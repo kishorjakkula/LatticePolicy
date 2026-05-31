@@ -11,9 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  frontend-build:
-    name: Frontend Build
+  validate:
+    name: Build, Test, Typecheck
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -23,34 +24,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm ci
-        working-directory: frontend
 
-      - name: Build frontend
+      - name: Build
         run: npm run build
-        working-directory: frontend
 
-  server-build:
-    name: Server Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Test
+        run: npm run test
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-
-      - name: Install server dependencies
-        run: npm ci
-        working-directory: server
-
-      - name: Build server
-        run: npm run build
-        working-directory: server
+      - name: Typecheck
+        run: npm run typecheck

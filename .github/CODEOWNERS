@@ -1,0 +1,22 @@
+# Default owner
+* @kishorjakkula
+
+# Repository automation and CI/CD
+.github/ @kishorjakkula
+
+# Backend API, contracts, and data model
+server/ @kishorjakkula
+contracts/ @kishorjakkula
+
+# Frontend application
+frontend/ @kishorjakkula
+
+# Product and tenant extension examples
+products/ @kishorjakkula
+tenants/ @kishorjakkula
+
+# Architecture and project documentation
+docs/ @kishorjakkula
+README.md @kishorjakkula
+CONTRIBUTING.md @kishorjakkula
+SECURITY.md @kishorjakkula
