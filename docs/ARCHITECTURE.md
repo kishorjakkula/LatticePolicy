@@ -1,5 +1,7 @@
 ﻿Architecture Overview (Carrier-Extensible, Multi-Tenant)
 
+![LatticePolicy component architecture](architecture-diagram.svg)
+
 Goals
 - Stable core with explicit extension points
 - Tenant isolation: data, config, and behavior
