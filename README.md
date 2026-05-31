@@ -181,6 +181,7 @@ npm run dev:frontend
 - [Domain model](docs/DOMAIN.md)
 - [Multitenancy](docs/MULTITENANCY.md)
 - [Data model ERD](docs/DATA_MODEL_ERD.md)
+- [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
 
