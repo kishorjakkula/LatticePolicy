@@ -29,25 +29,25 @@ jobs:
             server/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm ci --workspaces=false
         working-directory: frontend
 
       - name: Build frontend
-        run: npm run build
+        run: npm run build --workspaces=false
         working-directory: frontend
 
       - name: Test frontend
-        run: npm run test
+        run: npm run test --workspaces=false
         working-directory: frontend
 
       - name: Install server dependencies
-        run: npm ci
+        run: npm ci --workspaces=false
         working-directory: server
 
       - name: Build and typecheck server
-        run: npm run build
+        run: npm run build --workspaces=false
         working-directory: server
 
       - name: Test server
-        run: npm run test
+        run: npm run test --workspaces=false
         working-directory: server
