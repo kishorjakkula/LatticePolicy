@@ -24,16 +24,30 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            server/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install frontend dependencies
+        run: npm ci --workspaces=false
+        working-directory: frontend
 
-      - name: Build
-        run: npm run build
+      - name: Build frontend
+        run: npm run build --workspaces=false
+        working-directory: frontend
 
-      - name: Test
-        run: npm run test
+      - name: Test frontend
+        run: npm run test --workspaces=false
+        working-directory: frontend
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Install server dependencies
+        run: npm ci --workspaces=false
+        working-directory: server
+
+      - name: Build and typecheck server
+        run: npm run build --workspaces=false
+        working-directory: server
+
+      - name: Test server
+        run: npm run test --workspaces=false
+        working-directory: server
