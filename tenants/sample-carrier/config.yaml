@@ -1,0 +1,19 @@
+tenantId: sample-carrier
+enabledProducts:
+  - personal-auto
+  - homeowners
+overrides:
+  rating:
+    driverAgeFactors:
+      <25: 1.25
+      25-64: 0.98
+      65+: 1.08
+  documents:
+    templatePack: default
+  underwriting:
+    rules:
+      - id: HO-ROOF-AGE
+        description: Refer if roof age > 25
+        when: product == 'homeowners' && risk.roofAgeYears > 25
+        action: refer
+

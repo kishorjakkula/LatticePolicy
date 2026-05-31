@@ -1,0 +1,131 @@
+.topnav {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.topnav-toggle {
+  display: none;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 60%, var(--panel));
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.topnav-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.topnav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.topnav a:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-soft) 70%, var(--panel));
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.topnav a.active {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent-soft) 65%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 240px;
+  min-width: 140px;
+  max-width: 300px;
+}
+
+.topbar-search select {
+  flex: 0 0 112px;
+  width: 112px;
+}
+
+.topbar-search input[type='search'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  min-height: 34px;
+  font-size: 0.85rem;
+  padding: 0 10px;
+}
+
+.topbar-search-submit {
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.topbar-right > div {
+  min-width: 220px;
+}
+
+.topbar-right > div label {
+  margin: 0 0 5px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.topbar-org-chip {
+  min-width: 220px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 82%, white);
+}
+
+.topbar-org-chip > div {
+  font-weight: 700;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-user {
+  white-space: nowrap;
+  font-size: 0.80rem;
+}
+
+.topbar-signout {
+  font-size: 0.82rem;
+  padding: 5px 10px;
+  min-height: 30px;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.topbar-signout:hover {
+  color: var(--text);
+}

@@ -1,0 +1,41 @@
+{
+  "family": "policy-frontend-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::111111111111:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::111111111111:role/policy-frontend-task-role",
+  "containerDefinitions": [
+    {
+      "name": "policy-frontend",
+      "image": "111111111111.dkr.ecr.us-east-1.amazonaws.com/policy-frontend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5173,
+          "hostPort": 5173,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "VITE_API_BASE_URL",
+          "value": "https://api.example.com"
+        },
+        {
+          "name": "VITE_USE_MOCK",
+          "value": "0"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/policy-frontend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

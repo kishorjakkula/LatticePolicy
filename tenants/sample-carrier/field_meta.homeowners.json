@@ -1,0 +1,10 @@
+﻿[
+  {"path":"risks.0.construction","type":"enum","enum":["frame","masonry","other"],"required":true,"visibleTo":["Agent","Underwriter"],"editableBy":["Agent","Underwriter"],"ui":{"group":"Dwelling","order":110}},
+  {"path":"risks.0.yearBuilt","type":"int","required":true,"validation":{"message":"Enter valid year (1800..current)"},"ui":{"group":"Dwelling","order":120}},
+  {"path":"risks.0.roofAgeYears","type":"int","required":true,"ui":{"group":"Dwelling","order":130}},
+  {"path":"risks.0.squareFeet","type":"int","required":false,"ui":{"group":"Dwelling","order":140}},
+  {"path":"risks.0.protectionClass","type":"int","required":false,"ui":{"group":"Dwelling","order":145}},
+  {"path":"risks.0.occupancy","type":"enum","enum":["OwnerOccupied","TenantOccupied","Seasonal"],"required":false,"ui":{"group":"Dwelling","order":150}},
+  {"path":"risks.0.fireAlarm","type":"bool","required":false,"ui":{"group":"Credits","order":210}},
+  {"path":"risks.0.burglarAlarm","type":"bool","required":false,"ui":{"group":"Credits","order":220}}
+]

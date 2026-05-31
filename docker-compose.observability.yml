@@ -1,0 +1,60 @@
+# Observability stack — Grafana Loki + Promtail + Grafana dashboard
+# Usage: docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# Access Grafana at http://localhost:3000 (admin/admin — change on first login)
+# Explore logs at http://localhost:3000/explore with datasource: Loki
+
+services:
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: policy-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - lokidata:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: policy-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./observability/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: policy-grafana
+    restart: unless-stopped
+    ports:
+      - "3200:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+volumes:
+  lokidata:
+  grafanadata:

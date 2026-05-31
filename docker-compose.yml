@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:15
+    container_name: policy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-lattice_policy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-lattice_policy}
+    ports:
+      - "65432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  cache:
+    image: redis:7-alpine
+    container_name: policy-cache
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: policy-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-lattice_policy}:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DB_NAME:-lattice_policy}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PORT: 3000
+      REDIS_URL: redis://cache:6379
+      CACHE_ENABLED: "1"
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "3300:3000"
+    depends_on:
+      - db
+      - cache
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3300}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    container_name: policy-ui
+    restart: unless-stopped
+    environment:
+      VITE_USE_MOCK: "0"
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
+volumes:
+  pgdata:
+  redisdata:

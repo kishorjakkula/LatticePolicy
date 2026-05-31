@@ -1,0 +1,98 @@
+product: professional-liability
+version: 1.0.0
+availability:
+  country: US
+  states:
+    - AL
+    - AK
+    - AZ
+    - AR
+    - CA
+    - CO
+    - CT
+    - DE
+    - FL
+    - GA
+    - HI
+    - ID
+    - IL
+    - IN
+    - IA
+    - KS
+    - KY
+    - LA
+    - ME
+    - MD
+    - MA
+    - MI
+    - MN
+    - MS
+    - MO
+    - MT
+    - NE
+    - NV
+    - NH
+    - NJ
+    - NM
+    - NY
+    - NC
+    - ND
+    - OH
+    - OK
+    - OR
+    - PA
+    - RI
+    - SC
+    - SD
+    - TN
+    - TX
+    - UT
+    - VT
+    - VA
+    - WA
+    - WV
+    - WI
+    - WY
+    - DC
+coverages:
+  - code: PROF_LIAB
+    name: Professional Liability (Errors & Omissions)
+    selectable: true
+    limits: [250000, 500000, 1000000, 2000000, 3000000, 5000000]
+    deductibles: [1000, 2500, 5000, 10000, 25000, 50000]
+  - code: SUBPOENA
+    name: Subpoena Assistance
+    selectable: true
+    limits: [10000, 25000, 50000, 100000]
+    deductibles: [0, 500, 1000]
+  - code: DISCIP
+    name: Disciplinary Proceedings
+    selectable: true
+    limits: [10000, 25000, 50000, 100000]
+    deductibles: [0, 500, 1000]
+  - code: DEF_REIMB
+    name: Defendant Expense Reimbursement
+    selectable: true
+    limits: [25000, 50000, 100000, 250000]
+    deductibles: [0, 500, 1000, 2500]
+  - code: CRISIS_PR
+    name: Crisis / Reputation Management
+    selectable: true
+    limits: [25000, 50000, 100000, 250000]
+    deductibles: [0, 500, 1000, 2500]
+  - code: MEDIATION
+    name: Mediation / Arbitration Expense
+    selectable: true
+    limits: [10000, 25000, 50000, 100000]
+    deductibles: [0, 500, 1000]
+ratingKeys:
+  - industry
+  - annualRevenue
+  - employeeCount
+  - yearsInBusiness
+  - priorClaimsCount
+  - largestContractValue
+  - subcontractorPct
+  - writtenContracts
+  - qualityControl
+  - retroactiveYears

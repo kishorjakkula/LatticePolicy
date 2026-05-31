@@ -1,0 +1,39 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  letter-spacing: 0;
+}
+
+.container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px 22px;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell-frame {
+  display: grid;
+  grid-template-columns: 246px minmax(0, 1fr);
+  background: var(--bg);
+}
+
+.app-shell-login {
+  background: linear-gradient(180deg, #eef3fb 0%, #f5f8fe 100%);
+}

@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+*.log
+tmpclaude-*-cwd
+.DS_Store
+node_modules
+node_modules

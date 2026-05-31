@@ -1,0 +1,32 @@
+{
+  "name": "lattice-policy",
+  "version": "0.1.0",
+  "description": "Open-source framework for access-based insurance policy administration systems.",
+  "private": true,
+  "license": "Apache-2.0",
+  "keywords": [
+    "insurance",
+    "policy-administration",
+    "multi-tenant",
+    "framework"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "frontend",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:server": "npm run build --workspace=server",
+    "build": "npm run build:frontend && npm run build:server",
+    "test:frontend": "npm run test --workspace=frontend",
+    "test:server": "npm run test --workspace=server",
+    "test": "npm run test:frontend && npm run test:server",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

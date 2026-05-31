@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/contracts/quote.request.schema.json",
+  "title": "QuoteRequest",
+  "type": "object",
+  "required": ["tenantId", "productCode", "effectiveDate", "termMonths", "applicant", "risks", "coverages"],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "productCode": { "type": "string", "enum": ["personal-auto", "commercial-auto", "homeowners", "cyber", "professional-liability"] },
+    "effectiveDate": { "type": "string", "format": "date" },
+    "termMonths": { "type": "integer", "enum": [6, 12] },
+    "state": { "type": "string", "minLength": 2, "maxLength": 2 },
+    "applicant": {
+      "type": "object",
+      "required": ["firstName", "lastName"],
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "email": { "type": "string", "format": "email" }
+      }
+    },
+    "uwAnswers": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } },
+    "risks": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/definitions/autoVehicle" },
+          { "$ref": "#/definitions/commercialAutoFleet" },
+          { "$ref": "#/definitions/dwelling" },
+          { "$ref": "#/definitions/cyberProfile" },
+          { "$ref": "#/definitions/professionalLiabilityProfile" }
+        ]
+      }
+    },
+    "coverages": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/coverageSelection" }
+    }
+  },
+  "definitions": {
+    "coverageSelection": {
+      "type": "object",
+      "required": ["code", "selected"],
+      "properties": {
+        "code": { "type": "string" },
+        "selected": { "type": "boolean" },
+        "limit": { "type": ["number", "string", "null"] },
+        "deductible": { "type": ["number", "string", "null"] }
+      }
+    },
+    "autoVehicle": {
+      "type": "object",
+      "required": ["type", "year", "make", "model", "garagingZip"],
+      "properties": {
+        "type": { "const": "autoVehicle" },
+        "vin": { "type": ["string", "null"] },
+        "year": { "type": "integer" },
+        "make": { "type": "string" },
+        "model": { "type": "string" },
+        "symbol": { "type": ["string", "null"] },
+        "garagingZip": { "type": "string" },
+        "usage": { "type": "string", "enum": ["pleasure", "commute", "business"] },
+        "annualMiles": { "type": "integer" }
+      }
+    },
+    "commercialAutoFleet": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "commercialAutoFleet" },
+        "businessName": { "type": ["string", "null"] },
+        "garagingZip": { "type": ["string", "null"] },
+        "vehicleCount": { "type": ["number", "integer", "null"] },
+        "driverCount": { "type": ["number", "integer", "null"] },
+        "useClass": { "type": ["string", "null"] },
+        "radiusClass": { "type": ["string", "null"] },
+        "vehicleType": { "type": ["string", "null"] },
+        "gvwClass": { "type": ["string", "null"] },
+        "annualMileage": { "type": ["number", "integer", "null"] },
+        "yearsInBusiness": { "type": ["number", "integer", "null"] },
+        "priorLossesCount": { "type": ["number", "integer", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "dwelling": {
+      "type": "object",
+      "required": ["type", "address", "construction", "yearBuilt"],
+      "properties": {
+        "type": { "const": "dwelling" },
+        "address": { "type": "string" },
+        "construction": { "type": "string", "enum": ["frame", "masonry", "other"] },
+        "protectionClass": { "type": ["string", "number", "null"] },
+        "yearBuilt": { "type": "integer" },
+        "squareFeet": { "type": ["integer", "null"] },
+        "roofAgeYears": { "type": ["integer", "null"] }
+      }
+    },
+    "cyberProfile": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "cyberProfile" }
+      },
+      "additionalProperties": true
+    },
+    "professionalLiabilityProfile": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "professionalLiabilityProfile" },
+        "industry": { "type": ["string", "null"] },
+        "annualRevenue": { "type": ["number", "integer", "null"] },
+        "employeeCount": { "type": ["number", "integer", "null"] },
+        "yearsInBusiness": { "type": ["number", "integer", "null"] },
+        "priorClaimsCount": { "type": ["number", "integer", "null"] },
+        "largestContractValue": { "type": ["number", "integer", "null"] },
+        "subcontractorPct": { "type": ["number", "integer", "null"] },
+        "writtenContracts": { "type": ["boolean", "string", "null"] },
+        "qualityControl": { "type": ["string", "null"] },
+        "retroactiveYears": { "type": ["number", "integer", "null"] }
+      },
+      "additionalProperties": true
+    }
+  }
+}

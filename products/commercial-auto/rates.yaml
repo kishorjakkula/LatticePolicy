@@ -1,0 +1,119 @@
+product: commercial-auto
+version: 1.0.0
+base:
+  default: 4200
+  termMonths:
+    6: 0.58
+    12: 1.00
+    24: 1.90
+stateFactors:
+  AL: 0.97
+  AK: 1.06
+  AZ: 1.03
+  AR: 0.95
+  CA: 1.21
+  CO: 1.05
+  CT: 1.08
+  DE: 1.01
+  FL: 1.18
+  GA: 1.04
+  HI: 1.01
+  ID: 0.94
+  IL: 1.08
+  IN: 0.98
+  IA: 0.92
+  KS: 0.94
+  KY: 0.98
+  LA: 1.16
+  ME: 0.95
+  MD: 1.07
+  MA: 1.09
+  MI: 1.05
+  MN: 0.97
+  MS: 0.97
+  MO: 0.99
+  MT: 0.93
+  NE: 0.92
+  NV: 1.06
+  NH: 0.98
+  NJ: 1.15
+  NM: 0.97
+  NY: 1.24
+  NC: 1.00
+  ND: 0.91
+  OH: 1.00
+  OK: 1.02
+  OR: 0.99
+  PA: 1.03
+  RI: 1.06
+  SC: 1.01
+  SD: 0.91
+  TN: 0.99
+  TX: 1.11
+  UT: 0.96
+  VT: 0.94
+  VA: 1.00
+  WA: 1.03
+  WV: 0.96
+  WI: 0.95
+  WY: 0.92
+  DC: 1.17
+vehicleCountFactors:
+  <=1: 0.78
+  2-5: 1.00
+  6-10: 1.18
+  11-25: 1.38
+  26-50: 1.62
+  51+: 1.90
+driverCountFactors:
+  <=1: 0.85
+  2-5: 1.00
+  6-10: 1.12
+  11-25: 1.28
+  26-50: 1.46
+  51+: 1.70
+radiusClassFactors:
+  local: 0.95
+  intermediate: 1.08
+  long-haul: 1.26
+vehicleTypeFactors:
+  light-truck: 0.96
+  service-van: 0.98
+  pickup: 0.94
+  box-truck: 1.12
+  mixed-fleet: 1.10
+  dump-truck: 1.22
+  tractor-trailer: 1.35
+  other: 1.08
+useClassFactors:
+  artisan-contractor: 1.08
+  service: 0.98
+  retail-delivery: 1.10
+  wholesale-distribution: 1.12
+  for-hire: 1.28
+  livery: 1.35
+  mixed-business: 1.12
+  other: 1.06
+gvwClassFactors:
+  light: 0.95
+  medium: 1.05
+  heavy: 1.18
+annualMileageFactors:
+  <=10000: 0.90
+  10001-25000: 1.00
+  25001-50000: 1.12
+  50001-100000: 1.28
+  100001+: 1.48
+yearsInBusinessFactors:
+  <=1: 1.25
+  2-5: 1.10
+  6-10: 1.00
+  11-25: 0.95
+  26+: 0.92
+priorLosses:
+  perLossFactor: 0.14
+  maxLossesConsidered: 6
+fees:
+  policy: 95.00
+taxes:
+  rate: 0.03

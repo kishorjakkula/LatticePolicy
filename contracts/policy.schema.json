@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/contracts/policy.schema.json",
+  "title": "Policy",
+  "type": "object",
+  "required": ["policyId", "policyNumber", "tenantId", "productCode", "status", "term"],
+  "properties": {
+    "policyId": { "type": "string" },
+    "policyNumber": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "productCode": { "type": "string" },
+    "status": { "type": "string", "enum": ["Quoted", "Issued", "Cancelled"] },
+    "term": {
+      "type": "object",
+      "required": ["effectiveDate", "expirationDate"],
+      "properties": {
+        "effectiveDate": { "type": "string", "format": "date" },
+        "expirationDate": { "type": "string", "format": "date" }
+      }
+    },
+    "versions": { "type": "array", "items": { "$ref": "#/definitions/policyVersion" } }
+  },
+  "definitions": {
+    "money": { "type": "object", "required": ["amount", "currency"], "properties": { "amount": { "type": "number" }, "currency": { "type": "string" } } },
+    "premiumBreakdown": {
+      "type": "object",
+      "properties": {
+        "byCoverage": { "type": "array", "items": { "type": "object", "properties": { "code": { "type": "string" }, "premium": { "$ref": "#/definitions/money" } }, "required": ["code", "premium"] } },
+        "fees": { "$ref": "#/definitions/money" },
+        "taxes": { "$ref": "#/definitions/money" },
+        "total": { "$ref": "#/definitions/money" }
+      }
+    },
+    "policyVersion": {
+      "type": "object",
+      "required": ["versionId", "effectiveDate", "processedDate", "transactionType", "premium"],
+      "properties": {
+        "versionId": { "type": "string" },
+        "effectiveDate": { "type": "string", "format": "date" },
+        "processedDate": { "type": "string", "format": "date-time" },
+        "transactionType": { "type": "string", "enum": ["Issue", "Endorse", "Cancel", "Reinstate", "Renew"] },
+        "premium": { "$ref": "#/definitions/premiumBreakdown" }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,108 @@
+product: commercial-auto
+version: 1.0.0
+availability:
+  country: US
+  states:
+    - AL
+    - AK
+    - AZ
+    - AR
+    - CA
+    - CO
+    - CT
+    - DE
+    - FL
+    - GA
+    - HI
+    - ID
+    - IL
+    - IN
+    - IA
+    - KS
+    - KY
+    - LA
+    - ME
+    - MD
+    - MA
+    - MI
+    - MN
+    - MS
+    - MO
+    - MT
+    - NE
+    - NV
+    - NH
+    - NJ
+    - NM
+    - NY
+    - NC
+    - ND
+    - OH
+    - OK
+    - OR
+    - PA
+    - RI
+    - SC
+    - SD
+    - TN
+    - TX
+    - UT
+    - VT
+    - VA
+    - WA
+    - WV
+    - WI
+    - WY
+    - DC
+coverages:
+  - code: AUTO_LIAB
+    name: Commercial Auto Liability
+    selectable: true
+    limits: [300000, 500000, 1000000, 2000000]
+    deductibles: [0]
+  - code: HNOA
+    name: Hired & Non-Owned Auto Liability
+    selectable: true
+    limits: [300000, 500000, 1000000]
+    deductibles: [0]
+  - code: UM_UIM
+    name: Uninsured / Underinsured Motorist
+    selectable: true
+    limits: [50000, 100000, 300000, 500000, 1000000]
+    deductibles: [0]
+  - code: PIP_MED
+    name: Personal Injury Protection / Medical Payments
+    selectable: true
+    limits: [1000, 5000, 10000, 25000, 50000]
+    deductibles: [0]
+  - code: COMP
+    name: Comprehensive
+    selectable: true
+    limits: [0]
+    deductibles: [250, 500, 1000, 2500, 5000]
+  - code: COLL
+    name: Collision
+    selectable: true
+    limits: [0]
+    deductibles: [250, 500, 1000, 2500, 5000]
+  - code: TOWING
+    name: Towing & Labor
+    selectable: true
+    limits: [500, 1000, 2500, 5000]
+    deductibles: [0]
+  - code: RENTAL
+    name: Rental Reimbursement
+    selectable: true
+    limits: [900, 1500, 3000, 5000]
+    deductibles: [0]
+ratingKeys:
+  - garagingZip
+  - vehicleCount
+  - driverCount
+  - useClass
+  - radiusClass
+  - vehicleType
+  - gvwClass
+  - annualMileage
+  - yearsInBusiness
+  - priorLossesCount

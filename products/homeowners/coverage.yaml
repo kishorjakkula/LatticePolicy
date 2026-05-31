@@ -1,0 +1,43 @@
+product: homeowners
+version: 1.0.0
+coverages:
+  - code: A
+    name: Dwelling
+    selectable: true
+    limitType: value
+  - code: B
+    name: Other Structures
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [10, 20]
+  - code: C
+    name: Personal Property
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [50, 70]
+  - code: D
+    name: Loss of Use
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [20, 30]
+  - code: E
+    name: Personal Liability
+    selectable: true
+    limits: [100000, 300000, 500000]
+  - code: F
+    name: Medical Payments
+    selectable: true
+    limits: [1000, 5000]
+deductibles:
+  allPeril: [500, 1000, 2500]
+  windHailPercent: [1, 2, 5]
+ratingKeys:
+  - construction
+  - protectionClass
+  - roofAgeYears
+# Endorsements
+  - code: END_WB
+    name: Water Backup
+    selectable: true
+    limits: [2500, 5000, 10000]
+

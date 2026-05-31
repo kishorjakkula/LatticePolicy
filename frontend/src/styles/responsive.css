@@ -1,0 +1,874 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — Focus indicators, screen-reader utilities, ARIA
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Screen-reader-only utility ─────────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Unified visible focus ring ─────────────────────────────────── */
+/* 3px primary-blue ring on :focus-visible for every custom element  */
+
+.ps-page-btn:focus-visible,
+.ps-sort-header:focus-visible,
+.ps-tab:focus-visible,
+.ps-policy-link:focus-visible,
+.ps-action-menu-btn:focus-visible,
+.ps-meta-btn:focus-visible,
+.ps-bulk-btn:focus-visible,
+.ps-menu-item:focus-visible,
+.action-btn:focus-visible,
+.ps-breadcrumb-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
+}
+
+/* Tighter radius per element type */
+.ps-page-btn:focus-visible       { border-radius: 7px; }
+.ps-tab:focus-visible             { border-radius: 4px 4px 0 0; }
+.ps-breadcrumb-link:focus-visible { border-radius: 3px; }
+.ps-menu-item:focus-visible {
+  background: var(--ps-surface-2, #f3f4f6);
+  border-radius: 4px;
+}
+
+/* Checkbox — ring on the custom visual box */
+.ps-checkbox-input:focus-visible ~ .ps-checkbox-box {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+  border-radius: 4px;
+}
+
+/* Select / native inputs inside the filter form */
+.search-filters select:focus-visible,
+.search-filters input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+  border-color: var(--ps-primary, #3b82f6);
+}
+
+/* ── Status badge: dot is the non-color indicator ───────────────── */
+/* Already defined in the badge component; ensure dot is always visible */
+.status-badge__dot {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE — Tablet breakpoint (768px – 1200px)
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1200px) {
+  /* Hide State and Agent columns to reduce horizontal overflow */
+  .ps-policy-table [data-col="state"],
+  .ps-policy-table [data-col="agent"] {
+    display: none;
+  }
+
+  /* Filter grid: collapse to 2-column grid */
+  .search-filters.row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    align-items: end;
+  }
+
+  /* Query field spans both columns */
+  .search-filters.row .col:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Page shell: tighten padding */
+  .ps-page-shell {
+    padding: 16px 16px 32px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile breakpoint (<768px)
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+
+  /* ── Page layout ────────────────────────────────────────────── */
+
+  .ps-page-shell {
+    padding: 12px 12px 24px;
+    background: #F7F8FC;
+  }
+
+  .ps-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .ps-page-title {
+    font-size: 20px;
+  }
+
+  /* Tabs: horizontal scroll */
+  .ps-tabs-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .ps-tabs-row::-webkit-scrollbar { display: none; }
+
+  /* Keyboard hints: too cramped on mobile */
+  .ps-kbd-hints { display: none; }
+
+  /* ── Filter form: stack vertically ─────────────────────────── */
+
+  .search-filters.row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .search-filters.row .col,
+  .search-filters.row > div {
+    max-width: none !important;
+    width: 100%;
+    grid-column: unset !important;
+  }
+
+  /* ── Table card: no border/shadow — rows become cards ──────── */
+
+  .ps-table-card {
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  /* Visually hide the thead (keep for screen readers via position:absolute) */
+  .ps-policy-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  /* Table and tbody become block containers */
+  .ps-policy-table,
+  .ps-policy-table tbody {
+    display: block;
+  }
+
+  /* colgroup ignored in block layout */
+  .ps-policy-table colgroup { display: none; }
+
+  /* ── Each row becomes a card ────────────────────────────────── */
+
+  .ps-policy-table tbody tr.ps-policy-row {
+    display: block;
+    position: relative;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    background: #ffffff;
+    margin-bottom: 10px;
+    padding: 12px 12px 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .ps-policy-table tbody tr.ps-row--selected {
+    border-color: #c7d2fe;
+    background: #EBF0FF !important;
+  }
+
+  /* ── Each cell: label + value flex row ──────────────────────── */
+
+  .ps-policy-table tbody td {
+    display: flex;
+    align-items: center;
+    padding: 3px 0;
+    border: none;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    font-size: 13px;
+  }
+
+  /* Cell labels via data-label attribute */
+  .ps-policy-table tbody td::before {
+    content: attr(data-label);
+    font-family: var(--ps-font-sans, 'DM Sans', sans-serif);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ps-text-muted, #9ca3af);
+    letter-spacing: 0.05em;
+    min-width: 88px;
+    flex-shrink: 0;
+  }
+
+  /* ── Policy # as card title ─────────────────────────────────── */
+
+  .ps-policy-table tbody [data-col="policy-num"] {
+    padding: 0 80px 8px 0; /* room for checkbox + menu on the right */
+    border-bottom: 1px solid var(--ps-surface-2, #f3f4f6);
+    margin-bottom: 4px;
+  }
+
+  .ps-policy-table tbody [data-col="policy-num"]::before {
+    display: none; /* no "Policy #" label — it's the card title */
+  }
+
+  .ps-policy-link {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* ── Checkbox: top-right of card ───────────────────────────── */
+
+  .ps-policy-table tbody [data-col="check"] {
+    position: absolute;
+    top: 10px;
+    right: 46px;
+    padding: 0;
+  }
+
+  .ps-policy-table tbody [data-col="check"]::before {
+    display: none;
+  }
+
+  /* ── Actions (⋯ button): top-right corner ───────────────────── */
+
+  .ps-policy-table tbody [data-col="actions"] {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 0;
+  }
+
+  .ps-policy-table tbody [data-col="actions"]::before {
+    display: none;
+  }
+
+  /* Always show the action button on mobile (no hover) */
+  .ps-action-menu-btn { opacity: 1; }
+
+  /* State and agent are hidden on tablet but visible again on mobile cards */
+  .ps-policy-table [data-col="state"],
+  .ps-policy-table [data-col="agent"] {
+    display: flex;
+  }
+
+  /* Dates: allow wrap */
+  .ps-col-dates { flex-wrap: wrap; gap: 2px; }
+
+  /* ── Pagination: previous / next only ──────────────────────── */
+
+  /* Hide numbered page buttons and ellipsis */
+  .ps-page-btn:not(.ps-page-btn--nav) { display: none; }
+  .ps-page-ellipsis                   { display: none; }
+
+  /* Centre the nav buttons */
+  .ps-pagination { justify-content: space-between; gap: 6px; }
+
+  .ps-page-btn--nav {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* Stack page info above controls */
+  .ps-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ps-pagination-right {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ps-pagination-info { text-align: center; }
+
+  .ps-pagination-size {
+    justify-content: center;
+  }
+
+  /* ── Results meta bar ───────────────────────────────────────── */
+
+  .ps-table-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* ── Touch targets: 44×44px minimum ────────────────────────── */
+
+  .ps-page-btn,
+  .ps-tab,
+  .action-btn,
+  .ps-meta-btn,
+  .ps-bulk-btn,
+  .ps-action-menu-btn {
+    min-height: 44px;
+  }
+
+  /* Wider tap area for nav buttons */
+  .ps-page-btn--nav {
+    padding: 0 20px;
+  }
+
+  /* Size select full width */
+  .ps-pagination-size-select {
+    width: 100%;
+    height: 44px;
+    font-size: 14px;
+  }
+}
+
+/* ── Dark mode mobile cards ─────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  [data-theme='dark'] .ps-policy-table tbody tr.ps-policy-row {
+    background: var(--surface, #1e2533);
+    border-color: var(--border, #2d3748);
+  }
+
+  [data-theme='dark'] .ps-table-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PERFORMANCE — Browser-native row virtualization
+   content-visibility: auto defers rendering of off-screen rows,
+   giving similar benefits to react-window without JS overhead.
+   Pagination already limits visible rows to ≤100 per page.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 768px) {
+  /* Only apply on desktop where rows are fixed-height table rows */
+  .ps-policy-table tbody tr {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 46px; /* approximate row height */
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   ADMIN DESIGN SYSTEM — AdminShell sidebar + sub-page layout
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Admin layout (sidebar + content) ── */
+.admin-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  min-height: calc(100vh - 56px);
+  padding: 20px 24px;
+  background: var(--page-bg, #F7F8FC);
+  box-sizing: border-box;
+}
+
+/* ── Admin sidebar ── */
+.ps-admin-sidebar {
+  width: 192px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 16px 0;
+  position: sticky;
+  top: 20px;
+}
+
+.ps-admin-sidebar-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  padding: 0 16px 10px;
+}
+
+.ps-admin-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.ps-admin-nav-link {
+  display: block;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #374151;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ps-admin-nav-link:hover {
+  background: #F3F4F6;
+  color: #111827;
+}
+
+.ps-admin-nav-link--active {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border-left-color: #2563EB;
+  font-weight: 600;
+}
+
+/* ── Admin content area ── */
+.admin-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Admin sub-page wrapper ── */
+.ps-admin-page {
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+/* ps-page-header inside ps-admin-page reuses global tokens */
+.ps-admin-page .ps-page-header {
+  margin-bottom: 16px;
+}
+
+.ps-admin-page .ps-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+/* ── Responsive: collapse sidebar on narrow screens ── */
+@media (max-width: 767px) {
+  .admin-layout {
+    flex-direction: column;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .ps-admin-sidebar {
+    width: 100%;
+    position: static;
+    padding: 8px 0;
+  }
+
+  .ps-admin-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 8px;
+  }
+
+  .ps-admin-nav-link {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .ps-admin-nav-link--active {
+    border-bottom-color: #2563EB;
+    border-left-color: transparent;
+  }
+
+  .ps-admin-page {
+    padding: 16px;
+  }
+}
+
+/* ============================================================
+   FILTER PANEL — redesigned search filter card
+   ============================================================ */
+
+.ps-filter-panel {
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.ps-filter-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.ps-filter-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ps-filter-col--wide {
+  /* already 2fr */
+}
+
+.ps-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.ps-filter-input-wrap {
+  position: relative;
+}
+
+.ps-filter-input-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+  color: #A0AEC0;
+  line-height: 1;
+}
+
+.ps-filter-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1A202C;
+  background: #ffffff;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ps-filter-input--icon {
+  padding-left: 34px;
+}
+
+.ps-filter-input:focus {
+  border-color: #4361EE;
+  box-shadow: 0 0 0 3px rgba(67,97,238,0.12);
+}
+
+.ps-filter-select {
+  width: 100%;
+  padding: 9px 32px 9px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1A202C;
+  background: #ffffff;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  box-sizing: border-box;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394A3B8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s;
+}
+
+.ps-filter-select:focus {
+  border-color: #4361EE;
+  box-shadow: 0 0 0 3px rgba(67,97,238,0.12);
+}
+
+.ps-filter-date {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1A202C;
+  background: #ffffff;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.ps-filter-date:focus {
+  border-color: #4361EE;
+  box-shadow: 0 0 0 3px rgba(67,97,238,0.12);
+}
+
+.ps-filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-bottom: 0;
+}
+
+.ps-filter-btn-search {
+  padding: 9px 20px;
+  background: #4361EE;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ps-filter-btn-search:hover:not(:disabled) {
+  background: #3651D4;
+}
+
+.ps-filter-btn-search:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ps-filter-btn-clear {
+  padding: 9px 14px;
+  background: transparent;
+  color: #4361EE;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ps-filter-btn-clear:hover {
+  background: #EBF0FF;
+}
+
+/* Footer row: advanced toggle + applied chips */
+.ps-filter-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.ps-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  color: #4361EE;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ps-advanced-toggle:hover {
+  text-decoration: underline;
+}
+
+.ps-filter-applied {
+  font-size: 11px;
+  color: #94A3B8;
+  background: #F1F5F9;
+  padding: 2px 10px;
+  border-radius: 4px;
+}
+
+/* Advanced (expanded) filter row */
+.ps-advanced-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #EDF2F7;
+}
+
+/* Responsive: collapse filter grid on narrow screens */
+@media (max-width: 1024px) {
+  .ps-filter-grid {
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+
+  .ps-filter-col--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .ps-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ps-filter-col--wide {
+    grid-column: auto;
+  }
+
+  .ps-advanced-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GLOBAL CONSISTENCY — matches search screen visual style
+   Applied across all ps-page-shell + ps-admin-page contexts
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Section headings within content cards */
+.ps-page-shell h3,
+.ps-admin-page h3 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 14px;
+}
+
+.ps-page-shell h4,
+.ps-admin-page h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+/* Card head row inside .card panels */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-head h3,
+.card-head h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+/* Table within a card: no extra top margin needed */
+.card > .table,
+.ps-content-card > .table {
+  margin-top: 0;
+}
+
+/* Section wrappers inside ps-page-shell */
+.ps-page-shell section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+/* Search result items in contact search */
+.search-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--panel);
+  font-size: 0.88rem;
+}
+
+/* Additional insureds table wrapper */
+.additional-table {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Create customer form grid */
+.create-customer-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.create-customer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Admin page form rows using .row .col */
+.ps-admin-page .row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ps-admin-page .col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Stack card spacing */
+.stack-card {
+  margin-top: 16px;
+}
+
+/* Panel header (used in some admin pages) */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Dashboard KPI cards — consistent with search screen card style */
+.dashboard-kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+/* Dark mode adjustments */
+[data-theme='dark'] .ps-content-card {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .ps-page-shell section {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .search-result {
+  background: var(--panel);
+  border-color: var(--border);
+}

@@ -1,0 +1,37 @@
+# Environment secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+build/
+
+# Logs
+*.log
+*.pid
+logs/
+tmpclaude-*-cwd
+
+# Local tool settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Vite
+*.local

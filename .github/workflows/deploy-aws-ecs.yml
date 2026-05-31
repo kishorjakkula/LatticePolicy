@@ -1,0 +1,125 @@
+name: Deploy To AWS ECS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY_API: ${{ vars.ECR_REPOSITORY_API }}
+  ECR_REPOSITORY_FRONTEND: ${{ vars.ECR_REPOSITORY_FRONTEND }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
+  ECS_SERVICE_FRONTEND: ${{ vars.ECS_SERVICE_FRONTEND }}
+  ECS_TASK_DEF_API: .github/ecs/task-definition-api.json
+  ECS_TASK_DEF_FRONTEND: .github/ecs/task-definition-frontend.json
+  ECS_CONTAINER_NAME_API: ${{ vars.ECS_CONTAINER_NAME_API }}
+  ECS_CONTAINER_NAME_FRONTEND: ${{ vars.ECS_CONTAINER_NAME_FRONTEND }}
+
+jobs:
+  deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate required variables
+        run: |
+          required_vars=(
+            AWS_REGION
+            ECR_REPOSITORY_API
+            ECR_REPOSITORY_FRONTEND
+            ECS_CLUSTER
+            ECS_SERVICE_API
+            ECS_SERVICE_FRONTEND
+            ECS_CONTAINER_NAME_API
+            ECS_CONTAINER_NAME_FRONTEND
+          )
+
+          missing=0
+          for item in "${required_vars[@]}"; do
+            if [ -z "${!item}" ]; then
+              echo "Missing variable: $item"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Set required repository variables before deploy."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        id: api-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG"
+          docker build -f server/Dockerfile -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push frontend image
+        id: frontend-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG"
+          docker build -f frontend/Dockerfile -t "$IMAGE_URI" ./frontend
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Render API task definition
+        id: render-api
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEF_API }}
+          container-name: ${{ env.ECS_CONTAINER_NAME_API }}
+          image: ${{ steps.api-image.outputs.image }}
+
+      - name: Deploy API service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-api.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_API }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Render frontend task definition
+        id: render-frontend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEF_FRONTEND }}
+          container-name: ${{ env.ECS_CONTAINER_NAME_FRONTEND }}
+          image: ${{ steps.frontend-image.outputs.image }}
+
+      - name: Deploy frontend service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-frontend.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_FRONTEND }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

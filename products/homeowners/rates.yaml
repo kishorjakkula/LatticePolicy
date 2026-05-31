@@ -1,0 +1,24 @@
+product: homeowners
+version: 1.0.0
+base:
+  state: '*'
+  per100LimitRate:
+    A: 0.25
+    E: 0.15
+constructionFactors:
+  frame: 1.00
+  masonry: 0.95
+  other: 1.05
+protectionClassFactors:
+  '1-4': 0.95
+  '5-8': 1.00
+  '9-10': 1.15
+roofAgeFactors:
+  '0-10': 1.00
+  '11-20': 1.05
+  '21+': 1.15
+fees:
+  policy: 35.00
+taxes:
+  rate: 0.02
+

@@ -1,0 +1,134 @@
+main {
+  margin-top: 18px;
+  animation: page-enter 220ms ease both;
+}
+
+.main-login {
+  margin-top: 0;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-shell {
+  border-radius: var(--radius-lg);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  padding: 20px;
+}
+
+/* Generic reusable content card — same visual as ps-filter-panel */
+.ps-content-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.ps-content-card + .ps-content-card {
+  margin-top: 0;
+}
+
+.ps-content-card-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Form grid used inside content cards */
+.ps-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.ps-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stack-card {
+  margin-top: 14px;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-menu {
+  position: sticky;
+  top: 92px;
+}
+
+.admin-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-menu-link,
+.admin-section-link {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 60%, var(--panel));
+  box-shadow: none;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.admin-menu-link:hover,
+.admin-section-link:hover {
+  transform: none;
+  filter: none;
+  background: color-mix(in srgb, var(--panel-soft) 72%, var(--panel));
+}
+
+.admin-menu-link.active,
+.admin-section-link.active {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 46%, var(--panel));
+  color: var(--text);
+  font-weight: 600;
+}
+
+.admin-menu-link:focus-visible,
+.admin-section-link:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.admin-content {
+  min-width: 0;
+}

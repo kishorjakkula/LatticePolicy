@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/contracts/endorsement.request.schema.json",
+  "title": "EndorsementRequest",
+  "type": "object",
+  "required": ["tenantId", "effectiveDate"],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "effectiveDate": { "type": "string", "format": "date" },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "op"],
+        "properties": {
+          "path": { "type": "string", "description": "JSON Pointer path to field (RFC6901)" },
+          "op": { "type": "string", "enum": ["add", "replace", "remove"] },
+          "value": {}
+        }
+      }
+    }
+  }
+}
+

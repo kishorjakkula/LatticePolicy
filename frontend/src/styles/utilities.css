@@ -1,0 +1,183 @@
+/* ─── Monospace utility for IDs / policy numbers ─── */
+.id-mono {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  letter-spacing: 0.01em;
+}
+
+/* ─── Spinner ─── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner-sm {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+.spinner-lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
+.loading-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ─── Empty state ─── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--panel-soft) 80%, var(--border));
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 1.2rem;
+}
+
+.empty-state-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.empty-state-desc {
+  margin: 0;
+  font-size: 0.84rem;
+  max-width: 38ch;
+  line-height: 1.5;
+}
+
+/* ─── Toast notifications ─── */
+.toast-region {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  animation: toast-in 200ms ease both;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.toast.toast-exit {
+  animation: toast-out 180ms ease forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+
+.toast-success { border-left: 3px solid var(--success); }
+.toast-error   { border-left: 3px solid var(--danger); }
+.toast-info    { border-left: 3px solid var(--accent); }
+.toast-warning { border-left: 3px solid var(--warning); }
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.toast-success .toast-icon { background: #dcfce7; color: #145c38; }
+.toast-error   .toast-icon { background: #fee2e2; color: #991b1b; }
+.toast-info    .toast-icon { background: #dbeafe; color: #1e40af; }
+.toast-warning .toast-icon { background: #fef9e7; color: #6b3d00; }
+
+.toast-body { flex: 1; min-width: 0; }
+.toast-title { font-weight: 700; color: var(--text); }
+.toast-message { color: var(--muted); margin-top: 2px; }
+
+.toast-close {
+  flex-shrink: 0;
+  min-height: auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.toast-close:hover {
+  background: color-mix(in srgb, var(--panel-soft) 80%, var(--border));
+  color: var(--text);
+}
+
+/* ─── Table status row indicators ─── */
+.table tbody tr.row-active    { border-left: 3px solid var(--success); }
+.table tbody tr.row-cancelled { border-left: 3px solid var(--danger); }
+.table tbody tr.row-pending   { border-left: 3px solid var(--warning); }
+.table tbody tr.row-expired   { border-left: 3px solid var(--muted); }
+
+.table tbody tr.row-active td:first-child,
+.table tbody tr.row-cancelled td:first-child,
+.table tbody tr.row-pending td:first-child,
+.table tbody tr.row-expired td:first-child {
+  padding-left: 8px;
+}

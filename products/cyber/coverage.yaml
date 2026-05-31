@@ -1,0 +1,44 @@
+product: cyber
+version: 1.0.0
+coverages:
+  - code: CYB_LIAB
+    name: Cyber Liability / Privacy
+    selectable: true
+    limits: [250000, 500000, 1000000, 2000000, 5000000]
+    deductibles: [1000, 2500, 5000, 10000, 25000, 50000]
+  - code: BIZ_INT
+    name: Business Interruption
+    selectable: true
+    limits: [100000, 250000, 500000, 1000000]
+    deductibles: [1000, 2500, 5000, 10000, 25000]
+  - code: CYB_EXT
+    name: Cyber Extortion
+    selectable: true
+    limits: [50000, 100000, 250000, 500000, 1000000]
+    deductibles: [1000, 2500, 5000, 10000, 25000]
+  - code: IR_EXP
+    name: Incident Response Expenses
+    selectable: true
+    limits: [50000, 100000, 250000, 500000]
+    deductibles: [1000, 2500, 5000, 10000]
+  - code: DATA_REC
+    name: Data Recovery
+    selectable: true
+    limits: [25000, 50000, 100000, 250000]
+    deductibles: [1000, 2500, 5000, 10000]
+  - code: MEDIA
+    name: Media Liability
+    selectable: true
+    limits: [100000, 250000, 500000, 1000000]
+    deductibles: [1000, 2500, 5000, 10000, 25000]
+ratingKeys:
+  - industry
+  - annualRevenue
+  - employeeCount
+  - recordsCount
+  - mfaEnabled
+  - endpointProtection
+  - backups
+  - priorIncidents
+  - publicFacingApps
+  - domain

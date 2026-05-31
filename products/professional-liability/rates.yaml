@@ -1,0 +1,123 @@
+product: professional-liability
+version: 1.0.0
+base:
+  default: 2400
+  termMonths:
+    6: 0.60
+    12: 1.00
+    24: 1.92
+stateFactors:
+  AL: 0.95
+  AK: 1.07
+  AZ: 1.02
+  AR: 0.94
+  CA: 1.20
+  CO: 1.03
+  CT: 1.09
+  DE: 1.02
+  FL: 1.16
+  GA: 1.01
+  HI: 1.00
+  ID: 0.93
+  IL: 1.07
+  IN: 0.97
+  IA: 0.92
+  KS: 0.93
+  KY: 0.96
+  LA: 1.10
+  ME: 0.95
+  MD: 1.05
+  MA: 1.11
+  MI: 1.03
+  MN: 0.96
+  MS: 0.95
+  MO: 0.98
+  MT: 0.92
+  NE: 0.91
+  NV: 1.04
+  NH: 0.97
+  NJ: 1.14
+  NM: 0.96
+  NY: 1.22
+  NC: 0.99
+  ND: 0.90
+  OH: 0.99
+  OK: 0.97
+  OR: 0.98
+  PA: 1.02
+  RI: 1.05
+  SC: 0.99
+  SD: 0.90
+  TN: 0.97
+  TX: 1.08
+  UT: 0.95
+  VT: 0.94
+  VA: 1.00
+  WA: 1.02
+  WV: 0.95
+  WI: 0.94
+  WY: 0.91
+  DC: 1.18
+industryFactors:
+  accounting: 1.05
+  architecture-engineering: 1.15
+  consulting: 1.00
+  insurance-agency: 0.98
+  it-services: 1.08
+  legal-services: 1.22
+  management-consulting: 1.06
+  marketing-media: 1.03
+  real-estate: 1.10
+  staffing: 1.16
+  other: 1.08
+revenueFactors:
+  <=250000: 0.75
+  250001-1000000: 0.90
+  1000001-5000000: 1.00
+  5000001-10000000: 1.15
+  10000001-25000000: 1.30
+  25000001+: 1.50
+employeeCountFactors:
+  <=5: 0.85
+  6-25: 1.00
+  26-100: 1.12
+  101-500: 1.28
+  501+: 1.45
+yearsInBusinessFactors:
+  <=2: 1.25
+  3-5: 1.12
+  6-10: 1.00
+  11-25: 0.94
+  26+: 0.90
+largestContractValueFactors:
+  <=100000: 0.90
+  100001-500000: 1.00
+  500001-1000000: 1.10
+  1000001-5000000: 1.22
+  5000001+: 1.35
+subcontractorPctFactors:
+  <=10: 0.95
+  11-25: 1.00
+  26-50: 1.10
+  51-75: 1.22
+  76+: 1.38
+riskManagementFactors:
+  writtenContracts:
+    true: 0.92
+    false: 1.12
+  qualityControl:
+    formal: 0.90
+    standard: 1.00
+    limited: 1.12
+  retroactiveYears:
+    <=1: 1.18
+    2-5: 1.06
+    6-10: 1.00
+    11+: 0.95
+priorClaims:
+  perClaimFactor: 0.16
+  maxClaimsConsidered: 5
+fees:
+  policy: 85.00
+taxes:
+  rate: 0.025

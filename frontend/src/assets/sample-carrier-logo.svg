@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="132" height="40" viewBox="0 0 132 40" role="img" aria-label="Insurance Carrier">
+  <defs>
+    <linearGradient id="carrierBlue" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b4fa8" />
+      <stop offset="100%" stop-color="#2f87ff" />
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="131" height="39" rx="10" fill="#ffffff" stroke="#b9d1ef"/>
+  <g transform="translate(8,6)">
+    <path d="M14 1l10 4v8c0 8-6 13-10 15-4-2-10-7-10-15V5z" fill="url(#carrierBlue)"/>
+    <path d="M9.5 14.5l3.4 3.4 6-6" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="36" y="16" font-size="8.2" font-weight="700" letter-spacing="0.5" font-family="Arial, sans-serif" fill="#184b8c">INSURANCE</text>
+  <text x="36" y="28" font-size="11.3" font-weight="800" letter-spacing="0.55" font-family="Arial, sans-serif" fill="#0b4fa8">CARRIER</text>
+</svg>

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "u-admin",
+    "username": "admin",
+    "passwordHash": "$2a$10$bLmMBVN2uEOG/TEEb0seeOgVhU9OKkrUZW94F54pKRjdg//6u/Ef6",
+    "tenantId": "sample-carrier",
+    "roles": [
+      "admin"
+    ]
+  },
+  {
+    "id": "u-uw1",
+    "username": "uw1",
+    "passwordHash": "$2a$10$Hmeh9tMbtSP6K3trEkJ3i.k2c18mcYNAqWuZZeQAp9LNcQVo0co8W",
+    "tenantId": "sample-carrier",
+    "roles": [
+      "underwriter"
+    ]
+  },
+  {
+    "id": "u-agent1",
+    "username": "agent1",
+    "passwordHash": "$2a$10$zKqgtvYPbbKfoRpXfOd62e.btcTwMI7L3mb2l/AiJhETacj2TBNF6",
+    "tenantId": "sample-carrier",
+    "roles": [
+      "agent"
+    ]
+  }
+]

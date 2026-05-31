@@ -1,0 +1,45 @@
+{
+  "family": "policy-api-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::111111111111:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::111111111111:role/policy-api-task-role",
+  "containerDefinitions": [
+    {
+      "name": "policy-api",
+      "image": "111111111111.dkr.ecr.us-east-1.amazonaws.com/policy-api:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "PORT",
+          "value": "3000"
+        },
+        {
+          "name": "DATABASE_URL",
+          "value": "postgres://policy_mvp:replace-me@your-rds-endpoint:5432/policy_mvp"
+        },
+        {
+          "name": "JWT_SECRET",
+          "value": "replace-me"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/policy-api",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

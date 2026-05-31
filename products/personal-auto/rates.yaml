@@ -1,0 +1,25 @@
+product: personal-auto
+version: 1.0.0
+base:
+  state: '*'
+  termMonths:
+    6: 1.00
+    12: 1.90
+territoryFactors:
+  default: 1.00
+  byZip:
+    '10001': 1.15
+    '73301': 0.95
+driverAgeFactors:
+  <25: 1.30
+  25-64: 1.00
+  65+: 1.10
+vehicleSymbolFactors:
+  A: 0.95
+  B: 1.00
+  C: 1.10
+fees:
+  policy: 25.00
+taxes:
+  rate: 0.03
+

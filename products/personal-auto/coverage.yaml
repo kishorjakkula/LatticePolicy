@@ -1,0 +1,24 @@
+product: personal-auto
+version: 1.0.0
+coverages:
+  - code: BI
+    name: Bodily Injury Liability
+    selectable: true
+    limits: [25000/50000, 50000/100000, 100000/300000]
+  - code: PD
+    name: Property Damage Liability
+    selectable: true
+    limits: [10000, 25000, 50000]
+  - code: COMP
+    name: Comprehensive
+    selectable: true
+    deductibles: [250, 500, 1000]
+  - code: COLL
+    name: Collision
+    selectable: true
+    deductibles: [250, 500, 1000]
+ratingKeys:
+  - garagingZip
+  - driverAge
+  - vehicleSymbol
+
