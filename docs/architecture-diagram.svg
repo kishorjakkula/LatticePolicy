@@ -58,7 +58,7 @@
   <circle cx="119" cy="105" r="5" fill="#0f766e"/>
   <circle cx="104" cy="90" r="6" fill="#0f172a"/>
   <text x="158" y="83" class="title">LatticePolicy Component Architecture</text>
-  <text x="158" y="113" class="subtitle">Open-source, multi-tenant policy administration framework with one access-based portal and operations architecture</text>
+  <text x="158" y="113" class="subtitle">Property and casualty insurance policy underwriting system with one access-based portal and operations architecture</text>
   <text x="1466" y="78" class="whiteSmall">React + Express + PostgreSQL + Redis</text>
   <text x="1466" y="104" class="whiteSmall">Docker local stack | AWS ECS-ready</text>
 

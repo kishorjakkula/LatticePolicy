@@ -1,13 +1,13 @@
 # LatticePolicy
 
-LatticePolicy is an open-source starter framework for building multi-tenant policy administration systems. It includes a policy API, operations UI, customer portal views, product and tenant extension points, Docker-based local deployment, and documentation for architecture, APIs, and deployment.
+LatticePolicy is an open-source starter framework for building property and casualty insurance policy underwriting systems and multi-tenant policy administration platforms. It includes a policy API, operations UI, customer portal views, product and tenant extension points, Docker-based local deployment, and documentation for architecture, APIs, and deployment.
 
 The core design is a single policy platform with access-based experiences. Internal users, agents, underwriters, administrators, and end customers all enter through the same framework, but see different navigation, routes, APIs, and data projections based on tenant, role, permissions, and customer-policy relationships.
 
-The current implementation focuses on carrier-extensible insurance workflows:
+The current implementation focuses on carrier-extensible property and casualty insurance workflows:
 
 - Multi-tenant policy lifecycle APIs
-- Quote, bind, endorse, cancel, reinstate, and renew workflows
+- Quote intake, underwriting review, rating, bind, issue, endorse, cancel, reinstate, and renew workflows
 - Product packs and tenant configuration
 - Unified internal operations and customer portal architecture
 - PostgreSQL persistence and Redis-backed cache

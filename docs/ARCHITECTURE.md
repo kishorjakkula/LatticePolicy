@@ -2,6 +2,8 @@
 
 ![LatticePolicy component architecture](architecture-diagram.svg)
 
+LatticePolicy is designed as a property and casualty insurance policy underwriting system and policy administration framework. It supports carrier-extensible workflows across quoting, underwriting, rating, binding, issuance, endorsement, servicing, and customer portal access.
+
 Goals
 - Stable core with explicit extension points
 - Tenant isolation: data, config, and behavior
