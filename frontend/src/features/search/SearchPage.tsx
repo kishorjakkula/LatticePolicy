@@ -324,6 +324,10 @@ export function SearchPage() {
       clearTimeout(typingTimer.current);
       typingTimer.current = null;
     }
+    if (page !== 1) {
+      setPage(1);
+      return;
+    }
     runActiveSearch();
   };
 

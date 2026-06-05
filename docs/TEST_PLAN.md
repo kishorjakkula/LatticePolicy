@@ -103,6 +103,7 @@ Initial E2E scenarios:
 - Customer login -> portal list -> portal policy summary.
 - Customer cannot reach admin/search/internal policy pages.
 - Mobile viewport nav opens and routes correctly.
+- Search filters, pagination, and detail navigation work in a real browser.
 
 ## First Milestone
 
@@ -145,6 +146,8 @@ Add Playwright E2E:
 npm run test:server
 npm run test:frontend
 npm run test
+npm run test:e2e
+npm run test:e2e:docker
 npm run typecheck
 ```
 
@@ -170,3 +173,11 @@ curl http://localhost:3300/health
 npm run smoke --workspace=server
 npm run smoke:transactions --workspace=server
 ```
+
+Playwright runs against the local Docker Compose ports by default:
+
+- UI: `E2E_BASE_URL=http://localhost:5173`
+- API: `E2E_API_BASE_URL=http://localhost:3300`
+- Tenant: `E2E_TENANT_ID=sample-carrier`
+
+Use `npx playwright install chromium` before the first run on a new machine.

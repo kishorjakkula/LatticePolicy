@@ -120,8 +120,9 @@ export function LoginPage() {
         <form onSubmit={onSubmit}>
           {mfaStep === 'credentials' && (
             <>
-              <label>Organization Slug</label>
+              <label htmlFor="tenant-id">Organization Slug</label>
               <input
+                id="tenant-id"
                 value={tenantId}
                 onChange={e => {
                   setTenantId(e.target.value)
@@ -129,16 +130,18 @@ export function LoginPage() {
                 }}
                 placeholder="e.g. sample-carrier"
               />
-              <label>Email / Username</label>
+              <label htmlFor="username">Email / Username</label>
               <input
+                id="username"
                 value={username}
                 onChange={e => {
                   setUsername(e.target.value)
                   resetMfaFlow()
                 }}
               />
-              <label>Password</label>
+              <label htmlFor="password">Password</label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={e => {
@@ -159,15 +162,16 @@ export function LoginPage() {
                 <>
                   {manualKey && (
                     <>
-                      <label>Manual Setup Key</label>
-                      <input value={manualKey} readOnly />
+                      <label htmlFor="manual-setup-key">Manual Setup Key</label>
+                      <input id="manual-setup-key" value={manualKey} readOnly />
                     </>
                   )}
                   {otpAuthUri && <p className="muted">Authenticator URI: {otpAuthUri}</p>}
                 </>
               )}
-              <label>Verification Code</label>
+              <label htmlFor="verification-code">Verification Code</label>
               <input
+                id="verification-code"
                 value={otp}
                 onChange={e => setOtp(String(e.target.value || '').replace(/\D/g, '').slice(0, 6))}
                 placeholder="123456"

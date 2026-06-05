@@ -730,9 +730,11 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
   const tenantId = req.tenant!.tenantId
   const db = getDb()
   if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Seeding requires DB' })
+  let seedStep = 'start'
   try {
     await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
+      seedStep = 'load tenant policy number formats'
       const tenantSettingsResult = await q(
         'SELECT policy_number_formats_by_product FROM tenants WHERE tenant_id=$1 LIMIT 1',
         [tenantId]
@@ -765,8 +767,8 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
       samples.push({
         payload: {
           productCode: 'personal-auto', effectiveDate: '2025-05-01', termMonths: 12, state: 'FL',
-          uwAnswers: { driverAge: 70 },
-          risks: [{ type: 'autoVehicle', year: 2015, make: 'Ford', model: 'Focus', garagingZip: '33101', usage: 'business', annualMiles: 15000 }],
+          uwAnswers: { driverAge: 17 },
+          risks: [{ type: 'autoVehicle', year: 2015, make: 'Ford', model: 'Focus', garagingZip: '33101', usage: 'commercial', annualMiles: 40000 }],
           coverages: []
         },
         endorse: { effectiveDate: '2025-09-01', changes: [{ op: 'replace', path: '/uwAnswers/driverAge', value: 20 }] },
@@ -774,6 +776,7 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
       })
 
       for (const s of samples) {
+        seedStep = 'create policy identifiers'
         const policyId = uuidv4()
         const productCode = String(s.payload?.productCode || 'unknown')
         const policyNumber = await generatePolicyNumber({
@@ -794,27 +797,44 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
         const expStr = exp.toISOString().slice(0,10)
         const premium = rate(tenantId, s.payload)
         const uw = evaluateUW(tenantId, s.payload)
+        seedStep = `insert policy ${productCode}`
         await q('INSERT INTO policies (tenant_id, policy_id, policy_number, product_code, status, term_effective_date, term_expiration_date) VALUES ($1,$2,$3,$4,$5,$6,$7)',
           [tenantId, policyId, policyNumber, productCode, 'Issued', eff, expStr])
         const issueVid = uuidv4()
-        await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, uw_decision, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-          [tenantId, policyId, issueVid, eff, 'Issue', premium.total?.amount || 0, premium.fees?.amount || 0, premium.taxes?.amount || 0, 'USD', uw.decision, s.payload])
+        seedStep = `insert issue version ${productCode}`
+        await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, uw_decision, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)',
+          [tenantId, policyId, issueVid, eff, 'NB', premium.total?.amount || 0, premium.fees?.amount || 0, premium.taxes?.amount || 0, 'USD', uw.decision, JSON.stringify(s.payload)])
         const risk = s.payload.risks?.[0]
         if (s.payload.productCode === 'personal-auto') {
+          seedStep = 'insert auto vehicle'
           await q('INSERT INTO auto_vehicles (tenant_id, policy_id, version_id, year, make, model, vin, symbol, garaging_zip, usage, annual_miles, driver_age) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
             [tenantId, policyId, issueVid, risk.year || null, risk.make || null, risk.model || null, risk.vin || null, risk.symbol || null, risk.garagingZip || null, risk.usage || null, risk.annualMiles || null, (s.payload.uwAnswers?.driverAge ?? risk.driverAge) || null])
         } else {
-          await q('INSERT INTO dwellings (tenant_id, policy_id, version_id, address, construction, protection_class, year_built, roof_age_years, square_feet) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-            [tenantId, policyId, issueVid, risk.address || null, risk.construction || null, risk.protectionClass || null, risk.yearBuilt || null, risk.roofAgeYears || null, risk.squareFeet || null])
+          seedStep = 'insert dwelling'
+          await q('INSERT INTO dwellings (tenant_id, policy_id, version_id, address, construction, protection_class, year_built, roof_age_years, square_feet) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)',
+            [
+              tenantId,
+              policyId,
+              issueVid,
+              risk.address ? JSON.stringify({ line1: risk.address }) : null,
+              risk.construction || null,
+              risk.protectionClass || null,
+              risk.yearBuilt || null,
+              risk.roofAgeYears || null,
+              risk.squareFeet || null
+            ])
         }
         for (const c of (s.payload.coverages || [])) {
+          seedStep = 'insert coverage selection'
           await q('INSERT INTO coverage_selections (tenant_id, policy_id, version_id, coverage_code, selected, limit_value, deductible, percent) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
             [tenantId, policyId, issueVid, c.code, !!c.selected, c.limit ?? null, c.deductible ?? null, c.percent ?? null])
         }
         if (s.cancel) {
           const vid = uuidv4()
+          seedStep = 'insert cancellation version'
           await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-            [tenantId, policyId, vid, s.cancel, 'Cancel', -100, 0, 0, 'USD'])
+            [tenantId, policyId, vid, s.cancel, 'CANCEL', -100, 0, 0, 'USD'])
+          seedStep = 'mark policy cancelled'
           await q('UPDATE policies SET status=$1 WHERE tenant_id=$2 AND policy_id=$3', ['Cancelled', tenantId, policyId])
         }
         if (s.endorse) {
@@ -825,21 +845,23 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
           const np = rate(tenantId, newPayload)
           const delta = (np.total?.amount || 0) - (premium.total?.amount || 0)
           const vid = uuidv4()
-          await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-            [tenantId, policyId, vid, s.endorse.effectiveDate, 'Endorse', delta, 0, 0, 'USD', newPayload])
+          seedStep = 'insert endorsement version'
+          await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)',
+            [tenantId, policyId, vid, s.endorse.effectiveDate, 'ENDORSE', delta, 0, 0, 'USD', JSON.stringify(newPayload)])
         }
         if (s.renew) {
           const nextEff = expStr
           const np = rate(tenantId, { ...s.payload, effectiveDate: nextEff })
           const vid = uuidv4()
-          await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-            [tenantId, policyId, vid, nextEff, 'Renew', np.total?.amount || 0, np.fees?.amount || 0, np.taxes?.amount || 0, 'USD', { ...s.payload, effectiveDate: nextEff }])
+          seedStep = 'insert renewal version'
+          await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)',
+            [tenantId, policyId, vid, nextEff, 'RENEW', np.total?.amount || 0, np.fees?.amount || 0, np.taxes?.amount || 0, 'USD', JSON.stringify({ ...s.payload, effectiveDate: nextEff })])
         }
       }
     })
     return res.json({ ok: true })
   } catch (e:any) {
-    return res.status(500).json({ code: 'SEED_FAILED', message: String(e?.message || e) })
+    return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
   }
 })
 
