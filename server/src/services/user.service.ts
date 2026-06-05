@@ -1,10 +1,8 @@
 import bcrypt from 'bcryptjs'
-import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, and, sql, inArray, getTableColumns } from 'drizzle-orm'
-import { getDb, withTenantTx, type DrizzleDB } from '../db.js'
+import { createDrizzleDb, getDb, withTenantTx, type DrizzleDB } from '../db.js'
 import { isUuidLike } from '../lib/utils.js'
-import * as schema from '../schema.js'
-import { users, userRoles, customers } from '../schema.js'
+import { tenants, users, userRoles, customers } from '../schema.js'
 
 export type UserRecord = {
   id: string
@@ -25,7 +23,7 @@ export type UserRecord = {
 function getPoolDrizzle(): DrizzleDB {
   const pool = getDb()
   if (!pool) throw new Error('DB not initialized')
-  return drizzle({ client: pool, schema }) as DrizzleDB
+  return createDrizzleDb(pool)
 }
 
 async function resolveCustomerLink(db: DrizzleDB, tenantId: string, customerRefInput?: string | null): Promise<{ customerId: string; customerKey: string | null; customerName: string | null } | null> {
@@ -311,7 +309,7 @@ export async function ensureDefaults() {
   if (!pool) return
   await withTenantTx('sample-carrier', async (db) => {
     await db
-      .insert(schema.tenants)
+      .insert(tenants)
       .values({ tenantId: 'sample-carrier', name: 'Sample Carrier' })
       .onConflictDoNothing()
 

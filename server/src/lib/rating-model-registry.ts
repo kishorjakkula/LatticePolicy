@@ -1,8 +1,6 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, and, desc } from 'drizzle-orm'
-import { getDb, withTenantTx } from '../db.js'
+import { createDrizzleDb, getDb, withTenantTx } from '../db.js'
 import { ratingModels, ratingModelVersions, tenants } from '../schema.js'
-import * as schema from '../schema.js'
 
 export type PublishedRatingModelSnapshot = {
   tenantId: string
@@ -149,7 +147,7 @@ export async function refreshTenantPublishedRatingModelCache(tenantId: string): 
 export async function warmPublishedRatingModelCache(): Promise<void> {
   const pool = getDb()
   if (!pool) return
-  const db = drizzle({ client: pool, schema })
+  const db = createDrizzleDb(pool)
   const tenantRows = await db
     .select({ tenantId: tenants.tenantId })
     .from(tenants)

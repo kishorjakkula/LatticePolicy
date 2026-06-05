@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { Pool } from 'pg'
+import { Pool, type PoolClient } from 'pg'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from './schema.js'
 import { logger } from './logger.js'
@@ -12,7 +12,11 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const MIGRATIONS_DIR = path.resolve(__dirname, '../migrations')
 
-export type DrizzleDB = NodePgDatabase<typeof schema>
+export type DrizzleDB = NodePgDatabase<any>
+
+export function createDrizzleDb(client: Pool | PoolClient): DrizzleDB {
+  return drizzle({ client, schema } as any) as unknown as DrizzleDB
+}
 
 /**
  * Backward-compatibility helper: wraps a DrizzleDB into the old raw QueryFn
@@ -70,7 +74,7 @@ export async function withTenantTx<T>(tenantId: string, fn: (db: DrizzleDB) => P
   try {
     await client.query('BEGIN')
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId])
-    const db = drizzle({ client, schema }) as DrizzleDB
+    const db = createDrizzleDb(client)
     ;(db as any).__pgClient = client
     const result = await fn(db)
     await client.query('COMMIT')

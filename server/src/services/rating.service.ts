@@ -4,7 +4,15 @@ import { round2 } from '../lib/date.utils.js'
 
 export type QuoteInput = any
 
-export function rate(tenantId: string, payload: QuoteInput) {
+export type PremiumResult = {
+  byCoverage: any[]
+  fees: { amount: number; currency: string }
+  taxes: { amount: number; currency: string }
+  total: { amount: number; currency: string }
+  calcTrace?: any
+}
+
+export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
   const product = payload?.productCode as 'personal-auto' | 'commercial-auto' | 'homeowners' | 'cyber' | 'professional-liability'
   if (!product) throw new Error('productCode is required')
   const pack = loadProductRates(product)
@@ -873,7 +881,7 @@ function hoCoverageMultiplier(code: string, cov: any): number {
   return clamp(Math.sqrt(fallbackLimit / 5000), 0.65, 1.8)
 }
 
-function breakdown(total: number, fees: number, taxes: number, byCoverage: any[]) {
+function breakdown(total: number, fees: number, taxes: number, byCoverage: any[]): PremiumResult {
   return {
     byCoverage,
     fees: { amount: round2(fees), currency: 'USD' },

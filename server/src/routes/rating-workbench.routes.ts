@@ -380,7 +380,7 @@ async function parseWorkbook(input: {
   if (!buffer.length) throw new Error('Workbook payload is empty')
   const sha = createHash('sha256').update(buffer).digest('hex')
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buffer)
+  await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0])
   const sheetNames = wb.worksheets.map((sheet) => sheet.name)
   if (sheetNames.length === 0) throw new Error('Workbook has no sheets')
 
