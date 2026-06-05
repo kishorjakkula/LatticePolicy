@@ -1,9 +1,7 @@
 import type { Pool } from 'pg'
-import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, sql } from 'drizzle-orm'
-import { getDb } from './db.js'
+import { createDrizzleDb, getDb } from './db.js'
 import { asyncMessageOutbox } from './schema.js'
-import * as schema from './schema.js'
 import { logger } from './logger.js'
 
 type AsyncOutboxStatus = 'Pending' | 'Processing' | 'Retry' | 'Sent' | 'Failed'
@@ -148,7 +146,7 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
 }
 
 async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<void> {
-  const db = drizzle({ client: pool, schema })
+  const db = createDrizzleDb(pool)
   const nextAttempts = row.attempts + 1
   try {
     await pushMessage(row, config, nextAttempts)

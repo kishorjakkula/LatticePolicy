@@ -1345,7 +1345,7 @@ async function parseUploadedRows(input: { fileName: string; mimeType: string; da
   }
 
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buffer)
+  await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0])
   const out: ParsedInputRow[] = []
   for (const sheet of wb.worksheets) {
     const sheetName = sheet.name

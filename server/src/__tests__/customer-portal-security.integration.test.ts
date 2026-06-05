@@ -129,7 +129,7 @@ async function createIssuedPolicy(customer: { customerId: string; displayName: s
   )
   const bound = await bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)
   await withTenantTx(tenantId, (db) =>
-    issuePolicy(db, tenantId, bound.policyId, {
+    issuePolicy(db, tenantId, bound.policyId, {}, {
       id: crypto.randomUUID(),
       username: 'integration-test',
       roles: ['admin'],
