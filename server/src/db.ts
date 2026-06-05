@@ -24,9 +24,14 @@ export type DrizzleDB = NodePgDatabase<typeof schema>
  * connection.
  */
 export function toRawQuery(db: DrizzleDB): (text: string, params?: any[]) => Promise<any> {
+  const rawClient = (db as any).__pgClient
+  if (rawClient && typeof rawClient.query === 'function') {
+    return (text: string, params?: any[]) => rawClient.query(text, params)
+  }
+
   // drizzle-orm/node-postgres stores the underlying PoolClient on session.client
   const client = (db as any).session?.client
-  if (client && typeof client.query === 'function') {
+  if (client && typeof client.query === 'function' && client.constructor?.name === 'Client') {
     return (text: string, params?: any[]) => client.query(text, params)
   }
   // Fallback: use the module-level pool (loses the per-request tenant setting,
@@ -39,6 +44,13 @@ export function toRawQuery(db: DrizzleDB): (text: string, params?: any[]) => Pro
 
 export function getDb(): Pool | null {
   return pool
+}
+
+export async function closeDb() {
+  if (!pool) return
+  const current = pool
+  pool = null
+  await current.end()
 }
 
 export async function initDb() {
@@ -58,7 +70,8 @@ export async function withTenantTx<T>(tenantId: string, fn: (db: DrizzleDB) => P
   try {
     await client.query('BEGIN')
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId])
-    const db = drizzle(client, { schema }) as DrizzleDB
+    const db = drizzle({ client, schema }) as DrizzleDB
+    ;(db as any).__pgClient = client
     const result = await fn(db)
     await client.query('COMMIT')
     return result

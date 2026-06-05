@@ -149,7 +149,7 @@ export async function refreshTenantPublishedRatingModelCache(tenantId: string): 
 export async function warmPublishedRatingModelCache(): Promise<void> {
   const pool = getDb()
   if (!pool) return
-  const db = drizzle(pool, { schema })
+  const db = drizzle({ client: pool, schema })
   const tenantRows = await db
     .select({ tenantId: tenants.tenantId })
     .from(tenants)

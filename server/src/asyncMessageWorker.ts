@@ -148,7 +148,7 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
 }
 
 async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<void> {
-  const db = drizzle(pool, { schema })
+  const db = drizzle({ client: pool, schema })
   const nextAttempts = row.attempts + 1
   try {
     await pushMessage(row, config, nextAttempts)

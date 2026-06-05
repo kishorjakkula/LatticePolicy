@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { createHash } from 'crypto'
-import XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { v4 as uuidv4 } from '../uuid.js'
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { requirePermission } from '../auth.js'
@@ -106,7 +106,7 @@ ratingRoutes.post('/models/import', requirePermission('rating.models.manage'), a
   const dataBase64 = String(req.body?.dataBase64 || '').trim()
   if (!dataBase64) return res.status(400).json({ code: 'INVALID_INPUT', message: 'dataBase64 is required' })
   try {
-    const parsed = parseWorkbook({
+    const parsed = await parseWorkbook({
       fileName,
       mimeType,
       dataBase64,
@@ -367,7 +367,7 @@ ratingRoutes.get('/published', requirePermission('rating.models.read'), async (r
   }
 })
 
-function parseWorkbook(input: {
+async function parseWorkbook(input: {
   fileName: string
   mimeType: string
   dataBase64: string
@@ -375,19 +375,21 @@ function parseWorkbook(input: {
   stateCodeHint?: any
   modelCodeHint?: any
   programNameHint?: any
-}): ParsedWorkbook {
+}): Promise<ParsedWorkbook> {
   const buffer = Buffer.from(String(input.dataBase64 || ''), 'base64')
   if (!buffer.length) throw new Error('Workbook payload is empty')
   const sha = createHash('sha256').update(buffer).digest('hex')
-  const wb = XLSX.read(buffer, { type: 'buffer', raw: false, cellDates: true })
-  if (!Array.isArray(wb.SheetNames) || wb.SheetNames.length === 0) throw new Error('Workbook has no sheets')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
+  const sheetNames = wb.worksheets.map((sheet) => sheet.name)
+  if (sheetNames.length === 0) throw new Error('Workbook has no sheets')
 
   const allRows = new Map<string, any[][]>()
-  for (const name of wb.SheetNames) {
-    allRows.set(name, XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: false }) as any[][])
+  for (const sheet of wb.worksheets) {
+    allRows.set(sheet.name, worksheetToRows(sheet))
   }
 
-  const versionControlSheetName = findSheetName(wb.SheetNames, ['Version_Control', 'Version Control', 'VersionControl']) || ''
+  const versionControlSheetName = findSheetName(sheetNames, ['Version_Control', 'Version Control', 'VersionControl']) || ''
   const versionControl = parseTabularRows(allRows.get(versionControlSheetName) || [])
   const vcFirst = versionControl.records.find((r) => hasValues(r)) || {}
   const programName =
@@ -396,10 +398,10 @@ function parseWorkbook(input: {
       vcFirst['Program Name'] ||
       input.programNameHint ||
       ''
-    ).trim() || inferProgramName(input.fileName, wb.SheetNames)
+    ).trim() || inferProgramName(input.fileName, sheetNames)
   const productCode =
     normalizeProductCode(input.productCodeHint) ||
-    inferProductCode(programName, wb.SheetNames, input.fileName)
+    inferProductCode(programName, sheetNames, input.fileName)
   const stateCode = normalizeStateCode(input.stateCodeHint || vcFirst['State'] || '')
   const versionLabel = String(vcFirst['Model Version'] || 'v1.0').trim() || 'v1.0'
   const effectiveDate = coerceDateOnly(vcFirst['Effective Date'])
@@ -411,7 +413,7 @@ function parseWorkbook(input: {
   const tables: Record<string, any[]> = {}
   const sheetPreview: Record<string, any> = {}
   const tableCounts: Record<string, number> = {}
-  for (const sheetName of wb.SheetNames) {
+  for (const sheetName of sheetNames) {
     const rows = allRows.get(sheetName) || []
     const alias = resolveSheetAlias(sheetName)
     if (alias) {
@@ -448,13 +450,13 @@ function parseWorkbook(input: {
         expirationDate
       },
       sheets: {
-        names: wb.SheetNames,
+        names: sheetNames,
         preview: sheetPreview
       },
       tables
     },
     parserSummary: {
-      sheetCount: wb.SheetNames.length,
+      sheetCount: sheetNames.length,
       tableCounts,
       sourceWorkbook: {
         fileName: input.fileName,
@@ -467,6 +469,27 @@ function parseWorkbook(input: {
       importMode: 'generic'
     }
   }
+}
+
+function worksheetToRows(sheet: ExcelJS.Worksheet): any[][] {
+  const rows: any[][] = []
+  sheet.eachRow({ includeEmpty: true }, (row) => {
+    const values = Array.isArray(row.values) ? row.values.slice(1) : []
+    rows.push(values.map(normalizeExcelCellValue))
+  })
+  return rows
+}
+
+function normalizeExcelCellValue(value: any): any {
+  if (value == null) return null
+  if (value instanceof Date) return value
+  if (typeof value !== 'object') return value
+  if ('text' in value) return value.text
+  if ('result' in value) return value.result
+  if ('richText' in value && Array.isArray(value.richText)) {
+    return value.richText.map((part: any) => part?.text || '').join('')
+  }
+  return String(value)
 }
 
 function inferProductCode(programName: string, sheetNames: string[], fileName?: string): string {

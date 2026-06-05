@@ -49,6 +49,10 @@ export const store = {
   getQuote(id: string) { return quotes.get(id) },
   addPolicy(p: Policy) { policies.set(p.policyId, p) },
   getPolicy(id: string) { return policies.get(id) },
+  getPolicyForTenant(id: string, tenantId: string) {
+    const policy = policies.get(id)
+    return policy?.tenantId === tenantId ? policy : undefined
+  },
   searchPolicies(tenantId: string, query: string) {
     const q = (query || '').toLowerCase()
     return Array.from(policies.values()).filter(p => p.tenantId === tenantId && (

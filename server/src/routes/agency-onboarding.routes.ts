@@ -1,6 +1,6 @@
 import type { Request } from 'express'
 import { Router } from 'express'
-import XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { hasPermission } from '../auth.js'
@@ -717,11 +717,7 @@ onboardingAdminRoutes.get('/template', async (req, res) => {
   const format = String(req.query.format || 'csv').toLowerCase()
   if (format === 'json') return res.json(buildTemplateJson())
   if (format === 'xlsx') {
-    const wb = XLSX.utils.book_new()
-    for (const sheet of buildTemplateSheets()) {
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet.rows), sheet.name)
-    }
-    const data = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+    const data = await buildTemplateXlsx()
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', 'attachment; filename=\"agency-onboarding-template.xlsx\"')
     return res.send(data)
@@ -796,12 +792,12 @@ onboardingAdminRoutes.post('/jobs/:jobId/upload', async (req, res) => {
   if (!dataBase64) return res.status(400).json({ code: 'INVALID_INPUT', message: 'dataBase64 is required' })
 
   try {
+    const parsedRows = await parseUploadedRows({ fileName, mimeType, dataBase64 })
+    if (!parsedRows.length) throw new Error('NO_ROWS')
     const output = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       const job = await loadJobRow(q, tenantId, jobId)
       if (!job) throw new Error('JOB_NOT_FOUND')
-      const parsedRows = parseUploadedRows({ fileName, mimeType, dataBase64 })
-      if (!parsedRows.length) throw new Error('NO_ROWS')
       await q('DELETE FROM onboarding_job_rows WHERE tenant_id=$1 AND job_id=$2::uuid', [tenantId, jobId])
       let rowNo = 1
       for (const parsed of parsedRows) {
@@ -1337,7 +1333,7 @@ function normalizeIdempotencyMap(input: any, fallback: Record<string, Idempotenc
   return out
 }
 
-function parseUploadedRows(input: { fileName: string; mimeType: string; dataBase64: string }): ParsedInputRow[] {
+async function parseUploadedRows(input: { fileName: string; mimeType: string; dataBase64: string }): Promise<ParsedInputRow[]> {
   const fileName = input.fileName.toLowerCase()
   const mimeType = input.mimeType.toLowerCase()
   const buffer = Buffer.from(input.dataBase64, 'base64')
@@ -1348,12 +1344,12 @@ function parseUploadedRows(input: { fileName: string; mimeType: string; dataBase
     return parseJsonRows(parsed)
   }
 
-  const wb = XLSX.read(buffer, { type: 'buffer', raw: false, cellDates: true })
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
   const out: ParsedInputRow[] = []
-  for (const sheetName of wb.SheetNames || []) {
-    const sheet = wb.Sheets[sheetName]
-    if (!sheet) continue
-    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' })
+  for (const sheet of wb.worksheets) {
+    const sheetName = sheet.name
+    const rows = worksheetToObjects(sheet)
     const fallbackEntity = inferEntityTypeFromSheet(sheetName)
     for (const row of rows) {
       const entityType = inferEntityTypeFromRow(row) || fallbackEntity
@@ -1366,6 +1362,47 @@ function parseUploadedRows(input: { fileName: string; mimeType: string; dataBase
     }
   }
   return out
+}
+
+function worksheetToObjects(sheet: ExcelJS.Worksheet): Record<string, any>[] {
+  const rows = worksheetToRows(sheet)
+  const headerRowIndex = rows.findIndex((row) => row.some((value) => sanitizeText(value)))
+  if (headerRowIndex < 0) return []
+  const headers = rows[headerRowIndex].map((value) => sanitizeText(value))
+  const out: Record<string, any>[] = []
+  for (const row of rows.slice(headerRowIndex + 1)) {
+    const obj: Record<string, any> = {}
+    let hasValue = false
+    headers.forEach((header, index) => {
+      if (!header) return
+      const value = row[index] ?? ''
+      if (sanitizeText(value)) hasValue = true
+      obj[header] = value
+    })
+    if (hasValue) out.push(obj)
+  }
+  return out
+}
+
+function worksheetToRows(sheet: ExcelJS.Worksheet): any[][] {
+  const rows: any[][] = []
+  sheet.eachRow({ includeEmpty: true }, (row) => {
+    const values = Array.isArray(row.values) ? row.values.slice(1) : []
+    rows.push(values.map(normalizeExcelCellValue))
+  })
+  return rows
+}
+
+function normalizeExcelCellValue(value: any): any {
+  if (value == null) return ''
+  if (value instanceof Date) return value
+  if (typeof value !== 'object') return value
+  if ('text' in value) return value.text
+  if ('result' in value) return value.result
+  if ('richText' in value && Array.isArray(value.richText)) {
+    return value.richText.map((part: any) => part?.text || '').join('')
+  }
+  return String(value)
 }
 
 function parseJsonRows(parsed: any): ParsedInputRow[] {
@@ -3422,6 +3459,20 @@ function buildTemplateJson() {
   const output: Record<string, Record<string, any>[]> = {}
   for (const sheet of buildTemplateSheets()) output[sheet.name] = sheet.rows
   return output
+}
+
+async function buildTemplateXlsx(): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  for (const sheet of buildTemplateSheets()) {
+    const ws = wb.addWorksheet(sheet.name)
+    const headers = Array.from(new Set(sheet.rows.flatMap((row) => Object.keys(row))))
+    ws.addRow(headers)
+    for (const row of sheet.rows) {
+      ws.addRow(headers.map((header) => row[header] ?? ''))
+    }
+  }
+  const data = await wb.xlsx.writeBuffer()
+  return Buffer.from(data)
 }
 
 function buildTemplateCsv(): string {

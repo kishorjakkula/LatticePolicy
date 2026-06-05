@@ -37,6 +37,38 @@ function toArray(value: any): any[] {
   return Array.isArray(value) ? value : [value]
 }
 
+function policyField(row: any, camelKey: string, snakeKey: string): any {
+  return row?.[camelKey] ?? row?.[snakeKey]
+}
+
+function policyTermEffective(row: any): string {
+  return coerceDateOnly(policyField(row, 'termEffectiveDate', 'term_effective_date'))
+}
+
+function policyTermExpiration(row: any): string {
+  return coerceDateOnly(policyField(row, 'termExpirationDate', 'term_expiration_date'))
+}
+
+function policyProductCode(row: any): string {
+  return String(policyField(row, 'productCode', 'product_code') || '')
+}
+
+function policyCurrencyCode(row: any): string {
+  return String(policyField(row, 'currencyCode', 'currency_code') || 'USD')
+}
+
+function policyPremiumSummary(row: any): any {
+  return policyField(row, 'premiumSummary', 'premium_summary')
+}
+
+function policyRiskSummary(row: any): any {
+  return policyField(row, 'riskSummary', 'risk_summary')
+}
+
+function policyTermType(row: any): string | null {
+  return policyField(row, 'termType', 'term_type') || null
+}
+
 type TransactionNumberMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
 
 function transactionNumberPrefix(mode: TransactionNumberMode): string {
@@ -202,14 +234,14 @@ export async function cancelPolicy(
     throw new BadRequestError('INVALID_STATE', 'Policy already cancelled')
   }
   const eff = asDateOnly(body?.effectiveDate) || today()
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termEffective = policyTermEffective(policyRow)
+  const termExpiration = policyTermExpiration(policyRow)
   const txPayload = overridePayload
     ? JSON.parse(JSON.stringify(overridePayload))
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
-  const fullPremium = safeMoney(policyRow.premium_summary?.total?.amount)
+  const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
   let returnPremiumResult = { returnPremium: 0, earnedPremium: fullPremium, method: 'PRO_RATA' }
   let resolvedCancellationType = 'PRO_RATA'
@@ -223,7 +255,7 @@ export async function cancelPolicy(
 
       let shortRateTable: any[] = []
       if (reasonRow.return_premium === 'SHORT_RATE') {
-        shortRateTable = await loadShortRateTable(q, tenantId, policyRow.product_code || '', txPayload?.state || '')
+        shortRateTable = await loadShortRateTable(q, tenantId, policyProductCode(policyRow), txPayload?.state || '')
       }
 
       returnPremiumResult = computeReturnPremium({
@@ -249,7 +281,7 @@ export async function cancelPolicy(
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
-  const currency = policyRow.currency_code || 'USD'
+  const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('cancel')
   const version: any = {
@@ -384,20 +416,20 @@ export async function reinstatePolicy(
     throw new BadRequestError('INVALID_STATE', 'Policy is not cancelled')
   }
   const eff = asDateOnly(body?.effectiveDate) || today()
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termEffective = policyTermEffective(policyRow)
+  const termExpiration = policyTermExpiration(policyRow)
   const txPayload = overridePayload
     ? JSON.parse(JSON.stringify(overridePayload))
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
-  const fullPremium = safeMoney(policyRow.premium_summary?.total?.amount)
+  const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
   const factor = proRataFactor(eff, termEffective, termExpiration)
   const reinstatementCharge = round2(fullPremium * factor)
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
-  const currency = policyRow.currency_code || 'USD'
+  const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('reinstate')
   const version: any = {
@@ -518,8 +550,8 @@ export async function renewPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  const termMonths = diffMonths(policyRow.term_effective_date, policyRow.term_expiration_date) || 12
-  const nextEff = overrideEffectiveDate || coerceDateOnly(policyRow.term_expiration_date)
+  const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
+  const nextEff = overrideEffectiveDate || policyTermExpiration(policyRow)
   const nextExp = addMonths(nextEff, termMonths)
   const prevPayload = ctx.latestPayload && typeof ctx.latestPayload === 'object' ? ctx.latestPayload : {}
   const payload = overridePayload
@@ -527,7 +559,7 @@ export async function renewPolicy(
     : JSON.parse(JSON.stringify(prevPayload || {}))
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
-  payload.productCode = payload.productCode || policyRow.product_code
+  payload.productCode = payload.productCode || policyProductCode(policyRow)
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
   if (uw.decision === 'Decline') {
@@ -538,7 +570,7 @@ export async function renewPolicy(
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
-  const currency = policyRow.currency_code || 'USD'
+  const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('renew')
   const version: any = {
@@ -559,12 +591,12 @@ export async function renewPolicy(
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
   const riskEntries: RiskEntry[] = riskList.map((risk: any) => ({
     id: uuidv4(),
-    kind: mapRiskKind(policyRow.product_code, risk),
+    kind: mapRiskKind(policyProductCode(policyRow), risk),
     attributes: risk,
   }))
   const riskSummary = riskEntries.length
     ? { risks: riskEntries.map((r: RiskEntry) => ({ kind: r.kind, summary: summarizeRisk(r.attributes) })) }
-    : policyRow.risk_summary || null
+    : policyRiskSummary(policyRow) || null
   const premiumSummary = prem
     ? {
         total: (prem as any).total || { amount: safeMoney((prem as any)?.total?.amount), currency },
@@ -572,7 +604,7 @@ export async function renewPolicy(
         taxes: (prem as any).taxes || null,
         byCoverage: (prem as any).byCoverage || [],
       }
-    : policyRow.premium_summary
+    : policyPremiumSummary(policyRow)
   const lifecycle = {
     ...(policyRow.lifecycle || {}),
     renewedAt: processedAt,
@@ -650,7 +682,7 @@ export async function renewPolicy(
     policyId,
     versionId,
     entries: riskEntries,
-    productCode: policyRow.product_code,
+    productCode: policyProductCode(policyRow),
     transactionId,
     effectiveDate: nextEff,
     expirationDate: nextExp,
@@ -682,7 +714,7 @@ export async function renewPolicy(
     metadata,
     termEffectiveDate: nextEff,
     termExpirationDate: nextExp,
-    termType: policyRow.term_type,
+    termType: policyTermType(policyRow),
     currencyCode: currency,
   })
 
@@ -739,7 +771,7 @@ export async function rewritePolicy(
   }
 
   const baseTermMonths =
-    diffMonths(policyRow.term_effective_date, policyRow.term_expiration_date) || 12
+    diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const prevPayload =
     ctx.latestPayload && typeof ctx.latestPayload === 'object' ? ctx.latestPayload : {}
   const payload = overridePayload
@@ -750,7 +782,7 @@ export async function rewritePolicy(
   const nextExp = addMonths(nextEff, termMonths)
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
-  payload.productCode = payload.productCode || policyRow.product_code
+  payload.productCode = payload.productCode || policyProductCode(policyRow)
 
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
@@ -765,7 +797,7 @@ export async function rewritePolicy(
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
-  const currency = policyRow.currency_code || 'USD'
+  const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('rewrite')
   const version: any = {
@@ -787,7 +819,7 @@ export async function rewritePolicy(
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
   const riskEntries: RiskEntry[] = riskList.map((risk: any) => ({
     id: uuidv4(),
-    kind: mapRiskKind(policyRow.product_code, risk),
+    kind: mapRiskKind(policyProductCode(policyRow), risk),
     attributes: risk,
   }))
   const riskSummary = riskEntries.length
@@ -797,7 +829,7 @@ export async function rewritePolicy(
           summary: summarizeRisk(r.attributes),
         })),
       }
-    : policyRow.risk_summary || null
+    : policyRiskSummary(policyRow) || null
   const premiumSummary = prem
     ? {
         total: (prem as any).total || {
@@ -808,7 +840,7 @@ export async function rewritePolicy(
         taxes: (prem as any).taxes || null,
         byCoverage: (prem as any).byCoverage || [],
       }
-    : policyRow.premium_summary
+    : policyPremiumSummary(policyRow)
   const lifecycle = {
     ...(policyRow.lifecycle || {}),
     rewrittenAt: processedAt,
@@ -888,7 +920,7 @@ export async function rewritePolicy(
     policyId,
     versionId,
     entries: riskEntries,
-    productCode: policyRow.product_code,
+    productCode: policyProductCode(policyRow),
     transactionId,
     effectiveDate: nextEff,
     expirationDate: nextExp,
@@ -921,7 +953,7 @@ export async function rewritePolicy(
     metadata,
     termEffectiveDate: nextEff,
     termExpirationDate: nextExp,
-    termType: policyRow.term_type,
+    termType: policyTermType(policyRow),
     currencyCode: currency,
   })
 
@@ -955,14 +987,14 @@ export async function previewRenewal(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  const termMonths = diffMonths(policyRow.term_effective_date, policyRow.term_expiration_date) || 12
-  const nextEff = coerceDateOnly(policyRow.term_expiration_date)
+  const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
+  const nextEff = policyTermExpiration(policyRow)
   const nextExp = addMonths(nextEff, termMonths)
   const prevPayload = ctx.latestPayload && typeof ctx.latestPayload === 'object' ? ctx.latestPayload : {}
   const payload = JSON.parse(JSON.stringify(prevPayload || {}))
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
-  payload.productCode = payload.productCode || policyRow.product_code
+  payload.productCode = payload.productCode || policyProductCode(policyRow)
   const premium = rate(tenantId, payload)
   const underwriting = evaluateUW(tenantId, payload)
   return { underwriting, premium, nextEffectiveDate: nextEff, nextExpirationDate: nextExp }
@@ -994,15 +1026,15 @@ export async function nonRenewPolicy(
   if (status === 'cancelled') {
     throw new BadRequestError('INVALID_STATE', 'Cannot non-renew a cancelled policy.')
   }
-  if (policyRow.non_renewed_at) {
+  if (policyField(policyRow, 'nonRenewedAt', 'non_renewed_at')) {
     throw new ConflictError('ALREADY_NON_RENEWED', 'Policy is already marked as non-renewed.')
   }
 
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termExpiration = policyTermExpiration(policyRow)
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
-  const currency = policyRow.currency_code || 'USD'
+  const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = reserveTransactionNumber('renew').replace('RN-', 'NR-')
 
