@@ -30,6 +30,8 @@
     "test": "sh scripts/test.sh",
     "test:docker": "sh scripts/test-docker.sh",
     "test:integration": "sh scripts/test-integration.sh",
+    "test:e2e": "playwright test",
+    "test:e2e:docker": "sh scripts/test-e2e-docker.sh",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
@@ -40,5 +42,8 @@
     "exceljs@4.4.0": {
       "uuid": "11.1.1"
     }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
   }
 }

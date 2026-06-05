@@ -500,9 +500,9 @@ customerAdminRoutes.post('/policy-links/assign', requirePermission('admin.custom
           `UPDATE policies
               SET metadata = coalesce(metadata, '{}'::jsonb) || jsonb_strip_nulls(
                     jsonb_build_object(
-                      'customerId', $3,
-                      'customerKey', $4,
-                      'customerName', $5
+                      'customerId', $3::text,
+                      'customerKey', $4::text,
+                      'customerName', $5::text
                     )
                   ),
                   updated_at = now()
@@ -2817,7 +2817,7 @@ async function loadCustomerRecordById(
             display_name, pending_approval, deactivation_reason, deactivation_effective_date, deactivated_at,
             created_at, created_by, updated_at, updated_by, metadata
        FROM customers
-      WHERE tenant_id = $1 AND customer_id = $2
+      WHERE tenant_id = $1 AND customer_id = $2::uuid
       LIMIT 1`,
     [tenantId, customerId]
   )

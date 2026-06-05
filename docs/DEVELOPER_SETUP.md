@@ -210,6 +210,8 @@ curl -X POST http://localhost:3300/auth/login \
 | `npm run build` | Build frontend and server |
 | `npm run test` | Run frontend and server tests |
 | `npm run test:integration` | Run Docker-backed PostgreSQL migration integration tests |
+| `npm run test:e2e` | Run Playwright tests against an already-running local stack |
+| `npm run test:e2e:docker` | Build/start Docker Compose, wait for API/UI readiness, and run Playwright |
 | `npm run typecheck` | Run TypeScript checks across workspaces |
 | `npm run smoke --workspace=server` | Run API smoke checks |
 | `docker compose up -d --build` | Start the full local stack |
@@ -232,6 +234,15 @@ For Docker, API runtime, database, or deployment changes, also run:
 docker compose up -d --build
 docker compose ps
 ```
+
+For browser workflow changes, install the Chromium browser once and run the E2E suite:
+
+```bash
+npx playwright install chromium
+npm run test:e2e:docker
+```
+
+The E2E suite defaults to `http://localhost:5173` for the UI, `http://localhost:3300` for the API, and tenant `sample-carrier`. Override with `E2E_BASE_URL`, `E2E_API_BASE_URL`, or `E2E_TENANT_ID` when needed.
 
 For UI changes, include screenshots in the pull request when the visual behavior changes.
 

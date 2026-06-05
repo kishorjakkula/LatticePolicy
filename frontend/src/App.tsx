@@ -150,6 +150,7 @@ export default function App() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={() => setMobileNavOpen(false)}
                 className={({ isActive }) =>
                   navClass({ isActive: isActive || (item.path === '/admin' && location.pathname.startsWith('/admin')) })
                 }
