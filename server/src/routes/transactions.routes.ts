@@ -101,7 +101,7 @@ transactionRoutes.post('/policies/:id/issue', async (req, res, next) => {
     }
 
     // In-memory fallback
-    const policy = store.getPolicy(req.params.id)
+    const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     if (policy.status === 'Cancelled') {
       return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy is cancelled' })
@@ -155,7 +155,7 @@ transactionRoutes.post('/policies/:id/endorse/reserve-number', (req, res) => {
       )
   }
 
-  const policy = store.getPolicy(req.params.id)
+  const policy = store.getPolicyForTenant(req.params.id, tenantId)
   if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
   const invalidState = validateTransactionNumberReservation('endorse', policy.status)
   if (invalidState) return res.status(400).json(invalidState)
@@ -196,7 +196,7 @@ transactionRoutes.post('/policies/:id/transactions/reserve-number', (req, res) =
       )
   }
 
-  const policy = store.getPolicy(req.params.id)
+  const policy = store.getPolicyForTenant(req.params.id, tenantId)
   if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
   const invalidState = validateTransactionNumberReservation(mode, policy.status)
   if (invalidState) return res.status(400).json(invalidState)
@@ -268,7 +268,7 @@ transactionRoutes.post(
       }
 
       // In-memory fallback
-      const policy = store.getPolicy(req.params.id)
+      const policy = store.getPolicyForTenant(req.params.id, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       if ((policy.status || '').toLowerCase() === 'cancelled') {
         return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy already cancelled' })
@@ -320,7 +320,7 @@ transactionRoutes.post(
       }
 
       // In-memory fallback
-      const policy = store.getPolicy(req.params.id)
+      const policy = store.getPolicyForTenant(req.params.id, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       if ((policy.status || '').toLowerCase() !== 'cancelled') {
         return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy is not cancelled' })
@@ -384,7 +384,7 @@ transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
       typeof req.body?.transactionNumber === 'string' ? req.body.transactionNumber.trim() : ''
     const overrideEffectiveDate = asDateOnly(req.body?.effectiveDate)
 
-    const policy = store.getPolicy(req.params.id)
+    const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     if (policy.status !== 'Cancelled') {
       return res
@@ -477,7 +477,7 @@ transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
       typeof req.body?.transactionNumber === 'string' ? req.body.transactionNumber.trim() : ''
     const overrideEffectiveDate = asDateOnly(req.body?.effectiveDate)
 
-    const policy = store.getPolicy(req.params.id)
+    const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const nextEff =
       overrideEffectiveDate || (policy as any).term.expirationDate
@@ -545,7 +545,7 @@ transactionRoutes.post('/policies/:id/renew/preview', async (req, res, next) => 
     }
 
     // In-memory fallback
-    const policy = store.getPolicy(req.params.id)
+    const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const nextEff = (policy as any).term.expirationDate
     const termMonths =
@@ -587,7 +587,7 @@ transactionRoutes.post(
       }
 
       // In-memory fallback
-      const policy = store.getPolicy(policyId)
+      const policy = store.getPolicyForTenant(policyId, tenantId)
       if (!policy || (policy as any).tenantId !== tenantId) {
         return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       }

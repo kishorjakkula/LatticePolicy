@@ -35,10 +35,7 @@ Last local verification:
 
 ## Remaining Security Work
 
-`npm audit fix` reduced the dependency audit, but these items remain:
+The root workspace audit is currently clean after security dependency updates.
 
-- `drizzle-orm` requires a breaking upgrade to fix a high-severity advisory.
-- `drizzle-kit` requires a breaking upgrade to resolve its transitive `esbuild` advisory.
-- `xlsx` has high-severity advisories with no upstream fix available through npm audit.
-
-Recommended next step: replace or isolate spreadsheet parsing/export behavior, then test a controlled Drizzle upgrade in a dedicated pull request.
+Keep running `npm audit` from the repository root after dependency changes, because
+the project uses the root npm workspace lockfile as the source of truth.

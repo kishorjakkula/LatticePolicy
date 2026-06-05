@@ -642,6 +642,32 @@ export function SearchPage() {
   };
 
   const hasFilters = !!(q || product || status || state || dateFrom || dateTo);
+  const statusOptions = [
+    ["", "All Statuses"],
+    ...(mode === "policies"
+      ? [
+          ["Draft", "Draft"],
+          ["Rated", "Rated"],
+          ["Bind", "Bind"],
+          ["Issued", "Issued"],
+          ["Inforced", "In Force"],
+          ["Expired", "Expired"],
+          ["Cancelled", "Cancelled"],
+        ]
+      : mode === "quotes"
+        ? [
+            ["Draft", "Draft"],
+            ["Rated", "Rated"],
+          ]
+        : [
+            ["DRAFT", "Draft"],
+            ["ACTIVE", "Active"],
+            ["INACTIVE", "Inactive"],
+            ["MERGED", "Merged"],
+            ["PENDING_APPROVAL", "Pending Approval"],
+            ["ARCHIVED", "Archived"],
+          ]),
+  ];
 
   // Keyboard shortcuts: / â†’ focus search, N â†’ new quote
   useEffect(() => {
@@ -864,32 +890,11 @@ export function SearchPage() {
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
-              <option value="">All Statuses</option>
-              {mode === "policies" ? (
-                <>
-                  <option value="Draft">Draft</option>
-                  <option value="Rated">Rated</option>
-                  <option value="Bind">Bind</option>
-                  <option value="Issued">Issued</option>
-                  <option value="Inforced">In Force</option>
-                  <option value="Expired">Expired</option>
-                  <option value="Cancelled">Cancelled</option>
-                </>
-              ) : mode === "quotes" ? (
-                <>
-                  <option value="Draft">Draft</option>
-                  <option value="Rated">Rated</option>
-                </>
-              ) : (
-                <>
-                  <option value="DRAFT">Draft</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                  <option value="MERGED">Merged</option>
-                  <option value="PENDING_APPROVAL">Pending Approval</option>
-                  <option value="ARCHIVED">Archived</option>
-                </>
-              )}
+              {statusOptions.map(([value, label]) => (
+                <option key={value || "all-statuses"} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
           {mode === "policies" && (

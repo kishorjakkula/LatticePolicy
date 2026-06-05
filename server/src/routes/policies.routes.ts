@@ -228,7 +228,7 @@ policyRoutes.get('/policies/:id', (req, res, next) => {
 
   // In-memory fallback
   try {
-    const p = store.getPolicy(req.params.id)
+    const p = store.getPolicyForTenant(req.params.id, tenantId)
     if (!p) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     return res.json({
       ...p,
@@ -277,7 +277,7 @@ policyRoutes.get('/policies/:id/state', async (req, res, next) => {
     const db = getDb()
 
     if (!db) {
-      const policy = store.getPolicy(req.params.id)
+      const policy = store.getPolicyForTenant(req.params.id, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       const asOf = asOfParam || today()
       const premium = rate(tenantId, (policy as any).payload)
@@ -327,7 +327,7 @@ policyRoutes.get('/policies/:id/versions', async (req, res, next) => {
     }
 
     // In-memory fallback
-    const p = store.getPolicy(req.params.id)
+    const p = store.getPolicyForTenant(req.params.id, tenantId)
     if (!p) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const versions = ((p as any).versions || []).map((version: any) => ({
       ...version,

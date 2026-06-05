@@ -315,7 +315,9 @@ export function CustomerPortalPage() {
           <section className="policy-section-card customer-portal-section">
             <div className="panel-header">
               <h3>My Policies</h3>
-              <span className="muted">{policies.length} policy{policies.length === 1 ? '' : 'ies'}</span>
+              <span className="muted">
+                {policies.length} {policies.length === 1 ? 'policy' : 'policies'}
+              </span>
             </div>
             <div className="ps-table-card">
               <table className="table table-sticky-header">

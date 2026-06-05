@@ -25,7 +25,7 @@ export type UserRecord = {
 function getPoolDrizzle(): DrizzleDB {
   const pool = getDb()
   if (!pool) throw new Error('DB not initialized')
-  return drizzle(pool, { schema }) as DrizzleDB
+  return drizzle({ client: pool, schema }) as DrizzleDB
 }
 
 async function resolveCustomerLink(db: DrizzleDB, tenantId: string, customerRefInput?: string | null): Promise<{ customerId: string; customerKey: string | null; customerName: string | null } | null> {

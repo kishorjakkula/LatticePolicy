@@ -209,6 +209,7 @@ curl -X POST http://localhost:3300/auth/login \
 | `npm run dev:frontend` | Start the React frontend in Vite |
 | `npm run build` | Build frontend and server |
 | `npm run test` | Run frontend and server tests |
+| `npm run test:integration` | Run Docker-backed PostgreSQL migration integration tests |
 | `npm run typecheck` | Run TypeScript checks across workspaces |
 | `npm run smoke --workspace=server` | Run API smoke checks |
 | `docker compose up -d --build` | Start the full local stack |

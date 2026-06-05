@@ -26,7 +26,19 @@
     "build": "npm run build:frontend && npm run build:server",
     "test:frontend": "npm run test --workspace=frontend",
     "test:server": "npm run test --workspace=server",
-    "test": "npm run test:frontend && npm run test:server",
+    "test:local": "npm run test:frontend && npm run test:server",
+    "test": "sh scripts/test.sh",
+    "test:docker": "sh scripts/test-docker.sh",
+    "test:integration": "sh scripts/test-integration.sh",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.59.0",
+    "@rollup/rollup-linux-arm64-musl": "^4.59.0"
+  },
+  "overrides": {
+    "exceljs@4.4.0": {
+      "uuid": "11.1.1"
+    }
   }
 }
