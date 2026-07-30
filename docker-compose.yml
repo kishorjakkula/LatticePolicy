@@ -11,6 +11,11 @@ services:
       - "65432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-lattice_policy} -d ${DB_NAME:-lattice_policy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     deploy:
       resources:
         limits:
@@ -25,6 +30,11 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     deploy:
       resources:
         limits:
@@ -46,8 +56,10 @@ services:
     ports:
       - "3300:3000"
     depends_on:
-      - db
-      - cache
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
     deploy:
       resources:
         limits:
