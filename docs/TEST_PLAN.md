@@ -180,4 +180,8 @@ Playwright runs against the local Docker Compose ports by default:
 - API: `E2E_API_BASE_URL=http://localhost:3300`
 - Tenant: `E2E_TENANT_ID=sample-carrier`
 
+The Docker E2E runner resets the Compose volumes before startup, waits for a
+database-backed API health response, then waits for the frontend before running
+Playwright. Use it when you need a clean full-stack validation path.
+
 Use `npx playwright install chromium` before the first run on a new machine.

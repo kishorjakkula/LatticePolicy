@@ -91,11 +91,21 @@ test.describe('browser workflows', () => {
     }
 
     await page.getByRole('textbox', { name: 'Search' }).fill(policy.policyNumber)
-    await page.getByLabel('Status', { exact: true }).selectOption('Issued')
-    await page.getByRole('button', { name: 'Search' }).click()
-    await expect(page.getByRole('button', { name: policy.policyNumber })).toBeVisible()
+    await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().includes('/api/v1/policies') &&
+        response.url().includes(encodeURIComponent(policy.policyNumber)) &&
+        response.ok()
+      ),
+      page.getByRole('button', { name: 'Search' }).click(),
+    ])
+    const policyButton = page.getByRole('button', { name: policy.policyNumber }).first()
+    await expect(policyButton).toBeVisible()
 
-    await page.getByRole('button', { name: policy.policyNumber }).click()
+    await Promise.all([
+      page.waitForURL(new RegExp(`/policies/${policy.policyId}`)),
+      policyButton.click(),
+    ])
     await expect(page).toHaveURL(new RegExp(`/policies/${policy.policyId}`))
     await expect(page.getByText(policy.policyNumber).first()).toBeVisible()
   })

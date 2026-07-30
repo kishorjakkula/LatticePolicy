@@ -211,7 +211,7 @@ curl -X POST http://localhost:3300/auth/login \
 | `npm run test` | Run frontend and server tests |
 | `npm run test:integration` | Run Docker-backed PostgreSQL migration integration tests |
 | `npm run test:e2e` | Run Playwright tests against an already-running local stack |
-| `npm run test:e2e:docker` | Build/start Docker Compose, wait for API/UI readiness, and run Playwright |
+| `npm run test:e2e:docker` | Reset Docker Compose volumes, build/start the stack, wait for API/UI readiness, and run Playwright |
 | `npm run typecheck` | Run TypeScript checks across workspaces |
 | `npm run smoke --workspace=server` | Run API smoke checks |
 | `docker compose up -d --build` | Start the full local stack |
@@ -242,7 +242,7 @@ npx playwright install chromium
 npm run test:e2e:docker
 ```
 
-The E2E suite defaults to `http://localhost:5173` for the UI, `http://localhost:3300` for the API, and tenant `sample-carrier`. Override with `E2E_BASE_URL`, `E2E_API_BASE_URL`, or `E2E_TENANT_ID` when needed.
+The Docker E2E runner starts from clean PostgreSQL and Redis volumes so stale local credentials or test data do not affect results. The E2E suite defaults to `http://localhost:5173` for the UI, `http://localhost:3300` for the API, and tenant `sample-carrier`. Override with `E2E_BASE_URL`, `E2E_API_BASE_URL`, or `E2E_TENANT_ID` when needed.
 
 For UI changes, include screenshots in the pull request when the visual behavior changes.
 
