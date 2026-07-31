@@ -676,6 +676,14 @@ function formatInsuredAddress(address: Partial<InsuredAddress> | null | undefine
   return [street, cityStateZipWithPostal].filter(Boolean).join(', ')
 }
 
+function formatInsuredName(party: Partial<InsuredParty> | null | undefined): string {
+  if (!party) return ''
+  const firstName = String(party.firstName || '').trim()
+  const lastName = String(party.lastName || '').trim()
+  const individualName = [firstName, lastName].filter(Boolean).join(' ')
+  return individualName || String(party.displayName || '').trim()
+}
+
 function companyNameKey(value: any): string {
   return String(value || '').trim().toLowerCase()
 }
@@ -1952,9 +1960,7 @@ export function QuoteWizard() {
       if (Object.keys(errs).length > 0) return
     }
     if (step === 3 && target > step) {
-      const errs = validateInsureds(normalizedInsureds, q.productCode)
-      setFieldErrors(errs)
-      if (Object.keys(errs).length > 0) return
+      if (!validateCurrentInsureds()) return
     }
     if (step === 4 && target > step) {
       const errs = q.productCode === 'personal-auto'
@@ -1971,6 +1977,14 @@ export function QuoteWizard() {
     const saved = await ensureDraftAtStep(target)
     if (!saved) return
     setStep(target)
+  }
+
+  function validateCurrentInsureds(options: { returnToStep?: boolean } = {}): boolean {
+    const errs = validateInsureds(normalizedInsureds, q.productCode)
+    setFieldErrors(errs)
+    if (Object.keys(errs).length === 0) return true
+    if (options.returnToStep) setStep(3)
+    return false
   }
 
   function onProductChange(code: QuoteProductCode) {
@@ -2566,6 +2580,10 @@ export function QuoteWizard() {
     const resolvedCompany = resolveUnderwritingCompanyConfig(q, underwritingConfigurations)
     if (!resolvedCompany) {
       setError('Select an underwriting company before rating premium.')
+      return
+    }
+    if (!validateCurrentInsureds({ returnToStep: true })) {
+      setError('Resolve insured validation before rating premium.')
       return
     }
     const rateState: QuoteState = {
@@ -3828,6 +3846,7 @@ export function QuoteWizard() {
                 <tr>
                   <th>First Name</th>
                   <th>Last Name</th>
+                  <th>Display Name</th>
                   <th>DOB</th>
                   <th>Email</th>
                   <th>Phone</th>
@@ -3853,6 +3872,7 @@ export function QuoteWizard() {
                       insureds.primary.lastName || '-'
                     )}
                   </td>
+                  <td>{insureds.primary.displayName || formatInsuredName(insureds.primary) || '-'}</td>
                   <td>{insureds.primary.dob || '-'}</td>
                   <td>{insureds.primary.email || '-'}</td>
                   <td>{insureds.primary.phone || '-'}</td>
@@ -3916,6 +3936,7 @@ export function QuoteWizard() {
                 <tr>
                   <th>First Name</th>
                   <th>Last Name</th>
+                  <th>Display Name</th>
                   <th>DOB</th>
                   <th>Email</th>
                   <th>Phone</th>
@@ -3941,6 +3962,7 @@ export function QuoteWizard() {
                       insureds.secondary.lastName || '-'
                     )}
                   </td>
+                  <td>{insureds.secondary.displayName || formatInsuredName(insureds.secondary) || '-'}</td>
                   <td>{insureds.secondary.dob || '-'}</td>
                   <td>{insureds.secondary.email || '-'}</td>
                   <td>{insureds.secondary.phone || '-'}</td>
@@ -4015,6 +4037,7 @@ export function QuoteWizard() {
                   <tr>
                     <th>First Name</th>
                     <th>Last Name</th>
+                    <th>Display Name</th>
                     <th>DOB</th>
                     <th>Email</th>
                     <th>Phone</th>
@@ -4041,6 +4064,7 @@ export function QuoteWizard() {
                           item.lastName || '-'
                         )}
                       </td>
+                      <td>{item.displayName || formatInsuredName(item) || '-'}</td>
                       <td>{item.dob || '-'}</td>
                       <td>{item.email || '-'}</td>
                       <td>{item.phone || '-'}</td>
@@ -4235,7 +4259,7 @@ export function QuoteWizard() {
               </div>
               {insureds?.primary && (
                 <div>
-                  <div className="kvline"><span className="muted">Primary Insured</span><span>{insureds.primary.firstName} {insureds.primary.lastName}</span></div>
+                  <div className="kvline"><span className="muted">Primary Insured</span><span>{formatInsuredName(insureds.primary) || '-'}</span></div>
                   {insureds.primary.email && <div className="kvline"><span className="muted">Email</span><span>{insureds.primary.email}</span></div>}
                   {insureds.primary.phone && <div className="kvline"><span className="muted">Phone</span><span>{insureds.primary.phone}</span></div>}
                   {formatInsuredAddress(insureds.primary.address) && (
@@ -4245,7 +4269,7 @@ export function QuoteWizard() {
               )}
               {insureds?.secondary && (
                 <div>
-                  <div className="kvline"><span className="muted">Secondary Insured</span><span>{insureds.secondary.firstName} {insureds.secondary.lastName}</span></div>
+                  <div className="kvline"><span className="muted">Secondary Insured</span><span>{formatInsuredName(insureds.secondary) || '-'}</span></div>
                   {insureds.secondary.email && <div className="kvline"><span className="muted">Email</span><span>{insureds.secondary.email}</span></div>}
                   {insureds.secondary.phone && <div className="kvline"><span className="muted">Phone</span><span>{insureds.secondary.phone}</span></div>}
                 </div>
@@ -4259,7 +4283,7 @@ export function QuoteWizard() {
                   {insureds.additional.map((item, index) => (
                     <div className="kvline" key={`review-additional-insured-${index}`}>
                       <span className="muted">{`Additional ${index + 1}`}</span>
-                      <span>{[item.firstName, item.lastName].filter(Boolean).join(' ').trim() || item.displayName || '-'}</span>
+                      <span>{formatInsuredName(item) || '-'}</span>
                     </div>
                   ))}
                 </div>
