@@ -11,6 +11,14 @@ Test coverage notes / N/A explanation:
 
 -
 
+## AI Context
+
+- [ ] AI-readable Markdown context added/updated, or N/A explained below
+
+AI context notes / N/A explanation:
+
+-
+
 ## Checklist
 
 - [ ] Documentation updated, if needed
