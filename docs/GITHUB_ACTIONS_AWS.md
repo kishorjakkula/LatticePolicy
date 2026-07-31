@@ -68,7 +68,8 @@ Update these fields before first deploy:
 - `executionRoleArn`
 - `taskRoleArn`
 - CloudWatch log groups/region
-- Environment variables (`DATABASE_URL`, `JWT_SECRET`, `VITE_API_BASE_URL`)
+- API task secrets (`DATABASE_URL`, `JWT_SECRET`) with AWS Secrets Manager or SSM Parameter Store ARNs
+- Frontend environment variables (`VITE_API_BASE_URL`, `VITE_USE_MOCK`)
 
 ## 4) Deployment behavior
 
@@ -78,6 +79,6 @@ Update these fields before first deploy:
 
 ## 5) Recommended hardening
 
-- Move `DATABASE_URL` and `JWT_SECRET` to AWS Secrets Manager and inject via ECS task secrets.
+- Keep `DATABASE_URL` and `JWT_SECRET` in AWS Secrets Manager or SSM Parameter Store and inject them through ECS task secrets.
 - Keep deploy job in a protected GitHub environment (`production`) with manual approvals.
 - Restrict OIDC trust policy to exact repo and branch.

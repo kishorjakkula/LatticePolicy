@@ -4,6 +4,15 @@
   "description": "Open-source framework for access-based insurance policy administration systems.",
   "private": true,
   "license": "Apache-2.0",
+  "author": "Kishor Kumar Jakkula",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kishorjakkula/LatticePolicy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kishorjakkula/LatticePolicy/issues"
+  },
+  "homepage": "https://github.com/kishorjakkula/LatticePolicy#readme",
   "keywords": [
     "insurance",
     "policy-administration",

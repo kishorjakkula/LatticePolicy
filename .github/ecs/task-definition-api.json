@@ -22,14 +22,16 @@
         {
           "name": "PORT",
           "value": "3000"
-        },
+        }
+      ],
+      "secrets": [
         {
           "name": "DATABASE_URL",
-          "value": "postgres://policy_mvp:replace-me@your-rds-endpoint:5432/policy_mvp"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/database-url"
         },
         {
           "name": "JWT_SECRET",
-          "value": "replace-me"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/jwt-secret"
         }
       ],
       "logConfiguration": {
