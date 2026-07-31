@@ -12,6 +12,7 @@ import {
 import carrierLogo from '../../assets/sample-carrier-logo.svg'
 import { normalizePayloadCoverages } from './coverageUtils'
 import { clearPendingTransaction, savePendingTransaction, type PendingTransactionMode } from './pendingEndorsement'
+import { validateInsureds } from './insuredValidation'
 import { deriveWizardTransactionStatus } from '../policies/statusModel'
 import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
@@ -1951,7 +1952,9 @@ export function QuoteWizard() {
       if (Object.keys(errs).length > 0) return
     }
     if (step === 3 && target > step) {
-      // TODO: Add validation for insureds (primary/secondary required fields)
+      const errs = validateInsureds(normalizedInsureds, q.productCode)
+      setFieldErrors(errs)
+      if (Object.keys(errs).length > 0) return
     }
     if (step === 4 && target > step) {
       const errs = q.productCode === 'personal-auto'
@@ -3208,6 +3211,19 @@ export function QuoteWizard() {
         </div>
       )
       : null
+  const primaryInsuredErrors = [
+    fieldErrors['insureds.primary.firstName'],
+    fieldErrors['insureds.primary.lastName'],
+    fieldErrors['insureds.primary.displayName']
+  ].filter(Boolean)
+  const secondaryInsuredErrors = [
+    fieldErrors['insureds.secondary.firstName'],
+    fieldErrors['insureds.secondary.lastName']
+  ].filter(Boolean)
+  const additionalInsuredErrors = Object.entries(fieldErrors)
+    .filter(([key]) => key.startsWith('insureds.additional.'))
+    .map(([, value]) => value)
+    .filter(Boolean)
   const wizardTitle = isPolicyTransactionMode ? `${txLabel} Wizard` : 'New Quote Wizard'
   const headerPrimaryNumberLabel = isPolicyTransactionMode ? `${txLabel} #` : 'Quote #'
   const headerPrimaryNumberValue = String(transactionNumber || (showQuoteNumber ? draft?.quoteNumber : '') || '').trim()
@@ -3760,6 +3776,9 @@ export function QuoteWizard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>Primary Named Insured</h3>
           </div>
+          {primaryInsuredErrors.map((message) => (
+            <div key={`primary-insured-error-${message}`} className="error">{message}</div>
+          ))}
           <div style={{ marginBottom: 16 }}>
             <input
               type="text"
@@ -3845,6 +3864,9 @@ export function QuoteWizard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>Secondary Named Insured</h3>
           </div>
+          {secondaryInsuredErrors.map((message) => (
+            <div key={`secondary-insured-error-${message}`} className="error">{message}</div>
+          ))}
           <div style={{ marginBottom: 16 }}>
             <input
               type="text"
@@ -3935,6 +3957,9 @@ export function QuoteWizard() {
               </button>
             )}
           </div>
+          {additionalInsuredErrors.map((message) => (
+            <div key={`additional-insured-error-${message}`} className="error">{message}</div>
+          ))}
           {!isViewOnly && (
             <div style={{ marginTop: 10, marginBottom: 12 }}>
               <input
