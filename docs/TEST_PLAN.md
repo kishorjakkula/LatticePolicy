@@ -2,6 +2,29 @@
 
 This plan organizes automated testing by risk and execution cost. Keep fast unit and component tests in Vitest, then add DB-backed integration tests and Playwright E2E tests as separate layers.
 
+## Contributor Testing Policy
+
+Automated tests are part of the definition of done for behavior changes. Any
+new functionality or change in functionality should include automated coverage
+in the same pull request.
+
+Choose the lowest-cost test layer that proves the behavior, then add broader
+coverage when the risk crosses module, API, database, tenant, security, or user
+workflow boundaries. A PR may skip new automation only when it is
+documentation-only, formatting-only, or another no-behavior-change update; the
+PR must explain that decision in the testing notes.
+
+Expected mapping:
+
+- Pure logic or validation changes: unit tests.
+- API route, auth, RBAC, tenant scope, or contract changes: API tests.
+- UI form, route, permission, or state changes: frontend component tests.
+- Persistence, migration, lifecycle, or multi-table changes: DB-backed integration tests.
+- Critical user journeys or cross-service flows: Playwright E2E tests.
+
+When a change exposes a bug, add a failing regression test first when practical,
+then make it pass with the fix.
+
 ## Test Layers
 
 ### 1. Unit Tests

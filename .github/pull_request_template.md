@@ -2,9 +2,14 @@
 
 ## Testing
 
+- [ ] Automated tests added/updated for every product behavior change, or N/A explained below
 - [ ] `npm run build`
 - [ ] `npm run test`
 - [ ] `npm run typecheck`
+
+Test coverage notes / N/A explanation:
+
+-
 
 ## Checklist
 
