@@ -43,6 +43,29 @@ npm run test
 npm run typecheck
 ```
 
+## Automation Test Requirement
+
+Every new feature, bug fix, workflow change, API change, validation rule,
+security rule, data migration, or UI behavior change should include automated
+test coverage in the same pull request.
+
+Use the smallest test layer that proves the behavior:
+
+- Unit tests for pure helpers, business rules, validation, mappers, and policy lifecycle logic.
+- API tests for route behavior, request validation, auth/RBAC, tenant scope, and response contracts.
+- Frontend component tests for user-visible UI behavior, route guards, forms, and state transitions.
+- DB-backed integration tests for migrations, persistence, tenant isolation, lifecycle writes, and cross-table behavior.
+- Playwright E2E tests for critical user journeys that cross frontend, API, database, and cache boundaries.
+
+Documentation-only changes may skip automated tests, but the pull request must
+say why no product behavior changed. Test-only refactors may rely on the
+affected test command plus build/typecheck when TypeScript code changes.
+
+If automation is not practical in the same PR, call that out explicitly in the
+PR description, explain the risk, and open or link a follow-up issue before
+requesting review. Maintainers may block merging behavior changes that do not
+include adequate automated tests.
+
 ## Contribution Workflow
 
 1. Start with an issue for non-trivial work.
@@ -64,6 +87,7 @@ npm run typecheck
    - Build, test, and typecheck should pass.
    - Docker changes should be tested with `docker compose up -d --build`.
    - API changes should include docs or contract updates when appropriate.
+   - Behavior changes should include automated tests at the right layer.
 
 ## Branching Process
 
@@ -136,6 +160,7 @@ Every PR should include:
 - A concise summary of the change.
 - The problem or use case being addressed.
 - The major files or areas touched.
+- Automated tests added or updated for behavior changes.
 - Testing performed, including commands run.
 - Screenshots or screen recordings for visible UI changes.
 - Migration notes for database, configuration, contract, or deployment changes.
