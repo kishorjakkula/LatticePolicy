@@ -16,7 +16,7 @@
     "smoke:transactions": "node scripts/smoke-transactions.mjs"
   },
   "dependencies": {
-    "@sentry/node": "^8.0.0",
+    "@sentry/node": "^10.69.0",
     "ajv": "^8.17.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -43,7 +43,7 @@
     "@types/supertest": "^6.0.0",
     "drizzle-kit": "^1.0.0-rc.3",
     "supertest": "^7.0.0",
-    "tsx": "^4.19.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
   }
