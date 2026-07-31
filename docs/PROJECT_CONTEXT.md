@@ -148,12 +148,16 @@ Important lifecycle flows:
 - For policy/customer/portal changes, verify tenant, role, and linked-customer scope.
 - For schema changes, add an ordered SQL migration and update Drizzle schema when needed.
 - For risky changes, run targeted tests plus `npm run typecheck`; broader changes should also run `npm run build` and `npm run test`.
+- For non-trivial changes, update AI-readable Markdown context. Start with
+  `AGENTS.md` and `docs/AI_CONTRIBUTOR_PROCESS.md`; add a task note under
+  `docs/tasks/` when the change needs issue-specific context.
 
 ## Key Docs
 
 - `README.md`: overview and quick start.
 - `docs/ARCHITECTURE.md`: architecture, lifecycle, customer portal, cache, logging, async outbox, AI, rating workbench.
 - `docs/DEVELOPER_SETUP.md`: local setup and commands.
+- `docs/AI_CONTRIBUTOR_PROCESS.md`: process for AI-assisted contributors and task notes.
 - `docs/API.md`: MVP endpoint conventions.
 - `docs/DOMAIN.md`: core domain summary.
 - `docs/MULTITENANCY.md`: tenant strategy.

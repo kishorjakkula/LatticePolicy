@@ -66,6 +66,33 @@ PR description, explain the risk, and open or link a follow-up issue before
 requesting review. Maintainers may block merging behavior changes that do not
 include adequate automated tests.
 
+## AI-Readable Context Requirement
+
+LatticePolicy is designed to be friendly to AI-assisted contributors. A new
+contributor should be able to fork the project, open it in Codex or another
+coding agent, and start from a short prompt because the repository contains the
+needed context.
+
+Before making non-trivial changes, read:
+
+- `AGENTS.md`
+- `docs/PROJECT_CONTEXT.md`
+- `docs/TEST_PLAN.md`
+- the related issue or task note
+
+Every non-trivial PR should include an AI-readable Markdown update:
+
+- update existing docs when architecture, APIs, setup, deployment, data model,
+  security, test strategy, or user-visible workflow behavior changes;
+- add or update a task note under `docs/tasks/` when the implementation needs
+  issue-specific context, root cause notes, decisions, or follow-up guidance.
+
+Use `docs/AI_CONTRIBUTOR_PROCESS.md` for the full process and
+`docs/tasks/TEMPLATE.md` for task notes.
+
+Documentation-only and formatting-only changes may mark this as not applicable,
+but the PR should explain why no future contributor context changed.
+
 ## Contribution Workflow
 
 1. Start with an issue for non-trivial work.
@@ -88,6 +115,7 @@ include adequate automated tests.
    - Docker changes should be tested with `docker compose up -d --build`.
    - API changes should include docs or contract updates when appropriate.
    - Behavior changes should include automated tests at the right layer.
+   - Non-trivial changes should include AI-readable Markdown context.
 
 ## Branching Process
 
@@ -161,6 +189,7 @@ Every PR should include:
 - The problem or use case being addressed.
 - The major files or areas touched.
 - Automated tests added or updated for behavior changes.
+- AI-readable Markdown context added or updated for non-trivial changes.
 - Testing performed, including commands run.
 - Screenshots or screen recordings for visible UI changes.
 - Migration notes for database, configuration, contract, or deployment changes.
