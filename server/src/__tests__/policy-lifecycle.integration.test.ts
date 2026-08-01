@@ -134,7 +134,9 @@ describe('policy transaction lifecycle persistence', () => {
           (SELECT count(*)::int FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2) AS transaction_count,
           (SELECT count(*)::int FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2) AS version_count,
           (SELECT count(*)::int FROM ratings WHERE tenant_id=$1 AND policy_id=$2) AS rating_count,
-          (SELECT count(*)::int FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid) AS ledger_count`,
+          (SELECT count(*)::int FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid) AS ledger_count,
+          (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type IN ('POLICY_ISSUED', 'POLICY_CANCELLED')) AS notification_count,
+          (SELECT count(*)::int FROM async_message_outbox WHERE tenant_id=$1 AND source_table='notification_intents') AS notification_outbox_count`,
       [tenantId, bound.policyId],
     )
     const row = persisted.rows[0]
@@ -143,6 +145,8 @@ describe('policy transaction lifecycle persistence', () => {
     expect(row.version_count).toBeGreaterThanOrEqual(3)
     expect(row.rating_count).toBeGreaterThanOrEqual(3)
     expect(row.ledger_count).toBeGreaterThanOrEqual(3)
+    expect(row.notification_count).toBeGreaterThanOrEqual(2)
+    expect(row.notification_outbox_count).toBeGreaterThanOrEqual(2)
   })
 
   it('previews and renews policies, records non-renewal, and rejects rewrite before cancellation', async () => {
@@ -204,7 +208,8 @@ describe('policy transaction lifecycle persistence', () => {
           (SELECT term_effective_date::text FROM policies WHERE tenant_id=$1 AND policy_id=$2) AS term_effective_date,
           (SELECT term_expiration_date::text FROM policies WHERE tenant_id=$1 AND policy_id=$2) AS term_expiration_date,
           (SELECT count(*)::int FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type IN ('RENEW', 'NON_RENEWAL')) AS renewal_transaction_count,
-          (SELECT count(*)::int FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type IN ('RENEW', 'NON_RENEWAL')) AS renewal_version_count`,
+          (SELECT count(*)::int FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type IN ('RENEW', 'NON_RENEWAL')) AS renewal_version_count,
+          (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type='POLICY_NON_RENEWAL') AS nonrenewal_notice_count`,
       [tenantId, bound.policyId],
     )
     const row = persisted.rows[0]
@@ -212,5 +217,6 @@ describe('policy transaction lifecycle persistence', () => {
     expect(row.term_expiration_date).toBe('2028-07-01')
     expect(row.renewal_transaction_count).toBeGreaterThanOrEqual(2)
     expect(row.renewal_version_count).toBeGreaterThanOrEqual(2)
+    expect(row.nonrenewal_notice_count).toBeGreaterThanOrEqual(1)
   })
 })

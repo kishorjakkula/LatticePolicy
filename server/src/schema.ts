@@ -475,6 +475,62 @@ export const asyncMessageOutbox = pgTable('async_message_outbox', {
 })
 
 // ---------------------------------------------------------------------------
+// Notifications And Notices (migration 034)
+// ---------------------------------------------------------------------------
+export const notificationTemplates = pgTable('notification_templates', {
+  templateId: uuid('template_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  templateCode: text('template_code').notNull(),
+  eventType: text('event_type').notNull(),
+  channel: text('channel').notNull().default('EMAIL'),
+  productCode: text('product_code'),
+  transactionType: text('transaction_type'),
+  locale: text('locale').notNull().default('en-US'),
+  subjectTemplate: text('subject_template').notNull(),
+  bodyTemplate: text('body_template').notNull(),
+  visibility: text('visibility').array().notNull().default(sql`ARRAY['customer']::text[]`),
+  active: boolean('active').notNull().default(true),
+  effectiveDate: date('effective_date'),
+  expirationDate: date('expiration_date'),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ux_notification_templates_code').on(t.tenantId, t.templateCode),
+  index('idx_notification_templates_lookup').on(t.tenantId, t.eventType, t.channel, t.productCode, t.active),
+])
+
+export const notificationIntents = pgTable('notification_intents', {
+  notificationId: uuid('notification_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  policyId: uuid('policy_id').references(() => policies.policyId, { onDelete: 'cascade' }),
+  transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(),
+  channel: text('channel').notNull().default('EMAIL'),
+  recipient: jsonb('recipient').notNull().default(sql`'{}'::jsonb`),
+  templateCode: text('template_code').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  status: text('status').notNull().default('Pending'),
+  provider: text('provider'),
+  providerMessageId: text('provider_message_id'),
+  correlationId: text('correlation_id'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(8),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid('created_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_notification_intents_policy').on(t.tenantId, t.policyId, t.createdAt),
+  index('idx_notification_intents_status').on(t.tenantId, t.status, t.nextAttemptAt),
+])
+
+// ---------------------------------------------------------------------------
 // RBAC (migration 013)
 // ---------------------------------------------------------------------------
 export const rbacPermissions = pgTable('rbac_permissions', {
