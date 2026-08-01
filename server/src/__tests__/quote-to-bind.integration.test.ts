@@ -50,6 +50,44 @@ describe('quote-to-bind persistence', () => {
        ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name`,
       [tenantId, 'Sample Carrier', 'en-US', 'USD'],
     )
+    const formId = '11111111-1111-1111-1111-111111111147'
+    await db!.query(
+      `INSERT INTO forms_admin_forms (
+          form_id, tenant_id, carrier_code, authority, form_number, form_title,
+          edition_date, form_type, line_of_business, workflow_status, active
+        )
+       VALUES ($1,$2,'SAMPLE','ISO','PA-DEC','Personal Auto Declarations',
+          '2026-01-01','Declarations','personal-auto','Approved',true
+        )
+       ON CONFLICT (tenant_id, carrier_code, authority, form_number, edition_date)
+       DO UPDATE SET workflow_status = 'Approved', active = true`,
+      [formId, tenantId],
+    )
+    await db!.query(
+      `INSERT INTO forms_admin_applicability (
+          tenant_id, form_id, line_of_business, product_code, transaction_types, active
+        )
+       VALUES ($1,$2,'personal-auto','personal-auto',ARRAY['NB']::text[],true)
+       ON CONFLICT DO NOTHING`,
+      [tenantId, formId],
+    )
+    await db!.query(
+      `INSERT INTO forms_admin_jurisdictions (
+          tenant_id, form_id, state_code, regulatory_status, effective_date
+        )
+       VALUES ($1,$2,'CA','Approved','2026-01-01')
+       ON CONFLICT DO NOTHING`,
+      [tenantId, formId],
+    )
+    await db!.query(
+      `INSERT INTO forms_admin_delivery (
+          tenant_id, form_id, delivery_methods, visibility, active
+        )
+       VALUES ($1,$2,ARRAY['portal']::text[],ARRAY['internal','customer']::text[],true)
+       ON CONFLICT (tenant_id, form_id)
+       DO UPDATE SET visibility = ARRAY['internal','customer']::text[], active = true`,
+      [tenantId, formId],
+    )
 
     const quote = await createOrRateQuote(
       {} as any,
@@ -90,6 +128,10 @@ describe('quote-to-bind persistence', () => {
           (SELECT count(*)::int FROM ratings WHERE tenant_id=$1 AND policy_id=$3) AS rating_count,
           (SELECT count(*)::int FROM risk_units WHERE tenant_id=$1 AND policy_id=$3) AS risk_count,
           (SELECT count(*)::int FROM coverages WHERE tenant_id=$1 AND policy_id=$3) AS coverage_count,
+          (SELECT count(*)::int FROM policy_forms WHERE tenant_id=$1 AND policy_id=$3) AS form_count,
+          (SELECT count(*)::int FROM documents WHERE tenant_id=$1 AND policy_id=$3 AND type='POLICY_PACKET') AS packet_count,
+          (SELECT forms FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$3 AND type='NB' LIMIT 1) AS transaction_forms,
+          (SELECT documents FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$3 AND type='NB' LIMIT 1) AS transaction_documents,
           (SELECT premium_total::numeric FROM policy_versions WHERE tenant_id=$1 AND policy_id=$3 LIMIT 1) AS premium_total`,
       [tenantId, quote.quoteId, bound.policyId],
     )
@@ -104,6 +146,19 @@ describe('quote-to-bind persistence', () => {
     expect(row.rating_count).toBe(1)
     expect(row.risk_count).toBe(1)
     expect(row.coverage_count).toBe(2)
+    expect(row.form_count).toBeGreaterThanOrEqual(1)
+    expect(row.packet_count).toBeGreaterThanOrEqual(1)
+    expect(row.transaction_forms).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PA-DEC', customerSafe: true })]),
+    )
+    expect(row.transaction_documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'POLICY_PACKET',
+          metadata: expect.objectContaining({ customerSafe: true }),
+        }),
+      ]),
+    )
     expect(Number(row.premium_total)).toBeGreaterThan(0)
 
     const crossTenant = await db!.query(
