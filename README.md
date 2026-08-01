@@ -182,6 +182,7 @@ npm run dev:frontend
 - [Architecture](docs/ARCHITECTURE.md)
 - [API](docs/API.md)
 - [Domain model](docs/DOMAIN.md)
+- [Notifications and notices](docs/NOTIFICATIONS.md)
 - [Multitenancy](docs/MULTITENANCY.md)
 - [Data model ERD](docs/DATA_MODEL_ERD.md)
 - [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)

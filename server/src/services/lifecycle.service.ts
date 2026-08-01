@@ -21,6 +21,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
+import { createPolicyNotificationIntent } from './notification.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -94,6 +95,18 @@ function reserveTransactionNumber(mode: TransactionNumberMode): string {
 function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
   const result = validatePolicyTransactionState(action, status)
   if (!result.ok) throw new BadRequestError(result.code, result.message)
+}
+
+async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string): Promise<any> {
+  const res = await q(
+    `SELECT payload
+       FROM policy_versions
+      WHERE tenant_id = $1 AND policy_id = $2
+      ORDER BY processed_at DESC, effective_date DESC
+      LIMIT 1`,
+    [tenantId, policyId]
+  )
+  return res.rowCount ? res.rows[0].payload || null : null
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
@@ -178,7 +191,7 @@ export async function issuePolicy(
 ): Promise<any> {
   const q = toRawQuery(db)
   const policyRes: any = await q(
-    'SELECT policy_id, policy_number, status, lifecycle FROM policies WHERE tenant_id=$1 AND policy_id=$2',
+    'SELECT policy_id, policy_number, product_code, status, term_effective_date, term_expiration_date, lifecycle FROM policies WHERE tenant_id=$1 AND policy_id=$2',
     [tenantId, policyId]
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
@@ -201,6 +214,32 @@ export async function issuePolicy(
     'UPDATE policy_transactions SET status=$1 WHERE tenant_id=$2 AND policy_id=$3 AND type=$4',
     ['Issued', tenantId, policyId, 'NB']
   )
+  const txnRes = await q(
+    `SELECT transaction_id, metadata
+       FROM policy_transactions
+      WHERE tenant_id = $1 AND policy_id = $2 AND type = 'NB'
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [tenantId, policyId]
+  )
+  const issueTransactionId = txnRes.rowCount ? txnRes.rows[0].transaction_id : null
+  const transactionNumber = txnRes.rowCount ? txnRes.rows[0].metadata?.transactionNumber || null : null
+  const payload = await loadLatestPolicyPayload(q, tenantId, policyId)
+  await createPolicyNotificationIntent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyRow.policy_number,
+    productCode: policyRow.product_code,
+    transactionId: issueTransactionId,
+    transactionType: 'Issue',
+    transactionNumber,
+    eventType: 'POLICY_ISSUED',
+    effectiveDate: coerceDateOnly(policyRow.term_effective_date),
+    expirationDate: coerceDateOnly(policyRow.term_expiration_date),
+    payload,
+    actorId: actor?.id || null,
+    correlationId: transactionNumber || issueTransactionId,
+  })
   await q(
     'INSERT INTO ledger_events (tenant_id, entity_type, entity_id, event, from_state, to_state, payload, actor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
     [tenantId, 'Policy', policyId, 'STATUS_CHANGE', policyRow.status, 'Issued', { issuedAt }, actor?.id || null]
@@ -353,6 +392,24 @@ export async function cancelPolicy(
     taxes: [],
     totalPremium: -refund,
     currency,
+  })
+
+  await createPolicyNotificationIntent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    productCode: policyProductCode(policyRow),
+    transactionId,
+    transactionType: 'Cancel',
+    transactionNumber,
+    eventType: 'POLICY_CANCELLED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    reason: resolvedReasonDescription || reason || cancellationReasonCode || null,
+    premiumImpact: -refund,
+    payload: txPayload || null,
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
   })
 
   await updatePolicyProjection(db, {
@@ -1081,6 +1138,24 @@ export async function nonRenewPolicy(
     taxes: [],
     totalPremium: 0,
     currency,
+  })
+
+  await createPolicyNotificationIntent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    productCode: policyProductCode(policyRow),
+    transactionId,
+    transactionType: 'NonRenewal',
+    transactionNumber,
+    eventType: 'POLICY_NON_RENEWAL',
+    effectiveDate: termExpiration,
+    expirationDate: termExpiration,
+    noticeDate,
+    reason: reasonDescription || reasonCode || null,
+    payload: ctx.latestPayload || null,
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
   })
 
   await q(
