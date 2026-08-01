@@ -158,6 +158,7 @@ Important lifecycle flows:
 - `docs/ARCHITECTURE.md`: architecture, lifecycle, customer portal, cache, logging, async outbox, AI, rating workbench.
 - `docs/DEVELOPER_SETUP.md`: local setup and commands.
 - `docs/AI_CONTRIBUTOR_PROCESS.md`: process for AI-assisted contributors and task notes.
+- `docs/ROADMAP.md`: carrier and reinsurance platform roadmap linked to GitHub epics.
 - `docs/API.md`: MVP endpoint conventions.
 - `docs/DOMAIN.md`: core domain summary.
 - `docs/MULTITENANCY.md`: tenant strategy.

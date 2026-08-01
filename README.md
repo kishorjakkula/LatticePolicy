@@ -178,6 +178,7 @@ npm run dev:frontend
 
 - [Developer local setup](docs/DEVELOPER_SETUP.md)
 - [AI contributor process](docs/AI_CONTRIBUTOR_PROCESS.md)
+- [Roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [API](docs/API.md)
 - [Domain model](docs/DOMAIN.md)
