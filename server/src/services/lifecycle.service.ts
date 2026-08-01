@@ -20,6 +20,7 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
+import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -88,6 +89,11 @@ function generateTransactionNumber(prefix = 'EN-'): string {
 
 function reserveTransactionNumber(mode: TransactionNumberMode): string {
   return generateTransactionNumber(transactionNumberPrefix(mode))
+}
+
+function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
+  const result = validatePolicyTransactionState(action, status)
+  if (!result.ok) throw new BadRequestError(result.code, result.message)
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
@@ -177,13 +183,7 @@ export async function issuePolicy(
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = policyRes.rows[0]
-  const currentStatus = (policyRow.status || '').toLowerCase()
-  if (currentStatus === 'cancelled') {
-    throw new BadRequestError('INVALID_STATE', 'Policy is cancelled')
-  }
-  if (currentStatus && currentStatus !== 'bound' && currentStatus !== 'issued') {
-    throw new BadRequestError('INVALID_STATE', `Cannot issue policy from status ${policyRow.status}`)
-  }
+  assertPolicyTransactionState('issue', policyRow.status)
   const issuedAt = new Date().toISOString()
   const lifecycle = {
     ...(policyRow.lifecycle || {}),
@@ -230,9 +230,7 @@ export async function cancelPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  if ((policyRow.status || '').toLowerCase() === 'cancelled') {
-    throw new BadRequestError('INVALID_STATE', 'Policy already cancelled')
-  }
+  assertPolicyTransactionState('cancel', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
   const termExpiration = policyTermExpiration(policyRow)
@@ -412,9 +410,7 @@ export async function reinstatePolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  if ((policyRow.status || '').toLowerCase() !== 'cancelled') {
-    throw new BadRequestError('INVALID_STATE', 'Policy is not cancelled')
-  }
+  assertPolicyTransactionState('reinstate', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
   const termExpiration = policyTermExpiration(policyRow)
@@ -550,6 +546,7 @@ export async function renewPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  assertPolicyTransactionState('renew', policyRow.status)
   const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const nextEff = overrideEffectiveDate || policyTermExpiration(policyRow)
   const nextExp = addMonths(nextEff, termMonths)
@@ -766,9 +763,7 @@ export async function rewritePolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  if ((policyRow.status || '').toLowerCase() !== 'cancelled') {
-    throw new BadRequestError('INVALID_STATE', 'Policy must be cancelled to rewrite')
-  }
+  assertPolicyTransactionState('rewrite', policyRow.status)
 
   const baseTermMonths =
     diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
@@ -1021,11 +1016,7 @@ export async function nonRenewPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  const status = (policyRow.status || '').toLowerCase()
-
-  if (status === 'cancelled') {
-    throw new BadRequestError('INVALID_STATE', 'Cannot non-renew a cancelled policy.')
-  }
+  assertPolicyTransactionState('nonRenew', policyRow.status)
   if (policyField(policyRow, 'nonRenewedAt', 'non_renewed_at')) {
     throw new ConflictError('ALREADY_NON_RENEWED', 'Policy is already marked as non-renewed.')
   }

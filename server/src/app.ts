@@ -11,6 +11,7 @@ import { getCache } from './cache.js'
 import { getDb } from './db.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
+import { idempotencyMiddleware } from './lib/idempotency.js'
 
 export function createApp() {
   const app = express()
@@ -82,19 +83,21 @@ export function createApp() {
   app.post('/auth/mfa/verify', authLimiter, handleMfaVerify)
   app.post('/auth/mfa/setup/confirm', authLimiter, handleMfaSetupConfirm)
 
-  app.use('/api/v1', requireTenant, routes)
+  app.use('/api/v1', requireTenant, idempotencyMiddleware, routes)
 
   // Global error handler — must be last middleware
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+    const traceId = String(res.getHeader('x-request-id') || (req as any).id || '')
     if (err instanceof AppError) {
       return res.status(err.statusCode).json({
         code: err.code,
         message: err.message,
+        traceId,
         ...(err.details !== undefined ? { details: err.details } : {}),
       })
     }
     logger.error({ err }, 'Unhandled error')
-    return res.status(500).json({ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' })
+    return res.status(500).json({ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', traceId })
   })
 
   return app

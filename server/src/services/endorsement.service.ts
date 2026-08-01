@@ -24,6 +24,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
 import { diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
+import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,18 +109,14 @@ function validateTransactionNumberReservation(
   mode: TransactionNumberMode,
   rawStatus: any
 ): { code: string; message: string } | null {
-  const status = String(rawStatus || '').toLowerCase()
-  if (mode === 'reinstate' || mode === 'rewrite') {
-    if (status !== 'cancelled') return { code: 'INVALID_STATE', message: 'Policy is not cancelled' }
-    return null
-  }
-  if (mode === 'cancel' && status === 'cancelled') {
-    return { code: 'INVALID_STATE', message: 'Policy already cancelled' }
-  }
-  if (status === 'cancelled') {
-    return { code: 'INVALID_STATE', message: 'Policy is cancelled' }
-  }
-  return null
+  const action: PolicyTransactionAction = mode === 'renew' ? 'renew' : mode
+  const result = validatePolicyTransactionState(action, rawStatus)
+  return result.ok ? null : { code: result.code, message: result.message }
+}
+
+function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
+  const result = validatePolicyTransactionState(action, status)
+  if (!result.ok) throw new BadRequestError(result.code, result.message)
 }
 
 function generateTransactionNumber(prefix = 'EN-'): string {
@@ -649,6 +646,7 @@ export async function previewEndorsement(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  assertPolicyTransactionState('endorse', policyRow.status)
   const termEffective = coerceDateOnly(policyRow.term_effective_date)
   const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
   const effectiveDate = asDateOnly(body.effectiveDate) || termEffective

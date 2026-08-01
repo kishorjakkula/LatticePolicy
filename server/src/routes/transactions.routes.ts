@@ -20,6 +20,7 @@ import * as lifecycleService from '../services/lifecycle.service.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
+import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 
 // ── local helpers ─────────────────────────────────────────────────────────────
 
@@ -48,18 +49,9 @@ function validateTransactionNumberReservation(
   mode: TransactionNumberMode,
   rawStatus: any
 ): { code: string; message: string } | null {
-  const status = String(rawStatus || '').toLowerCase()
-  if (mode === 'reinstate' || mode === 'rewrite') {
-    if (status !== 'cancelled') return { code: 'INVALID_STATE', message: 'Policy is not cancelled' }
-    return null
-  }
-  if (mode === 'cancel' && status === 'cancelled') {
-    return { code: 'INVALID_STATE', message: 'Policy already cancelled' }
-  }
-  if (status === 'cancelled') {
-    return { code: 'INVALID_STATE', message: 'Policy is cancelled' }
-  }
-  return null
+  const action: PolicyTransactionAction = mode === 'renew' ? 'renew' : mode
+  const result = validatePolicyTransactionState(action, rawStatus)
+  return result.ok ? null : { code: result.code, message: result.message }
 }
 
 function parseTransactionNumberMode(value: any): TransactionNumberMode | null {
@@ -103,17 +95,8 @@ transactionRoutes.post('/policies/:id/issue', async (req, res, next) => {
     // In-memory fallback
     const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
-    if (policy.status === 'Cancelled') {
-      return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy is cancelled' })
-    }
-    if (policy.status !== 'Bound' && policy.status !== 'Issued') {
-      return res
-        .status(400)
-        .json({
-          code: 'INVALID_STATE',
-          message: `Cannot issue policy from status ${policy.status}`,
-        })
-    }
+    const invalidState = validatePolicyTransactionState('issue', policy.status)
+    if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
     policy.status = 'Issued'
     return res.json({
       policyId: policy.policyId,
@@ -270,9 +253,8 @@ transactionRoutes.post(
       // In-memory fallback
       const policy = store.getPolicyForTenant(req.params.id, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
-      if ((policy.status || '').toLowerCase() === 'cancelled') {
-        return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy already cancelled' })
-      }
+      const invalidState = validatePolicyTransactionState('cancel', policy.status)
+      if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
       const eff = asDateOnly(req.body?.effectiveDate) || today()
       const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
       const termEffective = (policy as any).term?.effectiveDate || today()
@@ -322,9 +304,8 @@ transactionRoutes.post(
       // In-memory fallback
       const policy = store.getPolicyForTenant(req.params.id, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
-      if ((policy.status || '').toLowerCase() !== 'cancelled') {
-        return res.status(400).json({ code: 'INVALID_STATE', message: 'Policy is not cancelled' })
-      }
+      const invalidState = validatePolicyTransactionState('reinstate', policy.status)
+      if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
       const eff = asDateOnly(req.body?.effectiveDate) || today()
       const termEffective = (policy as any).term?.effectiveDate || today()
       const termExpiration = (policy as any).term?.expirationDate || today()
@@ -386,11 +367,8 @@ transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
 
     const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
-    if (policy.status !== 'Cancelled') {
-      return res
-        .status(400)
-        .json({ code: 'INVALID_STATE', message: 'Policy must be cancelled to rewrite' })
-    }
+    const invalidState = validatePolicyTransactionState('rewrite', policy.status)
+    if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
     const payload = overridePayload
       ? JSON.parse(JSON.stringify(overridePayload))
       : JSON.parse(JSON.stringify((policy as any).payload || {}))
@@ -479,6 +457,8 @@ transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
 
     const policy = store.getPolicyForTenant(req.params.id, tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+    const invalidState = validatePolicyTransactionState('renew', policy.status)
+    if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
     const nextEff =
       overrideEffectiveDate || (policy as any).term.expirationDate
     const termMonths =
@@ -591,11 +571,8 @@ transactionRoutes.post(
       if (!policy || (policy as any).tenantId !== tenantId) {
         return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       }
-      if (policy.status === 'Cancelled') {
-        return res
-          .status(400)
-          .json({ code: 'INVALID_STATE', message: 'Cannot non-renew a cancelled policy.' })
-      }
+      const invalidState = validatePolicyTransactionState('nonRenew', policy.status)
+      if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
       const reasonCode =
         typeof req.body?.reasonCode === 'string' ? req.body.reasonCode.trim() : ''
       const reasonDescription =
