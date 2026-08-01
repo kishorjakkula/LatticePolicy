@@ -26,6 +26,11 @@ import { extractQuoteCustomerLinks } from '../lib/quote.utils.js'
 import { isUuidLike } from '../lib/utils.js'
 import { normalizeQuoteAuditHistory, upsertQuoteAuditHistory } from './quote.service.js'
 import { addMonths } from '../lib/date.utils.js'
+import {
+  buildPolicyDocumentPacket,
+  persistPolicyDocumentPacket,
+  type PolicyDocumentPacket,
+} from './document-generation.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -321,6 +326,7 @@ export async function bindQuote(
   const uwDecision = quote.uw?.decision || null
   const uwOverride = quote.uw?.decision === 'Refer' && !!overrideReason
   const termDetails: any = { effectiveDate, expirationDate, termMonths: months }
+  let documentPacket: PolicyDocumentPacket = { forms: [], documents: [] }
 
   // ── 8. Big transaction block ────────────────────────────────────────────────
   await withTenantTx(tenantId, async (txDb) => {
@@ -363,6 +369,20 @@ export async function bindQuote(
     await upsertPolicyCustomerLinks(txDb, tenantId, policyId, quoteCustomerLinks)
 
     // Policy transaction
+    documentPacket = await buildPolicyDocumentPacket(q, {
+      tenantId,
+      policyId,
+      policyNumber,
+      transactionId,
+      transactionType: 'NB',
+      transactionNumber,
+      productCode,
+      state: quote.payload?.state || jurisdiction?.code || null,
+      effectiveDate,
+      generatedBy: normalizedActorId,
+      correlationId: transactionNumber,
+    })
+
     await insertPolicyTransaction(txDb, {
       tenantId,
       transactionId,
@@ -376,8 +396,8 @@ export async function bindQuote(
       ratingId,
       uw: quote.uw || null,
       notes: [],
-      forms: [],
-      documents: [],
+      forms: documentPacket.forms,
+      documents: documentPacket.documents,
       createdBy: normalizedActorId,
       metadata: transactionMetadata,
     })
@@ -445,6 +465,21 @@ export async function bindQuote(
         fallbackRiskRef: defaultRiskRef,
       })
     }
+
+    // Generated policy packet metadata
+    await persistPolicyDocumentPacket(txDb, {
+      tenantId,
+      policyId,
+      policyNumber,
+      transactionId,
+      transactionType: 'NB',
+      transactionNumber,
+      productCode,
+      state: quote.payload?.state || jurisdiction?.code || null,
+      effectiveDate,
+      generatedBy: normalizedActorId,
+      correlationId: transactionNumber,
+    }, documentPacket)
 
     // Ledger event
     await q(
