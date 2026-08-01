@@ -22,7 +22,12 @@ vi.mock('../cache.js', () => ({
 
 vi.mock('../logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-  httpLogger: (_req: any, _res: any, next: any) => next(),
+  httpLogger: (req: any, res: any, next: any) => {
+    const requestId = req.header('x-request-id') || crypto.randomUUID()
+    req.id = requestId
+    res.setHeader('x-request-id', requestId)
+    next()
+  },
   getRequestLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }))
 
@@ -51,6 +56,7 @@ vi.mock('../auth.js', () => ({
 }))
 
 import { createApp } from '../app.js'
+import { resetIdempotencyStoreForTests } from '../lib/idempotency.js'
 
 function quotePayload(overrides: Record<string, any> = {}) {
   return {
@@ -73,6 +79,7 @@ describe('quote and policy fallback API', () => {
   let tenantId: string
 
   beforeEach(() => {
+    resetIdempotencyStoreForTests()
     app = createApp()
     tenantId = `api-test-${crypto.randomUUID()}`
   })
@@ -265,6 +272,55 @@ describe('quote and policy fallback API', () => {
 
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('INVALID_QUOTE')
+  })
+
+  it('replays idempotent write responses and rejects key reuse with a different payload', async () => {
+    const idempotencyKey = `quote-create-${crypto.randomUUID()}`
+    const firstRes = await request(app)
+      .post('/api/v1/quotes')
+      .set('X-Tenant', tenantId)
+      .set('Idempotency-Key', idempotencyKey)
+      .send(quotePayload())
+
+    expect(firstRes.status).toBe(200)
+    expect(firstRes.body.quoteId).toBeTruthy()
+
+    const replayRes = await request(app)
+      .post('/api/v1/quotes')
+      .set('X-Tenant', tenantId)
+      .set('Idempotency-Key', idempotencyKey)
+      .send(quotePayload())
+
+    expect(replayRes.status).toBe(200)
+    expect(replayRes.body.quoteId).toBe(firstRes.body.quoteId)
+    expect(replayRes.body).toEqual(firstRes.body)
+
+    const conflictRes = await request(app)
+      .post('/api/v1/quotes')
+      .set('X-Tenant', tenantId)
+      .set('Idempotency-Key', idempotencyKey)
+      .send(quotePayload({ effectiveDate: '2026-08-01' }))
+
+    expect(conflictRes.status).toBe(409)
+    expect(conflictRes.body).toMatchObject({
+      code: 'IDEMPOTENCY_KEY_CONFLICT',
+      traceId: expect.any(String),
+    })
+  })
+
+  it('returns trace ids on validation errors', async () => {
+    const traceId = `trace-${crypto.randomUUID()}`
+    const res = await request(app)
+      .post('/api/v1/policies/policy-1/cancel')
+      .set('X-Tenant', tenantId)
+      .set('x-request-id', traceId)
+      .send({})
+
+    expect(res.status).toBe(422)
+    expect(res.body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      traceId,
+    })
   })
 
   it('issues bound policies and exposes fallback policy state and versions', async () => {
