@@ -1,0 +1,17 @@
+# Canonical LatticePolicy roadmap milestones.
+# GitHub does not read this file automatically; it is the source of truth for
+# maintainers when creating milestones in the GitHub UI or through automation.
+- title: Carrier Pilot Readiness
+  description: Stabilize core policy, underwriting, document, API, idempotency, and test workflows for a controlled carrier pilot.
+- title: Insurance Platform Readiness
+  description: Add operational workflows for MGAs/MGUs, delegated authority, compliance, audit, jobs, dashboards, and migration.
+- title: Reinsurance Compatibility
+  description: Add treaty/facultative, bordereaux, exposure aggregation, large commercial, and out-of-sequence capabilities.
+- title: Product Governance And Filing Readiness
+  description: Add product/rate/form/rule lifecycle governance, state availability, filing status, and readiness certification.
+- title: Enterprise Security And Compliance Readiness
+  description: Harden identity, tenant isolation, sensitive data, production guardrails, auditability, and compliance evidence.
+- title: Production Operations And Integration Readiness
+  description: Add production eventing, jobs, deployment, backup, restore, DR, smoke tests, and operational runbooks.
+- title: Contributor Experience
+  description: Improve local setup, first-good-task guidance, GitHub workflow, AI-readable context, and documentation quality.

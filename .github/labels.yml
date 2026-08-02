@@ -1,0 +1,92 @@
+# Canonical LatticePolicy issue labels.
+# Apply these through GitHub UI, GitHub CLI, or a label-sync tool.
+- name: type:epic
+  color: "5319e7"
+  description: Roadmap parent issue that groups related work.
+- name: type:task
+  color: "1d76db"
+  description: Implementable engineering or documentation task.
+- name: type:bug
+  color: "d73a4a"
+  description: Reproducible defect or regression.
+- name: type:docs
+  color: "0075ca"
+  description: Documentation-only or documentation-heavy work.
+- name: type:test
+  color: "0e8a16"
+  description: Automated test coverage, test harness, or validation work.
+- name: type:research
+  color: "fbca04"
+  description: Analysis or design needed before implementation.
+- name: good first issue
+  color: "7057ff"
+  description: Suitable for a new contributor.
+- name: help wanted
+  color: "008672"
+  description: Maintainers welcome external contribution.
+- name: needs-analysis
+  color: "d4c5f9"
+  description: Scope needs review before implementation.
+- name: needs-design
+  color: "c5def5"
+  description: Requires design or architecture agreement.
+- name: needs-tests
+  color: "bfe5bf"
+  description: Implementation needs automated test coverage.
+- name: blocked
+  color: "b60205"
+  description: Cannot progress until a dependency or decision is resolved.
+- name: priority:p0
+  color: "b60205"
+  description: Critical for pilot, security, or production readiness.
+- name: priority:p1
+  color: "fbca04"
+  description: Important roadmap work.
+- name: priority:p2
+  color: "cfd3d7"
+  description: Useful but not immediately blocking.
+- name: readiness:demo
+  color: "bfdadc"
+  description: Improves local/demo experience.
+- name: readiness:pilot
+  color: "1d76db"
+  description: Needed for controlled carrier pilot readiness.
+- name: readiness:production
+  color: "d93f0b"
+  description: Needed for production carrier or reinsurer operation.
+- name: domain:policy
+  color: "0052cc"
+  description: Policy lifecycle, versions, transactions, or search.
+- name: domain:underwriting
+  color: "006b75"
+  description: Underwriting rules, referral, authority, or decisions.
+- name: domain:documents
+  color: "7057ff"
+  description: Forms, document packets, notices, or artifacts.
+- name: domain:compliance
+  color: "d93f0b"
+  description: Regulatory, OFAC, filing, eligibility, or audit controls.
+- name: domain:reinsurance
+  color: "5319e7"
+  description: Treaty, facultative, bordereaux, or reinsurer compatibility.
+- name: domain:exposure
+  color: "0e8a16"
+  description: Exposure capture, aggregation, or portfolio analysis.
+- name: domain:integration
+  color: "1d76db"
+  description: External APIs, events, adapters, imports, or exports.
+- name: domain:security
+  color: "b60205"
+  description: Auth, RBAC, tenant isolation, secrets, privacy, or hardening.
+- name: domain:operations
+  color: "5319e7"
+  description: Jobs, deployment, observability, DR, or runbooks.
+- name: domain:product
+  color: "fbca04"
+  description: Product packs, rating config, forms config, or extensions.
+- name: domain:testing
+  color: "0e8a16"
+  description: Test strategy, CI validation, or automation coverage.
+- name: domain:docs
+  color: "0075ca"
+  description: Public docs, contributor docs, Wiki, or task notes.
