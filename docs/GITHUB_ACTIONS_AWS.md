@@ -3,7 +3,8 @@
 This repo now includes:
 
 - `.github/workflows/ci.yml` - builds frontend and server on push/PR.
-- `.github/workflows/deploy-aws-ecs.yml` - deploys to AWS ECS on push to `main` (or manual run).
+- `.github/workflows/deploy-aws-ecs.yml` - deploys to AWS ECS by manual
+  `workflow_dispatch` after AWS repository variables and secrets are configured.
 
 ## 1) Create AWS IAM role for GitHub OIDC
 
@@ -74,8 +75,14 @@ Update these fields before first deploy:
 ## 4) Deployment behavior
 
 - CI runs on PR and push to `main`.
-- CD runs on push to `main` and `workflow_dispatch`.
+- CD runs only through manual `workflow_dispatch`.
 - CD builds Docker images, pushes to ECR (tag = commit SHA), renders task definitions, and deploys both ECS services.
+
+Automatic deploys on push to `main` are intentionally disabled until the
+production AWS account, repository variables, environment approvals, and task
+definition templates are fully configured. Re-enable `push: branches: [main]`
+only after a manual deployment succeeds and the `production` environment has the
+desired approval rules.
 
 ## 5) Recommended hardening
 
