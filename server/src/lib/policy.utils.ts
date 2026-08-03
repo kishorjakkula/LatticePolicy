@@ -111,7 +111,9 @@ export function appendPolicyStatusFilterClause(
     return idx + 1
   }
   if (statusFilter === 'Expired') {
-    clauses.push(`${statusExpr} <> 'cancelled' AND ${expirationDateColumn} < $${idx}`)
+    clauses.push(
+      `(${statusExpr} = 'expired' OR (${statusExpr} <> 'cancelled' AND ${expirationDateColumn} < $${idx}))`
+    )
     return idx + 1
   }
   params.pop()
