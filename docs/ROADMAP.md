@@ -219,6 +219,9 @@ Recommended GitHub Project fields:
 - Size: S, M, L, XL.
 - Owner.
 
+For the full GitHub setup process, label taxonomy, milestone list, triage rules,
+and Wiki synchronization guidance, see `docs/GITHUB_ROADMAP_SETUP.md`.
+
 ## Phase Definition Of Done
 
 A roadmap phase is complete when:
