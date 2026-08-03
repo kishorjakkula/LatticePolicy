@@ -72,7 +72,7 @@ jobs:
           exit-code: "0"
 
       - name: Build frontend image
-        run: docker build -f frontend/Dockerfile -t latticepolicy-frontend:${{ github.sha }} frontend
+        run: docker build -f frontend/Dockerfile -t latticepolicy-frontend:${{ github.sha }} .
 
       - name: Scan frontend image
         uses: aquasecurity/trivy-action@v0.36.0

@@ -27,11 +27,17 @@ This checklist tracks work needed before publishing the repository publicly.
 - Added Dependabot configuration for npm and GitHub Actions.
 - Normalized the Apache-2.0 license appendix so GitHub can recognize the
   repository license.
+- Added a release-tag GHCR publishing workflow for API and frontend container
+  images.
 
 ## Publishing Decisions
 
 - Public repository: `kishorjakkula/LatticePolicy`.
 - Package registry: root, frontend, server, and shared type packages remain private until a maintainer intentionally prepares an npm release.
+- Container registry: publish release images to GHCR for API and frontend
+  containers after release validation. Do not publish npm packages or mutable
+  `latest` container tags until maintainers explicitly define those release
+  policies.
 - License: keep the standard Apache-2.0 `LICENSE` text. There is no `LatticePolicy contributors` placeholder in the current license file to replace.
 - Sample data: product YAML files, tenant config, and contract seed SQL files are intended to be synthetic examples. Re-review them before major public announcements or when adding new samples.
 - Demo credentials: `admin`, `uw1`, and `agent1` with password `password` remain local/demo-only credentials documented in developer setup. Production credentials must come from external secrets.
@@ -50,6 +56,8 @@ Last local verification:
 - Re-run `npm run test:integration` and `npm run test:e2e:docker` before cutting a release.
 - Verify a fresh clone can follow the quick-start path using `.env.example`.
 - Re-review newly added sample data, task definitions, and workflow changes before publication.
+- For release images, run the `Publish GHCR Images` workflow only after the
+  release tag and GitHub release notes are reviewed.
 
 ## Remaining Security Work
 

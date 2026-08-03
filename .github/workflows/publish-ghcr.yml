@@ -1,0 +1,127 @@
+name: Publish GHCR Images
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish, for example v0.2.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE_NAME: kishorjakkula/latticepolicy-api
+  FRONTEND_IMAGE_NAME: kishorjakkula/latticepolicy-frontend
+
+jobs:
+  publish:
+    name: Build, Scan, and Publish Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${INPUT_RELEASE_TAG}"
+          else
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if ! printf '%s' "${RELEASE_TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "release_tag must be a semantic version tag like v0.2.0" >&2
+            exit 1
+          fi
+
+          echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Resolve checked-out commit
+        id: checkout
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: local/latticepolicy-api:${{ steps.checkout.outputs.sha }}
+
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: local/latticepolicy-api:${{ steps.checkout.outputs.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Build frontend image for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          load: true
+          tags: local/latticepolicy-frontend:${{ steps.checkout.outputs.sha }}
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: local/latticepolicy-frontend:${{ steps.checkout.outputs.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.checkout.outputs.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+            org.opencontainers.image.licenses=Apache-2.0
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.release.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.checkout.outputs.sha }}
+
+      - name: Publish frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.checkout.outputs.sha }}
+            org.opencontainers.image.version=${{ steps.release.outputs.tag }}
+            org.opencontainers.image.licenses=Apache-2.0
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.release.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.checkout.outputs.sha }}
