@@ -22,7 +22,7 @@
     "cors": "^2.8.5",
     "drizzle-orm": "^1.0.0-rc.3",
     "exceljs": "^4.4.0",
-    "express": "^4.19.2",
+    "express": "^5.2.1",
     "express-rate-limit": "^7.0.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.9.2",
@@ -36,7 +36,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^22.7.6",
     "@types/pg": "^8.15.5",
