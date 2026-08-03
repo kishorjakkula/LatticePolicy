@@ -48,7 +48,7 @@ Build two images:
 
 ```bash
 docker build -t lattice-policy-api:0.2.0 -f server/Dockerfile .
-docker build -t lattice-policy-ui:0.2.0 -f frontend/Dockerfile frontend \
+docker build -t lattice-policy-ui:0.2.0 -f frontend/Dockerfile . \
   --build-arg VITE_API_BASE_URL=https://api.example.com
 ```
 
@@ -110,7 +110,7 @@ aws ecr get-login-password --region $AWS_REGION \
   | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
 docker build -t $API_IMAGE -f server/Dockerfile .
-docker build -t $UI_IMAGE -f frontend/Dockerfile frontend \
+docker build -t $UI_IMAGE -f frontend/Dockerfile . \
   --build-arg VITE_API_BASE_URL=https://api.example.com
 
 docker push $API_IMAGE
@@ -257,7 +257,7 @@ API_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-api:0.2.0
 UI_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-ui:0.2.0
 
 docker build -t $API_IMAGE -f server/Dockerfile .
-docker build -t $UI_IMAGE -f frontend/Dockerfile frontend \
+docker build -t $UI_IMAGE -f frontend/Dockerfile . \
   --build-arg VITE_API_BASE_URL=https://api.example.com
 
 docker push $API_IMAGE
@@ -418,7 +418,7 @@ API_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-api:0.2.
 UI_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-ui:0.2.0
 
 docker build -t $API_IMAGE -f server/Dockerfile .
-docker build -t $UI_IMAGE -f frontend/Dockerfile frontend \
+docker build -t $UI_IMAGE -f frontend/Dockerfile . \
   --build-arg VITE_API_BASE_URL=https://api.example.com
 
 docker push $API_IMAGE

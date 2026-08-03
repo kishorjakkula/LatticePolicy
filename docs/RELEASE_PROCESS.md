@@ -99,6 +99,32 @@ After the PR merges:
    - upgrade notes,
    - next planned focus.
 
+## GitHub Container Registry
+
+LatticePolicy publishes release container images to GitHub Container Registry
+(GHCR) for adopters who want to run a tagged release without building images
+locally. The workflow publishes two images:
+
+- `ghcr.io/kishorjakkula/latticepolicy-api:<tag>`
+- `ghcr.io/kishorjakkula/latticepolicy-frontend:<tag>`
+
+The publish workflow runs automatically for new semantic version tags such as
+`v0.2.1`. It can also be run manually through the `Publish GHCR Images`
+workflow when publishing an existing tag, such as `v0.2.0`, after the workflow
+is introduced.
+
+Before publishing images:
+
+- confirm the release tag points to the intended `main` commit,
+- confirm CI, integration, E2E, and security checks are green,
+- confirm no `.env`, secret, local data, build output, or generated log files
+  are part of the Docker build context,
+- review high and critical container scan findings.
+
+Published images are tagged with both the release tag and the Git commit SHA.
+Do not publish mutable `latest` tags until maintainers intentionally define a
+stable production release policy.
+
 ## Post-Release
 
 - Close completed release-prep issues.
