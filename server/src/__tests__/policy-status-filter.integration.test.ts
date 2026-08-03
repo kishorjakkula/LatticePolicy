@@ -35,6 +35,8 @@ const seeds: Seed[] = [
   { policyNumber: 'PSF-ISSUED-EXPIRED', status: 'Issued', ...EXPIRED_TERM },
   { policyNumber: 'PSF-CANCELLED-CURRENT', status: 'Cancelled', ...CURRENT_TERM },
   { policyNumber: 'PSF-CANCELLED-EXPIRED', status: 'Cancelled', ...EXPIRED_TERM },
+  { policyNumber: 'PSF-RAW-EXPIRED-CURRENT', status: 'Expired', ...CURRENT_TERM },
+  { policyNumber: 'PSF-RAW-EXPIRED-EXPIRED', status: 'Expired', ...EXPIRED_TERM },
 ]
 
 const FILTERS: PolicyStatusFilter[] = [
@@ -129,6 +131,8 @@ describe('policy status filter (database path)', () => {
         'PSF-QUOTE-EXPIRED',
         'PSF-BOUND-EXPIRED',
         'PSF-ISSUED-EXPIRED',
+        'PSF-RAW-EXPIRED-CURRENT',
+        'PSF-RAW-EXPIRED-EXPIRED',
       ]),
     )
     // Cancelled wins over Expired.

@@ -23,9 +23,9 @@ Root cause was duplication: `derivePolicyWorkflowStatus`,
 copy-pasted from `server/src/lib/policy.utils.ts` into
 `server/src/services/policy.service.ts`, and the two copies drifted.
 
-The fix adds a term guard to the `Draft`/`Rated`/`Bind` SQL clauses and deletes
-the duplicate helpers so the database and fallback paths share one
-implementation.
+The fix adds a term guard to the `Draft`/`Rated`/`Bind` SQL clauses, keeps raw
+stored `Expired` policies visible under the `Expired` filter, and deletes the
+duplicate helpers so the database and fallback paths share one implementation.
 
 ## Important Files
 
@@ -43,6 +43,9 @@ implementation.
 - A status filter must never return a row whose derived workflow status differs
   from the requested filter. If `derivePolicyWorkflowStatus` would label a row
   `Expired`, no other filter may match it.
+- The `Expired` filter must include both non-cancelled policies whose term has
+  ended and policies stored with raw status `Expired`, even when the stored term
+  is current/future.
 - `Cancelled` is the only filter that ignores the term dates, because
   `derivePolicyWorkflowStatus` checks `cancelled` before its expiry check.
 - Every other filter needs a term guard against `expirationDateColumn`.
@@ -68,14 +71,14 @@ implementation.
   - `server/src/lib/__tests__/policy.utils.test.ts` — clause shape for
     `Draft`/`Rated`/`Bind`, `Cancelled` still unguarded, empty filter leaves
     `params` balanced, and a parity test that evaluates the generated SQL
-    predicate against a fixture matrix and asserts it agrees with
-    `matchesPolicyStatusFilter` for every filter.
+    predicate against a fixture matrix, including raw `Expired` rows, and
+    asserts it agrees with `matchesPolicyStatusFilter` for every filter.
   - `server/src/__tests__/policy-status-filter.integration.test.ts` — seeds
     current-term, future-term, and expired-term policies across every
-    `policy_status_enum` value, then asserts `listPolicies` excludes expired rows
-    from `Draft`/`Bind`, still reports them under `Expired`, never returns a row
-    labelled with a different status, and agrees with the in-memory matcher for
-    every filter.
+    `policy_status_enum` value, including raw `Expired`, then asserts
+    `listPolicies` excludes expired rows from `Draft`/`Bind`, still reports them
+    under `Expired`, never returns a row labelled with a different status, and
+    agrees with the in-memory matcher for every filter.
 - Test layer used: unit for the clause builder and cross-path parity, DB-backed
   integration for the real query.
 - Why this layer is enough: the bug lives in a pure string-building helper, so a

@@ -27,9 +27,51 @@ type PolicyRow = {
  * check below.
  */
 function evaluateSqlClause(clause: string, params: any[], row: PolicyRow): boolean {
-  return clause.split(' AND ').every((fragment) => {
-    const term = fragment.trim()
+  const stripOuterParens = (value: string): string => {
+    let term = value.trim()
+    while (term.startsWith('(') && term.endsWith(')')) {
+      let depth = 0
+      let wraps = true
+      for (let i = 0; i < term.length; i += 1) {
+        if (term[i] === '(') depth += 1
+        if (term[i] === ')') depth -= 1
+        if (depth === 0 && i < term.length - 1) {
+          wraps = false
+          break
+        }
+      }
+      if (!wraps) break
+      term = term.slice(1, -1).trim()
+    }
+    return term
+  }
+
+  const splitTopLevel = (value: string, separator: string): string[] => {
+    const pieces: string[] = []
+    let depth = 0
+    let start = 0
+    for (let i = 0; i < value.length; i += 1) {
+      if (value[i] === '(') depth += 1
+      if (value[i] === ')') depth -= 1
+      if (depth === 0 && value.slice(i, i + separator.length) === separator) {
+        pieces.push(value.slice(start, i))
+        start = i + separator.length
+        i += separator.length - 1
+      }
+    }
+    pieces.push(value.slice(start))
+    return pieces.map((piece) => piece.trim()).filter(Boolean)
+  }
+
+  const evaluateTerm = (fragment: string): boolean => {
+    const term = stripOuterParens(fragment)
     const status = row.status.trim().toLowerCase()
+
+    const orPieces = splitTopLevel(term, ' OR ')
+    if (orPieces.length > 1) return orPieces.some((piece) => evaluateTerm(piece))
+
+    const andPieces = splitTopLevel(term, ' AND ')
+    if (andPieces.length > 1) return andPieces.every((piece) => evaluateTerm(piece))
 
     const inMatch = /^LOWER\(p\.status::text\) IN \((.+)\)$/.exec(term)
     if (inMatch) {
@@ -55,7 +97,9 @@ function evaluateSqlClause(clause: string, params: any[], row: PolicyRow): boole
     }
 
     throw new Error(`Unsupported SQL fragment in parity evaluator: ${term}`)
-  })
+  }
+
+  return evaluateTerm(clause)
 }
 
 function matchesSqlFilter(statusFilter: PolicyStatusFilter, row: PolicyRow): boolean {
@@ -185,6 +229,8 @@ describe('policy.utils', () => {
       { label: 'issued, expired term', status: 'issued', effectiveDate: '2024-01-01', expirationDate: '2025-01-01' },
       { label: 'cancelled, current term', status: 'cancelled', effectiveDate: '2026-01-01', expirationDate: '2027-01-01' },
       { label: 'cancelled, expired term', status: 'cancelled', effectiveDate: '2024-01-01', expirationDate: '2025-01-01' },
+      { label: 'raw expired, current term', status: 'expired', effectiveDate: '2026-01-01', expirationDate: '2027-01-01' },
+      { label: 'raw expired, expired term', status: 'expired', effectiveDate: '2024-01-01', expirationDate: '2025-01-01' },
       { label: 'unmapped status, current term', status: 'active', effectiveDate: '2026-01-01', expirationDate: '2027-01-01' },
       { label: 'unmapped status, expired term', status: 'active', effectiveDate: '2024-01-01', expirationDate: '2025-01-01' },
     ]
