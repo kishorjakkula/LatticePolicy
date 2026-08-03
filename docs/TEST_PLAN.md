@@ -169,6 +169,7 @@ Add Playwright E2E:
 npm run test:server
 npm run test:frontend
 npm run test
+npm run security:audit
 npm run test:e2e
 npm run test:e2e:docker
 npm run typecheck
@@ -208,3 +209,7 @@ database-backed API health response, then waits for the frontend before running
 Playwright. Use it when you need a clean full-stack validation path.
 
 Use `npx playwright install chromium` before the first run on a new machine.
+
+GitHub CI runs unit/component tests, typecheck, DB-backed integration tests,
+Playwright E2E smoke, dependency audit policy, dependency review, CodeQL, and
+container scanning. Keep workflow changes aligned with this test plan.

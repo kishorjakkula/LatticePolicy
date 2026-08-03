@@ -1,0 +1,67 @@
+# Changelog
+
+All notable changes to LatticePolicy are documented here. This project is
+pre-1.0; minor versions may still include breaking internal changes, but
+release notes should call out API, migration, setup, and product-pack impact.
+
+## [0.2.0] - 2026-08-03
+
+### Added
+
+- AI contributor process and task-note expectations for non-trivial changes.
+- Carrier and reinsurance platform roadmap with GitHub label and milestone
+  source files.
+- Policy document generation hooks and notification intent/outbox groundwork.
+- DB-backed integration coverage for migrations, policy lifecycle, quote-bind,
+  customer portal security, and policy status filters.
+- GitHub Actions release-readiness coverage for DB integration tests,
+  Playwright E2E smoke tests, dependency audit policy, dependency review,
+  CodeQL, and container scanning.
+- Dependabot configuration for npm and GitHub Actions updates.
+- Manual GitHub roadmap metadata sync workflow backed by repository-owned YAML.
+- Release process documentation.
+
+### Changed
+
+- AWS ECS deployment workflow is manual-only until production AWS account,
+  secrets, OIDC role, and environment approval setup are complete.
+- Package metadata is updated for the `0.2.0` release line.
+- Apache-2.0 license text is normalized so GitHub can recognize the repository
+  license.
+
+### Fixed
+
+- Policy status filters now align raw DB status, derived display status, and
+  expired term behavior across DB-backed and fallback paths.
+- Docker and test documentation now reflect the current local validation paths.
+
+### Security
+
+- `npm audit` is now gated by a repository policy script.
+- The current React Router advisory is tracked as an explicit temporary
+  exception because LatticePolicy uses React Router as a Vite SPA client router
+  and does not enable React Router RSC/framework server actions. The project
+  remains on `react-router-dom` 7.18.2 because the npm-suggested downgrade
+  reintroduces older high-severity advisories. Remove the exception when a
+  patched non-regressing release is available.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- Production runtime configuration validation remains tracked separately.
+- OpenAPI drift checks remain tracked separately.
+- Full reinsurance, bordereaux, ACORD/GRLC mapping, production document
+  artifact storage, enterprise SSO, and complete product governance remain
+  roadmap items.
+
+## [0.1.0] - 2026-06-03
+
+### Added
+
+- Initial open-source policy administration framework baseline.
+- React/Vite operations UI and customer portal shell.
+- Express/TypeScript policy API with tenant-aware quote, policy, underwriting,
+  rating, admin, customer, and portal workflows.
+- Product-pack and tenant configuration examples.
+- Docker Compose local deployment and cloud deployment documentation.
