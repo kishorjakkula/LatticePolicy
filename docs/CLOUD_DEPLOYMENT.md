@@ -47,14 +47,14 @@ Important: Vite variables are compiled into the frontend image at build time. If
 Build two images:
 
 ```bash
-docker build -t lattice-policy-api:0.1.0 -f server/Dockerfile .
-docker build -t lattice-policy-ui:0.1.0 -f frontend/Dockerfile frontend \
+docker build -t lattice-policy-api:0.2.0 -f server/Dockerfile .
+docker build -t lattice-policy-ui:0.2.0 -f frontend/Dockerfile frontend \
   --build-arg VITE_API_BASE_URL=https://api.example.com
 ```
 
 Recommended image tags:
 
-- Immutable release tag: `0.1.0`, `0.1.1`, etc.
+- Immutable release tag: `0.2.0`, `0.1.1`, etc.
 - Commit tag: Git SHA for traceability.
 - Avoid relying on `latest` for production rollouts.
 
@@ -103,8 +103,8 @@ aws ecr create-repository --repository-name lattice-policy-ui
 ```bash
 AWS_ACCOUNT_ID=<account-id>
 AWS_REGION=us-east-1
-API_IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lattice-policy-api:0.1.0
-UI_IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lattice-policy-ui:0.1.0
+API_IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lattice-policy-api:0.2.0
+UI_IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lattice-policy-ui:0.2.0
 
 aws ecr get-login-password --region $AWS_REGION \
   | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
@@ -253,8 +253,8 @@ ACR_LOGIN_SERVER=$(az acr show \
   --query loginServer \
   --output tsv)
 
-API_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-api:0.1.0
-UI_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-ui:0.1.0
+API_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-api:0.2.0
+UI_IMAGE=$ACR_LOGIN_SERVER/lattice-policy-ui:0.2.0
 
 docker build -t $API_IMAGE -f server/Dockerfile .
 docker build -t $UI_IMAGE -f frontend/Dockerfile frontend \
@@ -414,8 +414,8 @@ gcloud artifacts repositories create $REPOSITORY \
 ```bash
 gcloud auth configure-docker $REGION-docker.pkg.dev
 
-API_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-api:0.1.0
-UI_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-ui:0.1.0
+API_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-api:0.2.0
+UI_IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/lattice-policy-ui:0.2.0
 
 docker build -t $API_IMAGE -f server/Dockerfile .
 docker build -t $UI_IMAGE -f frontend/Dockerfile frontend \

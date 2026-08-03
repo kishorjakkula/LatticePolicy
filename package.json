@@ -1,6 +1,6 @@
 {
   "name": "lattice-policy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open-source framework for access-based insurance policy administration systems.",
   "private": true,
   "license": "Apache-2.0",
@@ -41,6 +41,8 @@
     "test:integration": "sh scripts/test-integration.sh",
     "test:e2e": "playwright test",
     "test:e2e:docker": "sh scripts/test-e2e-docker.sh",
+    "security:audit": "node scripts/check-npm-audit.mjs",
+    "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {

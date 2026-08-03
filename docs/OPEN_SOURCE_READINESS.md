@@ -21,6 +21,12 @@ This checklist tracks work needed before publishing the repository publicly.
 - Reviewed the AWS ECS deployment workflow and task templates for public repository use.
 - Moved API deployment secrets in the ECS task template to ECS task secrets instead of plain environment values.
 - Updated fixable security dependencies, including Sentry, Vite, React Router, and TSX package lines.
+- Added CI security automation for dependency audit policy, dependency review,
+  CodeQL, and container scanning.
+- Added DB integration and Playwright E2E smoke jobs to CI.
+- Added Dependabot configuration for npm and GitHub Actions.
+- Normalized the Apache-2.0 license appendix so GitHub can recognize the
+  repository license.
 
 ## Publishing Decisions
 
@@ -35,24 +41,28 @@ This checklist tracks work needed before publishing the repository publicly.
 
 Last local verification:
 
-- `npm audit fix` applied available non-force updates.
-- `npm run build` passed.
-- `npm run test` passed.
-- `npm run typecheck` passed.
-- Fresh clone quick-start config check passed with `.env.example`.
+- `npm audit fix` applied available non-force updates before v0.2.0.
+- v0.2.0 release validation is tracked in `docs/tasks/issue-102-v0.2.0-release-readiness.md`.
 
 ## Before Publishing
 
-- Re-run `npm audit`, `npm run test`, `npm run typecheck`, and `npm run build` from the repository root.
+- Re-run `npm run security:audit`, `npm run test`, `npm run typecheck`, and `npm run build` from the repository root.
+- Re-run `npm run test:integration` and `npm run test:e2e:docker` before cutting a release.
 - Verify a fresh clone can follow the quick-start path using `.env.example`.
 - Re-review newly added sample data, task definitions, and workflow changes before publication.
 
 ## Remaining Security Work
 
-`npm audit` currently reports the React Router advisory chain for
-`react-router-dom` 7.18.2. That is the latest published `react-router-dom`
-version available to this app at the time of review; keep monitoring for the
-next patched `react-router-dom` release and update as soon as it is available.
+`npm audit` currently reports the React Router RSC Mode CSRF advisory chain for
+`react-router-dom` 7.18.2. LatticePolicy uses React Router as a Vite
+client-side SPA router and does not enable React Router RSC/framework server
+actions. The npm-suggested downgrade to 7.11.0 reintroduces older high-severity
+React Router advisories, so the project keeps 7.18.2 and tracks
+`GHSA-qwww-vcr4-c8h2` as a temporary explicit exception in
+`scripts/check-npm-audit.mjs`.
+
+Keep monitoring for the next patched non-regressing `react-router-dom` release
+and remove the audit exception as soon as one is available.
 
 Keep running `npm audit` from the repository root after dependency changes, because
 the project uses the root npm workspace lockfile as the source of truth.
