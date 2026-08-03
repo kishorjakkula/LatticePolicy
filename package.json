@@ -46,9 +46,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
-    "@rollup/rollup-darwin-arm64": "4.59.0",
-    "@rollup/rollup-linux-arm64-musl": "4.59.0",
-    "@rollup/rollup-linux-x64-gnu": "4.59.0"
+    "@rollup/rollup-darwin-arm64": "4.62.3",
+    "@rollup/rollup-linux-arm64-musl": "4.62.3",
+    "@rollup/rollup-linux-x64-gnu": "4.62.3"
   },
   "overrides": {
     "exceljs@4.4.0": {
@@ -56,6 +56,6 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.62.1"
   }
 }
