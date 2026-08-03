@@ -73,18 +73,8 @@ export function appendPolicyStatusFilterClause(
   const { statusColumn, effectiveDateColumn, expirationDateColumn } = columns
   const statusExpr = `LOWER(${statusColumn}::text)`
 
-  if (statusFilter === 'Draft') {
-    clauses.push(`${statusExpr} IN ('draft','quote')`)
-    return idx
-  }
-  if (statusFilter === 'Rated') {
-    clauses.push(`${statusExpr} = 'rated'`)
-    return idx
-  }
-  if (statusFilter === 'Bind') {
-    clauses.push(`${statusExpr} = 'bound'`)
-    return idx
-  }
+  // Cancelled wins over Expired in derivePolicyWorkflowStatus, so this filter
+  // is the only one that ignores the term dates.
   if (statusFilter === 'Cancelled') {
     clauses.push(`${statusExpr} = 'cancelled'`)
     return idx
@@ -92,6 +82,22 @@ export function appendPolicyStatusFilterClause(
 
   const todayValue = today()
   params.push(todayValue)
+  // Every remaining filter needs the term guard: derivePolicyWorkflowStatus
+  // reports any non-cancelled policy with a past term end as Expired, so a
+  // filter that matched on raw status alone would return rows it then labels
+  // with a different status.
+  if (statusFilter === 'Draft') {
+    clauses.push(`${statusExpr} IN ('draft','quote') AND ${expirationDateColumn} >= $${idx}`)
+    return idx + 1
+  }
+  if (statusFilter === 'Rated') {
+    clauses.push(`${statusExpr} = 'rated' AND ${expirationDateColumn} >= $${idx}`)
+    return idx + 1
+  }
+  if (statusFilter === 'Bind') {
+    clauses.push(`${statusExpr} = 'bound' AND ${expirationDateColumn} >= $${idx}`)
+    return idx + 1
+  }
   if (statusFilter === 'Issued') {
     clauses.push(
       `${statusExpr} = 'issued' AND ${effectiveDateColumn} > $${idx} AND ${expirationDateColumn} >= $${idx}`
