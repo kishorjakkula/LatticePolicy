@@ -17,7 +17,7 @@ export function getDeploymentEnv(): string {
 
 export function isManagedDeployment(): boolean {
   const deploymentEnv = getDeploymentEnv()
-  return process.env.NODE_ENV === 'production' || ['test', 'validation', 'staging', 'production'].includes(deploymentEnv)
+  return ['test', 'validation', 'staging', 'production'].includes(deploymentEnv)
 }
 
 export function isTruthyEnv(value: string | undefined): boolean {

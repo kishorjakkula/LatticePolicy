@@ -53,11 +53,11 @@ export function createApp() {
     return res.status(403).json({ code: 'FORBIDDEN', message: 'Admin user required for API Docs' })
   }
 
-  app.get('/openapi.json', requireAdminDocs, (req, res) => {
+  app.get('/openapi.json', authLimiter, requireAdminDocs, (req, res) => {
     const serverUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`
     res.json(buildOpenApiSpec(serverUrl))
   })
-  app.get('/api-docs', requireAdminDocs, (req, res) => {
+  app.get('/api-docs', authLimiter, requireAdminDocs, (req, res) => {
     const token = String((req.query as any)?.token || '').trim()
     const serverUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`
     const specUrl = `${serverUrl}/openapi.json${token ? `?token=${encodeURIComponent(token)}` : ''}`

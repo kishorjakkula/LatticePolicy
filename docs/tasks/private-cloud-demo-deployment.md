@@ -12,6 +12,9 @@ validation users.
 
 - Added managed deployment validation for required database and secret
   configuration.
+- Scoped managed deployment guardrails to `DEPLOYMENT_ENV`/`APP_ENV` so
+  `NODE_ENV=production` can still be used for container runtime optimization
+  without breaking local Docker Compose.
 - Made managed test startup fail closed when PostgreSQL configuration or
   initialization is missing.
 - Added invite-only demo access controls using `DEMO_ACCESS_MODE=invite_only`
@@ -20,6 +23,8 @@ validation users.
   enabled proxy trust for cloud test deployments.
 - Updated AWS ECS task definitions for test env/secrets, health checks,
   and frontend port `80`.
+- Added rate limiting to API docs routes so admin documentation authorization
+  endpoints have the same brute-force protection posture as auth endpoints.
 - Updated AWS deployment workflow to pass the frontend API URL as a Docker
   build argument and run optional smoke checks.
 - Added an Azure Container Apps deployment workflow skeleton using the same

@@ -52,6 +52,18 @@ describe('runtime config', () => {
     expect(validateDeploymentConfig()).toEqual({ ok: true, missing: [] })
   })
 
+  it('does not treat NODE_ENV production alone as a managed deployment', () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.DEPLOYMENT_ENV
+    delete process.env.DATABASE_URL
+    delete process.env.JWT_SECRET
+    delete process.env.CUSTOMER_DATA_KEY
+    delete process.env.MFA_TOKEN_SECRET
+    delete process.env.ALLOWED_ORIGINS
+
+    expect(validateDeploymentConfig()).toEqual({ ok: true, missing: [] })
+  })
+
   it('throws from reusable secret helpers when managed deployment config is incomplete', () => {
     process.env.DEPLOYMENT_ENV = 'test'
     delete process.env.DATABASE_URL
