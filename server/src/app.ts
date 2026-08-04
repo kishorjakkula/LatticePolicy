@@ -12,12 +12,22 @@ import { getDb } from './db.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
+import { getAllowedOrigins, isManagedDeployment, isTruthyEnv } from './config.js'
 
 export function createApp() {
   const app = express()
 
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
-  app.use(cors())
+  if (isManagedDeployment() || isTruthyEnv(process.env.TRUST_PROXY)) app.set('trust proxy', 1)
+  app.use(helmet({ crossOriginEmbedderPolicy: false }))
+  const allowedOrigins = getAllowedOrigins()
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (!isManagedDeployment() && allowedOrigins.length === 0) return callback(null, true)
+      return callback(null, allowedOrigins.includes(origin))
+    },
+    credentials: true
+  }))
   app.use(express.json({ limit: '25mb' }))
   app.use(httpLogger)
 

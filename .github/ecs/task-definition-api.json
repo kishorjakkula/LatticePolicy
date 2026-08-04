@@ -20,8 +20,36 @@
       ],
       "environment": [
         {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "DEPLOYMENT_ENV",
+          "value": "test"
+        },
+        {
           "name": "PORT",
           "value": "3000"
+        },
+        {
+          "name": "CACHE_ENABLED",
+          "value": "1"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "info"
+        },
+        {
+          "name": "REGISTRATION_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "DEMO_ACCESS_MODE",
+          "value": "invite_only"
+        },
+        {
+          "name": "DEMO_ALLOWED_EMAIL_DOMAINS",
+          "value": ""
         }
       ],
       "secrets": [
@@ -32,8 +60,38 @@
         {
           "name": "JWT_SECRET",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/jwt-secret"
+        },
+        {
+          "name": "CUSTOMER_DATA_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/customer-data-key"
+        },
+        {
+          "name": "MFA_TOKEN_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/mfa-token-secret"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/redis-url"
+        },
+        {
+          "name": "ALLOWED_ORIGINS",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/allowed-origins"
+        },
+        {
+          "name": "DEMO_ALLOWED_EMAILS",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/demo-allowed-emails"
         }
       ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

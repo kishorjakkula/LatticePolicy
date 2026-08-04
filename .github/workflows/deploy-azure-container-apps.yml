@@ -1,0 +1,137 @@
+name: Deploy To Azure Container Apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-azure-test
+  cancel-in-progress: true
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_CONTAINER_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+  AZURE_CONTAINER_APP_API: ${{ vars.AZURE_CONTAINER_APP_API }}
+  AZURE_CONTAINER_APP_FRONTEND: ${{ vars.AZURE_CONTAINER_APP_FRONTEND }}
+  AZURE_CONTAINER_APP_MIGRATION_JOB: ${{ vars.AZURE_CONTAINER_APP_MIGRATION_JOB }}
+  VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+  TEST_API_HEALTH_URL: ${{ vars.TEST_API_HEALTH_URL }}
+  TEST_FRONTEND_URL: ${{ vars.TEST_FRONTEND_URL }}
+
+jobs:
+  deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate required variables
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          required_vars=(
+            AZURE_CLIENT_ID
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            AZURE_RESOURCE_GROUP
+            AZURE_CONTAINER_REGISTRY
+            AZURE_CONTAINER_APP_API
+            AZURE_CONTAINER_APP_FRONTEND
+            VITE_API_BASE_URL
+          )
+
+          missing=0
+          for item in "${required_vars[@]}"; do
+            if [ -z "${!item}" ]; then
+              echo "Missing variable: $item"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Set required Azure repository variables and secrets before deploy."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve ACR login server
+        id: acr
+        run: |
+          LOGIN_SERVER=$(az acr show \
+            --name "$AZURE_CONTAINER_REGISTRY" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query loginServer \
+            --output tsv)
+          echo "login-server=$LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "$AZURE_CONTAINER_REGISTRY"
+
+      - name: Build and push API image
+        id: api-image
+        env:
+          ACR_LOGIN_SERVER: ${{ steps.acr.outputs.login-server }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ACR_LOGIN_SERVER/lattice-policy-api:$IMAGE_TAG"
+          docker build -f server/Dockerfile -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push frontend image
+        id: frontend-image
+        env:
+          ACR_LOGIN_SERVER: ${{ steps.acr.outputs.login-server }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ACR_LOGIN_SERVER/lattice-policy-ui:$IMAGE_TAG"
+          docker build \
+            -f frontend/Dockerfile \
+            --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Run migration job
+        if: ${{ env.AZURE_CONTAINER_APP_MIGRATION_JOB != '' }}
+        run: |
+          az containerapp job start \
+            --name "$AZURE_CONTAINER_APP_MIGRATION_JOB" \
+            --resource-group "$AZURE_RESOURCE_GROUP"
+
+      - name: Deploy API container app
+        run: |
+          az containerapp update \
+            --name "$AZURE_CONTAINER_APP_API" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "${{ steps.api-image.outputs.image }}"
+
+      - name: Deploy frontend container app
+        run: |
+          az containerapp update \
+            --name "$AZURE_CONTAINER_APP_FRONTEND" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "${{ steps.frontend-image.outputs.image }}"
+
+      - name: Smoke test API health
+        if: ${{ env.TEST_API_HEALTH_URL != '' }}
+        run: |
+          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL"
+
+      - name: Smoke test frontend
+        if: ${{ env.TEST_FRONTEND_URL != '' }}
+        run: |
+          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_FRONTEND_URL"
