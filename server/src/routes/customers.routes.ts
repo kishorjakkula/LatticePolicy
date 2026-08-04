@@ -11,7 +11,7 @@ import {
   normalizeSensitiveValue
 } from '../customerCrypto.js'
 import { today, asDateOnly as _asDateOnly } from '../lib/date.utils.js'
-import { sanitizeText } from '../lib/utils.js'
+import { routeParam, sanitizeText } from '../lib/utils.js'
 
 type QueryFn = (text: string, params?: any[]) => Promise<any>
 
@@ -706,7 +706,7 @@ customerAdminRoutes.get('/:idOrKey/export', requirePermission(['admin.customers.
   try {
     const customer = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      return loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      return loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
     })
     if (!customer) return res.status(404).json({ code: 'NOT_FOUND' })
     return res.json(customer)
@@ -722,7 +722,7 @@ customerAdminRoutes.get('/:idOrKey/audit', requirePermission('admin.customers.re
   try {
     const customer = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      return loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, false)
+      return loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), false)
     })
     if (!customer) return res.status(404).json({ code: 'NOT_FOUND' })
     const limit = clampNumber(req.query.limit, 100, 1, 1000)
@@ -757,7 +757,7 @@ customerAdminRoutes.post('/:idOrKey/reveal', requirePermission('admin.customers.
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       let value: string | null = null
       if (field === 'ssn') {
@@ -796,7 +796,7 @@ customerAdminRoutes.post('/:idOrKey/submit-approval', requirePermission('admin.c
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       await createApprovalRequest(q, tenantId, customer.customerId, 'UPDATE', actor, reason, req.body?.payload || {})
       await q(
@@ -838,7 +838,7 @@ customerAdminRoutes.post('/:idOrKey/approve', requirePermission('admin.customers
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       await q(
         `UPDATE customer_approvals
@@ -895,7 +895,7 @@ customerAdminRoutes.post('/:idOrKey/deactivate', requirePermission(['admin.custo
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       const settings = await loadCustomerSettings(q, tenantId)
       const activePolicyCount = await countActivePolicyReferences(q, tenantId, customer.customerId)
@@ -959,7 +959,7 @@ customerAdminRoutes.post('/:idOrKey/reactivate', requirePermission(['admin.custo
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       await q(
         `UPDATE customers
@@ -1002,7 +1002,7 @@ customerAdminRoutes.get('/:idOrKey/policies', requirePermission('admin.customers
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, false)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), false)
       if (!customer) throw new Error('NOT_FOUND')
       return listCustomerPolicies(q, tenantId, customer.customerId, req.query.limit)
     })
@@ -1021,7 +1021,7 @@ customerAdminRoutes.get('/:idOrKey/quotes', requirePermission('admin.customers.r
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, false)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), false)
       if (!customer) throw new Error('NOT_FOUND')
       return listCustomerOpenQuotes(q, tenantId, customer, req.query.limit)
     })
@@ -1041,7 +1041,7 @@ customerAdminRoutes.get('/:idOrKey/ai-insights', requirePermission('admin.custom
     const aiMlConfig = await loadTenantAiMlConfig(tenantId)
     const payload = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       const [policies, quotes] = await Promise.all([
         listCustomerPolicies(q, tenantId, customer.customerId, 500),
@@ -1091,7 +1091,7 @@ customerAdminRoutes.get('/:idOrKey', requirePermission('admin.customers.read'), 
   try {
     const customer = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      return loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      return loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
     })
     if (!customer) return res.status(404).json({ code: 'NOT_FOUND' })
     if (customer.status === 'MERGED' && customer.survivorCustomerId) {
@@ -1119,7 +1119,7 @@ customerAdminRoutes.patch(
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const existing = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const existing = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!existing) throw new Error('NOT_FOUND')
       const customerServiceMode = hasPermission(req.user?.permissions, 'admin.customers.contact.manage') &&
         !hasPermission(req.user?.permissions, 'admin.customers.manage')
@@ -1158,7 +1158,7 @@ customerAdminRoutes.delete('/:idOrKey', requirePermission('admin.customers.manag
     const reason = sanitizeText(req.body?.reason) || 'DELETE'
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, req.params.idOrKey, true)
+      const customer = await loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
       if (!customer) throw new Error('NOT_FOUND')
       const refs = await countCustomerReferences(q, tenantId, customer.customerId)
       if (refs > 0) throw new Error('HAS_REFERENCES')

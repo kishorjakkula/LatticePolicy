@@ -15,6 +15,10 @@ export function asTrimmedText(value: any): string {
   return String(value ?? '').trim()
 }
 
+export function routeParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? String(value[0] ?? '').trim() : String(value ?? '').trim()
+}
+
 export function csvEscape(v: any): string {
   const s = v == null ? '' : String(v)
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s

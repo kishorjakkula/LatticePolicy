@@ -57,6 +57,7 @@ import {
 } from '../rbac.js'
 import { generatePolicyNumber } from '../policyNumbers.js'
 import { buildCacheKey, cacheDeleteKey, cacheDeletePrefix } from '../cache.js'
+import { routeParam } from '../lib/utils.js'
 
 export const adminRoutes = Router()
 const DUPLICATE_UW_COMPANY_MESSAGE =
@@ -103,7 +104,7 @@ adminRoutes.post('/users', requirePermission('admin.users.manage'), async (req, 
 
 adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const { id } = req.params
+  const id = routeParam(req.params.id)
   const body = req.body || {}
   const { password, roles, disabled } = body
   try {
@@ -133,7 +134,7 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
 
 adminRoutes.delete('/users/:id', requirePermission('admin.users.manage'), (req, res) => {
   const tenantId = req.tenant!.tenantId
-  deleteUser(tenantId, req.params.id)
+  deleteUser(tenantId, routeParam(req.params.id))
     .then(() => res.status(204).end())
     .catch((e:any) => {
       if (String(e?.message) === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
@@ -207,7 +208,7 @@ adminRoutes.patch('/security/roles/:roleCode', requirePermission('admin.security
     await ensureTenantRbacDefaults(tenantId)
     const role = await updateRole(
       tenantId,
-      req.params.roleCode,
+      routeParam(req.params.roleCode),
       {
         roleName: req.body?.roleName,
         description: req.body?.description,
@@ -235,7 +236,7 @@ adminRoutes.delete('/security/roles/:roleCode', requirePermission('admin.securit
   const tenantId = req.tenant!.tenantId
   try {
     await ensureTenantRbacDefaults(tenantId)
-    await deleteSecurityRole(tenantId, req.params.roleCode)
+    await deleteSecurityRole(tenantId, routeParam(req.params.roleCode))
     return res.status(204).end()
   } catch (e: any) {
     const msg = String(e?.message || e)
@@ -253,7 +254,7 @@ adminRoutes.delete('/security/roles/:roleCode', requirePermission('admin.securit
 
 adminRoutes.patch('/security/users/:id/roles', requirePermission(['admin.security.manage', 'admin.users.manage']), async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const userId = req.params.id
+  const userId = routeParam(req.params.id)
   const requestedRoles = Array.isArray(req.body?.roleCodes) ? req.body.roleCodes : []
   try {
     await ensureTenantRbacDefaults(tenantId)
@@ -602,7 +603,7 @@ adminRoutes.post('/underwriting-companies', requirePermission('admin.uw_company.
 
 adminRoutes.patch('/underwriting-companies/:id', requirePermission('admin.uw_company.manage'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const companyId = req.params.id
+  const companyId = routeParam(req.params.id)
   const patch: {
     name?: string
     productCode?: string
@@ -704,7 +705,7 @@ adminRoutes.patch('/underwriting-companies/:id', requirePermission('admin.uw_com
 
 adminRoutes.delete('/underwriting-companies/:id', requirePermission('admin.uw_company.manage'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const companyId = req.params.id
+  const companyId = routeParam(req.params.id)
   const db = getDb()
   if (db) {
     try {
