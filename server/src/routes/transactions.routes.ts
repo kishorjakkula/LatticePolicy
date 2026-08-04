@@ -21,6 +21,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
+import { routeParam } from '../lib/utils.js'
 
 // ── local helpers ─────────────────────────────────────────────────────────────
 
@@ -87,13 +88,13 @@ transactionRoutes.post('/policies/:id/issue', async (req, res, next) => {
 
     if (db) {
       const result = await req.tx((db) =>
-        lifecycleService.issuePolicy(db, tenantId, req.params.id, req.body || {}, req.user)
+        lifecycleService.issuePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
       )
       return res.json(result)
     }
 
     // In-memory fallback
-    const policy = store.getPolicyForTenant(req.params.id, tenantId)
+    const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const invalidState = validatePolicyTransactionState('issue', policy.status)
     if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
@@ -118,7 +119,7 @@ transactionRoutes.post('/policies/:id/endorse/reserve-number', (req, res) => {
 
   if (db) {
     return withTenantTx(tenantId, async (db) => {
-      const ctx = await loadPolicyContext(db, tenantId, req.params.id)
+      const ctx = await loadPolicyContext(db, tenantId, routeParam(req.params.id))
       if (!ctx) return { notFound: true }
       const invalidState = validateTransactionNumberReservation('endorse', ctx.policy.status)
       if (invalidState) return { error: { status: 400, ...invalidState } }
@@ -138,7 +139,7 @@ transactionRoutes.post('/policies/:id/endorse/reserve-number', (req, res) => {
       )
   }
 
-  const policy = store.getPolicyForTenant(req.params.id, tenantId)
+  const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
   if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
   const invalidState = validateTransactionNumberReservation('endorse', policy.status)
   if (invalidState) return res.status(400).json(invalidState)
@@ -159,7 +160,7 @@ transactionRoutes.post('/policies/:id/transactions/reserve-number', (req, res) =
 
   if (db) {
     return withTenantTx(tenantId, async (db) => {
-      const ctx = await loadPolicyContext(db, tenantId, req.params.id)
+      const ctx = await loadPolicyContext(db, tenantId, routeParam(req.params.id))
       if (!ctx) return { notFound: true }
       const invalidState = validateTransactionNumberReservation(mode, ctx.policy.status)
       if (invalidState) return { error: { status: 400, ...invalidState } }
@@ -179,7 +180,7 @@ transactionRoutes.post('/policies/:id/transactions/reserve-number', (req, res) =
       )
   }
 
-  const policy = store.getPolicyForTenant(req.params.id, tenantId)
+  const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
   if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
   const invalidState = validateTransactionNumberReservation(mode, policy.status)
   if (invalidState) return res.status(400).json(invalidState)
@@ -197,7 +198,7 @@ transactionRoutes.post('/policies/:id/endorse/preview', async (req, res, next) =
     }
 
     const result = await req.tx((db) =>
-      endorsementService.previewEndorsement(db, tenantId, req.params.id, req.body || {})
+      endorsementService.previewEndorsement(db, tenantId, routeParam(req.params.id), req.body || {})
     )
     return res.json(result)
   } catch (err: any) {
@@ -222,7 +223,7 @@ transactionRoutes.post(
       }
 
       const result = await req.tx((db) =>
-        endorsementService.executeEndorsement(db, tenantId, req.params.id, req.body || {}, req.user)
+        endorsementService.executeEndorsement(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
       )
       return res.json(result)
     } catch (err: any) {
@@ -245,13 +246,13 @@ transactionRoutes.post(
 
       if (db) {
         const result = await req.tx((db) =>
-          lifecycleService.cancelPolicy(db, tenantId, req.params.id, req.body || {}, req.user)
+          lifecycleService.cancelPolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
         )
         return res.json(result)
       }
 
       // In-memory fallback
-      const policy = store.getPolicyForTenant(req.params.id, tenantId)
+      const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       const invalidState = validatePolicyTransactionState('cancel', policy.status)
       if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
@@ -296,13 +297,13 @@ transactionRoutes.post(
 
       if (db) {
         const result = await req.tx((db) =>
-          lifecycleService.reinstatePolicy(db, tenantId, req.params.id, req.body || {}, req.user)
+          lifecycleService.reinstatePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
         )
         return res.json(result)
       }
 
       // In-memory fallback
-      const policy = store.getPolicyForTenant(req.params.id, tenantId)
+      const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       const invalidState = validatePolicyTransactionState('reinstate', policy.status)
       if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
@@ -343,7 +344,7 @@ transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
 
     if (db) {
       const result = await req.tx((db) =>
-        lifecycleService.rewritePolicy(db, tenantId, req.params.id, req.body || {}, req.user)
+        lifecycleService.rewritePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
       )
       return ok(res, result)
     }
@@ -365,7 +366,7 @@ transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
       typeof req.body?.transactionNumber === 'string' ? req.body.transactionNumber.trim() : ''
     const overrideEffectiveDate = asDateOnly(req.body?.effectiveDate)
 
-    const policy = store.getPolicyForTenant(req.params.id, tenantId)
+    const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const invalidState = validatePolicyTransactionState('rewrite', policy.status)
     if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
@@ -433,7 +434,7 @@ transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
 
     if (db) {
       const result = await req.tx((db) =>
-        lifecycleService.renewPolicy(db, tenantId, req.params.id, req.body || {}, req.user)
+        lifecycleService.renewPolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
       )
       return res.json(result)
     }
@@ -455,7 +456,7 @@ transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
       typeof req.body?.transactionNumber === 'string' ? req.body.transactionNumber.trim() : ''
     const overrideEffectiveDate = asDateOnly(req.body?.effectiveDate)
 
-    const policy = store.getPolicyForTenant(req.params.id, tenantId)
+    const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const invalidState = validatePolicyTransactionState('renew', policy.status)
     if (!invalidState.ok) return res.status(400).json({ code: invalidState.code, message: invalidState.message })
@@ -519,13 +520,13 @@ transactionRoutes.post('/policies/:id/renew/preview', async (req, res, next) => 
 
     if (db) {
       const result = await req.tx((db) =>
-        lifecycleService.previewRenewal(db, tenantId, req.params.id, req.body || {})
+        lifecycleService.previewRenewal(db, tenantId, routeParam(req.params.id), req.body || {})
       )
       return res.json(result)
     }
 
     // In-memory fallback
-    const policy = store.getPolicyForTenant(req.params.id, tenantId)
+    const policy = store.getPolicyForTenant(routeParam(req.params.id), tenantId)
     if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const nextEff = (policy as any).term.expirationDate
     const termMonths =
@@ -556,7 +557,7 @@ transactionRoutes.post(
   async (req, res, next) => {
     try {
       const tenantId = req.tenant!.tenantId
-      const policyId = req.params.id
+      const policyId = routeParam(req.params.id)
       const db = getDb()
 
       if (db) {

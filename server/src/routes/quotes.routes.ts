@@ -18,7 +18,7 @@ import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuote } from '../contracts.js'
 import { addMonths } from '../lib/date.utils.js'
-import { csvEscape } from '../lib/utils.js'
+import { csvEscape, routeParam } from '../lib/utils.js'
 
 export const quoteRoutes = Router()
 
@@ -127,12 +127,12 @@ quoteRoutes.get('/quotes/:id', async (req, res, next) => {
     const db = getDb()
 
     if (db) {
-      const data = await quoteService.getQuote(db as any, tenantId, req.params.id)
+      const data = await quoteService.getQuote(db as any, tenantId, routeParam(req.params.id))
       return ok(res, data)
     }
 
     // In-memory fallback
-    const q = store.getQuote(req.params.id)
+    const q = store.getQuote(routeParam(req.params.id))
     if (!q || (q as any).tenantId !== tenantId) {
       return res.status(404).json({ code: 'QUOTE_NOT_FOUND' })
     }
@@ -204,7 +204,7 @@ quoteRoutes.post('/quotes/draft', validate(DraftQuoteSchema), async (req, res, n
 quoteRoutes.patch('/quotes/:id/draft', validate(DraftQuoteSchema), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
-    const quoteId = req.params.id
+    const quoteId = routeParam(req.params.id)
     const body = req.body || {}
     const updatedBy = resolveQuoteActor(req)
     const db = getDb()
@@ -290,7 +290,7 @@ quoteRoutes.patch('/quotes/:id/draft', validate(DraftQuoteSchema), async (req, r
 quoteRoutes.post('/quotes/:id/bind', validate(BindQuoteSchema), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
-    const id = req.params.id
+    const id = routeParam(req.params.id)
     const overrideReason =
       req.body && typeof req.body.overrideReason === 'string'
         ? req.body.overrideReason.trim()
@@ -414,7 +414,7 @@ quoteRoutes.post('/quotes/:id/bind', validate(BindQuoteSchema), async (req, res,
 quoteRoutes.post('/quotes/:id/copy', async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
-    const id = req.params.id
+    const id = routeParam(req.params.id)
     const updatedBy = resolveQuoteActor(req)
     const db = getDb()
 

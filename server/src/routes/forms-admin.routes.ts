@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from '../uuid.js'
 import { hasPermission } from '../auth.js'
 import { buildCacheKey, cacheDeletePrefix } from '../cache.js'
 import { asDateOnly as _asDateOnly } from '../lib/date.utils.js'
-import { sanitizeInlineFileName } from '../lib/utils.js'
+import { routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 
 export const formsAdminRoutes = Router()
 
@@ -476,7 +476,7 @@ formsAdminRoutes.post('/seed/iso-personal-auto-us', async (req, res) => {
 
 formsAdminRoutes.get('/:id', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
 
   try {
     const details = await withTenantTx(tenantId, async (db) => {
@@ -494,7 +494,7 @@ formsAdminRoutes.get('/:id', async (req, res) => {
 
 formsAdminRoutes.patch('/:id', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeFormPayload(req.body || {})
 
@@ -610,7 +610,7 @@ formsAdminRoutes.patch('/:id', async (req, res) => {
 
 formsAdminRoutes.post('/:id/clone', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const sourceFormId = req.params.id
+  const sourceFormId = routeParam(req.params.id)
   const actor = currentActor(req)
   const body = req.body || {}
   const newEditionDate = parseEditionDate(body.editionDate)
@@ -707,7 +707,7 @@ formsAdminRoutes.post('/:id/clone', async (req, res) => {
 
 formsAdminRoutes.delete('/:id', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 
@@ -769,7 +769,7 @@ formsAdminRoutes.post('/:id/approve', async (req, res) => {
 })
 formsAdminRoutes.post('/:id/activate', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 
@@ -834,7 +834,7 @@ formsAdminRoutes.post('/:id/activate', async (req, res) => {
 
 formsAdminRoutes.post('/:id/deactivate', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 
@@ -888,7 +888,7 @@ formsAdminRoutes.post('/:id/deactivate', async (req, res) => {
 
 formsAdminRoutes.get('/:id/jurisdictions', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -909,7 +909,7 @@ formsAdminRoutes.get('/:id/jurisdictions', async (req, res) => {
 
 formsAdminRoutes.post('/:id/jurisdictions', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeJurisdictionPayload(req.body || {})
 
@@ -985,8 +985,8 @@ formsAdminRoutes.post('/:id/jurisdictions', async (req, res) => {
 
 formsAdminRoutes.patch('/:id/jurisdictions/:jurisdictionId', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
-  const jurisdictionId = req.params.jurisdictionId
+  const formId = routeParam(req.params.id)
+  const jurisdictionId = routeParam(req.params.jurisdictionId)
   const actor = currentActor(req)
 
   if (!isFormsEditor(req)) {
@@ -1076,8 +1076,8 @@ formsAdminRoutes.patch('/:id/jurisdictions/:jurisdictionId', async (req, res) =>
 
 formsAdminRoutes.delete('/:id/jurisdictions/:jurisdictionId', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
-  const jurisdictionId = req.params.jurisdictionId
+  const formId = routeParam(req.params.id)
+  const jurisdictionId = routeParam(req.params.jurisdictionId)
 
   if (!isFormsEditor(req)) {
     return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
@@ -1110,7 +1110,7 @@ formsAdminRoutes.delete('/:id/jurisdictions/:jurisdictionId', async (req, res) =
 
 formsAdminRoutes.get('/:id/applicability', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1128,7 +1128,7 @@ formsAdminRoutes.get('/:id/applicability', async (req, res) => {
 })
 formsAdminRoutes.post('/:id/applicability', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeApplicabilityPayload(req.body || {})
 
@@ -1176,8 +1176,8 @@ formsAdminRoutes.post('/:id/applicability', async (req, res) => {
 
 formsAdminRoutes.patch('/:id/applicability/:applicabilityId', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
-  const applicabilityId = req.params.applicabilityId
+  const formId = routeParam(req.params.id)
+  const applicabilityId = routeParam(req.params.applicabilityId)
   const actor = currentActor(req)
 
   if (!isFormsEditor(req)) {
@@ -1245,8 +1245,8 @@ formsAdminRoutes.patch('/:id/applicability/:applicabilityId', async (req, res) =
 
 formsAdminRoutes.delete('/:id/applicability/:applicabilityId', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
-  const applicabilityId = req.params.applicabilityId
+  const formId = routeParam(req.params.id)
+  const applicabilityId = routeParam(req.params.applicabilityId)
 
   if (!isFormsEditor(req)) {
     return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
@@ -1279,7 +1279,7 @@ formsAdminRoutes.delete('/:id/applicability/:applicabilityId', async (req, res) 
 
 formsAdminRoutes.get('/:id/triggers', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1312,8 +1312,8 @@ formsAdminRoutes.patch('/:id/triggers/:triggerId', async (req, res) => {
 
 formsAdminRoutes.delete('/:id/triggers/:triggerId', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
-  const triggerId = req.params.triggerId
+  const formId = routeParam(req.params.id)
+  const triggerId = routeParam(req.params.triggerId)
 
   if (!isFormsEditor(req)) {
     return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
@@ -1346,7 +1346,7 @@ formsAdminRoutes.delete('/:id/triggers/:triggerId', async (req, res) => {
 
 formsAdminRoutes.get('/:id/output', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const row = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1360,7 +1360,7 @@ formsAdminRoutes.get('/:id/output', async (req, res) => {
 
 formsAdminRoutes.get('/:id/document', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const data = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1427,7 +1427,7 @@ formsAdminRoutes.get('/:id/document', async (req, res) => {
 
 formsAdminRoutes.get('/:id/output/template', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const row = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1447,7 +1447,7 @@ formsAdminRoutes.get('/:id/output/template', async (req, res) => {
 
 formsAdminRoutes.post('/:id/output/template', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 
@@ -1555,7 +1555,7 @@ formsAdminRoutes.post('/:id/output/template', async (req, res) => {
 
 formsAdminRoutes.delete('/:id/output/template', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 
@@ -1631,7 +1631,7 @@ formsAdminRoutes.delete('/:id/output/template', async (req, res) => {
 
 formsAdminRoutes.put('/:id/output', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeOutputPayload(req.body || {})
 
@@ -1660,7 +1660,7 @@ formsAdminRoutes.put('/:id/output', async (req, res) => {
 })
 formsAdminRoutes.get('/:id/delivery', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const row = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1674,7 +1674,7 @@ formsAdminRoutes.get('/:id/delivery', async (req, res) => {
 
 formsAdminRoutes.put('/:id/delivery', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeDeliveryPayload(req.body || {})
 
@@ -1704,7 +1704,7 @@ formsAdminRoutes.put('/:id/delivery', async (req, res) => {
 
 formsAdminRoutes.get('/:id/security', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   try {
     const row = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
@@ -1718,7 +1718,7 @@ formsAdminRoutes.get('/:id/security', async (req, res) => {
 
 formsAdminRoutes.put('/:id/security', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const payload = normalizeSecurityPayload(req.body || {})
 
@@ -1748,7 +1748,7 @@ formsAdminRoutes.put('/:id/security', async (req, res) => {
 
 formsAdminRoutes.get('/:id/audit', async (req, res) => {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)))
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
@@ -1886,7 +1886,7 @@ async function transitionWorkflow(
   input: { expectedCurrent: (typeof WORKFLOW_STATUSES)[number]; nextStatus: (typeof WORKFLOW_STATUSES)[number]; eventType: string; requireComplianceRole: boolean }
 ) {
   const tenantId = req.tenant!.tenantId
-  const formId = req.params.id
+  const formId = routeParam(req.params.id)
   const actor = currentActor(req)
   const reason = normalizeLabel(req.body?.reason)
 

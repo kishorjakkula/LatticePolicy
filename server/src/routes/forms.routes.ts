@@ -7,6 +7,7 @@ import {
   sanitizeInlineFileName
 } from '../services/forms.service.js'
 import * as formsService from '../services/forms.service.js'
+import { routeParam } from '../lib/utils.js'
 
 export const formsRoutes = Router()
 
@@ -47,7 +48,7 @@ formsRoutes.get(
   requirePermission(['page.wizard.view', 'page.policy.view']),
   async (req, res, next) => {
     const tenantId = req.tenant!.tenantId
-    const formId = req.params.id
+    const formId = routeParam(req.params.id)
     const db = getDb()
     if (!db) return res.status(404).json({ code: 'NOT_FOUND', message: 'Form not found' })
     try {
