@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-production
+  group: deploy-test
   cancel-in-progress: true
 
 env:
@@ -22,12 +22,15 @@ env:
   ECS_TASK_DEF_FRONTEND: .github/ecs/task-definition-frontend.json
   ECS_CONTAINER_NAME_API: ${{ vars.ECS_CONTAINER_NAME_API }}
   ECS_CONTAINER_NAME_FRONTEND: ${{ vars.ECS_CONTAINER_NAME_FRONTEND }}
+  VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+  TEST_API_HEALTH_URL: ${{ vars.TEST_API_HEALTH_URL }}
+  TEST_FRONTEND_URL: ${{ vars.TEST_FRONTEND_URL }}
 
 jobs:
   deploy:
     name: Build, Push, Deploy
     runs-on: ubuntu-latest
-    environment: production
+    environment: test
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -45,6 +48,7 @@ jobs:
             ECS_SERVICE_FRONTEND
             ECS_CONTAINER_NAME_API
             ECS_CONTAINER_NAME_FRONTEND
+            VITE_API_BASE_URL
             AWS_ROLE_TO_ASSUME
           )
 
@@ -89,7 +93,10 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG"
-          docker build -f frontend/Dockerfile -t "$IMAGE_URI" .
+          docker build \
+            -f frontend/Dockerfile \
+            --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
           echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
@@ -124,3 +131,13 @@ jobs:
           service: ${{ env.ECS_SERVICE_FRONTEND }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Smoke test API health
+        if: ${{ env.TEST_API_HEALTH_URL != '' }}
+        run: |
+          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL"
+
+      - name: Smoke test frontend
+        if: ${{ env.TEST_FRONTEND_URL != '' }}
+        run: |
+          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_FRONTEND_URL"

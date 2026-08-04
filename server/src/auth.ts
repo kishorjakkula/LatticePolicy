@@ -6,6 +6,7 @@ import { withTenantTx, getDb, toRawQuery } from './db.js'
 import { ensureTenantRbacDefaults, getDefaultPermissionCodesForRoles, resolvePermissionsForRoles } from './rbac.js'
 import { buildOtpAuthUri, generateMfaSecret, normalizeOtpCode, verifyTotpCode } from './mfa.js'
 import { getMemoryTenantMfaRequired } from './tenantSecurity.js'
+import { getDemoLoginName, getJwtSecret, getMfaTokenSecret, isDemoUserAllowed, isManagedDeployment } from './config.js'
 
 type User = {
   id: string
@@ -18,8 +19,6 @@ type User = {
   customerName?: string | null
 }
 
-const SECRET = process.env.JWT_SECRET || 'dev-secret'
-const MFA_TOKEN_SECRET = process.env.MFA_TOKEN_SECRET || `${SECRET}-mfa`
 const MFA_ISSUER = process.env.MFA_ISSUER || 'LatticePolicy'
 
 type MfaTokenKind = 'challenge' | 'setup'
@@ -57,7 +56,7 @@ export function issueToken(user: User): string {
       customerKey: user.customerKey || null,
       customerName: user.customerName || null
     },
-    SECRET,
+    getJwtSecret(),
     { expiresIn: '8h' }
   )
 }
@@ -66,12 +65,12 @@ function issueMfaToken(
   payload: Omit<MfaTokenPayload, 'sub'> & { sub: string },
   expiresIn: jwt.SignOptions['expiresIn']
 ): string {
-  return jwt.sign(payload, MFA_TOKEN_SECRET, { expiresIn } as jwt.SignOptions)
+  return jwt.sign(payload, getMfaTokenSecret(), { expiresIn } as jwt.SignOptions)
 }
 
 function verifyMfaToken(token: string, expectedKind: MfaTokenKind): MfaTokenPayload | null {
   try {
-    const payload = jwt.verify(token, MFA_TOKEN_SECRET) as any
+    const payload = jwt.verify(token, getMfaTokenSecret()) as any
     if (!payload || payload.kind !== expectedKind) return null
     return {
       kind: payload.kind,
@@ -177,7 +176,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   const rawToken = (m?.[1] || queryToken || '').trim()
   if (rawToken) {
     try {
-      const payload: any = jwt.verify(rawToken, SECRET)
+      const payload: any = jwt.verify(rawToken, getJwtSecret())
       req.user = {
         id: payload.sub,
         username: payload.username,
@@ -199,8 +198,11 @@ export async function handleLogin(req: Request, res: Response) {
   const tenantId = (bodyTenant || headerTenant)
   if (!tenantId) return res.status(400).json({ code: 'TENANT_REQUIRED', message: 'Provide tenantId in body or X-Tenant header' })
   if (!username || !password) return res.status(400).json({ code: 'INVALID_CREDENTIALS' })
+  if (!isDemoUserAllowed(username)) return res.status(403).json({ code: 'DEMO_ACCESS_NOT_ALLOWED', message: 'This demo is invite-only' })
   // If DB is not configured, allow demo logins to unblock UI exploration
   if (!getDb()) {
+    if (isManagedDeployment()) return res.status(503).json({ code: 'DATABASE_UNAVAILABLE', message: 'Database is required in managed deployments' })
+    const demoLoginName = getDemoLoginName(username)
     const demoUsers: Record<string, string[]> = {
       admin: ['admin'],
       actuary1: ['actuary'],
@@ -208,7 +210,7 @@ export async function handleLogin(req: Request, res: Response) {
       agent1: ['agent'],
       customer1: ['customer']
     }
-    const roles = demoUsers[username as keyof typeof demoUsers]
+    const roles = demoUsers[demoLoginName as keyof typeof demoUsers]
     if (!roles || password !== 'password') return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
     const permissions = getDefaultPermissionCodesForRoles(roles)
     const user: User = { id: `demo-${username}`, username, tenantId, roles, permissions }

@@ -1,6 +1,8 @@
-# Cloud Deployment Guide
+# Cloud Test Deployment Guide
 
-This guide describes recommended production deployment patterns for LatticePolicy on AWS, Azure, and Google Cloud Platform. Each option deploys the same logical components:
+This guide describes recommended external test and validation deployment patterns for LatticePolicy on AWS, Azure, and Google Cloud Platform. This environment is intended for a small group of invited validation users, not open public production access. The application should remain cloud-neutral: Docker images, environment variables, database URLs, Redis URLs, and secret injection are the stable contract, while each cloud provider supplies its own network, registry, secret store, and runtime service.
+
+Each option deploys the same logical components:
 
 - Frontend container: React/Vite static app served by Nginx
 - API container: Node.js/Express service
@@ -10,7 +12,7 @@ This guide describes recommended production deployment patterns for LatticePolic
 - Public HTTPS entry point: routes browser traffic to the frontend and API
 - CI/CD: builds container images and updates the runtime service
 
-For production, avoid running PostgreSQL or Redis as unmanaged containers unless you have a clear operational reason. Prefer managed database/cache services, private networking, TLS, automated backups, and cloud-native secret storage.
+For external validation, avoid running PostgreSQL or Redis as unmanaged containers unless you have a clear operational reason. Prefer managed database/cache services, private networking, TLS, automated backups, and cloud-native secret storage.
 
 ## Required Runtime Configuration
 
@@ -18,20 +20,26 @@ API container environment variables:
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `NODE_ENV=production` | Yes | Enables production runtime behavior. |
+| `NODE_ENV=production` | Yes | Keeps the container runtime optimized. |
+| `DEPLOYMENT_ENV=test` | Yes | Marks this as a managed external test environment and enables fail-closed guardrails. |
 | `PORT=3000` | Yes | API container listen port. |
 | `DATABASE_URL` | Yes | PostgreSQL connection string. |
 | `JWT_SECRET` | Yes | Long random signing secret for auth tokens. |
-| `CUSTOMER_DATA_KEY` | Recommended | Encryption key for customer-sensitive data. Defaults to `JWT_SECRET` if omitted. |
-| `MFA_TOKEN_SECRET` | Recommended | Separate secret for MFA challenge tokens. |
+| `CUSTOMER_DATA_KEY` | Yes | Separate encryption key for customer-sensitive data. |
+| `MFA_TOKEN_SECRET` | Yes | Separate secret for MFA challenge tokens. |
 | `MFA_ISSUER=LatticePolicy` | Recommended | Authenticator app issuer name. |
+| `ALLOWED_ORIGINS` | Yes | Comma-separated browser origins allowed to call the API. |
+| `REGISTRATION_ENABLED=false` | Recommended for demos | Disables public account creation for invite-only demos. |
+| `DEMO_ACCESS_MODE=invite_only` | Recommended for demos | Restricts demo access to explicitly allowed users. |
+| `DEMO_ALLOWED_EMAILS` | Required for invite-only demos | Comma-separated list of usernames/email addresses allowed to log in. |
+| `DEMO_ALLOWED_EMAIL_DOMAINS` | Optional | Optional domain allowlist for invited organizations. |
 | `REDIS_URL` | Optional | Redis connection string. |
 | `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache when `REDIS_URL` is present. |
 | `SENTRY_DSN` | Optional | Server-side error tracking DSN. |
 | `ASYNC_PUSH_ENABLED` | Optional | Enables/disables async outbox worker. |
 | `ASYNC_PUSH_WEBHOOK_URL` | Optional | Downstream webhook target for async events. |
 | `ASYNC_PUSH_AUTH_HEADER` | Optional | Auth header used by async event push. |
-| `LOG_LEVEL=info` | Recommended | Production log level. |
+| `LOG_LEVEL=info` | Recommended | Test environment log level. |
 
 Frontend build variables:
 
@@ -41,6 +49,31 @@ Frontend build variables:
 | `VITE_SENTRY_DSN` | Optional | Browser-side error tracking DSN. |
 
 Important: Vite variables are compiled into the frontend image at build time. If the API URL changes, rebuild and redeploy the frontend image.
+
+## Private Validation Access
+
+For a cloud validation/demo environment, deploy the application behind HTTPS but
+keep the application private by policy:
+
+- Require login for all application workflows. Keep only `/health` public for
+  platform health checks.
+- Set `DEMO_ACCESS_MODE=invite_only`.
+- Set `DEMO_ALLOWED_EMAILS` to the exact demo usernames or email addresses that
+  should be able to log in.
+- Set `ALLOWED_ORIGINS` to the deployed frontend origin only.
+- Keep demo users in a demo tenant and assign the least-privileged role needed
+  for the walkthrough.
+- Do not enable public self-registration for validation environments.
+- Add a cloud WAF, IP allowlist, or identity-aware proxy if the demo audience
+  is small and known.
+
+The same environment variables are used on AWS and Azure. The cloud provider
+should inject them from Secrets Manager, SSM Parameter Store, Key Vault, or the
+platform equivalent.
+
+Runtime enforcement of `REGISTRATION_ENABLED`, `DEMO_ACCESS_MODE`, and allowlist
+variables must be verified before using the deployment with sensitive carrier or
+customer data.
 
 ## Container Images
 
@@ -56,7 +89,7 @@ Recommended image tags:
 
 - Immutable release tag: `0.2.0`, `0.1.1`, etc.
 - Commit tag: Git SHA for traceability.
-- Avoid relying on `latest` for production rollouts.
+- Avoid relying on `latest` for validation rollouts.
 
 ## AWS Deployment
 
@@ -133,6 +166,8 @@ Use AWS Secrets Manager or SSM Parameter Store for:
 - `JWT_SECRET`
 - `CUSTOMER_DATA_KEY`
 - `MFA_TOKEN_SECRET`
+- `ALLOWED_ORIGINS`
+- `DEMO_ALLOWED_EMAILS`
 - `REDIS_URL`
 - optional Sentry and async webhook secrets
 
@@ -142,8 +177,8 @@ API task:
 
 - Image: ECR API image
 - Container port: `3000`
-- Environment: `NODE_ENV=production`, `PORT=3000`, `CACHE_ENABLED=1`
-- Secrets: `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `REDIS_URL`
+- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `REGISTRATION_ENABLED=false`, `DEMO_ACCESS_MODE=invite_only`
+- Secrets: `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `REDIS_URL`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`
 - Health check path: `/health`
 
 Frontend task:
@@ -151,6 +186,8 @@ Frontend task:
 - Image: ECR frontend image
 - Container port: `80`
 - Health check path: `/`
+
+Important: do not set `VITE_API_BASE_URL` as an ECS runtime environment variable for the frontend. The frontend Docker build must receive it as a build argument because Vite compiles it into static browser assets.
 
 7. Create ECS services.
 
@@ -178,7 +215,7 @@ Run migrations as a one-time ECS task or CI/CD deployment step before shifting t
 
 Send container logs to CloudWatch Logs. Configure alarms for API 5xx errors, ALB target health, RDS CPU/storage, Redis memory, and ECS task restarts.
 
-### AWS Production Checklist
+### AWS Test Environment Checklist
 
 - Use private subnets for ECS tasks, RDS, and Redis.
 - Use ACM-managed TLS certificates.
@@ -280,6 +317,8 @@ Store:
 - `JWT_SECRET`
 - `CUSTOMER_DATA_KEY`
 - `MFA_TOKEN_SECRET`
+- `ALLOWED_ORIGINS`
+- `DEMO_ALLOWED_EMAILS`
 - `REDIS_URL`
 - optional Sentry and async webhook secrets
 
@@ -307,10 +346,10 @@ az containerapp create \
   --target-port 3000 \
   --ingress external \
   --registry-server $ACR_LOGIN_SERVER \
-  --env-vars NODE_ENV=production PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info
+  --env-vars NODE_ENV=production DEPLOYMENT_ENV=test PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info REGISTRATION_ENABLED=false DEMO_ACCESS_MODE=invite_only
 ```
 
-After creating the app, add secrets and secret-backed environment variables for `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, and `REDIS_URL`.
+After creating the app, add secrets and secret-backed environment variables for `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`, and `REDIS_URL`.
 
 9. Deploy frontend container app.
 
@@ -337,12 +376,12 @@ Run migrations from a controlled deployment job, one-off container execution, or
 
 Use Log Analytics and Azure Monitor alerts for failed revisions, high error rates, PostgreSQL metrics, Redis metrics, and HTTP latency.
 
-### Azure Production Checklist
+### Azure Test Environment Checklist
 
 - Use private networking for PostgreSQL and Redis.
 - Use Key Vault for secrets.
 - Use managed identity where supported.
-- Enable PostgreSQL backup and high availability for production.
+- Enable PostgreSQL backups and choose high availability according to validation needs.
 - Configure custom domains and TLS.
 - Use revision-based rollbacks in Container Apps.
 - Configure Azure Monitor alerts.
@@ -496,7 +535,7 @@ Use Cloud Logging and Cloud Monitoring alerts for API errors, Cloud Run instance
 
 ## Database Migrations
 
-LatticePolicy currently stores SQL migrations under `server/migrations/`. Production deployment should run migrations as a deliberate release step before routing traffic to the new API version.
+LatticePolicy currently stores SQL migrations under `server/migrations/`. External test deployment should run migrations as a deliberate release step before routing traffic to the new API version.
 
 Recommended migration patterns:
 
@@ -529,17 +568,18 @@ Recommended release flow:
 2. Required checks pass: build, test, typecheck.
 3. Review and squash merge.
 4. Build API and frontend images tagged with release version and Git SHA.
-5. Push images to cloud registry.
-6. Run database migrations.
-7. Update API service.
-8. Update frontend service.
-9. Smoke test:
+5. Build frontend with the target environment `VITE_API_BASE_URL`.
+6. Push images to cloud registry.
+7. Run database migrations.
+8. Update API service.
+9. Update frontend service.
+10. Smoke test:
    - API `/health`
    - login
    - dashboard/search
    - quote workflow
    - customer portal route if enabled
-10. Promote DNS/traffic after smoke tests pass.
+11. Promote DNS/traffic after smoke tests pass.
 
 ## Official References
 

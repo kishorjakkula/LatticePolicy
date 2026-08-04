@@ -12,12 +12,22 @@ import { getDb } from './db.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
+import { getAllowedOrigins, isManagedDeployment, isTruthyEnv } from './config.js'
 
 export function createApp() {
   const app = express()
 
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
-  app.use(cors())
+  if (isManagedDeployment() || isTruthyEnv(process.env.TRUST_PROXY)) app.set('trust proxy', 1)
+  app.use(helmet({ crossOriginEmbedderPolicy: false }))
+  const allowedOrigins = getAllowedOrigins()
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (!isManagedDeployment() && allowedOrigins.length === 0) return callback(null, true)
+      return callback(null, allowedOrigins.includes(origin))
+    },
+    credentials: true
+  }))
   app.use(express.json({ limit: '25mb' }))
   app.use(httpLogger)
 
@@ -28,14 +38,28 @@ export function createApp() {
     legacyHeaders: false,
     message: { code: 'RATE_LIMITED', message: 'Too many login attempts, please try again later' }
   })
+  const appLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false
+  })
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 60,
     standardHeaders: true,
     legacyHeaders: false
   })
+  const docsLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+  })
 
+  app.use(appLimiter)
   app.use(authMiddleware)
+  app.use(['/openapi.json', '/api-docs'], docsLimiter)
 
   function requireAdminDocs(req: express.Request, res: express.Response, next: express.NextFunction) {
     const roles = Array.isArray(req.user?.roles) ? req.user!.roles : []

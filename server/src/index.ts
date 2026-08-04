@@ -4,6 +4,7 @@ import { startAsyncMessageWorker } from './asyncMessageWorker.js'
 import { logger } from './logger.js'
 import { closeCache, initCache } from './cache.js'
 import { warmPublishedRatingModelCache } from './ratingModelRegistry.js'
+import { assertDeploymentConfig, isManagedDeployment } from './config.js'
 
 const app = createApp()
 const port = process.env.PORT ? Number(process.env.PORT) : 3000
@@ -20,6 +21,13 @@ function registerShutdown(stopServer: () => void) {
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 }
 
+try {
+  assertDeploymentConfig()
+} catch (err) {
+  logger.error({ err }, 'Invalid deployment configuration')
+  process.exit(1)
+}
+
 initDb()
   .then(async () => {
     await initCache()
@@ -32,6 +40,10 @@ initDb()
   })
   .catch(async (err) => {
     const details = (err as Error)?.message || err
+    if (isManagedDeployment()) {
+      logger.error({ err: details }, 'DB init failed in managed deployment')
+      process.exit(1)
+    }
     logger.warn({ err: details }, 'DB init failed; continuing without Postgres')
     await initCache()
     const server = app.listen(port, () => {

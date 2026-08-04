@@ -13,21 +13,27 @@
       "essential": true,
       "portMappings": [
         {
-          "containerPort": 5173,
-          "hostPort": 5173,
+          "containerPort": 80,
+          "hostPort": 80,
           "protocol": "tcp"
         }
       ],
       "environment": [
         {
-          "name": "VITE_API_BASE_URL",
-          "value": "https://api.example.com"
-        },
-        {
-          "name": "VITE_USE_MOCK",
-          "value": "0"
+          "name": "NGINX_PORT",
+          "value": "80"
         }
       ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "wget -q -O - http://127.0.0.1/ >/dev/null || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

@@ -5,6 +5,7 @@ import { Pool, type PoolClient } from 'pg'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from './schema.js'
 import { logger } from './logger.js'
+import { assertDeploymentConfig } from './config.js'
 
 let pool: Pool | null = null
 
@@ -58,6 +59,7 @@ export async function closeDb() {
 }
 
 export async function initDb() {
+  assertDeploymentConfig()
   const url = process.env.DATABASE_URL
   if (!url) {
     logger.warn('DATABASE_URL not set; running in in-memory mode')
