@@ -23,7 +23,7 @@
     "drizzle-orm": "^1.0.0-rc.3",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^7.0.0",
+    "express-rate-limit": "^8.6.1",
     "helmet": "^8.0.0",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.2",
