@@ -124,8 +124,17 @@ Suggested Wiki pages:
 
 - [ ] Create the GitHub Project board.
 - [ ] Add project fields and views.
-- [ ] Create labels from `.github/labels.yml`.
-- [ ] Create milestones from `.github/milestones.yml`.
+- [ ] Enable public issue creation for the repository unless maintainers are
+  intentionally running invite-only planning.
+- [ ] Run the `Sync Roadmap Metadata` GitHub Actions workflow with
+  `dry_run=false` to create or update labels from `.github/labels.yml` and
+  milestones from `.github/milestones.yml`.
 - [ ] Apply labels and milestones to roadmap issues.
 - [ ] Link the Project board from `docs/ROADMAP.md` after the public URL exists.
 - [ ] Link stable Wiki pages from README after they are created.
+
+For local validation before running the workflow:
+
+```bash
+DRY_RUN=1 GITHUB_REPOSITORY=kishorjakkula/LatticePolicy npm run sync:github-roadmap
+```

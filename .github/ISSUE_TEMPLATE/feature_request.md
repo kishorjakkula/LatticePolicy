@@ -2,7 +2,7 @@
 name: Feature request
 about: Propose a framework capability or enhancement
 title: "[Feature]: "
-labels: enhancement
+labels: type:task, needs-analysis
 assignees: ""
 ---
 
