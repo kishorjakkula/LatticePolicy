@@ -7,6 +7,8 @@ Contributions should protect the framework qualities that matter most: tenant is
 ## Development Setup
 
 For the complete local setup workflow, see [Developer Local Setup](docs/DEVELOPER_SETUP.md).
+If you are looking for approachable starter work, see
+[First Good Tasks](docs/FIRST_GOOD_TASKS.md).
 
 Prerequisites:
 
