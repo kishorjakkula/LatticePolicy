@@ -152,6 +152,9 @@ const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/quotes', tag: 'Admin - Customers', summary: 'List customer quotes' },
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/ai-insights', tag: 'Admin - Customers', summary: 'Get customer AI/ML insights' },
 
+  { method: 'get', path: '/v1/customer-portal/policies', tag: 'Customer Portal', summary: 'List portal-safe customer policies' },
+  { method: 'get', path: '/v1/customer-portal/policies/{policyId}', tag: 'Customer Portal', summary: 'Get portal-safe policy detail' },
+
   { method: 'get', path: '/v1/admin/onboarding/settings', tag: 'Admin - Onboarding', summary: 'Get onboarding settings' },
   { method: 'patch', path: '/v1/admin/onboarding/settings', tag: 'Admin - Onboarding', summary: 'Update onboarding settings' },
   { method: 'get', path: '/v1/admin/onboarding/agencies/search', tag: 'Admin - Onboarding', summary: 'Search agencies' },
@@ -211,14 +214,72 @@ function jsonResponse(schemaRefOrSchema: any, description = 'Success') {
   }
 }
 
+function errorResponse(schema = 'ErrorResponse', description = 'Error') {
+  return jsonResponse(schema, description)
+}
+
+const standardErrorResponses = {
+  '400': errorResponse('ValidationErrorResponse', 'Bad Request'),
+  '401': errorResponse('ErrorResponse', 'Unauthorized'),
+  '403': errorResponse('ErrorResponse', 'Forbidden'),
+  '404': errorResponse('ErrorResponse', 'Not Found'),
+  '409': errorResponse('ErrorResponse', 'Conflict'),
+  '422': errorResponse('ValidationErrorResponse', 'Validation Error'),
+  '500': errorResponse('ErrorResponse', 'Server Error'),
+}
+
 const componentSchemas: Record<string, any> = {
   ErrorResponse: {
     type: 'object',
+    required: ['code', 'message', 'traceId'],
     properties: {
       code: { type: 'string', example: 'DB_ERROR' },
-      message: { type: 'string', example: 'Something failed' }
+      message: { type: 'string', example: 'Something failed' },
+      traceId: {
+        type: 'string',
+        example: 'req-01HZY4W5J8Q9AVH32R3K8Z4V7P',
+        description: 'Request correlation id returned in the x-request-id response header.',
+      },
+      details: {
+        description: 'Optional structured machine-readable details for validation, conflict, or domain errors.',
+      },
     },
     additionalProperties: true
+  },
+  ContractValidationError: {
+    type: 'object',
+    required: ['path', 'keyword', 'message', 'schema'],
+    properties: {
+      path: { type: 'string', example: '/risks/0/year' },
+      keyword: { type: 'string', example: 'type' },
+      message: { type: 'string', example: 'must be integer' },
+      schema: { type: 'string', example: 'quote.request.schema.json' },
+      params: { type: 'object', additionalProperties: true },
+    },
+    additionalProperties: true,
+  },
+  ValidationErrorResponse: {
+    allOf: [
+      { $ref: '#/components/schemas/ErrorResponse' },
+      {
+        type: 'object',
+        properties: {
+          code: { type: 'string', example: 'VALIDATION_ERROR' },
+          details: {
+            oneOf: [
+              {
+                type: 'array',
+                items: { $ref: '#/components/schemas/ContractValidationError' },
+              },
+              {
+                type: 'object',
+                additionalProperties: true,
+              },
+            ],
+          },
+        },
+      },
+    ],
   },
   LoginRequest: {
     type: 'object',
@@ -524,7 +585,7 @@ const operationOverrides: Record<string, any> = {
     },
     responses: {
       '200': jsonResponse('QuoteRateResponse'),
-      '400': jsonResponse('ErrorResponse')
+      '400': jsonResponse('ValidationErrorResponse')
     }
   },
   'GET /v1/quotes/{id}': {
@@ -662,11 +723,7 @@ export function buildOpenApiSpec(serverUrl: string) {
       security,
       responses: {
         '200': { description: 'Success' },
-        '400': { description: 'Bad Request' },
-        '401': { description: 'Unauthorized' },
-        '403': { description: 'Forbidden' },
-        '404': { description: 'Not Found' },
-        '500': { description: 'Server Error' }
+        ...standardErrorResponses
       }
     }
     const mergedOp = {

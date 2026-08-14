@@ -5,7 +5,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
-import { validateQuote } from '../contracts.js'
+import { validateQuoteDetailed } from '../contracts.js'
 import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
@@ -110,9 +110,12 @@ export async function createOrRateQuote(
   stepHistory: QuoteAuditEntry[]
 }> {
   // Validate
-  const valid = validateQuote(body)
-  if (!valid) {
-    throw new ValidationError('INVALID_QUOTE', { message: 'Missing required fields' })
+  const validation = validateQuoteDetailed(body)
+  if (!validation.valid) {
+    throw new ValidationError('INVALID_QUOTE', {
+      message: 'Quote payload failed contract validation',
+      errors: validation.errors,
+    })
   }
 
   // State eligibility check (non-fatal — ignore if table not seeded)

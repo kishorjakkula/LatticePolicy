@@ -16,7 +16,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
-import { validateQuote } from '../contracts.js'
+import { validateQuoteDetailed } from '../contracts.js'
 import { addMonths } from '../lib/date.utils.js'
 import { csvEscape, routeParam } from '../lib/utils.js'
 
@@ -38,9 +38,13 @@ quoteRoutes.post(
       const db = getDb()
       if (!db) {
         // In-memory fallback
-        const valid = validateQuote(body)
-        if (!valid) {
-          return res.status(400).json({ code: 'INVALID_QUOTE', message: 'Missing required fields' })
+        const validation = validateQuoteDetailed(body)
+        if (!validation.valid) {
+          return res.status(400).json({
+            code: 'INVALID_QUOTE',
+            message: 'Quote payload failed contract validation',
+            details: validation.errors,
+          })
         }
         const premium = rate(tenantId, body)
         const uw = evaluateUW(tenantId, body)

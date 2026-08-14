@@ -34,5 +34,31 @@ Endpoints
   - Create renewal offer (re-rate for next term).
 
 Errors
-- Problem+JSON with machine-readable codes; include `traceId` for support.
+- JSON error envelope with machine-readable fields:
+  - `code`: stable error code such as `VALIDATION_ERROR`,
+    `INVALID_QUOTE`, `FORBIDDEN`, `IDEMPOTENCY_KEY_CONFLICT`, or
+    `INTERNAL_ERROR`.
+  - `message`: human-readable summary safe to show to API clients.
+  - `traceId`: request correlation id. It matches the `x-request-id` response
+    header when one is present.
+  - `details`: optional structured details. Contract validation details include
+    JSON path, JSON Schema keyword, message, schema source, and keyword params.
 
+Example validation response:
+
+```json
+{
+  "code": "INVALID_QUOTE",
+  "message": "Quote payload failed contract validation",
+  "traceId": "req-01HZY4W5J8Q9AVH32R3K8Z4V7P",
+  "details": [
+    {
+      "path": "/risks",
+      "keyword": "minItems",
+      "message": "must NOT have fewer than 1 items",
+      "schema": "quote.request.schema.json",
+      "params": { "limit": 1 }
+    }
+  ]
+}
+```
