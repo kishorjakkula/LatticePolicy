@@ -33,8 +33,8 @@ API container environment variables:
 | `DEMO_ACCESS_MODE=invite_only` | Recommended for demos | Restricts demo access to explicitly allowed users. |
 | `DEMO_ALLOWED_EMAILS` | Required for invite-only demos | Comma-separated list of usernames/email addresses allowed to log in. |
 | `DEMO_ALLOWED_EMAIL_DOMAINS` | Optional | Optional domain allowlist for invited organizations. |
-| `REDIS_URL` | Optional | Redis connection string. |
-| `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache when `REDIS_URL` is present. |
+| `REDIS_URL` | Required when cache is enabled | Redis connection string. |
+| `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache and requires `REDIS_URL`. |
 | `SENTRY_DSN` | Optional | Server-side error tracking DSN. |
 | `ASYNC_PUSH_ENABLED` | Optional | Enables/disables async outbox worker. |
 | `ASYNC_PUSH_WEBHOOK_URL` | Optional | Downstream webhook target for async events. |
@@ -46,9 +46,21 @@ Frontend build variables:
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Yes | Public API base URL used by the browser app. |
+| `VITE_USE_MOCK=0` | Yes | Disables the frontend mock API in production builds. |
 | `VITE_SENTRY_DSN` | Optional | Browser-side error tracking DSN. |
 
 Important: Vite variables are compiled into the frontend image at build time. If the API URL changes, rebuild and redeploy the frontend image.
+
+The API fails fast in managed environments when required variables are missing
+or unsafe. Managed environments include `NODE_ENV=production` and
+`DEPLOYMENT_ENV` values of `test`, `validation`, `staging`, or `production`;
+`DEPLOYMENT_ENV=local` is reserved for local Docker/demo smoke tests. Secrets
+must be unique, non-placeholder values of at least 32 characters.
+`ALLOWED_ORIGINS` must list explicit HTTPS browser origins in managed
+deployments; wildcard, HTTP, and localhost origins are rejected. Production
+frontend builds also fail when mock mode is enabled or `VITE_API_BASE_URL` is
+missing/non-HTTPS, except for localhost/127.0.0.1 URLs used by local smoke
+tests.
 
 ## Private Validation Access
 

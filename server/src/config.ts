@@ -1,6 +1,7 @@
 export type RuntimeConfigValidation = {
   ok: boolean
   missing: string[]
+  invalid: string[]
 }
 
 const REQUIRED_PRODUCTION_ENV = [
@@ -11,13 +12,30 @@ const REQUIRED_PRODUCTION_ENV = [
   'ALLOWED_ORIGINS'
 ] as const
 
+const REQUIRED_SECRET_ENV = ['JWT_SECRET', 'CUSTOMER_DATA_KEY', 'MFA_TOKEN_SECRET'] as const
+const UNSAFE_SECRET_VALUES = new Set([
+  'change-me',
+  'change-me-please-use-a-long-random-string',
+  'customer-data-key',
+  'dev-secret',
+  'jwt-secret',
+  'lattice-policy-customer-dev-key',
+  'mfa-token-secret',
+  'password',
+  'secret',
+  'test'
+])
+
+const MANAGED_DEPLOYMENT_ENVS = ['test', 'validation', 'staging', 'production'] as const
+
 export function getDeploymentEnv(): string {
   return String(process.env.DEPLOYMENT_ENV || process.env.APP_ENV || '').trim().toLowerCase()
 }
 
 export function isManagedDeployment(): boolean {
   const deploymentEnv = getDeploymentEnv()
-  return ['test', 'validation', 'staging', 'production'].includes(deploymentEnv)
+  if (deploymentEnv === 'local') return false
+  return process.env.NODE_ENV === 'production' || MANAGED_DEPLOYMENT_ENVS.some((value) => value === deploymentEnv)
 }
 
 export function isTruthyEnv(value: string | undefined): boolean {
@@ -65,16 +83,69 @@ export function getDemoLoginName(username: string): string {
 }
 
 export function validateDeploymentConfig(): RuntimeConfigValidation {
-  if (!isManagedDeployment()) return { ok: true, missing: [] }
+  if (!isManagedDeployment()) return { ok: true, missing: [], invalid: [] }
   const missing: string[] = REQUIRED_PRODUCTION_ENV.filter((name) => !String(process.env[name] || '').trim())
+  const invalid: string[] = []
+
+  for (const name of REQUIRED_SECRET_ENV) {
+    const value = String(process.env[name] || '').trim()
+    if (!value) continue
+    const normalized = value.toLowerCase()
+    if (UNSAFE_SECRET_VALUES.has(normalized) || normalized.includes('change-me')) {
+      invalid.push(`${name} must not use a demo, test, or placeholder value`)
+    } else if (value.length < 32) {
+      invalid.push(`${name} must be at least 32 characters`)
+    }
+  }
+
+  const configuredSecrets = REQUIRED_SECRET_ENV
+    .map((name) => [name, String(process.env[name] || '').trim()] as const)
+    .filter(([, value]) => value)
+  for (let i = 0; i < configuredSecrets.length; i += 1) {
+    for (let j = i + 1; j < configuredSecrets.length; j += 1) {
+      const [leftName, leftValue] = configuredSecrets[i]
+      const [rightName, rightValue] = configuredSecrets[j]
+      if (leftValue === rightValue) {
+        invalid.push(`${leftName} and ${rightName} must use different values`)
+      }
+    }
+  }
+
+  const allowedOrigins = getAllowedOrigins()
+  if (allowedOrigins.some((origin) => origin === '*')) {
+    invalid.push('ALLOWED_ORIGINS must list explicit HTTPS origins, not *')
+  }
+  for (const origin of allowedOrigins) {
+    if (origin === '*') continue
+    try {
+      const url = new URL(origin)
+      if (url.protocol !== 'https:') invalid.push(`ALLOWED_ORIGINS contains non-HTTPS origin: ${origin}`)
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+        invalid.push(`ALLOWED_ORIGINS contains local origin: ${origin}`)
+      }
+    } catch {
+      invalid.push(`ALLOWED_ORIGINS contains invalid origin: ${origin}`)
+    }
+  }
+
+  if (isTruthyEnv(process.env.CACHE_ENABLED) && !String(process.env.REDIS_URL || '').trim()) {
+    invalid.push('REDIS_URL is required when CACHE_ENABLED is true')
+  }
+
   if (isInviteOnlyDemoAccess() && getInviteOnlyAllowedUsers().length === 0) missing.push('DEMO_ALLOWED_EMAILS')
-  return { ok: missing.length === 0, missing: [...missing] }
+  return { ok: missing.length === 0 && invalid.length === 0, missing: [...missing], invalid: [...invalid] }
 }
 
 export function assertDeploymentConfig() {
   const validation = validateDeploymentConfig()
   if (!validation.ok) {
-    throw new Error(`Missing required deployment environment variables: ${validation.missing.join(', ')}`)
+    const messages = [
+      validation.missing.length
+        ? `Missing required deployment environment variables: ${validation.missing.join(', ')}`
+        : '',
+      ...validation.invalid
+    ].filter(Boolean)
+    throw new Error(messages.join('; '))
   }
 }
 
