@@ -23,6 +23,7 @@ COPY packages/types/package.json ./packages/types/package.json
 RUN npm ci --workspace=server --omit=dev
 
 COPY --from=build /app/server/dist ./dist
+COPY contracts ./contracts
 COPY products ./products
 COPY tenants ./tenants
 COPY server/migrations ./migrations
