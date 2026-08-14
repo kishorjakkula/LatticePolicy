@@ -8,6 +8,24 @@ const resolvedMockDelayMs = Number.isFinite(mockDelayEnv) && mockDelayEnv >= 0
   ? mockDelayEnv
   : 75
 
+function validateFrontendRuntimeConfig() {
+  if (!import.meta.env.PROD) return
+  if (resolvedUseMock) {
+    throw new Error('VITE_USE_MOCK must be 0/false for production frontend builds')
+  }
+  if (!apiBaseUrl) {
+    throw new Error('VITE_API_BASE_URL is required for production frontend builds')
+  }
+  try {
+    const url = new URL(apiBaseUrl)
+    if (url.protocol !== 'https:') throw new Error('protocol')
+  } catch {
+    throw new Error('VITE_API_BASE_URL must be an absolute HTTPS URL for production frontend builds')
+  }
+}
+
+validateFrontendRuntimeConfig()
+
 export const config = {
   apiBaseUrl,
   useMock: resolvedUseMock,
