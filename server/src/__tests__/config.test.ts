@@ -87,6 +87,15 @@ describe('runtime config', () => {
     })
   })
 
+  it('allows explicit local Docker mode even when the image sets NODE_ENV production', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DEPLOYMENT_ENV = 'local'
+    delete process.env.DATABASE_URL
+
+    expect(isManagedDeployment()).toBe(false)
+    expect(validateDeploymentConfig()).toEqual({ ok: true, missing: [], invalid: [] })
+  })
+
   it('throws from reusable secret helpers when managed deployment config is incomplete', () => {
     process.env.DEPLOYMENT_ENV = 'test'
     delete process.env.DATABASE_URL

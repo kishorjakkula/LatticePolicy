@@ -28,12 +28,22 @@ describe('frontend runtime config', () => {
     await expect(loadConfig()).rejects.toThrow(/VITE_USE_MOCK must be 0\/false/)
   })
 
-  it('requires an HTTPS API URL for production builds', async () => {
+  it('rejects non-local HTTP API URLs for production builds', async () => {
     vi.stubEnv('PROD', true)
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.example.com')
     vi.stubEnv('VITE_USE_MOCK', '0')
 
     await expect(loadConfig()).rejects.toThrow(/absolute HTTPS URL/)
+  })
+
+  it('allows localhost HTTP API URLs for local production smoke builds', async () => {
+    vi.stubEnv('PROD', true)
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3300')
+    vi.stubEnv('VITE_USE_MOCK', '0')
+
+    await expect(loadConfig()).resolves.toMatchObject({
+      config: expect.objectContaining({ apiBaseUrl: 'http://localhost:3300', useMock: false })
+    })
   })
 
   it('accepts non-mock production builds with an HTTPS API URL', async () => {

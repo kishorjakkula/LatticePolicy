@@ -24,6 +24,8 @@ The frontend also rejects production builds that still point at the mock API.
 
 - `NODE_ENV=production` and `DEPLOYMENT_ENV` values of `test`, `validation`,
   `staging`, or `production` are managed deployments.
+- `DEPLOYMENT_ENV=local` is reserved for local Docker/demo smoke tests and keeps
+  demo defaults available even when the container image sets `NODE_ENV=production`.
 - Managed deployments require `DATABASE_URL`, `JWT_SECRET`,
   `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, and `ALLOWED_ORIGINS`.
 - Managed secrets must be unique, non-placeholder values with at least 32
@@ -32,7 +34,8 @@ The frontend also rejects production builds that still point at the mock API.
   localhost values.
 - `CACHE_ENABLED` requires `REDIS_URL` in managed deployments.
 - Production frontend builds require `VITE_USE_MOCK=0/false` and an absolute
-  HTTPS `VITE_API_BASE_URL`.
+  HTTPS `VITE_API_BASE_URL`, except for localhost/127.0.0.1 URLs used by local
+  smoke tests.
 - Local/demo mode remains available when the deployment is not managed.
 
 ## Automated Tests

@@ -34,6 +34,7 @@ export function getDeploymentEnv(): string {
 
 export function isManagedDeployment(): boolean {
   const deploymentEnv = getDeploymentEnv()
+  if (deploymentEnv === 'local') return false
   return process.env.NODE_ENV === 'production' || MANAGED_DEPLOYMENT_ENVS.some((value) => value === deploymentEnv)
 }
 

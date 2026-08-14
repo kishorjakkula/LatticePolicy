@@ -53,11 +53,14 @@ Important: Vite variables are compiled into the frontend image at build time. If
 
 The API fails fast in managed environments when required variables are missing
 or unsafe. Managed environments include `NODE_ENV=production` and
-`DEPLOYMENT_ENV` values of `test`, `validation`, `staging`, or `production`.
-Secrets must be unique, non-placeholder values of at least 32 characters.
-`ALLOWED_ORIGINS` must list explicit HTTPS browser origins; wildcard, HTTP, and
-localhost origins are rejected. Production frontend builds also fail when mock
-mode is enabled or `VITE_API_BASE_URL` is missing/non-HTTPS.
+`DEPLOYMENT_ENV` values of `test`, `validation`, `staging`, or `production`;
+`DEPLOYMENT_ENV=local` is reserved for local Docker/demo smoke tests. Secrets
+must be unique, non-placeholder values of at least 32 characters.
+`ALLOWED_ORIGINS` must list explicit HTTPS browser origins in managed
+deployments; wildcard, HTTP, and localhost origins are rejected. Production
+frontend builds also fail when mock mode is enabled or `VITE_API_BASE_URL` is
+missing/non-HTTPS, except for localhost/127.0.0.1 URLs used by local smoke
+tests.
 
 ## Private Validation Access
 

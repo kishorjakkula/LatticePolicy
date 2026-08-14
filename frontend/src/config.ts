@@ -18,9 +18,10 @@ function validateFrontendRuntimeConfig() {
   }
   try {
     const url = new URL(apiBaseUrl)
-    if (url.protocol !== 'https:') throw new Error('protocol')
+    const isLocalApi = ['localhost', '127.0.0.1'].includes(url.hostname)
+    if (url.protocol !== 'https:' && !isLocalApi) throw new Error('protocol')
   } catch {
-    throw new Error('VITE_API_BASE_URL must be an absolute HTTPS URL for production frontend builds')
+    throw new Error('VITE_API_BASE_URL must be an absolute HTTPS URL, or localhost URL for local smoke tests, for production frontend builds')
   }
 }
 
