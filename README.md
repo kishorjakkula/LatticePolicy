@@ -178,6 +178,7 @@ npm run dev:frontend
 
 - [Developer local setup](docs/DEVELOPER_SETUP.md)
 - [AI contributor process](docs/AI_CONTRIBUTOR_PROCESS.md)
+- [First good tasks](docs/FIRST_GOOD_TASKS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Release process](docs/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
