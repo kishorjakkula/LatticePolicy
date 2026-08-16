@@ -154,6 +154,6 @@ describe('SearchPage', () => {
     renderSearch('/search?page=1&pageSize=20&mode=policies')
 
     await waitFor(() => expect(mockSearchPolicies).toHaveBeenCalledTimes(1))
-    expect(screen.getByText('search failed')).toBeInTheDocument()
+    expect(await screen.findByText('search failed')).toBeInTheDocument()
   })
 })
