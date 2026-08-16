@@ -45,10 +45,16 @@ This checklist tracks work needed before publishing the repository publicly.
 
 ## Verification
 
-Last local verification:
+Current verification:
 
-- `npm audit fix` applied available non-force updates before v0.2.0.
-- v0.2.0 release validation is tracked in `docs/tasks/issue-102-v0.2.0-release-readiness.md`.
+- GitHub recognizes the repository license as Apache License 2.0 after the
+  canonical `LICENSE` normalization.
+- `npm audit --audit-level=high` reports 0 vulnerabilities.
+- Main branch CI is green for build, frontend tests, server tests, typecheck,
+  DB integration tests, Playwright E2E smoke tests, dependency audit, CodeQL,
+  and container scanning.
+- v0.2.0 release validation is tracked in
+  `docs/tasks/issue-102-v0.2.0-release-readiness.md`.
 
 ## Before Publishing
 
@@ -61,16 +67,7 @@ Last local verification:
 
 ## Remaining Security Work
 
-`npm audit` currently reports the React Router RSC Mode CSRF advisory chain for
-`react-router-dom` 7.18.2. LatticePolicy uses React Router as a Vite
-client-side SPA router and does not enable React Router RSC/framework server
-actions. The npm-suggested downgrade to 7.11.0 reintroduces older high-severity
-React Router advisories, so the project keeps 7.18.2 and tracks
-`GHSA-qwww-vcr4-c8h2` as a temporary explicit exception in
-`scripts/check-npm-audit.mjs`.
-
-Keep monitoring for the next patched non-regressing `react-router-dom` release
-and remove the audit exception as soon as one is available.
-
-Keep running `npm audit` from the repository root after dependency changes, because
-the project uses the root npm workspace lockfile as the source of truth.
+No open npm audit exceptions are currently documented for the public-readiness
+baseline. Keep running `npm run security:audit` and `npm audit` from the
+repository root after dependency changes, because the project uses the root npm
+workspace lockfile as the source of truth.
