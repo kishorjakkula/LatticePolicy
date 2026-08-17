@@ -173,6 +173,12 @@ Batch Processing Capabilities
 - Retry/Backoff: transient failure retries with dead-letter handling.
 - Tenant Safety: tenant-scoped execution context and data access in every job run.
 
+First production slice: `docs/JOB_QUEUE_DESIGN.md` defines the proposed
+PostgreSQL-backed job registry, tenant schedule, run-history, retry,
+dead-letter, checkpointing, and tenant-safety boundaries. The first job type is
+async outbox delivery retry so implementation can build on the current
+`async_message_outbox` worker before adding broader scheduling features.
+
 Typical Job Types
 - Renewal pre-processing and offer generation.
 - Premium recomputation for queued policy changes.
