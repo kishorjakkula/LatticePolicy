@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
+import { renderAndStoreDocument } from './document-storage.service.js'
 
 export type PolicyDocumentTransactionType =
   | 'NB'
@@ -125,16 +126,58 @@ function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPoli
       customerSafe: form.customerSafe,
     })),
   }
-  const hash = sha256(metadata)
   return [
     {
       documentId: uuidv4(),
       type: 'POLICY_PACKET',
       uri: `generated://policy-packet/${context.policyId}/${context.transactionId}`,
-      hash,
+      hash: sha256(metadata),
       metadata,
     },
   ]
+}
+
+async function attachRenderedArtifact(
+  context: PolicyDocumentContext,
+  forms: SelectedPolicyForm[],
+  document: GeneratedPolicyDocument
+): Promise<GeneratedPolicyDocument> {
+  const artifact = await renderAndStoreDocument({
+    tenantId: context.tenantId,
+    documentId: document.documentId,
+    metadata: {
+      policyId: context.policyId,
+      policyNumber: context.policyNumber,
+      transactionId: context.transactionId,
+      transactionType: context.transactionType,
+      transactionNumber: context.transactionNumber,
+      productCode: context.productCode,
+      state: context.state,
+      effectiveDate: context.effectiveDate,
+      generatedAt: String((document.metadata as any).generatedAt || new Date().toISOString()),
+      forms: forms.map((form) => ({
+        code: form.code,
+        title: form.title,
+        edition: form.edition,
+        source: form.source,
+        customerSafe: form.customerSafe,
+      })),
+    },
+  })
+  return {
+    ...document,
+    hash: artifact.contentHash,
+    metadata: {
+      ...document.metadata,
+      artifact: {
+        storageUri: artifact.storageUri,
+        contentType: artifact.contentType,
+        byteSize: artifact.byteSize,
+        storageAdapter: artifact.storageAdapter,
+        renderedAt: artifact.renderedAt,
+      },
+    },
+  }
 }
 
 export async function selectPolicyForms(
@@ -247,10 +290,10 @@ export async function buildPolicyDocumentPacket(
   context: PolicyDocumentContext
 ): Promise<PolicyDocumentPacket> {
   const forms = await selectPolicyForms(q, context)
-  return {
-    forms,
-    documents: buildPacketDocument(context, forms),
-  }
+  const documents = await Promise.all(
+    buildPacketDocument(context, forms).map((document) => attachRenderedArtifact(context, forms, document))
+  )
+  return { forms, documents }
 }
 
 export async function persistPolicyDocumentPacket(

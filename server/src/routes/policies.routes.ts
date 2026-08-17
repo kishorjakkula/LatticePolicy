@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getDb, type DrizzleDB } from '../db.js'
+import { getDb, type DrizzleDB, withTenantTx, toRawQuery } from '../db.js'
 import { ok } from '../lib/respond.js'
 import { store } from '../store.js'
 import {
@@ -10,7 +10,9 @@ import {
 import * as policyService from '../services/policy.service.js'
 import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
-import { csvEscape } from '../lib/utils.js'
+import { csvEscape, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
+import { requirePermission, hasPermission } from '../auth.js'
+import { retrieveStoredDocument } from '../services/document-storage.service.js'
 
 // ── local helpers (in-memory fallback only) ──────────────────────────────────
 
@@ -375,3 +377,140 @@ policyRoutes.get('/policies/:id/versions/:vid/rating-worksheet', async (req, res
     next(err)
   }
 })
+
+function toMetadataObject(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' ? (value as Record<string, any>) : {}
+}
+
+async function resolveDocumentAccessContext(
+  req: any,
+  tenantId: string,
+  policyId: string
+): Promise<{ isInternal: boolean; customerId: string } | null> {
+  const isInternal = hasPermission(req, 'page.policy.view')
+  const customerId = String(req.user?.customerId || '').trim()
+  if (isInternal) return { isInternal, customerId }
+  if (!customerId) return null
+  const linked = await withTenantTx(tenantId, async (txDb) => {
+    const q = toRawQuery(txDb)
+    return q(
+      `SELECT 1 FROM policy_customer_links
+        WHERE tenant_id = $1 AND policy_id = $2::uuid AND customer_id = $3::uuid
+        LIMIT 1`,
+      [tenantId, policyId, customerId]
+    )
+  })
+  if (!((linked as any).rowCount > 0)) return null
+  return { isInternal, customerId }
+}
+
+// ── GET /policies/:id/documents ───────────────────────────────────────────────
+// Lists generated policy documents. Internal callers (page.policy.view) see
+// every document for the policy; customer-portal callers see only documents
+// linked to their own customer record and flagged metadata.customerSafe.
+policyRoutes.get(
+  '/policies/:id/documents',
+  requirePermission(['page.policy.view', 'customer.portal.read']),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      if (!isUuidLike(policyId)) return res.status(400).json({ code: 'INVALID_POLICY_ID' })
+      const db = getDb()
+      if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+
+      const access = await resolveDocumentAccessContext(req, tenantId, policyId)
+      if (!access) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+
+      const result = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        return q(
+          `SELECT document_id, type, hash, metadata, created_at
+             FROM documents
+            WHERE tenant_id = $1 AND policy_id = $2::uuid
+            ORDER BY created_at DESC`,
+          [tenantId, policyId]
+        )
+      })
+
+      const rows = ((result as any).rows || []) as any[]
+      const documents = rows
+        .map((row) => ({ row, metadata: toMetadataObject(row.metadata) }))
+        .filter(({ metadata }) => access.isInternal || metadata.customerSafe === true)
+        .map(({ row, metadata }) => ({
+          documentId: String(row.document_id),
+          type: String(row.type),
+          displayName: `${String(row.type)} ${metadata.transactionNumber || ''}`.trim(),
+          transactionType: metadata.transactionType || null,
+          transactionNumber: metadata.transactionNumber || null,
+          forms: Array.isArray(metadata.forms) ? metadata.forms : [],
+          contentHash: row.hash || null,
+          contentType: metadata.artifact?.contentType || null,
+          byteSize: metadata.artifact?.byteSize ?? null,
+          customerSafe: metadata.customerSafe === true,
+          generatedAt: metadata.generatedAt || row.created_at,
+        }))
+      return ok(res, { documents })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+// ── GET /policies/:id/documents/:documentId/content ───────────────────────────
+// Retrieves the rendered artifact bytes for a generated policy document,
+// enforcing the same tenant/customer scope as the listing endpoint plus a
+// customer-safe check for non-internal callers.
+policyRoutes.get(
+  '/policies/:id/documents/:documentId/content',
+  requirePermission(['page.policy.view', 'customer.portal.read']),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      const db = getDb()
+      if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+
+      const access = await resolveDocumentAccessContext(req, tenantId, policyId)
+      if (!access) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+
+      const result = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        return q(
+          `SELECT document_id, type, metadata
+             FROM documents
+            WHERE tenant_id = $1 AND policy_id = $2::uuid AND document_id = $3::uuid
+            LIMIT 1`,
+          [tenantId, policyId, documentId]
+        )
+      })
+      if (!((result as any).rowCount > 0)) {
+        return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+      }
+      const row = (result as any).rows[0]
+      const metadata = toMetadataObject(row.metadata)
+      if (!access.isInternal && metadata.customerSafe !== true) {
+        return res.status(403).json({ code: 'FORBIDDEN', message: 'Document is not customer-safe' })
+      }
+      const artifact = toMetadataObject(metadata.artifact)
+      const storageUri = artifact.storageUri
+      if (!storageUri) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
+      const content = await retrieveStoredDocument(String(storageUri))
+      if (!content) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
+
+      res.setHeader('Content-Type', String(artifact.contentType || 'application/octet-stream'))
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.html`)}"`
+      )
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).send(content)
+    } catch (err) {
+      next(err)
+    }
+  }
+)
