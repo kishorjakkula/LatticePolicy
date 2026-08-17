@@ -67,6 +67,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.security.view', scope: 'menu', resourceKey: 'admin.security', actionKey: 'view', label: 'Admin Menu: Security', description: 'View Security section in Administration', sortOrder: 35 },
   { permissionCode: 'menu.admin.customers.view', scope: 'menu', resourceKey: 'admin.customers', actionKey: 'view', label: 'Admin Menu: Customers', description: 'View Customers section in Administration', sortOrder: 36 },
   { permissionCode: 'menu.admin.onboarding.view', scope: 'menu', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Admin Menu: Agency Onboarding', description: 'View agency and broker onboarding section in Administration', sortOrder: 37 },
+  { permissionCode: 'menu.admin.notifications.view', scope: 'menu', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Admin Menu: Notifications', description: 'View Notification Templates section in Administration', sortOrder: 38 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -81,6 +82,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.security.view', scope: 'page', resourceKey: 'admin.security', actionKey: 'view', label: 'Page: Admin Security', description: 'Access role and permission administration page', sortOrder: 190 },
   { permissionCode: 'page.admin.customers.view', scope: 'page', resourceKey: 'admin.customers', actionKey: 'view', label: 'Page: Admin Customers', description: 'Access customer administration page', sortOrder: 200 },
   { permissionCode: 'page.admin.onboarding.view', scope: 'page', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Page: Admin Agency Onboarding', description: 'Access agency and broker onboarding administration page', sortOrder: 210 },
+  { permissionCode: 'page.admin.notifications.view', scope: 'page', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Page: Admin Notification Templates', description: 'Access notification template administration page', sortOrder: 215 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -113,7 +115,10 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'rating.models.read', scope: 'api', resourceKey: 'rating.models', actionKey: 'read', label: 'Rating API: Models Read', description: 'Read rating workbook models and published versions', sortOrder: 480 },
   { permissionCode: 'rating.models.manage', scope: 'api', resourceKey: 'rating.models', actionKey: 'manage', label: 'Rating API: Models Manage', description: 'Import and manage rating workbook versions', sortOrder: 490 },
   { permissionCode: 'rating.models.publish', scope: 'api', resourceKey: 'rating.models', actionKey: 'approve', label: 'Rating API: Models Publish', description: 'Publish/activate rating workbook versions', sortOrder: 500 },
-  { permissionCode: 'customer.portal.read', scope: 'api', resourceKey: 'customer.portal', actionKey: 'read', label: 'Customer Portal API: Read', description: 'Read own customer portal policies, declarations, and ID cards', sortOrder: 510 }
+  { permissionCode: 'customer.portal.read', scope: 'api', resourceKey: 'customer.portal', actionKey: 'read', label: 'Customer Portal API: Read', description: 'Read own customer portal policies, declarations, and ID cards', sortOrder: 510 },
+
+  { permissionCode: 'admin.notifications.read', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'read', label: 'Admin API: Notifications Read', description: 'Read notification templates and render previews', sortOrder: 520 },
+  { permissionCode: 'admin.notifications.manage', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'manage', label: 'Admin API: Notifications Manage', description: 'Create, edit, and activate/deactivate notification templates', sortOrder: 530 }
 ]
 
 type RoleSeed = {
@@ -276,6 +281,19 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.admin.customers.view',
       'admin.customers.read',
       'admin.customers.pii_reveal'
+    ]
+  },
+  {
+    roleCode: 'notification_admin',
+    roleName: 'Notification Administrator',
+    description: 'Manages tenant notification templates',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.notifications.view',
+      'page.admin.notifications.view',
+      'admin.notifications.read',
+      'admin.notifications.manage'
     ]
   },
   {
