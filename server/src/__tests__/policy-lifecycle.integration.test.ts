@@ -70,6 +70,52 @@ async function ensureTenant() {
   )
 }
 
+const servicingFormId = '11111111-1111-1111-1111-111111111189'
+
+// Issue #89: servicing transaction document hooks. Seeds a form applicable to
+// Cancel and NonRenewal so cancelPolicy/nonRenewPolicy exercise the same
+// document-generation.service.ts form-selection path bind already uses.
+async function ensureServicingForm() {
+  const db = getDb()
+  await db!.query(
+    `INSERT INTO forms_admin_forms (
+        form_id, tenant_id, carrier_code, authority, form_number, form_title,
+        edition_date, form_type, line_of_business, workflow_status, active
+      )
+     VALUES ($1,$2,'SAMPLE','ISO','PA-NOTICE','Personal Auto Servicing Notice',
+        '2026-01-01','Notice','personal-auto','Approved',true
+      )
+     ON CONFLICT (tenant_id, carrier_code, authority, form_number, edition_date)
+     DO UPDATE SET workflow_status = 'Approved', active = true`,
+    [servicingFormId, tenantId],
+  )
+  await db!.query(
+    `INSERT INTO forms_admin_applicability (
+        tenant_id, form_id, line_of_business, product_code, transaction_types, active
+      )
+     VALUES ($1,$2,'personal-auto','personal-auto',ARRAY['Cancel','NonRenewal','Reinstate','Renew','Rewrite']::text[],true)
+     ON CONFLICT DO NOTHING`,
+    [tenantId, servicingFormId],
+  )
+  await db!.query(
+    `INSERT INTO forms_admin_jurisdictions (
+        tenant_id, form_id, state_code, regulatory_status, effective_date
+      )
+     VALUES ($1,$2,'CA','Approved','2026-01-01')
+     ON CONFLICT DO NOTHING`,
+    [tenantId, servicingFormId],
+  )
+  await db!.query(
+    `INSERT INTO forms_admin_delivery (
+        tenant_id, form_id, delivery_methods, visibility, active
+      )
+     VALUES ($1,$2,ARRAY['portal']::text[],ARRAY['internal','customer']::text[],true)
+     ON CONFLICT (tenant_id, form_id)
+     DO UPDATE SET visibility = ARRAY['internal','customer']::text[], active = true`,
+    [tenantId, servicingFormId],
+  )
+}
+
 async function createBoundPolicy() {
   const quote = await createOrRateQuote(
     {} as any,
@@ -93,6 +139,7 @@ describe('policy transaction lifecycle persistence', () => {
   it('issues, cancels, rejects duplicate cancel, and reinstates an issued policy', async () => {
     await initDb()
     await ensureTenant()
+    await ensureServicingForm()
     const db = getDb()
     expect(db).toBeTruthy()
 
@@ -147,10 +194,35 @@ describe('policy transaction lifecycle persistence', () => {
           (SELECT count(*)::int FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid) AS ledger_count,
           (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type IN ('POLICY_ISSUED', 'POLICY_CANCELLED')) AS notification_count,
           (SELECT count(*)::int FROM async_message_outbox WHERE tenant_id=$1 AND source_table='notification_intents') AS notification_outbox_count,
-          (SELECT jsonb_agg(payload ORDER BY occurred_at) FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid AND event='COMMISSION_HANDOFF') AS commission_payloads`,
+          (SELECT jsonb_agg(payload ORDER BY occurred_at) FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid AND event='COMMISSION_HANDOFF') AS commission_payloads,
+          (SELECT count(*)::int FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=(SELECT transaction_id FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='CANCEL' LIMIT 1)) AS cancel_form_count,
+          (SELECT documents FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='CANCEL' LIMIT 1) AS cancel_transaction_documents,
+          (SELECT count(*)::int FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=(SELECT transaction_id FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='REINSTATE' LIMIT 1)) AS reinstate_form_count,
+          (SELECT documents FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='REINSTATE' LIMIT 1) AS reinstate_transaction_documents`,
       [tenantId, bound.policyId],
     )
     const row = persisted.rows[0]
+
+    // Issue #89: cancellation and reinstatement should attach the servicing
+    // notice form/packet the same way bind attaches NB forms.
+    expect(row.cancel_form_count).toBeGreaterThanOrEqual(1)
+    expect(row.cancel_transaction_documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'POLICY_PACKET',
+          metadata: expect.objectContaining({ transactionType: 'Cancel' }),
+        }),
+      ]),
+    )
+    expect(row.reinstate_form_count).toBeGreaterThanOrEqual(1)
+    expect(row.reinstate_transaction_documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'POLICY_PACKET',
+          metadata: expect.objectContaining({ transactionType: 'Reinstate' }),
+        }),
+      ]),
+    )
     const commissionPayloads = row.commission_payloads || []
     const bindHandoff = commissionPayloads.find((payload: any) => payload.transaction?.transactionType === 'QuoteBind')
     const cancelHandoff = commissionPayloads.find((payload: any) => payload.transaction?.transactionType === 'Cancel')
@@ -195,6 +267,7 @@ describe('policy transaction lifecycle persistence', () => {
   it('previews and renews policies, records non-renewal, and rejects rewrite before cancellation', async () => {
     await initDb()
     await ensureTenant()
+    await ensureServicingForm()
     const db = getDb()
     expect(db).toBeTruthy()
 
@@ -252,7 +325,11 @@ describe('policy transaction lifecycle persistence', () => {
           (SELECT term_expiration_date::text FROM policies WHERE tenant_id=$1 AND policy_id=$2) AS term_expiration_date,
           (SELECT count(*)::int FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type IN ('RENEW', 'NON_RENEWAL')) AS renewal_transaction_count,
           (SELECT count(*)::int FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type IN ('RENEW', 'NON_RENEWAL')) AS renewal_version_count,
-          (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type='POLICY_NON_RENEWAL') AS nonrenewal_notice_count`,
+          (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type='POLICY_NON_RENEWAL') AS nonrenewal_notice_count,
+          (SELECT count(*)::int FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=(SELECT transaction_id FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='RENEW' LIMIT 1)) AS renew_form_count,
+          (SELECT documents FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='RENEW' LIMIT 1) AS renew_transaction_documents,
+          (SELECT count(*)::int FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=(SELECT transaction_id FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='NON_RENEWAL' LIMIT 1)) AS nonrenewal_form_count,
+          (SELECT documents FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$2 AND type='NON_RENEWAL' LIMIT 1) AS nonrenewal_transaction_documents`,
       [tenantId, bound.policyId],
     )
     const row = persisted.rows[0]
@@ -261,5 +338,26 @@ describe('policy transaction lifecycle persistence', () => {
     expect(row.renewal_transaction_count).toBeGreaterThanOrEqual(2)
     expect(row.renewal_version_count).toBeGreaterThanOrEqual(2)
     expect(row.nonrenewal_notice_count).toBeGreaterThanOrEqual(1)
+
+    // Issue #89: renewal and non-renewal should attach the servicing
+    // notice form/packet the same way bind attaches NB forms.
+    expect(row.renew_form_count).toBeGreaterThanOrEqual(1)
+    expect(row.renew_transaction_documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'POLICY_PACKET',
+          metadata: expect.objectContaining({ transactionType: 'Renew' }),
+        }),
+      ]),
+    )
+    expect(row.nonrenewal_form_count).toBeGreaterThanOrEqual(1)
+    expect(row.nonrenewal_transaction_documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'POLICY_PACKET',
+          metadata: expect.objectContaining({ transactionType: 'NonRenewal' }),
+        }),
+      ]),
+    )
   })
 })
