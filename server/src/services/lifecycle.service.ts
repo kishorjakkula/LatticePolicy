@@ -22,6 +22,7 @@ import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -191,7 +192,10 @@ export async function issuePolicy(
 ): Promise<any> {
   const q = toRawQuery(db)
   const policyRes: any = await q(
-    'SELECT policy_id, policy_number, product_code, status, term_effective_date, term_expiration_date, lifecycle FROM policies WHERE tenant_id=$1 AND policy_id=$2',
+    `SELECT policy_id, policy_number, product_code, status, term_effective_date,
+            term_expiration_date, currency_code, premium_summary, lifecycle, metadata
+       FROM policies
+      WHERE tenant_id=$1 AND policy_id=$2`,
     [tenantId, policyId]
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
@@ -244,6 +248,26 @@ export async function issuePolicy(
     'INSERT INTO ledger_events (tenant_id, entity_type, entity_id, event, from_state, to_state, payload, actor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
     [tenantId, 'Policy', policyId, 'STATUS_CHANGE', policyRow.status, 'Issued', { issuedAt }, actor?.id || null]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyRow.policy_number,
+    transactionId: issueTransactionId,
+    transactionNumber,
+    transactionType: 'Issue',
+    sourceEvent: 'POLICY_ISSUED',
+    effectiveDate: coerceDateOnly(policyRow.term_effective_date),
+    expirationDate: coerceDateOnly(policyRow.term_expiration_date),
+    processedAt: issuedAt,
+    productCode: policyRow.product_code,
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney(policyRow.premium_summary?.total?.amount),
+    currency: policyRow.currency_code || policyRow.premium_summary?.total?.currency || 'USD',
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber || issueTransactionId,
+  })
   return { policyId, policyNumber: policyRow.policy_number, status: 'Issued', issuedAt }
 }
 
@@ -443,6 +467,26 @@ export async function cancelPolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Cancel',
+    sourceEvent: 'POLICY_CANCELLED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    premiumImpact: -refund,
+    currency,
+    payload: txPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -574,6 +618,26 @@ export async function reinstatePolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Reinstate',
+    sourceEvent: 'POLICY_REINSTATED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    premiumImpact: reinstatementCharge,
+    currency,
+    payload: txPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -785,6 +849,26 @@ export async function renewPolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Renew',
+    sourceEvent: 'POLICY_RENEWED',
+    effectiveDate: nextEff,
+    expirationDate: nextExp,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney((prem as any)?.total?.amount),
+    currency,
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -1022,6 +1106,26 @@ export async function rewritePolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Rewrite',
+    sourceEvent: 'POLICY_REWRITTEN',
+    effectiveDate: nextEff,
+    expirationDate: nextExp,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney((prem as any)?.total?.amount),
+    currency,
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -1194,6 +1298,26 @@ export async function nonRenewPolicy(
       actor?.id || null,
     ]
   ).catch(() => {})
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'NonRenewal',
+    sourceEvent: 'POLICY_NON_RENEWAL',
+    effectiveDate: termExpiration,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    premiumImpact: 0,
+    currency,
+    payload: ctx.latestPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return {
     ok: true,

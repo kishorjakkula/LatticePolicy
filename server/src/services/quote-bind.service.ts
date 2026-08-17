@@ -31,6 +31,7 @@ import {
   persistPolicyDocumentPacket,
   type PolicyDocumentPacket,
 } from './document-generation.service.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -495,6 +496,27 @@ export async function bindQuote(
         normalizedActorId,
       ]
     )
+
+    await createCommissionHandoffEvent(txDb, {
+      tenantId,
+      policyId,
+      policyNumber,
+      transactionId,
+      transactionNumber,
+      transactionType: 'QuoteBind',
+      sourceEvent: 'QUOTE_BOUND',
+      effectiveDate,
+      expirationDate,
+      processedAt: nowIso,
+      productCode,
+      state: quote.payload?.state || jurisdiction?.code || null,
+      premiumImpact: safeMoney(quote.premium?.total?.amount),
+      currency,
+      payload: quote.payload,
+      policyMetadata: transactionMetadata,
+      actorId: normalizedActorId,
+      correlationId: transactionNumber,
+    })
 
     // Update quote status to Converted
     const quoteUpdatedAt = new Date().toISOString()
