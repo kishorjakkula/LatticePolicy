@@ -31,6 +31,16 @@ function quotePayload(overrides: Record<string, any> = {}) {
       lastName: 'Lovelace',
       email: 'ada@example.com',
     },
+    producer: {
+      producerKey: 'PROD-001',
+      npn: '1234567',
+      firstName: 'Pat',
+      lastName: 'Producer',
+      agency: {
+        agencyCode: 'AGY-001',
+        legalName: 'Demo Agency LLC',
+      },
+    },
     risks: [
       {
         type: 'autoVehicle',
@@ -136,10 +146,14 @@ describe('policy transaction lifecycle persistence', () => {
           (SELECT count(*)::int FROM ratings WHERE tenant_id=$1 AND policy_id=$2) AS rating_count,
           (SELECT count(*)::int FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid) AS ledger_count,
           (SELECT count(*)::int FROM notification_intents WHERE tenant_id=$1 AND policy_id=$2 AND event_type IN ('POLICY_ISSUED', 'POLICY_CANCELLED')) AS notification_count,
-          (SELECT count(*)::int FROM async_message_outbox WHERE tenant_id=$1 AND source_table='notification_intents') AS notification_outbox_count`,
+          (SELECT count(*)::int FROM async_message_outbox WHERE tenant_id=$1 AND source_table='notification_intents') AS notification_outbox_count,
+          (SELECT jsonb_agg(payload ORDER BY occurred_at) FROM ledger_events WHERE tenant_id=$1 AND entity_id=$2::uuid AND event='COMMISSION_HANDOFF') AS commission_payloads`,
       [tenantId, bound.policyId],
     )
     const row = persisted.rows[0]
+    const commissionPayloads = row.commission_payloads || []
+    const bindHandoff = commissionPayloads.find((payload: any) => payload.transaction?.transactionType === 'QuoteBind')
+    const cancelHandoff = commissionPayloads.find((payload: any) => payload.transaction?.transactionType === 'Cancel')
     expect(row.policy_status).toBe('Issued')
     expect(row.transaction_count).toBeGreaterThanOrEqual(3)
     expect(row.version_count).toBeGreaterThanOrEqual(3)
@@ -147,6 +161,35 @@ describe('policy transaction lifecycle persistence', () => {
     expect(row.ledger_count).toBeGreaterThanOrEqual(3)
     expect(row.notification_count).toBeGreaterThanOrEqual(2)
     expect(row.notification_outbox_count).toBeGreaterThanOrEqual(2)
+    expect(bindHandoff).toMatchObject({
+      schemaVersion: 'commission-handoff.v1',
+      eventType: 'COMMISSION_HANDOFF',
+      tenantId,
+      policy: {
+        policyId: bound.policyId,
+        productCode: 'personal-auto',
+        state: 'CA',
+      },
+      producer: {
+        producerKey: 'PROD-001',
+        producerNpn: '1234567',
+        agencyCode: 'AGY-001',
+      },
+    })
+    expect(bindHandoff.idempotencyKey).toContain(bound.policyId)
+    expect(bindHandoff.premiumImpact.amount).toBeGreaterThan(0)
+    expect(cancelHandoff).toMatchObject({
+      schemaVersion: 'commission-handoff.v1',
+      eventType: 'COMMISSION_HANDOFF',
+      tenantId,
+      policy: {
+        policyId: bound.policyId,
+      },
+      transaction: {
+        transactionType: 'Cancel',
+      },
+    })
+    expect(cancelHandoff.premiumImpact.amount).toBeLessThanOrEqual(0)
   })
 
   it('previews and renews policies, records non-renewal, and rejects rewrite before cancellation', async () => {

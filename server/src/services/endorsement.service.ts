@@ -25,6 +25,7 @@ import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
 import { diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1051,6 +1052,26 @@ export async function executeEndorsement(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyRow.policyNumber || policyRow.policy_number || null,
+    transactionId,
+    transactionNumber,
+    transactionType: 'Endorse',
+    sourceEvent: 'ENDORSEMENT_ISSUED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyRow.productCode || policyRow.product_code || newPayload?.productCode || null,
+    state: newPayload?.state || newPayload?.jurisdiction?.code || null,
+    premiumImpact: delta,
+    currency,
+    payload: newPayload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }

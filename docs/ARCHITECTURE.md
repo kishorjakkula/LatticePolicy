@@ -31,6 +31,8 @@ Modules
 - AI/ML Decisioning: tenant-configurable inference for risk, fraud, premium adequacy, and recommendation outputs.
 - Batch Processing: scheduled and asynchronous jobs for nightly processing and heavy workloads.
 - Async Event Push: outbox-based message push for downstream systems (webhooks/event consumers).
+- Producer Commission Handoff: transaction-fact events for downstream
+  commission/accounting systems without owning commission accounting.
 - Cache Layer: Redis-backed read-through cache for high-read APIs and invalidation on admin updates.
 - Observability: structured JSON logging with request correlation IDs.
 - API Documentation Service: OpenAPI + Swagger UI (admin-only access).
@@ -156,6 +158,16 @@ Async Message Push (Outbox Pattern)
 - Failures are retried with exponential backoff; terminal failures are marked `Failed` with error details.
 - Outbox rows retain tenant, topic, payload, attempts, and timestamps for audit/debug.
 - Runtime controls: `ASYNC_PUSH_ENABLED`, `ASYNC_PUSH_POLL_MS`, `ASYNC_PUSH_BATCH_SIZE`, `ASYNC_PUSH_TIMEOUT_MS`.
+
+Producer Commission Handoff
+- Policy-changing transactions emit separate `COMMISSION_HANDOFF` ledger events
+  for downstream commission/accounting systems.
+- Payloads include tenant, policy, transaction, producer/agency, product,
+  state, premium impact, idempotency, and correlation context.
+- LatticePolicy owns the transaction-fact handoff only; commission calculation,
+  payables, statements, chargebacks, and settlement status stay outside the
+  platform.
+- Contract details: `docs/COMMISSION_HANDOFF.md`.
 
 Email Capabilities
 - Transactional emails: quote-ready, bind confirmation, issue notices, cancellation/reinstatement communications.
