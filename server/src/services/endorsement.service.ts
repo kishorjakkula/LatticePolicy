@@ -854,6 +854,14 @@ export async function executeEndorsement(
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
 
+  // Intentional no-op: endorsement document/form generation is not wired to
+  // document-generation.service.ts yet. Endorsements only touch specific
+  // coverages (see `changes` above), and form applicability rules in
+  // forms_admin_applicability / forms_catalog are not currently coverage-diff
+  // aware, so a generic product/state/transaction-type packet would attach
+  // the same forms regardless of which coverage actually changed. Wire this
+  // up once coverage-diff-aware form selection exists (see issue #89 task
+  // note for details and the follow-up issue reference).
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,

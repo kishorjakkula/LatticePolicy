@@ -23,6 +23,10 @@ import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRa
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import {
+  buildPolicyDocumentPacket,
+  persistPolicyDocumentPacket,
+} from './document-generation.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -354,6 +358,20 @@ export async function cancelPolicy(
     premium: simplePremium(-refund),
   }
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Cancel',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -367,8 +385,8 @@ export async function cancelPolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       reason: resolvedReasonDescription || reason || null,
@@ -379,6 +397,20 @@ export async function cancelPolicy(
       transactionNumber,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Cancel',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -538,6 +570,20 @@ export async function reinstatePolicy(
     premium: simplePremium(reinstatementCharge),
   }
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Reinstate',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -551,11 +597,25 @@ export async function reinstatePolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: { reinstateDate: eff, transactionNumber, reinstatementCharge },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Reinstate',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -736,6 +796,20 @@ export async function renewPolicy(
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Renew',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -749,8 +823,8 @@ export async function renewPolicy(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       renewal: true,
@@ -759,6 +833,20 @@ export async function renewPolicy(
       transactionNumber,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Renew',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -992,6 +1080,20 @@ export async function rewritePolicy(
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Rewrite',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -1005,8 +1107,8 @@ export async function rewritePolicy(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       rewrite: true,
@@ -1015,6 +1117,20 @@ export async function rewritePolicy(
       transactionNumber,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Rewrite',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -1190,6 +1306,20 @@ export async function nonRenewPolicy(
   const processedAt = new Date().toISOString()
   const transactionNumber = reserveTransactionNumber('renew').replace('RN-', 'NR-')
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'NonRenewal',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    effectiveDate: termExpiration,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -1203,8 +1333,8 @@ export async function nonRenewPolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       reasonCode: reasonCode || null,
@@ -1214,6 +1344,20 @@ export async function nonRenewPolicy(
       transactionNumber,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'NonRenewal',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    effectiveDate: termExpiration,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,

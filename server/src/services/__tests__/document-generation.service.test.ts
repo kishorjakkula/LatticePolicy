@@ -127,4 +127,84 @@ describe('document generation service', () => {
       visibility: ['internal'],
     })
   })
+
+  it('selects servicing forms for cancellation and non-renewal transactions (issue #89)', async () => {
+    const query = createQuery({
+      forms_admin_forms: [
+        {
+          form_id: '55555555-5555-5555-5555-555555555555',
+          form_number: 'PA-NOTICE',
+          form_title: 'Personal Auto Servicing Notice',
+          edition_date: '2026-01-01',
+          form_type: 'Notice',
+          transaction_types: ['Cancel', 'NonRenewal', 'Reinstate', 'Renew', 'Rewrite'],
+          output_format: 'PDF',
+          packet_placement: 'Front',
+          sort_order: 10,
+          visibility: ['internal', 'customer'],
+          state_code: 'CA',
+          regulatory_status: 'Approved',
+        },
+        {
+          form_id: '66666666-6666-6666-6666-666666666666',
+          form_number: 'PA-DEC',
+          form_title: 'Personal Auto Declarations',
+          edition_date: '2026-01-01',
+          form_type: 'Declarations',
+          transaction_types: ['NB'],
+          output_format: 'PDF',
+          packet_placement: 'Front',
+          sort_order: 10,
+          visibility: ['internal', 'customer'],
+          state_code: 'CA',
+          regulatory_status: 'Approved',
+        },
+      ],
+    })
+
+    const cancelPacket = await buildPolicyDocumentPacket(query, {
+      ...context,
+      transactionType: 'Cancel',
+      transactionId: 'transaction-cancel',
+    })
+    expect(cancelPacket.forms.map((form) => form.code)).toEqual(['PA-NOTICE'])
+    expect(cancelPacket.documents[0].metadata).toMatchObject({ transactionType: 'Cancel', customerSafe: true })
+
+    const nonRenewalPacket = await buildPolicyDocumentPacket(query, {
+      ...context,
+      transactionType: 'NonRenewal',
+      transactionId: 'transaction-nonrenewal',
+    })
+    expect(nonRenewalPacket.forms.map((form) => form.code)).toEqual(['PA-NOTICE'])
+    expect(nonRenewalPacket.documents[0].metadata).toMatchObject({ transactionType: 'NonRenewal', customerSafe: true })
+  })
+
+  it('does not select forms for a transaction type outside a form applicability list', async () => {
+    const query = createQuery({
+      forms_admin_forms: [
+        {
+          form_id: '77777777-7777-7777-7777-777777777777',
+          form_number: 'PA-END-ONLY',
+          form_title: 'Endorsement Only Form',
+          edition_date: '2026-01-01',
+          form_type: 'Endorsement',
+          transaction_types: ['Endorse'],
+          output_format: 'PDF',
+          packet_placement: 'End',
+          sort_order: 20,
+          visibility: ['internal', 'customer'],
+          state_code: 'CA',
+          regulatory_status: 'Approved',
+        },
+      ],
+    })
+
+    const packet = await buildPolicyDocumentPacket(query, {
+      ...context,
+      transactionType: 'Cancel',
+      transactionId: 'transaction-cancel-no-match',
+    })
+    expect(packet.forms).toHaveLength(0)
+    expect(packet.documents).toHaveLength(0)
+  })
 })
