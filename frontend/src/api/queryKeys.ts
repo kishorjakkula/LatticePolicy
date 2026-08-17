@@ -78,4 +78,8 @@ export const queryKeys = {
   adminUwCompanies: {
     list: (opts: Record<string, any>) => ['admin-uw-companies', opts] as const,
   },
+  notificationTemplates: {
+    list: (opts: Record<string, any>) => ['notification-templates', opts] as const,
+    detail: (id: string) => ['notification-templates', id] as const,
+  },
 }

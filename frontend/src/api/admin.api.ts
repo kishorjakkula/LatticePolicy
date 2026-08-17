@@ -233,6 +233,51 @@ export const adminApi = {
   updateUnderwritingCompany: (id: string, payload: Partial<{ name: string; productCode: string; country: string; state: string; active: boolean }>) =>
     request<any>('PATCH', `/v1/admin/underwriting-companies/${id}`, payload),
   deleteUnderwritingCompany: (id: string) => request<any>('DELETE', `/v1/admin/underwriting-companies/${id}`),
+  // Notification templates
+  listNotificationTemplates: (opts?: { eventType?: string; channel?: string; productCode?: string; transactionType?: string; active?: boolean }) => {
+    const params = new URLSearchParams()
+    if (opts?.eventType) params.set('eventType', opts.eventType)
+    if (opts?.channel) params.set('channel', opts.channel)
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.transactionType) params.set('transactionType', opts.transactionType)
+    if (opts?.active != null) params.set('active', String(opts.active))
+    const query = params.toString()
+    return request<any[]>('GET', `/v1/admin/notification-templates${query ? `?${query}` : ''}`)
+  },
+  getNotificationTemplate: (id: string) => request<any>('GET', `/v1/admin/notification-templates/${id}`),
+  createNotificationTemplate: (payload: {
+    templateCode: string
+    eventType: string
+    channel?: string
+    productCode?: string | null
+    transactionType?: string | null
+    locale?: string
+    subjectTemplate: string
+    bodyTemplate: string
+    visibility?: string[]
+    effectiveDate?: string | null
+    expirationDate?: string | null
+    active?: boolean
+    metadata?: Record<string, unknown>
+  }) => request<any>('POST', '/v1/admin/notification-templates', payload),
+  updateNotificationTemplate: (id: string, payload: Partial<{
+    templateCode: string
+    eventType: string
+    channel: string
+    productCode: string | null
+    transactionType: string | null
+    locale: string
+    subjectTemplate: string
+    bodyTemplate: string
+    visibility: string[]
+    effectiveDate: string | null
+    expirationDate: string | null
+    metadata: Record<string, unknown>
+  }>) => request<any>('PATCH', `/v1/admin/notification-templates/${id}`, payload),
+  activateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/activate`),
+  deactivateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/deactivate`),
+  previewNotificationTemplate: (payload: { subjectTemplate: string; bodyTemplate: string; sampleFields?: Record<string, unknown> }) =>
+    request<{ subject: string; body: string }>('POST', '/v1/admin/notification-templates/preview', payload),
   // Forms administration
   listForms: (opts?: {
     q?: string
