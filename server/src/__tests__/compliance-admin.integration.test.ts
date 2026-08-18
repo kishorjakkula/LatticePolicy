@@ -130,6 +130,23 @@ describe('compliance admin: eligibility and OFAC review (database path)', () => 
     expect(clearedQueue.body.items.some((item: any) => item.screen_id === first.screenId)).toBe(true)
   })
 
+  it('does not treat an automatic CLEAR screen as reviewer clearance for future SDN matches', async () => {
+    const run = suffix()
+    const partyName = `Later Listed Party ${run}`
+
+    const first = await screenOfac(q, tenantId, partyName, {})
+    expect(first.result).toBe('CLEAR')
+
+    await getDb()!.query(
+      `INSERT INTO ofac_sdn_list (name, normalized_name, aliases, country, list_type)
+       VALUES ($1,$2,'[]'::jsonb,'XX','SDN')`,
+      [partyName, `LATER LISTED PARTY ${run.toUpperCase()}`],
+    )
+
+    const second = await screenOfac(q, tenantId, partyName, {})
+    expect(second.result).toBe('POTENTIAL_HIT')
+  })
+
   it('carries forward a BLOCKED disposition to force future holds', async () => {
     const run = suffix()
     const partyName = `Blocked Test Party ${run}`

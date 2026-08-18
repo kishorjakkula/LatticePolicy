@@ -67,7 +67,10 @@ export async function screenOfac(
   if (normalized) {
     const priorRes = await q(
       `SELECT disposition FROM ofac_screens
-        WHERE tenant_id = $1 AND normalized_party_name = $2 AND disposition IN ('CLEARED','BLOCKED')
+        WHERE tenant_id = $1
+          AND normalized_party_name = $2
+          AND disposition IN ('CLEARED','BLOCKED')
+          AND reviewed_by IS NOT NULL
         ORDER BY reviewed_at DESC NULLS LAST, created_at DESC
         LIMIT 1`,
       [tenantId, normalized]
