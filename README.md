@@ -194,6 +194,7 @@ npm run dev:frontend
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
 - [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
 - [Commercial support and services](COMMERCIAL.md)
+- [Carrier onboarding and go-live certification kit](docs/CARRIER_ONBOARDING_KIT.md)
 
 ## Extension Points
 
