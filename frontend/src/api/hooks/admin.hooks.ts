@@ -189,6 +189,57 @@ export function useDeleteUnderwritingCompanyMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Notification Templates
+// ---------------------------------------------------------------------------
+
+export function useNotificationTemplates(opts: Record<string, any> = {}) {
+  return useQuery({
+    queryKey: queryKeys.notificationTemplates.list(opts),
+    queryFn: () => adminApi.listNotificationTemplates(opts),
+  })
+}
+
+export function useCreateNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof adminApi.createNotificationTemplate>[0]) =>
+      adminApi.createNotificationTemplate(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function useUpdateNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof adminApi.updateNotificationTemplate>[1] }) =>
+      adminApi.updateNotificationTemplate(id, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function useSetNotificationTemplateActiveMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      active ? adminApi.activateNotificationTemplate(id) : adminApi.deactivateNotificationTemplate(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function usePreviewNotificationTemplateMutation() {
+  return useMutation({
+    mutationFn: (payload: { subjectTemplate: string; bodyTemplate: string; sampleFields?: Record<string, unknown> }) =>
+      adminApi.previewNotificationTemplate(payload),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Customers
 // ---------------------------------------------------------------------------
 

@@ -58,7 +58,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build API image for scan
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: server/Dockerfile
@@ -74,7 +74,7 @@ jobs:
           exit-code: "1"
 
       - name: Build frontend image for scan
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: frontend/Dockerfile
@@ -97,7 +97,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: server/Dockerfile
@@ -112,7 +112,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.checkout.outputs.sha }}
 
       - name: Publish frontend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: frontend/Dockerfile

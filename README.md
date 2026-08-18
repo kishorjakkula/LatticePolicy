@@ -193,6 +193,7 @@ npm run dev:frontend
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
 - [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
+- [Commercial support and services](COMMERCIAL.md)
 
 ## Extension Points
 
@@ -212,6 +213,10 @@ Report security issues using the process in [SECURITY.md](SECURITY.md).
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, standards, and pull request guidance.
+
+## Commercial Support
+
+LatticePolicy is fully open-source with no feature gating. Paid implementation, hosting, and deployment support may also be available; see [COMMERCIAL.md](COMMERCIAL.md).
 
 ## License
 
