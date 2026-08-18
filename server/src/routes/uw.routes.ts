@@ -1,11 +1,24 @@
 import { Router } from 'express'
-import { getDb, withTenantTx, toRawQuery } from '../db.js'
+import { getDb, withTenantTx } from '../db.js'
 import { requirePermission } from '../auth.js'
+import {
+  listReferrals,
+  getReferral,
+  assignReferral,
+  addReferralComment,
+  decideReferral,
+} from '../services/uw-referral.service.js'
 
 export const uwRoutes = Router()
 
+function isUnderwriter(req: any): boolean {
+  const roles: string[] = req.user?.roles || []
+  const permissions: string[] = req.user?.permissions || []
+  return roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
+}
+
 // GET /uw/referrals
-// Lists policy versions in 'Refer' UW decision state that have not been overridden.
+// Lists underwriting referrals for the tenant, optionally filtered by status.
 // Returns empty result set when no DB is configured.
 uwRoutes.get('/uw/referrals', requirePermission('uw.referrals.read'), (req, res, next) => {
   const tenantId = req.tenant!.tenantId
@@ -13,82 +26,110 @@ uwRoutes.get('/uw/referrals', requirePermission('uw.referrals.read'), (req, res,
   if (!db) return res.json({ items: [], total: 0, page: 1, pageSize: 20 })
   const page = Math.max(1, Number(req.query.page || 1))
   const pageSize = Math.max(1, Math.min(100, Number(req.query.pageSize || 20)))
-  const offset = (page - 1) * pageSize
-  const sql = `
-    SELECT pv.version_id, pv.policy_id, pv.effective_date, pv.processed_at, pv.transaction_type,
-           pv.uw_decision, pv.uw_override, pv.override_reason, pv.calc_trace,
-           p.policy_number, p.product_code
-      FROM policy_versions pv
-      JOIN policies p ON p.policy_id = pv.policy_id AND p.tenant_id = pv.tenant_id
-     WHERE pv.tenant_id = $1 AND pv.uw_decision = 'Refer' AND COALESCE(pv.uw_override, false) = false
-     ORDER BY pv.processed_at DESC
-     LIMIT ${pageSize} OFFSET ${offset}`
-  withTenantTx(tenantId, (db) => toRawQuery(db)(sql, [tenantId]))
-    .then((r: any) => {
-      const items = r.rows.map((row: any) => ({
-        versionId: row.version_id,
-        policyId: row.policy_id,
-        policyNumber: row.policy_number,
-        productCode: row.product_code,
-        effectiveDate: row.effective_date,
-        processedDate: row.processed_at,
-        transactionType: row.transaction_type,
-        uwDecision: row.uw_decision,
-        uwOverride: row.uw_override,
-        overrideReason: row.override_reason,
-        submittedBy: row.calc_trace?.uw?.submittedBy || null
-      }))
-      return res.json({ items, total: items.length, page, pageSize })
-    })
-    .catch((err: any) => next(err))
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined
+  withTenantTx(tenantId, (innerDb) => listReferrals(innerDb, tenantId, { status, page, pageSize }))
+    .then((result) => res.json(result))
+    .catch((err) => next(err))
 })
 
-// PATCH /uw/referrals/:versionId/approve
-// Sets uw_override=true with the provided override reason.
-// Requires a non-empty reason in the request body.
-// DB-only — returns 400 when no DB is configured.
-uwRoutes.patch(
-  '/uw/referrals/:versionId/approve',
-  requirePermission('uw.referrals.decide'),
-  (req, res, next) => {
-    const tenantId = req.tenant!.tenantId
-    const versionId = req.params.versionId
-    const reason = (req.body?.reason || '').toString().trim()
-    if (!reason) {
-      return res.status(400).json({ code: 'REASON_REQUIRED', message: 'Override reason is required' })
-    }
-    const db = getDb()
-    if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
-    withTenantTx(tenantId, (db) =>
-      toRawQuery(db)(
-        'UPDATE policy_versions SET uw_override=true, override_reason=$1 WHERE tenant_id=$2 AND version_id=$3',
-        [reason, tenantId, versionId]
-      )
-    )
-      .then(() => res.json({ ok: true }))
-      .catch((err: any) => next(err))
-  }
-)
+// GET /uw/referrals/:referralId
+uwRoutes.get('/uw/referrals/:referralId', requirePermission('uw.referrals.read'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  withTenantTx(tenantId, (innerDb) => getReferral(innerDb, tenantId, String(req.params.referralId)))
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
 
-// PATCH /uw/referrals/:versionId/decline
-// Sets uw_decision='Decline' and uw_override=false with the optional override reason.
-// DB-only — returns 400 when no DB is configured.
-uwRoutes.patch(
-  '/uw/referrals/:versionId/decline',
-  requirePermission('uw.referrals.decide'),
-  (req, res, next) => {
-    const tenantId = req.tenant!.tenantId
-    const versionId = req.params.versionId
-    const reason = (req.body?.reason || '').toString().trim()
-    const db = getDb()
-    if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
-    withTenantTx(tenantId, (db) =>
-      toRawQuery(db)(
-        'UPDATE policy_versions SET uw_decision=$1, uw_override=false, override_reason=$2 WHERE tenant_id=$3 AND version_id=$4',
-        ['Decline', reason || null, tenantId, versionId]
-      )
-    )
-      .then(() => res.json({ ok: true }))
-      .catch((err: any) => next(err))
+// PATCH /uw/referrals/:referralId/assign
+// Body: { assignedTo: string (user id) }
+uwRoutes.patch('/uw/referrals/:referralId/assign', requirePermission('uw.referrals.decide'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const assignedTo = (req.body?.assignedTo || '').toString().trim()
+  if (!assignedTo) {
+    return res.status(400).json({ code: 'ASSIGNED_TO_REQUIRED', message: 'assignedTo is required' })
   }
-)
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  withTenantTx(tenantId, (innerDb) => assignReferral(innerDb, tenantId, String(req.params.referralId), assignedTo))
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
+
+// POST /uw/referrals/:referralId/comments
+// Body: { text: string }
+uwRoutes.post('/uw/referrals/:referralId/comments', requirePermission('uw.referrals.read'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const by = req.user?.id || req.user?.username || 'unknown'
+  withTenantTx(tenantId, (innerDb) =>
+    addReferralComment(innerDb, tenantId, String(req.params.referralId), { by, text: req.body?.text })
+  )
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
+
+// PATCH /uw/referrals/:referralId/decide
+// Body: { decision: 'Approved' | 'Declined' | 'InfoRequested', reason?: string }
+// Requires an underwriter-permission actor; the decision authorizes (or blocks)
+// the pending bind/renewal/rewrite/endorsement that created this referral.
+uwRoutes.patch('/uw/referrals/:referralId/decide', requirePermission('uw.referrals.decide'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const decision = (req.body?.decision || '').toString().trim()
+  if (!['Approved', 'Declined', 'InfoRequested'].includes(decision)) {
+    return res.status(400).json({
+      code: 'INVALID_DECISION',
+      message: "decision must be one of 'Approved', 'Declined', 'InfoRequested'",
+    })
+  }
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const decidedBy = req.user?.id || null
+  withTenantTx(tenantId, (innerDb) =>
+    decideReferral(innerDb, tenantId, String(req.params.referralId), {
+      decision: decision as any,
+      reason: req.body?.reason,
+      decidedBy,
+      isUnderwriter: isUnderwriter(req),
+    })
+  )
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
+
+// Backward-compatible aliases used by the existing UW queue UI.
+uwRoutes.patch('/uw/referrals/:referralId/approve', requirePermission('uw.referrals.decide'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const decidedBy = req.user?.id || null
+  withTenantTx(tenantId, (innerDb) =>
+    decideReferral(innerDb, tenantId, String(req.params.referralId), {
+      decision: 'Approved',
+      reason: req.body?.reason,
+      decidedBy,
+      isUnderwriter: isUnderwriter(req),
+    })
+  )
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
+
+uwRoutes.patch('/uw/referrals/:referralId/decline', requirePermission('uw.referrals.decide'), (req, res, next) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const decidedBy = req.user?.id || null
+  withTenantTx(tenantId, (innerDb) =>
+    decideReferral(innerDb, tenantId, String(req.params.referralId), {
+      decision: 'Declined',
+      reason: req.body?.reason,
+      decidedBy,
+      isUnderwriter: isUnderwriter(req),
+    })
+  )
+    .then((referral) => res.json(referral))
+    .catch((err) => next(err))
+})
