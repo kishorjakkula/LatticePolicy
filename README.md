@@ -192,12 +192,13 @@ npm run dev:frontend
 - [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
+- [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
 
 ## Extension Points
 
 The framework is intended to be extended through product packs, tenant configuration, and service adapters. The existing sample tenant and product folders are the best starting point:
 
-- `products/`
+- `products/` — see [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md) for the required files and framework code paths.
 - `tenants/sample-carrier/`
 - `server/src/`
 - `contracts/`
