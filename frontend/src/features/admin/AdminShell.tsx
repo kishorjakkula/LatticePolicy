@@ -37,6 +37,9 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.notifications.view') && (
             <NavLink to="/admin/notification-templates" className={adminMenuClass}>Notifications</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.compliance.view') && (
+            <NavLink to="/admin/compliance" className={adminMenuClass}>Compliance</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">

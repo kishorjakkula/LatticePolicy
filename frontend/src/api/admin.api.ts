@@ -5,6 +5,22 @@ export const adminApi = {
   createUser: (payload: { username: string; password: string; roles: string[]; customerRef?: string }) => request<any>('POST', '/v1/admin/users', payload),
   updateUser: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/users/${id}`, patch),
   deleteUser: (id: string) => request<any>('DELETE', `/v1/admin/users/${id}`),
+  // Compliance administration
+  listEligibility: (opts?: { productCode?: string; stateCode?: string; status?: string }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.stateCode) params.set('stateCode', opts.stateCode)
+    if (opts?.status) params.set('status', opts.status)
+    const qs = params.toString()
+    return request<{ items: any[] }>('GET', `/v1/admin/compliance/eligibility${qs ? `?${qs}` : ''}`)
+  },
+  createEligibility: (payload: any) => request<any>('POST', '/v1/admin/compliance/eligibility', payload),
+  updateEligibility: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/compliance/eligibility/${id}`, patch),
+  importOfacSdnList: (entries: any[]) => request<{ imported: number }>('POST', '/v1/admin/compliance/ofac/sdn-list/import', { entries }),
+  listOfacScreens: (disposition?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/compliance/ofac/screens${disposition ? `?disposition=${disposition}` : ''}`),
+  dispositionOfacScreen: (screenId: string, payload: { disposition: string; reason: string }) =>
+    request<any>('PATCH', `/v1/admin/compliance/ofac/screens/${screenId}`, payload),
   listSecurityPermissions: () => request<any[]>('GET', '/v1/admin/security/permissions'),
   listSecurityRoles: () => request<any[]>('GET', '/v1/admin/security/roles'),
   listSecurityRelationships: () => request<any>('GET', '/v1/admin/security/relationships'),

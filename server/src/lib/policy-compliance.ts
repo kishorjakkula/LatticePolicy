@@ -16,7 +16,7 @@ import { round2 } from './date.utils.js'
 // ──────────────────────────────────────────────────────────────
 
 /** Normalize a name for fuzzy matching against the SDN list */
-function normalizeOfacName(name: string): string {
+export function normalizeOfacName(name: string): string {
   return name
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')
@@ -56,8 +56,31 @@ export async function screenOfac(
   const normalized = normalizeOfacName(partyName || '')
   let result: OfacScreenResult['result'] = 'CLEAR'
   let matchDetails: any[] | null = null
+  let carriedDisposition: 'PENDING' | 'CLEARED' | 'ESCALATED' | 'BLOCKED' = 'PENDING'
+  let carriedReason: string | null = null
 
+  // A compliance reviewer may have already dispositioned this exact party
+  // name for this tenant. CLEARED precedent auto-clears a fresh potential
+  // match; BLOCKED precedent forces a hold even if the fuzzy match logic
+  // would otherwise come back clear (e.g. an alias variant).
+  let priorDisposition: 'CLEARED' | 'BLOCKED' | null = null
   if (normalized) {
+    const priorRes = await q(
+      `SELECT disposition FROM ofac_screens
+        WHERE tenant_id = $1 AND normalized_party_name = $2 AND disposition IN ('CLEARED','BLOCKED')
+        ORDER BY reviewed_at DESC NULLS LAST, created_at DESC
+        LIMIT 1`,
+      [tenantId, normalized]
+    )
+    priorDisposition = priorRes.rows[0]?.disposition ?? null
+  }
+
+  if (priorDisposition === 'BLOCKED') {
+    result = 'CONFIRMED_HIT'
+    matchDetails = [{ note: 'Party previously blocked by compliance reviewer' }]
+    carriedDisposition = 'BLOCKED'
+    carriedReason = 'Carried forward from a prior compliance BLOCKED disposition for this party name.'
+  } else if (normalized) {
     // Pull all SDN entries whose normalized_name shares at least one token
     const firstToken = normalized.split(' ')[0]
     const sdnRows = await q(
@@ -88,23 +111,33 @@ export async function screenOfac(
     if (hits.length > 0) {
       result = 'POTENTIAL_HIT'
       matchDetails = hits.slice(0, 10)
+
+      if (priorDisposition === 'CLEARED') {
+        // A reviewer already cleared this exact party name; do not re-block
+        // bind on a repeat fuzzy match, but keep the match details on record.
+        result = 'CLEAR'
+        carriedDisposition = 'CLEARED'
+        carriedReason = 'Auto-cleared: matches a party name previously reviewed and cleared by compliance.'
+      }
     }
   }
 
   // Record the screen
   const screenRes = await q(
     `INSERT INTO ofac_screens
-       (tenant_id, party_name, policy_id, quote_id, result, match_details, disposition)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+       (tenant_id, party_name, normalized_party_name, policy_id, quote_id, result, match_details, disposition, disposition_reason, reviewed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, CASE WHEN $8 IN ('CLEARED','BLOCKED') THEN now() ELSE NULL END)
      RETURNING screen_id`,
     [
       tenantId,
       partyName,
+      normalized || null,
       opts.policyId || null,
       opts.quoteId || null,
       result,
       matchDetails ? JSON.stringify(matchDetails) : null,
-      result === 'CLEAR' ? 'CLEARED' : 'PENDING'
+      carriedDisposition !== 'PENDING' ? carriedDisposition : (result === 'CLEAR' ? 'CLEARED' : 'PENDING'),
+      carriedReason
     ]
   )
 

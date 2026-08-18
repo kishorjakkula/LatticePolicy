@@ -7,6 +7,7 @@ import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { formsAdminRoutes } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
+import { complianceAdminRoutes } from './compliance-admin.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
 import { notificationTemplatesRoutes } from '../notificationTemplates.js'
 import {
@@ -70,6 +71,7 @@ adminRoutes.use('/forms', requirePermission('admin.forms.read'), formsAdminRoute
 adminRoutes.use('/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
 adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
 adminRoutes.use('/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
+adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
