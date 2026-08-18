@@ -32,6 +32,7 @@ import {
   type PolicyDocumentPacket,
 } from './document-generation.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,8 @@ export async function bindQuote(
   quoteId: string,
   body: any,
   updatedBy: string,
-  actorId?: string | null
+  actorId?: string | null,
+  actor?: { roles?: string[]; permissions?: string[] } | null
 ): Promise<BindQuoteResult> {
   const overrideReason =
     body && typeof body.overrideReason === 'string'
@@ -202,22 +204,6 @@ export async function bindQuote(
   }
 
   // ── 3. UW validation ────────────────────────────────────────────────────────
-  if (quote.uw) {
-    if (quote.uw.decision === 'Decline') {
-      throw new BadRequestError(
-        'UW_DECLINED',
-        `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
-      )
-    }
-    if (quote.uw.decision === 'Refer' && !overrideReason) {
-      throw new BadRequestError(
-        'UW_OVERRIDE_REQUIRED',
-        'Underwriting decision is Refer. Provide overrideReason to bind.'
-      )
-    }
-  }
-
-  // ── 4. OFAC screening ───────────────────────────────────────────────────────
   const insuredDisplayName = (
     (quote.payload?.insureds?.primary?.firstName || '') +
     ' ' +
@@ -226,6 +212,44 @@ export async function bindQuote(
       '')
   ).trim()
 
+  let referralId: string | null = null
+  if (quote.uw) {
+    if (quote.uw.decision === 'Decline') {
+      throw new BadRequestError(
+        'UW_DECLINED',
+        `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
+      )
+    }
+    if (quote.uw.decision === 'Refer') {
+      const gate = await withTenantTx(tenantId, (innerDb) =>
+        resolveReferralGateForActor(
+          innerDb,
+          tenantId,
+          {
+            quoteId,
+            transactionType: 'NewBusiness',
+            productCode: quote.payload?.productCode || null,
+            insuredName: insuredDisplayName || null,
+            effectiveDate: quote.payload?.effectiveDate || null,
+            reasons: quote.uw.reasons || [],
+            createdBy: normalizedActorId,
+          },
+          { id: normalizedActorId, username: updatedBy, roles: actor?.roles, permissions: actor?.permissions },
+          overrideReason
+        )
+      )
+
+      if (gate.blocked) {
+        throw new BadRequestError(
+          'UW_REFERRAL_REQUIRED',
+          `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before bind.`
+        )
+      }
+      referralId = gate.referral.referralId
+    }
+  }
+
+  // ── 4. OFAC screening ───────────────────────────────────────────────────────
   if (insuredDisplayName) {
     try {
       const ofacResult = await withTenantTx(tenantId, (innerDb) =>
@@ -307,6 +331,7 @@ export async function bindQuote(
   const transactionMetadata: any = {
     sourceQuoteId: quoteId,
     transactionNumber,
+    ...(referralId ? { uwReferralId: referralId } : {}),
     ...(primaryCustomerLink?.customerId
       ? { customerId: primaryCustomerLink.customerId }
       : {}),
@@ -325,7 +350,7 @@ export async function bindQuote(
     quote.payload?.jurisdiction ||
     (quote.payload?.state ? { code: quote.payload.state } : null)
   const uwDecision = quote.uw?.decision || null
-  const uwOverride = quote.uw?.decision === 'Refer' && !!overrideReason
+  const uwOverride = quote.uw?.decision === 'Refer' && !!referralId
   const termDetails: any = { effectiveDate, expirationDate, termMonths: months }
   let documentPacket: PolicyDocumentPacket = { forms: [], documents: [] }
 
@@ -421,6 +446,13 @@ export async function bindQuote(
       payload: quote.payload,
       transactionNumber,
     })
+
+    if (referralId) {
+      await q(
+        'UPDATE underwriting_referrals SET policy_id=$1, transaction_id=$2, version_id=$3, updated_at=now() WHERE tenant_id=$4 AND referral_id=$5',
+        [policyId, transactionId, versionId, tenantId, referralId]
+      )
+    }
 
     // Rating
     await insertRating(txDb, {
