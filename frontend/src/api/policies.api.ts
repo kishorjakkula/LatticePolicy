@@ -3,7 +3,8 @@ import { request, tenantId, authHeaders, handleUnauthorized, API_PREFIX } from '
 
 export const issuePolicy = (id: string) => request<any>('POST', `/v1/policies/${id}/issue`)
 
-export const getPolicy = (id: string) => request<any>('GET', `/v1/policies/${id}`)
+export const getPolicy = (id: string, asOf?: string) =>
+  request<any>('GET', `/v1/policies/${id}${asOf ? `?asOf=${encodeURIComponent(asOf)}` : ''}`)
 
 export const getPolicyVersions = (id: string) => request<any[]>('GET', `/v1/policies/${id}/versions`)
 
@@ -73,6 +74,16 @@ export const deleteAdditionalInterest = (policyId: string, aiId: string) =>
 
 export const getCancellationReasonCodes = () =>
   request<{ items: any[] }>('GET', '/v1/reference/cancellation-reason-codes')
+
+export const downloadPolicyDocument = async (policyId: string, documentId: string): Promise<Blob> => {
+  const url = `${config.apiBaseUrl}${API_PREFIX}/v1/policies/${encodeURIComponent(policyId)}/documents/${encodeURIComponent(documentId)}/content`
+  const res = await fetch(url, { headers: { 'X-Tenant': tenantId(), 'X-Api-Version': config.apiVersion, ...authHeaders() } })
+  if (!res.ok) {
+    if (res.status === 401) handleUnauthorized()
+    throw new Error(`Document download failed ${res.status}`)
+  }
+  return await res.blob()
+}
 
 export const apiDetails = {
   getVersionDetails: (policyId: string, versionId: string) => request<any>('GET', `/v1/policies/${policyId}/versions/${versionId}/details`),

@@ -34,6 +34,7 @@ import {
   formatDisplayDate as tt,
   formatDisplayDateTime as nt,
 } from "../../shared/dateDisplay";
+import { TransactionAuditPanel as AuditPanel } from "./TransactionAuditPanel";
 function je(n) {
   if (!n) return "";
   const t = new Date(n);
@@ -70,12 +71,35 @@ function yt(n) {
             ? "renew"
             : "quote";
 }
+function findAuditTransaction(timeline, version) {
+  const transactions = Array.isArray(timeline?.transactions) ? timeline.transactions : [];
+  if (version?.transactionId) {
+    const byId = transactions.find((tx) => tx?.transactionId === version.transactionId);
+    if (byId) return byId;
+  }
+  const num = String(version?.transactionNumber || "").trim();
+  if (num) {
+    const byNumber = transactions.find(
+      (tx) => String(tx?.metadata?.transactionNumber || "").trim() === num,
+    );
+    if (byNumber) return byNumber;
+  }
+  return null;
+}
+function findAuditLedgerEvents(timeline, version) {
+  const ledger = Array.isArray(timeline?.ledger) ? timeline.ledger : [];
+  const num = String(version?.transactionNumber || "").trim();
+  return ledger.filter(
+    (ev) => String(ev?.payload?.transactionNumber || "").trim() === num,
+  );
+}
 function Tt() {
   const { id: n } = Ye(),
     t = Ge(),
     a = Qe(),
     [i, l] = v.useState(null),
     [o, d] = v.useState(!1),
+    [expandedVersionId, setExpandedVersionId] = v.useState(null),
     [c, x] = v.useState("updatedDate"),
     [N, S] = v.useState("desc"),
     [u, m] = v.useState({
@@ -779,6 +803,10 @@ function Tt() {
                             children: E("amount", "Amount"),
                           }),
                         }),
+                        e.jsx("th", {
+                          "data-mobile-label": "Audit",
+                          children: "Audit",
+                        }),
                       ],
                     }),
                   }),
@@ -787,13 +815,14 @@ function Tt() {
                       W.length === 0 &&
                         e.jsx("tr", {
                           children: e.jsx("td", {
-                            colSpan: 9,
+                            colSpan: 10,
                             className: "muted",
                             children: "No versions",
                           }),
                         }),
-                      $.rows.map((s) =>
-                        e.jsxs(
+                      $.rows.flatMap((s) => {
+                        const isExpanded = expandedVersionId === s.versionId;
+                        const row = e.jsxs(
                           "tr",
                           {
                             children: [
@@ -834,11 +863,44 @@ function Tt() {
                                   : void 0,
                                 children: De(s.premium?.total),
                               }),
+                              e.jsx("td", {
+                                children: e.jsx("button", {
+                                  type: "button",
+                                  className: "table-link-button",
+                                  onClick: () =>
+                                    setExpandedVersionId(
+                                      isExpanded ? null : s.versionId,
+                                    ),
+                                  children: isExpanded ? "Hide" : "Audit",
+                                }),
+                              }),
                             ],
                           },
                           s.versionId,
-                        ),
-                      ),
+                        );
+                        if (!isExpanded) return [row];
+                        return [
+                          row,
+                          e.jsx(
+                            "tr",
+                            {
+                              children: e.jsx("td", {
+                                colSpan: 10,
+                                children: e.jsx(AuditPanel, {
+                                  policyId: r.policyId,
+                                  version: s,
+                                  timelineTransaction: findAuditTransaction(
+                                    me,
+                                    s,
+                                  ),
+                                  ledgerEvents: findAuditLedgerEvents(me, s),
+                                }),
+                              }),
+                            },
+                            `${s.versionId}-audit`,
+                          ),
+                        ];
+                      }),
                     ],
                   }),
                 ],
