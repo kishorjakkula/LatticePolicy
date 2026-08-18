@@ -20,6 +20,10 @@ export const queryKeys = {
     all: () => ['users'] as const,
     list: () => ['users', 'list'] as const,
   },
+  compliance: {
+    eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
+    ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
+  },
   customers: {
     all: () => ['customers'] as const,
     search: (opts: Record<string, any>) => ['customers', 'search', opts] as const,

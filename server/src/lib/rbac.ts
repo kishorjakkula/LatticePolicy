@@ -68,6 +68,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.customers.view', scope: 'menu', resourceKey: 'admin.customers', actionKey: 'view', label: 'Admin Menu: Customers', description: 'View Customers section in Administration', sortOrder: 36 },
   { permissionCode: 'menu.admin.onboarding.view', scope: 'menu', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Admin Menu: Agency Onboarding', description: 'View agency and broker onboarding section in Administration', sortOrder: 37 },
   { permissionCode: 'menu.admin.notifications.view', scope: 'menu', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Admin Menu: Notifications', description: 'View Notification Templates section in Administration', sortOrder: 38 },
+  { permissionCode: 'menu.admin.compliance.view', scope: 'menu', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Admin Menu: Compliance', description: 'View Compliance section in Administration', sortOrder: 39 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -83,6 +84,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.customers.view', scope: 'page', resourceKey: 'admin.customers', actionKey: 'view', label: 'Page: Admin Customers', description: 'Access customer administration page', sortOrder: 200 },
   { permissionCode: 'page.admin.onboarding.view', scope: 'page', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Page: Admin Agency Onboarding', description: 'Access agency and broker onboarding administration page', sortOrder: 210 },
   { permissionCode: 'page.admin.notifications.view', scope: 'page', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Page: Admin Notification Templates', description: 'Access notification template administration page', sortOrder: 215 },
+  { permissionCode: 'page.admin.compliance.view', scope: 'page', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Page: Admin Compliance', description: 'Access compliance administration page', sortOrder: 216 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -118,7 +120,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'customer.portal.read', scope: 'api', resourceKey: 'customer.portal', actionKey: 'read', label: 'Customer Portal API: Read', description: 'Read own customer portal policies, declarations, and ID cards', sortOrder: 510 },
 
   { permissionCode: 'admin.notifications.read', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'read', label: 'Admin API: Notifications Read', description: 'Read notification templates and render previews', sortOrder: 520 },
-  { permissionCode: 'admin.notifications.manage', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'manage', label: 'Admin API: Notifications Manage', description: 'Create, edit, and activate/deactivate notification templates', sortOrder: 530 }
+  { permissionCode: 'admin.notifications.manage', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'manage', label: 'Admin API: Notifications Manage', description: 'Create, edit, and activate/deactivate notification templates', sortOrder: 530 },
+  { permissionCode: 'admin.compliance.read', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'read', label: 'Admin API: Compliance Read', description: 'Read state/product eligibility records and OFAC screen queue', sortOrder: 540 },
+  { permissionCode: 'admin.compliance.manage', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'manage', label: 'Admin API: Compliance Manage', description: 'Manage eligibility records, import OFAC list entries, and disposition OFAC screens', sortOrder: 550 }
 ]
 
 type RoleSeed = {
@@ -202,15 +206,19 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
   {
     roleCode: 'compliance_admin',
     roleName: 'Compliance Administrator',
-    description: 'Approves and activates form filings',
+    description: 'Approves and activates form filings; manages state/product eligibility and OFAC screening review',
     isSystem: true,
     permissionCodes: [
       'menu.admin.view',
       'menu.admin.forms.view',
+      'menu.admin.compliance.view',
       'page.admin.forms.view',
+      'page.admin.compliance.view',
       'admin.forms.read',
       'admin.forms.manage',
-      'admin.forms.approve'
+      'admin.forms.approve',
+      'admin.compliance.read',
+      'admin.compliance.manage'
     ]
   },
   {

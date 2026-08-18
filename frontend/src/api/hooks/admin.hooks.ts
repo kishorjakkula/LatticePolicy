@@ -45,6 +45,61 @@ export function useDeleteUserMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Compliance
+// ---------------------------------------------------------------------------
+
+export function useEligibility(opts: { productCode?: string; stateCode?: string; status?: string } = {}) {
+  return useQuery({
+    queryKey: queryKeys.compliance.eligibility(opts),
+    queryFn: () => adminApi.listEligibility(opts),
+  })
+}
+
+export function useCreateEligibilityMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createEligibility(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'eligibility'] })
+    },
+  })
+}
+
+export function useUpdateEligibilityMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: any }) => adminApi.updateEligibility(id, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'eligibility'] })
+    },
+  })
+}
+
+export function useOfacScreens(disposition?: string) {
+  return useQuery({
+    queryKey: queryKeys.compliance.ofacScreens(disposition),
+    queryFn: () => adminApi.listOfacScreens(disposition),
+  })
+}
+
+export function useDispositionOfacScreenMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ screenId, disposition, reason }: { screenId: string; disposition: string; reason: string }) =>
+      adminApi.dispositionOfacScreen(screenId, { disposition, reason }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'ofac-screens'] })
+    },
+  })
+}
+
+export function useImportOfacSdnListMutation() {
+  return useMutation({
+    mutationFn: (entries: any[]) => adminApi.importOfacSdnList(entries),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Security
 // ---------------------------------------------------------------------------
 
