@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb, initDb } from '../db.js'
 import { createOrRateQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
-import { decideReferral } from '../services/uw-referral.service.js'
+import { decideReferral, listReferrals } from '../services/uw-referral.service.js'
 
 const UW_USER_ID = '22222222-2222-4222-a222-222222222222'
 
@@ -163,5 +163,45 @@ describe('underwriting referral workflow', () => {
     expect(referralRow.rows[0].status).toBe('Approved')
     expect(referralRow.rows[0].decided_by).toBe(UW_USER_ID)
     expect(referralRow.rows[0].decision_reason).toBe('Underwriter reviewed and approved inline')
+  })
+
+  it('reports the full filtered referral total across pages', async () => {
+    await initDb()
+    const db = getDb()
+    const tenantId = 'sample-carrier'
+
+    await db!.query(
+      `INSERT INTO tenants (tenant_id, name, default_locale, default_currency)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name`,
+      [tenantId, 'Sample Carrier', 'en-US', 'USD']
+    )
+
+    await db!.query(
+      `INSERT INTO underwriting_referrals
+         (tenant_id, transaction_type, status, product_code, insured_name, reasons, created_at)
+       VALUES
+         ($1, 'NewBusiness', 'Open', 'personal-auto', 'Paged One', ARRAY['age'], now() - interval '3 seconds'),
+         ($1, 'Renew', 'Open', 'personal-auto', 'Paged Two', ARRAY['losses'], now() - interval '2 seconds'),
+         ($1, 'Rewrite', 'Open', 'personal-auto', 'Paged Three', ARRAY['vehicle'], now() - interval '1 second')`,
+      [tenantId]
+    )
+
+    const page = await listReferrals(db! as any, tenantId, { status: 'Open', page: 1, pageSize: 2 })
+
+    expect(page.items).toHaveLength(2)
+    expect(page.total).toBeGreaterThanOrEqual(3)
+    expect(page.total).toBe(
+      Number(
+        (
+          await db!.query(
+            `SELECT count(*) AS total
+               FROM underwriting_referrals
+              WHERE tenant_id = $1 AND status = 'Open'`,
+            [tenantId]
+          )
+        ).rows[0].total
+      )
+    )
   })
 })

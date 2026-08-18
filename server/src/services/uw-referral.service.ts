@@ -202,8 +202,15 @@ export async function listReferrals(
       LIMIT ${pageSize} OFFSET ${offset}`,
     [tenantId, statusFilter]
   )
+  const totalResult = await q(
+    `SELECT count(*)::int AS total
+       FROM underwriting_referrals
+      WHERE tenant_id = $1
+        AND ($2::text IS NULL OR status = $2)`,
+    [tenantId, statusFilter]
+  )
   const items = r.rows.map((row: any) => ({ ...mapRow(row), policyNumber: row.policy_number || null }))
-  return { items, total: items.length, page, pageSize }
+  return { items, total: Number(totalResult.rows[0]?.total || 0), page, pageSize }
 }
 
 export async function getReferral(db: DrizzleDB, tenantId: string, referralId: string) {

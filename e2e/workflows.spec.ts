@@ -31,7 +31,7 @@ test.describe('browser workflows', () => {
 
     await page.goto('/uw/queue')
     await expect(page.getByRole('heading', { name: 'UW Referrals' })).toBeVisible()
-    await expect(page.getByText('Refer').first()).toBeVisible()
+    await expect(page.getByText('Open').first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Approve' }).first()).toBeVisible()
   })
 
