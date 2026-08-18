@@ -137,6 +137,7 @@ Important lifecycle flows:
 - Tenant overrides are loaded from `tenants/<tenant>/overrides`.
 - Rating checks tenant/product/state published workbook models first, then falls back to legacy/product YAML rating logic.
 - Rating calc traces are important for explainability and audit.
+- See `docs/PRODUCT_PACK_CONTRACT.md` for the full contract and framework code paths to update when adding a new product pack.
 
 ## Working Guidance
 
@@ -160,6 +161,7 @@ Important lifecycle flows:
 - `docs/AI_CONTRIBUTOR_PROCESS.md`: process for AI-assisted contributors and task notes.
 - `docs/ROADMAP.md`: carrier and reinsurance platform roadmap linked to GitHub epics.
 - `docs/API.md`: MVP endpoint conventions.
+- `docs/PRODUCT_PACK_CONTRACT.md`: contract and checklist for adding a new product pack.
 - `docs/DOMAIN.md`: core domain summary.
 - `docs/MULTITENANCY.md`: tenant strategy.
 - `docs/DATA_MODEL_ERD.md`: relational PAS data model.
