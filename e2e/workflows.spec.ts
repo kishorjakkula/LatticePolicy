@@ -31,8 +31,9 @@ test.describe('browser workflows', () => {
 
     await page.goto('/uw/queue')
     await expect(page.getByRole('heading', { name: 'UW Referrals' })).toBeVisible()
-    await expect(page.getByText('Open').first()).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Approve' }).first()).toBeVisible()
+    const referralTable = page.getByRole('table')
+    await expect(referralTable.getByText('Open', { exact: true }).first()).toBeVisible()
+    await expect(referralTable.getByRole('button', { name: 'Approve' }).first()).toBeVisible()
   })
 
   test('customer can open portal list and policy summary', async ({ page, request }) => {
