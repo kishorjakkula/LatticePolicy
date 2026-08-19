@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/66
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/158
 
 ## Summary
 
@@ -51,8 +51,8 @@ npm run typecheck
 
 ## Follow-Ups Or Risks
 
-- Section 7 references issue #68 (production runbooks), which is still open
-  at the time of this change; link the actual runbook doc from the kit once
-  it merges.
+- Section 7 depends on `docs/PRODUCTION_RUNBOOKS.md` for detailed
+  production release, rollback, backup/restore, and incident response
+  procedures; keep those docs in sync as production automation improves.
 - The ACORD/GRLC and reinsurance worksheets are planning aids only until
   #60-#64 land; keep them in sync with that implementation once it starts.

@@ -188,12 +188,11 @@ Confirm each integration boundary before production go-live:
 - **(Production)** Enterprise SSO/external identity mapping — open roadmap
   work, see [#65](https://github.com/kishorjakkula/LatticePolicy/issues/65)
   (Phase 6, `docs/ROADMAP.md`).
-- **(Production)** Production deployment, backup, restore, and disaster
-  recovery runbooks — open roadmap work, see
-  [#68](https://github.com/kishorjakkula/LatticePolicy/issues/68). Until
-  that runbook set lands, define and test your own backup/restore and
-  rollback procedure before go-live; do not treat this kit as a substitute
-  for a tested DR plan.
+- **(Production)** Follow `docs/PRODUCTION_RUNBOOKS.md` for deployment
+  promotion, migration execution/rollback, database backup/restore,
+  Redis/cache recovery, health checks, incident response, and RPO/RTO
+  validation. Treat the runbook's restore-test and smoke-test checklist as
+  go-live prerequisites, not optional launch cleanup.
 - **(Production)** Run `npm run security:audit` and resolve findings before
   go-live; keep it in CI per `docs/TEST_PLAN.md`.
 
