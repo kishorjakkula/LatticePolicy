@@ -809,6 +809,24 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
         seedStep = `insert issue version ${productCode}`
         await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, uw_decision, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)',
           [tenantId, policyId, issueVid, eff, 'NB', premium.total?.amount || 0, premium.fees?.amount || 0, premium.taxes?.amount || 0, 'USD', uw.decision, JSON.stringify(s.payload)])
+        if (uw.decision === 'Refer') {
+          seedStep = 'insert underwriting referral'
+          await q(
+            `INSERT INTO underwriting_referrals
+               (tenant_id, policy_id, version_id, product_code, insured_name, effective_date, transaction_type, status, priority, reasons, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,'NewBusiness','Open','Normal',$7,$8)`,
+            [
+              tenantId,
+              policyId,
+              issueVid,
+              productCode,
+              s.payload?.insureds?.primary?.displayName || null,
+              eff,
+              uw.reasons || [],
+              null,
+            ]
+          )
+        }
         const risk = s.payload.risks?.[0]
         if (s.payload.productCode === 'personal-auto') {
           seedStep = 'insert auto vehicle'

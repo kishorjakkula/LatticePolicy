@@ -303,7 +303,10 @@ quoteRoutes.post('/quotes/:id/bind', validate(BindQuoteSchema), async (req, res,
     const db = getDb()
 
     if (db) {
-      const result = await bindQuote(db as any, tenantId, id, req.body, updatedBy, req.user?.id || null)
+      const result = await bindQuote(db as any, tenantId, id, req.body, updatedBy, req.user?.id || null, {
+        roles: req.user?.roles,
+        permissions: req.user?.permissions,
+      })
       return ok(res, {
         policyId: result.policyId,
         policyNumber: result.policyNumber,
