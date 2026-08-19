@@ -126,7 +126,7 @@ Suggested Wiki pages:
 - [ ] Add project fields and views.
 - [ ] Enable public issue creation for the repository unless maintainers are
   intentionally running invite-only planning.
-- [ ] Run the `Sync Roadmap Metadata` GitHub Actions workflow with
+- [x] Run the `Sync Roadmap Metadata` GitHub Actions workflow with
   `dry_run=false` to create or update labels from `.github/labels.yml` and
   milestones from `.github/milestones.yml`.
 - [ ] Apply labels and milestones to roadmap issues.
