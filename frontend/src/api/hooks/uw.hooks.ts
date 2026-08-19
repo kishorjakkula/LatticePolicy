@@ -6,29 +6,55 @@ import { queryKeys } from '../queryKeys'
 // UW referrals
 // ---------------------------------------------------------------------------
 
-export function useUwReferrals(page: number, pageSize: number) {
+export function useUwReferrals(page: number, pageSize: number, status?: string) {
   return useQuery({
-    queryKey: queryKeys.uwReferrals.list(page, pageSize),
-    queryFn: () => apiUw.listReferrals(page, pageSize),
+    queryKey: queryKeys.uwReferrals.list(page, pageSize, status),
+    queryFn: () => apiUw.listReferrals(page, pageSize, status),
   })
 }
 
-export function useApproveReferralMutation() {
+export function useUwReferral(referralId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.uwReferrals.detail(referralId || ''),
+    queryFn: () => apiUw.getReferral(referralId as string),
+    enabled: !!referralId,
+  })
+}
+
+export function useAssignReferralMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ versionId, reason }: { versionId: string; reason: string }) =>
-      apiUw.approveReferral(versionId, reason),
+    mutationFn: ({ referralId, assignedTo }: { referralId: string; assignedTo: string }) =>
+      apiUw.assignReferral(referralId, assignedTo),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.uwReferrals.all() })
     },
   })
 }
 
-export function useDeclineReferralMutation() {
+export function useAddReferralCommentMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ versionId, reason }: { versionId: string; reason: string }) =>
-      apiUw.declineReferral(versionId, reason),
+    mutationFn: ({ referralId, text }: { referralId: string; text: string }) =>
+      apiUw.addReferralComment(referralId, text),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.uwReferrals.all() })
+    },
+  })
+}
+
+export function useDecideReferralMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      referralId,
+      decision,
+      reason,
+    }: {
+      referralId: string
+      decision: 'Approved' | 'Declined' | 'InfoRequested'
+      reason?: string
+    }) => apiUw.decideReferral(referralId, decision, reason),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.uwReferrals.all() })
     },

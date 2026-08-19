@@ -4,30 +4,40 @@ import { ActionButton } from '../../components/ActionButton'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
-import { useUwReferrals, useApproveReferralMutation, useDeclineReferralMutation } from '../../api/hooks'
+import { useUwReferrals, useDecideReferralMutation } from '../../api/hooks'
+
+const STATUS_BADGE: Record<string, string> = {
+  Open: 'yellow',
+  InfoRequested: 'yellow',
+  Approved: 'green',
+  Declined: 'red',
+  Withdrawn: 'gray',
+}
 
 export function UwQueue() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [statusFilter, setStatusFilter] = useState<string>('Open')
   const navigate = useNavigate()
   const canDecide = hasPermission(user, 'uw.referrals.decide')
 
-  const { data, isLoading, error } = useUwReferrals(page, pageSize)
+  const { data, isLoading, error } = useUwReferrals(page, pageSize, statusFilter || undefined)
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
-  const approveMutation = useApproveReferralMutation()
-  const declineMutation = useDeclineReferralMutation()
+  const decideMutation = useDecideReferralMutation()
 
-  const onApprove = async (v: any) => {
-    const reason = window.prompt('Override reason (required):') || ''
-    if (!reason.trim()) return
-    try { await approveMutation.mutateAsync({ versionId: v.versionId, reason }) } catch (e: any) { alert(e.message || String(e)) }
-  }
-  const onDecline = async (v: any) => {
-    const reason = window.prompt('Decline note (optional):') || ''
-    try { await declineMutation.mutateAsync({ versionId: v.versionId, reason }) } catch (e: any) { alert(e.message || String(e)) }
+  const onDecide = async (v: any, decision: 'Approved' | 'Declined' | 'InfoRequested') => {
+    const reason = window.prompt(
+      decision === 'Approved' ? 'Approval reason (required):' : 'Decision note:'
+    ) || ''
+    if (decision === 'Approved' && !reason.trim()) return
+    try {
+      await decideMutation.mutateAsync({ referralId: v.referralId, decision, reason })
+    } catch (e: any) {
+      alert(e.message || String(e))
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -47,6 +57,17 @@ export function UwQueue() {
           <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>Items requiring underwriter approval</p>
         </div>
         <div className="ps-page-header-actions">
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+            style={{ width: 'auto', height: 32, minHeight: 32, fontSize: 13 }}
+          >
+            <option value="Open">Open</option>
+            <option value="InfoRequested">Info Requested</option>
+            <option value="Approved">Approved</option>
+            <option value="Declined">Declined</option>
+            <option value="">All</option>
+          </select>
           <ActionButton variant="success" onClick={() => navigate('/wizard')}>+ New Quote</ActionButton>
         </div>
       </div>
@@ -58,24 +79,29 @@ export function UwQueue() {
           <div className="ps-table-card">
             <table className="table">
               <thead>
-                <tr><th>Policy #</th><th>Product</th><th>Version</th><th>Eff</th><th>Processed</th><th>Txn</th><th>Submitted By</th><th>UW</th><th></th></tr>
+                <tr><th>Policy #</th><th>Product</th><th>Txn</th><th>Eff</th><th>Reasons</th><th>Status</th><th>Assigned</th><th></th></tr>
               </thead>
               <tbody>
-                {items.length === 0 && <tr><td colSpan={9} className="muted" style={{ textAlign: 'center', padding: '24px' }}>No referrals pending</td></tr>}
+                {items.length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: 'center', padding: '24px' }}>No referrals found</td></tr>}
                 {items.map((v: any) => (
-                  <tr key={v.versionId}>
-                    <td>{v.policyNumber}</td>
-                    <td>{v.productCode}</td>
-                    <td className="muted">{v.versionId.slice(0,8)}</td>
-                    <td>{formatDisplayDate(v.effectiveDate, { fallback: '-' })}</td>
-                    <td>{formatDisplayDate(v.processedDate, { fallback: '-' })}</td>
+                  <tr key={v.referralId}>
+                    <td>{v.policyNumber || <span className="muted">Pre-bind (quote)</span>}</td>
+                    <td>{v.productCode || '-'}</td>
                     <td>{v.transactionType}</td>
-                    <td>{v.submittedBy || '-'}</td>
-                    <td><span className="badge yellow">Refer</span></td>
+                    <td>{formatDisplayDate(v.effectiveDate, { fallback: '-' })}</td>
+                    <td className="muted" style={{ maxWidth: 260 }}>{(v.reasons || []).join('; ') || '-'}</td>
+                    <td><span className={`badge ${STATUS_BADGE[v.status] || 'gray'}`}>{v.status}</span></td>
+                    <td className="muted">{v.assignedTo || '-'}</td>
                     <td style={{ display:'flex', gap: 6 }}>
-                      <ActionButton variant="secondary" size="sm" onClick={() => navigate(`/policies/${v.policyId}`)}>Open</ActionButton>
-                      <ActionButton variant="success" size="sm" onClick={() => onApprove(v)} disabled={!canDecide}>Approve</ActionButton>
-                      <ActionButton variant="secondary" size="sm" onClick={() => onDecline(v)} disabled={!canDecide}>Decline</ActionButton>
+                      {v.policyId && (
+                        <ActionButton variant="secondary" size="sm" onClick={() => navigate(`/policies/${v.policyId}`)}>Open</ActionButton>
+                      )}
+                      {(v.status === 'Open' || v.status === 'InfoRequested') && (
+                        <>
+                          <ActionButton variant="success" size="sm" onClick={() => onDecide(v, 'Approved')} disabled={!canDecide}>Approve</ActionButton>
+                          <ActionButton variant="secondary" size="sm" onClick={() => onDecide(v, 'Declined')} disabled={!canDecide}>Decline</ActionButton>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
