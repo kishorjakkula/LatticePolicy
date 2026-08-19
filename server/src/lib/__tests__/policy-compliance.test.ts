@@ -8,8 +8,12 @@ import {
   screenOfac,
 } from '../policy-compliance.js'
 
-function createQuery(handlers: Array<{ match: string; rows: any[] }>) {
-  return async (text: string, _params?: any[]) => {
+function createQuery(
+  handlers: Array<{ match: string; rows: any[] }>,
+  calls: Array<{ text: string; params?: any[] }> = []
+) {
+  return async (text: string, params?: any[]) => {
+    calls.push({ text, params })
     for (const handler of handlers) {
       if (text.includes(handler.match)) {
         return { rows: handler.rows, rowCount: handler.rows.length }
@@ -182,6 +186,7 @@ describe('screenOfac', () => {
   })
 
   it('auto-clears a fresh fuzzy match when the party was previously cleared by a reviewer', async () => {
+    const calls: Array<{ text: string; params?: any[] }> = []
     const q = createQuery([
       { match: 'FROM ofac_screens', rows: [{ disposition: 'CLEARED' }] },
       {
@@ -189,8 +194,9 @@ describe('screenOfac', () => {
         rows: [{ entry_id: 'sdn-1', name: 'Jane Cleared', normalized_name: 'JANE CLEARED', aliases: [], country: 'XX', list_type: 'SDN' }],
       },
       { match: 'INSERT INTO ofac_screens', rows: [{ screen_id: 'screen-4' }] },
-    ])
+    ], calls)
     const result = await screenOfac(q as any, 'tenant-1', 'Jane Cleared')
     expect(result.result).toBe('CLEAR')
+    expect(calls[0].text).toMatch(/reviewed_by IS NOT NULL/)
   })
 })
