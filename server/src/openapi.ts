@@ -449,6 +449,7 @@ const componentSchemas: Record<string, any> = {
     type: 'object',
     properties: {
       versionId: { type: 'string', format: 'uuid' },
+      transactionId: { type: 'string', format: 'uuid', nullable: true },
       transactionNumber: { type: 'string' },
       transactionType: { type: 'string' },
       effectiveDate: { type: 'string', format: 'date' },

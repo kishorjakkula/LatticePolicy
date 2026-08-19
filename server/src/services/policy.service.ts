@@ -659,6 +659,7 @@ export async function getPolicyVersions(
     toRawQuery(db)(
       `SELECT
          pv.version_id,
+         pv.transaction_id,
          pv.effective_date,
          COALESCE(
            NULLIF(pt.term->>'effectiveDate', '')::date,
@@ -725,6 +726,7 @@ export async function getPolicyVersions(
     const byCoverage = Array.isArray(row.rating_components) ? row.rating_components : []
     return {
       versionId: row.version_id,
+      transactionId: row.transaction_id || null,
       effectiveDate: row.effective_date,
       policyEffectiveDate: row.policy_effective_date || null,
       expirationDate: row.expiration_date || null,
