@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/53
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/161
 
 ## Summary
 
@@ -89,8 +89,8 @@ npm run test:integration   # via scripts/test-integration.sh, disposable Postgre
 ```
 
 All green: 70 frontend + 113 server unit tests, 26/26 integration tests
-(including the 2 new ones), clean build, no typecheck script configured at
-the workspace level (`npm run typecheck` is a no-op in this repo).
+(including the 2 new ones), clean build, and clean root typecheck
+(`npm run typecheck`).
 
 ## Follow-Ups Or Risks
 
