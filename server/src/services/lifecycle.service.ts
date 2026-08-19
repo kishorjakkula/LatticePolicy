@@ -27,6 +27,7 @@ import {
   buildPolicyDocumentPacket,
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -716,9 +717,6 @@ export async function renewPolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw = roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
   const overrideReason = body && typeof body.overrideReason === 'string' ? body.overrideReason.trim() : ''
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
@@ -743,7 +741,34 @@ export async function renewPolicy(
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
+  let referralId: string | null = null
+  if (uw.decision === 'Refer') {
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Renew',
+        productCode: policyProductCode(policyRow),
+        insuredName: payload?.insureds?.primary
+          ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: nextEff,
+        reasons: uw.reasons || [],
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = uw.decision === 'Refer' && !!referralId
   const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
@@ -761,7 +786,7 @@ export async function renewPolicy(
     meta: {
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       submittedBy: submittedBy || undefined,
       transactionNumber,
     },
@@ -828,7 +853,7 @@ export async function renewPolicy(
     createdBy: actor?.id || null,
     metadata: {
       renewal: true,
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
     },
@@ -861,11 +886,18 @@ export async function renewPolicy(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload,
     transactionNumber,
   })
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   await insertRating(db, {
     tenantId,
@@ -975,12 +1007,6 @@ export async function rewritePolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw =
-    roles.includes('underwriter') ||
-    roles.includes('admin') ||
-    permissions.includes('uw.referrals.decide')
   const overrideReason =
     body && typeof body.overrideReason === 'string' ? body.overrideReason.trim() : ''
   const overridePayload =
@@ -1016,7 +1042,34 @@ export async function rewritePolicy(
       `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`
     )
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
+  let referralId: string | null = null
+  if (uw.decision === 'Refer') {
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Rewrite',
+        productCode: policyProductCode(policyRow),
+        insuredName: payload?.insureds?.primary
+          ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: nextEff,
+        reasons: uw.reasons || [],
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = uw.decision === 'Refer' && !!referralId
   const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
@@ -1034,7 +1087,7 @@ export async function rewritePolicy(
     meta: {
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       submittedBy: submittedBy || undefined,
       rewrite: true,
       transactionNumber,
@@ -1112,7 +1165,7 @@ export async function rewritePolicy(
     createdBy: actor?.id || null,
     metadata: {
       rewrite: true,
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
     },
@@ -1145,11 +1198,18 @@ export async function rewritePolicy(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload,
     transactionNumber,
   })
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   await insertRating(db, {
     tenantId,

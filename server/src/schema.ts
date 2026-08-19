@@ -408,6 +408,32 @@ export const notes = pgTable('notes', {
   metadata: jsonb('metadata'),
 })
 
+export const underwritingReferrals = pgTable('underwriting_referrals', {
+  referralId: uuid('referral_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  quoteId: uuid('quote_id').references(() => quotes.quoteId, { onDelete: 'set null' }),
+  policyId: uuid('policy_id').references(() => policies.policyId, { onDelete: 'cascade' }),
+  transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'set null' }),
+  versionId: uuid('version_id').references(() => policyVersions.versionId, { onDelete: 'set null' }),
+  productCode: text('product_code'),
+  agencyId: uuid('agency_id'),
+  insuredName: text('insured_name'),
+  effectiveDate: date('effective_date'),
+  transactionType: text('transaction_type').notNull(),
+  status: text('status').notNull().default('Open'),
+  priority: text('priority').notNull().default('Normal'),
+  reasons: text('reasons').array(),
+  assignedTo: uuid('assigned_to'),
+  comments: jsonb('comments').notNull().default(sql`'[]'::jsonb`),
+  decision: text('decision'),
+  decidedBy: uuid('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  decisionReason: text('decision_reason'),
+  createdBy: uuid('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const uwDecisions = pgTable('uw_decisions', {
   decisionId: uuid('decision_id').primaryKey().default(sql`uuid_generate_v4()`),
   tenantId: text('tenant_id').notNull(),

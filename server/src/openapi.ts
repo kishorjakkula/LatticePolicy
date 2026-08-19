@@ -58,9 +58,13 @@ const routeDefs: RouteDef[] = [
   { method: 'post', path: '/v1/policies/{id}/renew', tag: 'Transactions', summary: 'Issue renewal' },
   { method: 'post', path: '/v1/policies/{id}/renew/preview', tag: 'Transactions', summary: 'Preview renewal' },
 
-  { method: 'get', path: '/v1/uw/referrals', tag: 'UW Queue', summary: 'List UW referrals' },
-  { method: 'patch', path: '/v1/uw/referrals/{versionId}/approve', tag: 'UW Queue', summary: 'Approve referral' },
-  { method: 'patch', path: '/v1/uw/referrals/{versionId}/decline', tag: 'UW Queue', summary: 'Decline referral' },
+  { method: 'get', path: '/v1/uw/referrals', tag: 'UW Queue', summary: 'List underwriting referrals' },
+  { method: 'get', path: '/v1/uw/referrals/{referralId}', tag: 'UW Queue', summary: 'Get an underwriting referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/assign', tag: 'UW Queue', summary: 'Assign a referral to an underwriter' },
+  { method: 'post', path: '/v1/uw/referrals/{referralId}/comments', tag: 'UW Queue', summary: 'Add a comment to a referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/decide', tag: 'UW Queue', summary: 'Approve, decline, or request info on a referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/approve', tag: 'UW Queue', summary: 'Approve referral (alias for decide)' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/decline', tag: 'UW Queue', summary: 'Decline referral (alias for decide)' },
 
   { method: 'get', path: '/v1/products/{code}/config', tag: 'Products', summary: 'Get product config' },
   { method: 'get', path: '/v1/products/{code}/form', tag: 'Products', summary: 'Get product form schema' },
