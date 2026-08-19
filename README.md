@@ -190,6 +190,7 @@ npm run dev:frontend
 - [Multitenancy](docs/MULTITENANCY.md)
 - [Data model ERD](docs/DATA_MODEL_ERD.md)
 - [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)
+- [Production runbooks](docs/PRODUCTION_RUNBOOKS.md)
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
 - [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
