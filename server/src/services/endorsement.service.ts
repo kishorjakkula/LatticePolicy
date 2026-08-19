@@ -26,6 +26,7 @@ import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib
 import { diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -726,9 +727,6 @@ export async function executeEndorsement(
   const endorsementReason = typeof body.reason === 'string' ? body.reason.trim() : ''
   const endorsementNotes = typeof body.notes === 'string' ? body.notes.trim() : ''
   const requestedTransactionNumber = typeof body.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw = roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
 
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
@@ -785,7 +783,34 @@ export async function executeEndorsement(
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
+  let referralId: string | null = null
+  if (uw.decision === 'Refer') {
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Endorse',
+        productCode: policyRow.product_code,
+        insuredName: newPayload?.insureds?.primary
+          ? `${newPayload.insureds.primary.firstName || ''} ${newPayload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: eff,
+        reasons: uw.reasons || [],
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = uw.decision === 'Refer' && !!referralId
   const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
   const baseTimelineVersion = await loadCurrentTimelineVersion(q, tenantId, policyId)
   const timelineVersion = baseTimelineVersion + 1
@@ -802,7 +827,7 @@ export async function executeEndorsement(
       changes,
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       reason: endorsementReason || undefined,
       notes: endorsementNotes || undefined,
       submittedBy: submittedBy || undefined,
@@ -884,7 +909,7 @@ export async function executeEndorsement(
     baseTimelineVersion,
     timelineVersion,
     metadata: {
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       delta,
       feesDelta: endorsementPremium.feesDelta,
@@ -911,13 +936,20 @@ export async function executeEndorsement(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload: newPayload,
     transactionNumber,
     baseTimelineVersion,
     timelineVersion,
   })
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   const componentsValue = jsonParam(Array.isArray(endorsementPremium.byCoverage) ? endorsementPremium.byCoverage : [])
   const discountsValue = jsonParam(toArray((newPrem as any)?.discounts))
