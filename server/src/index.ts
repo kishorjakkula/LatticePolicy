@@ -1,6 +1,8 @@
 import { createApp } from './app.js'
 import { initDb } from './db.js'
 import { startAsyncMessageWorker } from './asyncMessageWorker.js'
+import { registerBuiltinJobs } from './jobs/registerBuiltinJobs.js'
+import { startJobWorker } from './jobs/worker.js'
 import { logger } from './logger.js'
 import { closeCache, initCache } from './cache.js'
 import { warmPublishedRatingModelCache } from './ratingModelRegistry.js'
@@ -9,11 +11,13 @@ import { assertDeploymentConfig, isManagedDeployment } from './config.js'
 const app = createApp()
 const port = process.env.PORT ? Number(process.env.PORT) : 3000
 let stopAsyncWorker: (() => void) | null = null
+let stopJobWorker: (() => void) | null = null
 
 function registerShutdown(stopServer: () => void) {
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Shutdown requested')
     try { stopAsyncWorker?.() } catch {}
+    try { stopJobWorker?.() } catch {}
     void closeCache()
     stopServer()
   }
@@ -28,11 +32,14 @@ try {
   process.exit(1)
 }
 
+registerBuiltinJobs()
+
 initDb()
   .then(async () => {
     await initCache()
     await warmPublishedRatingModelCache()
     stopAsyncWorker = startAsyncMessageWorker()
+    stopJobWorker = startJobWorker()
     const server = app.listen(port, () => {
       logger.info({ port }, 'LatticePolicy server listening')
     })

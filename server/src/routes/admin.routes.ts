@@ -8,6 +8,7 @@ import { evaluateUW } from '../uw.js'
 import { formsAdminRoutes } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
 import { complianceAdminRoutes } from './compliance-admin.routes.js'
+import { adminJobsRoutes } from './admin-jobs.routes.js'
 import { dataImportRoutes } from './data-import.routes.js'
 import { adminDashboardRoutes } from './admin-dashboard.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
@@ -86,6 +87,7 @@ adminRoutes.use('/customers', requirePermission('admin.customers.read'), custome
 adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
 adminRoutes.use('/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
 adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
+adminRoutes.use('/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
 adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
 adminRoutes.use('/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
 
