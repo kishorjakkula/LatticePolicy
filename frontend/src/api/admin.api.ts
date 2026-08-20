@@ -32,6 +32,12 @@ export const adminApi = {
   commitImportBatch: (batchId: string) => request<any>('POST', `/v1/admin/import/batches/${batchId}/commit`, {}),
   retryImportRow: (batchId: string, rowId: string) =>
     request<any>('POST', `/v1/admin/import/batches/${batchId}/rows/${rowId}/retry`, {}),
+  // Operations dashboard
+  getDashboardSummary: () => request<any>('GET', '/v1/admin/dashboard/summary'),
+  listDashboardOutbox: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
+  listDashboardNotifications: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
   listSecurityPermissions: () => request<any[]>('GET', '/v1/admin/security/permissions'),
   listSecurityRoles: () => request<any[]>('GET', '/v1/admin/security/roles'),
   listSecurityRelationships: () => request<any>('GET', '/v1/admin/security/relationships'),

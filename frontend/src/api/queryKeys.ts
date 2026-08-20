@@ -29,6 +29,11 @@ export const queryKeys = {
     batch: (batchId: string) => ['data-import', 'batches', batchId] as const,
     rows: (batchId: string, status?: string) => ['data-import', 'batches', batchId, 'rows', status ?? null] as const,
   },
+  dashboard: {
+    summary: () => ['dashboard', 'summary'] as const,
+    outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
+    notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
+  },
   customers: {
     all: () => ['customers'] as const,
     search: (opts: Record<string, any>) => ['customers', 'search', opts] as const,

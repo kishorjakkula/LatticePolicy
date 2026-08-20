@@ -164,6 +164,31 @@ export function useDispositionOfacScreenMutation() {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Admin - Operations Dashboard
+// ---------------------------------------------------------------------------
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.summary(),
+    queryFn: () => adminApi.getDashboardSummary(),
+  })
+}
+
+export function useDashboardOutbox(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.outbox(status),
+    queryFn: () => adminApi.listDashboardOutbox(status),
+  })
+}
+
+export function useDashboardNotifications(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.notifications(status),
+    queryFn: () => adminApi.listDashboardNotifications(status),
+  })
+}
+
 export function useImportOfacSdnListMutation() {
   return useMutation({
     mutationFn: (entries: any[]) => adminApi.importOfacSdnList(entries),
