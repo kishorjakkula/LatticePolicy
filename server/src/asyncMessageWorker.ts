@@ -6,7 +6,7 @@ import { logger } from './logger.js'
 
 type AsyncOutboxStatus = 'Pending' | 'Processing' | 'Retry' | 'Sent' | 'Failed'
 
-interface AsyncOutboxRow {
+export interface AsyncOutboxRow {
   message_id: string
   tenant_id: string
   topic: string
@@ -16,7 +16,7 @@ interface AsyncOutboxRow {
   created_at: string
 }
 
-interface AsyncPushConfig {
+export interface AsyncPushConfig {
   enabled: boolean
   webhookUrl: string
   authHeader: string
@@ -94,7 +94,8 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
   }
 }
 
-function loadConfig(): AsyncPushConfig {
+/** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same delivery config. */
+export function loadConfig(): AsyncPushConfig {
   return {
     enabled: parseBoolean(process.env.ASYNC_PUSH_ENABLED, true),
     webhookUrl: (process.env.ASYNC_PUSH_WEBHOOK_URL || '').trim(),
@@ -107,7 +108,8 @@ function loadConfig(): AsyncPushConfig {
   }
 }
 
-async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRow[]> {
+/** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same claim query. */
+export async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRow[]> {
   // This query uses FOR UPDATE SKIP LOCKED with a CTE, which requires raw SQL.
   // We keep it as a raw query via a dedicated client transaction.
   const client = await pool.connect()
@@ -145,7 +147,13 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
   }
 }
 
-async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<void> {
+/**
+ * Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse
+ * the same dispatch behavior. Returns true when the row was sent
+ * successfully, false when it was scheduled for retry or marked Failed.
+ * Never throws for delivery failures; only a DB error propagates.
+ */
+export async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<boolean> {
   const db = createDrizzleDb(pool)
   const nextAttempts = row.attempts + 1
   try {
@@ -161,6 +169,7 @@ async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncP
         updatedAt: new Date()
       })
       .where(eq(asyncMessageOutbox.messageId, row.message_id as any))
+    return true
   } catch (err) {
     const exhausted = nextAttempts >= row.max_attempts
     const delaySeconds = exhausted
@@ -186,6 +195,7 @@ async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncP
     } else {
       logger.warn({ messageId: row.message_id, attempts: nextAttempts, retryInSeconds: delaySeconds, err: errorText }, '[async-push] Message retry scheduled')
     }
+    return false
   }
 }
 

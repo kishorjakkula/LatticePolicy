@@ -251,3 +251,72 @@ Operational smoke tests:
 3. Add manual retry API for dead-lettered runs.
 4. Add scheduler creation/next-run calculation.
 5. Add UI dashboard after the API and permissions are stable.
+
+## Implementation Status (Issue #57)
+
+Slices 1-3 above are implemented:
+
+- Migration `server/migrations/040_job_queue_framework.sql` creates
+  `job_definitions`, `job_schedules`, `job_runs`, and `job_run_events` exactly
+  as scoped above, with tenant RLS on the three tenant-scoped tables.
+- `server/src/jobs/registry.ts`: typed job registry with Zod payload
+  validation.
+- `server/src/jobs/jobQueue.ts`: `enqueueJob` (idempotent), `claimDueRuns`
+  (`FOR UPDATE SKIP LOCKED`, cross-tenant claim matching the existing outbox
+  worker's pattern), `checkpointRun`, `completeRun`, `retryOrDeadLetterRun`,
+  and `retryDeadLetteredRun` (creates a new run referencing the dead-lettered
+  one; never mutates run history).
+- `server/src/jobs/worker.ts`: stateless polling worker behind
+  `JOB_WORKER_ENABLED` (default `false` for this first slice — turn it on
+  explicitly once you are ready to run jobs continuously), `JOB_WORKER_POLL_MS`,
+  `JOB_WORKER_BATCH_SIZE`, `JOB_WORKER_LOCK_SECONDS`, `JOB_WORKER_ID`.
+- `server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts`: first handler,
+  reusing `claimOutboxRows`/`dispatchOutboxRow`/`loadConfig` exported from
+  `server/src/asyncMessageWorker.ts` so behavior is identical whether outbox
+  delivery runs through the always-on legacy worker or through this job.
+- `server/src/routes/admin-jobs.routes.ts`: `GET /definitions`,
+  `GET /runs`, `GET /runs/:runId`, `POST /runs` (manual enqueue),
+  `POST /runs/:runId/retry` (dead-letter retry), gated by new
+  `admin.jobs.read` / `admin.jobs.manage` permissions (see
+  `server/src/lib/rbac.ts`, role `jobs_admin`).
+
+### Tenant safety note
+
+`claimDueRuns` claims across all tenants in one raw query, same as the
+existing outbox worker — the worker cannot know which tenant has due work
+until it claims a row, so this step is necessarily tenant-agnostic. Every
+subsequent read/write for a claimed run (`checkpointRun`, `completeRun`,
+`retryOrDeadLetterRun`, `recordRunEvent`) goes back through `withTenantTx`
+using that row's own `tenant_id`, so tenant RLS is enforced for all
+tenant-scoped state changes.
+
+### Adding A New Job Type
+
+1. Write a handler function matching `JobHandler` in
+   `server/src/jobs/registry.ts`: `(ctx) => Promise<{ resultPayload? }>`. Use
+   `ctx.checkpoint(data)` before/after side effects that are expensive to
+   redo on retry.
+2. Call `registerJob({ jobCode, description, handler, payloadSchema,
+   defaultMaxAttempts, backoff })` from
+   `server/src/jobs/registerBuiltinJobs.ts` (or a similar registration point
+   run once at startup, before `startJobWorker()`).
+3. Add a `job_definitions` row for the new `job_code` in a new migration
+   (`enabled`, `default_schedule`, `default_max_attempts`,
+   `default_timeout_seconds`).
+4. Enqueue runs for it via `enqueueJob({ tenantId, jobCode, idempotencyKey,
+   requestPayload })` from application code, or through
+   `POST /api/v1/admin/jobs/runs` for a manual/admin-triggered run.
+5. Add unit tests for the handler's success/retryable/terminal-failure
+   behavior, and a DB integration test for enqueue + claim + complete (or
+   retry/dead-letter) using the patterns in
+   `server/src/__tests__/job-queue.integration.test.ts`.
+
+### Still Open
+
+- Slice 4 (scheduler creation/next-run calculation) and slice 5 (UI
+  dashboard) are not implemented — `job_schedules` rows can be inserted
+  manually but nothing yet turns a schedule into automatic recurring runs.
+- No additional job types beyond `async_outbox_delivery_retry` are
+  registered yet. Stale-quote-cleanup and renewal-candidate-scan jobs
+  mentioned in the issue are good first follow-up jobs to add using the
+  pattern above.
