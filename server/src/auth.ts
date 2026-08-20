@@ -7,6 +7,9 @@ import { ensureTenantRbacDefaults, getDefaultPermissionCodesForRoles, resolvePer
 import { buildOtpAuthUri, generateMfaSecret, normalizeOtpCode, verifyTotpCode } from './mfa.js'
 import { getMemoryTenantMfaRequired } from './tenantSecurity.js'
 import { getDemoLoginName, getJwtSecret, getMfaTokenSecret, isDemoUserAllowed, isManagedDeployment } from './config.js'
+import { loadTenantLocalAuthEnabled } from './config/tenant-identity.js'
+import { isLockedOut } from './lib/password-policy.js'
+import { recordFailedLoginAttempt, resetLoginFailureState } from './services/user.service.js'
 
 type User = {
   id: string
@@ -121,7 +124,7 @@ async function loadRolesForUser(tenantId: string, userId: string, fallbackRoles:
   }
 }
 
-async function buildAuthUser(base: User): Promise<User> {
+export async function buildAuthUser(base: User): Promise<User> {
   const roles = await loadRolesForUser(base.tenantId, base.id, base.roles || [])
   const permissions = await resolvePermissions(base.tenantId, roles)
   if (!getDb()) return { ...base, roles, permissions }
@@ -199,6 +202,10 @@ export async function handleLogin(req: Request, res: Response) {
   if (!tenantId) return res.status(400).json({ code: 'TENANT_REQUIRED', message: 'Provide tenantId in body or X-Tenant header' })
   if (!username || !password) return res.status(400).json({ code: 'INVALID_CREDENTIALS' })
   if (!isDemoUserAllowed(username)) return res.status(403).json({ code: 'DEMO_ACCESS_NOT_ALLOWED', message: 'This demo is invite-only' })
+  const localAuthEnabled = await loadTenantLocalAuthEnabled(tenantId)
+  if (!localAuthEnabled) {
+    return res.status(403).json({ code: 'LOCAL_AUTH_DISABLED', message: 'Local username/password login is disabled for this tenant. Use single sign-on instead.' })
+  }
   // If DB is not configured, allow demo logins to unblock UI exploration
   if (!getDb()) {
     if (isManagedDeployment()) return res.status(503).json({ code: 'DATABASE_UNAVAILABLE', message: 'Database is required in managed deployments' })
@@ -223,7 +230,15 @@ export async function handleLogin(req: Request, res: Response) {
   // Run user lookup under tenant RLS
   const u = await withTenantTx(tenantId, async () => await findByUsername(username))
   if (!u || u.disabled) return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
-  if (!bcrypt.compareSync(password, u.passwordHash)) return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
+  if (u.authProvider === 'oidc') return res.status(401).json({ code: 'SSO_ACCOUNT', message: 'This account signs in through SSO, not username/password' })
+  if (isLockedOut({ lockedUntil: u.lockedUntil ?? null })) {
+    return res.status(423).json({ code: 'ACCOUNT_LOCKED', message: 'Account temporarily locked after too many failed login attempts. Try again later.' })
+  }
+  if (!bcrypt.compareSync(password, u.passwordHash)) {
+    await recordFailedLoginAttempt(tenantId, u.id)
+    return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
+  }
+  await resetLoginFailureState(tenantId, u.id)
   const user = await buildAuthUser({ id: u.id, username: u.username, tenantId: u.tenantId, roles: u.roles || [] })
   const mfaRequired = await resolveTenantMfaRequired(tenantId)
   if (!mfaRequired) {

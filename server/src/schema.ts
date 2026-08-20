@@ -26,6 +26,8 @@ export const tenants = pgTable('tenants', {
   defaultLocale: text('default_locale'),
   defaultCurrency: char('default_currency', { length: 3 }),
   mfaRequired: boolean('mfa_required').notNull().default(false),
+  localAuthEnabled: boolean('local_auth_enabled').notNull().default(true),
+  ssoConfig: jsonb('sso_config').notNull().default(sql`'{}'::jsonb`),
   customerKeyPattern: text('customer_key_pattern').notNull().default('CUST-{YYYY}-{SEQ6}'),
   customerValidationConfig: jsonb('customer_validation_config').notNull().default(sql`'{}'::jsonb`),
   customerWorkflowConfig: jsonb('customer_workflow_config').notNull().default(sql`'{}'::jsonb`),
@@ -45,6 +47,11 @@ export const users = pgTable('users', {
   mfaEnabled: boolean('mfa_enabled').notNull().default(false),
   mfaSecret: text('mfa_secret'),
   customerId: uuid('customer_id'),
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  passwordUpdatedAt: timestamp('password_updated_at', { withTimezone: true }).notNull().defaultNow(),
+  authProvider: text('auth_provider').notNull().default('local'),
+  externalSubject: text('external_subject'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
