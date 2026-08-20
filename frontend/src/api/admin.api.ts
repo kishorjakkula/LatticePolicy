@@ -21,6 +21,12 @@ export const adminApi = {
     request<{ items: any[] }>('GET', `/v1/admin/compliance/ofac/screens${disposition ? `?disposition=${disposition}` : ''}`),
   dispositionOfacScreen: (screenId: string, payload: { disposition: string; reason: string }) =>
     request<any>('PATCH', `/v1/admin/compliance/ofac/screens/${screenId}`, payload),
+  // Operations dashboard
+  getDashboardSummary: () => request<any>('GET', '/v1/admin/dashboard/summary'),
+  listDashboardOutbox: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
+  listDashboardNotifications: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
   listSecurityPermissions: () => request<any[]>('GET', '/v1/admin/security/permissions'),
   listSecurityRoles: () => request<any[]>('GET', '/v1/admin/security/roles'),
   listSecurityRelationships: () => request<any>('GET', '/v1/admin/security/relationships'),
