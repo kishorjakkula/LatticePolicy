@@ -28,6 +28,20 @@ import { validatePolicyTransactionState, type PolicyTransactionAction } from '..
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * `loadPolicyContext` returns Drizzle-shaped camelCase fields
+ * (`termEffectiveDate`, not `term_effective_date`). Several call sites below
+ * previously read the snake_case key directly, which is always `undefined`
+ * on that shape, silently falling `coerceDateOnly` back to today's date and
+ * corrupting term-window/segment computation for every endorsement (issue
+ * #52 follow-up fix).
+ */
+function policyField(row: any, camelKey: string, snakeKey: string): any {
+  return row?.[camelKey] ?? row?.[snakeKey]
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TransactionNumberMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
@@ -407,7 +421,7 @@ function currentPolicyStateAsOfDate(termEffectiveDate: string, termExpirationDat
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
-async function loadPolicyTimelineVersions(
+export async function loadPolicyTimelineVersions(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -459,7 +473,7 @@ async function loadPolicyTimelineVersions(
   return versions
 }
 
-async function loadCurrentTimelineVersion(
+export async function loadCurrentTimelineVersion(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -473,7 +487,7 @@ async function loadCurrentTimelineVersion(
   return Number(result.rows?.[0]?.max_timeline_version || 0)
 }
 
-async function nextPolicyTransactionSequence(
+export async function nextPolicyTransactionSequence(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -487,7 +501,7 @@ async function nextPolicyTransactionSequence(
   return Number(result.rows?.[0]?.max_sequence_no || 0) + 1
 }
 
-async function persistPolicyTimelineSegments(
+export async function persistPolicyTimelineSegments(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string,
@@ -649,8 +663,8 @@ export async function previewEndorsement(
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
   assertPolicyTransactionState('endorse', policyRow.status)
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
+  const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
   const effectiveDate = asDateOnly(body.effectiveDate) || termEffective
   const computation = await computeEndorsementTimeline(
     q,
@@ -665,7 +679,7 @@ export async function previewEndorsement(
     new Date().toISOString()
   )
   const underwriting = evaluateUW(tenantId, computation.nextPayload)
-  const currency = policyRow.currency_code || computation.newStateAtEffective?.currency || 'USD'
+  const currency = policyField(policyRow, 'currencyCode', 'currency_code') || computation.newStateAtEffective?.currency || 'USD'
   const factor = proRataFactor(effectiveDate, termEffective, termExpiration)
   const endorsementPremium = buildEndorsementPremiumDelta({
     previousStored: { total: { amount: computation.oldStateAtEffective?.premiumTotal ?? safeMoney(computation.previousPremium?.total?.amount), currency } },
@@ -731,8 +745,8 @@ export async function executeEndorsement(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
+  const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
   const eff = asDateOnly(body.effectiveDate) || termEffective
   const processedAt = new Date().toISOString()
   const versionId = uuidv4()
@@ -760,7 +774,7 @@ export async function executeEndorsement(
   const oldPrem = computation.previousPremium
   const newPrem = computation.nextPremium
   const factor = proRataFactor(eff, termEffective, termExpiration)
-  const currency = policyRow.currency_code || computation.newStateAtEffective?.currency || 'USD'
+  const currency = policyField(policyRow, 'currencyCode', 'currency_code') || computation.newStateAtEffective?.currency || 'USD'
   const endorsementPremium = buildEndorsementPremiumDelta({
     previousStored: { total: { amount: computation.oldStateAtEffective?.premiumTotal ?? safeMoney(oldPrem?.total?.amount), currency } },
     previousCalculated: oldPrem,
@@ -791,7 +805,7 @@ export async function executeEndorsement(
       {
         policyId,
         transactionType: 'Endorse',
-        productCode: policyRow.product_code,
+        productCode: policyField(policyRow, 'productCode', 'product_code'),
         insuredName: newPayload?.insureds?.primary
           ? `${newPayload.insureds.primary.firstName || ''} ${newPayload.insureds.primary.lastName || ''}`.trim()
           : null,
@@ -848,7 +862,7 @@ export async function executeEndorsement(
   const riskList = Array.isArray(newPayload?.risks) ? newPayload.risks : []
   const riskEntries: RiskEntry[] = riskList.map((risk: any) => ({
     id: uuidv4(),
-    kind: mapRiskKind(policyRow.product_code, risk),
+    kind: mapRiskKind(policyField(policyRow, 'productCode', 'product_code'), risk),
     attributes: risk,
   }))
   const projectionAsOf = currentPolicyStateAsOfDate(termEffective, termExpiration)
@@ -857,7 +871,7 @@ export async function executeEndorsement(
   const projectionPremium = projectionState?.premium || newPrem
   const projectionRiskList = Array.isArray(projectionPayload?.risks) ? projectionPayload.risks : []
   const riskSummary = projectionRiskList.length
-    ? { risks: projectionRiskList.map((risk: any) => ({ kind: mapRiskKind(policyRow.product_code, risk), summary: summarizeRisk(risk) })) }
+    ? { risks: projectionRiskList.map((risk: any) => ({ kind: mapRiskKind(policyField(policyRow, 'productCode', 'product_code'), risk), summary: summarizeRisk(risk) })) }
     : null
   const premiumSummary = projectionPremium
     ? {
@@ -918,6 +932,7 @@ export async function executeEndorsement(
       transactionNumber,
       baseTimelineVersion,
       timelineVersion,
+      outOfSequence: computation.rebasedTransactions.length > 0,
       rebasedTransactions: computation.rebasedTransactions,
       retroAdjustment: computation.retroResult,
     },
@@ -991,7 +1006,7 @@ export async function executeEndorsement(
     policyId,
     versionId,
     entries: riskEntries,
-    productCode: policyRow.product_code,
+    productCode: policyField(policyRow, 'productCode', 'product_code'),
     transactionId,
     effectiveDate: eff,
     expirationDate: termExpiration,

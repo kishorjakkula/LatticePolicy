@@ -11,6 +11,8 @@ import {
   renewPolicy,
   rewritePolicy,
 } from '../services/lifecycle.service.js'
+import { executeEndorsement } from '../services/endorsement.service.js'
+import { getPolicyState } from '../services/policy.service.js'
 
 const tenantId = 'sample-carrier'
 const actor = {
@@ -359,5 +361,91 @@ describe('policy transaction lifecycle persistence', () => {
         }),
       ]),
     )
+  })
+
+  // Issue #52: out-of-sequence handling beyond endorsements. A cancellation
+  // with an effective date before an already-processed later endorsement must
+  // (a) record rebase/audit metadata the same way endorsement OOS does, and
+  // (b) refresh the persisted timeline segments cache so getPolicyState(asOf)
+  // does not silently return stale pre-cancellation state.
+  it('records rebase metadata and keeps as-of state correct for an out-of-sequence cancellation', async () => {
+    await initDb()
+    await ensureTenant()
+    await ensureServicingForm()
+    const db = getDb()
+    expect(db).toBeTruthy()
+
+    const bound = await createBoundPolicy()
+    await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
+
+    const currentPayloadRow = await db!.query(
+      `SELECT payload FROM policy_versions
+        WHERE tenant_id=$1 AND policy_id=$2
+        ORDER BY processed_at DESC LIMIT 1`,
+      [tenantId, bound.policyId],
+    )
+    const endorsedPayload = JSON.parse(JSON.stringify(currentPayloadRow.rows[0].payload))
+    endorsedPayload.coverages = (endorsedPayload.coverages || []).map((c: any) =>
+      c.code === 'PD' ? { ...c, limit: 100000 } : c,
+    )
+
+    // A later, in-sequence endorsement. This is what first populates the
+    // persisted policy_timeline_segments cache (timelineVersion 1).
+    const endorsed = await tx((db) =>
+      executeEndorsement(
+        db,
+        tenantId,
+        bound.policyId,
+        {
+          effectiveDate: '2026-08-01',
+          payload: endorsedPayload,
+          transactionNumber: 'EN-OOS-BASE',
+        },
+        actor,
+      ),
+    )
+    expect(endorsed.transactionType).toBe('Endorse')
+
+    const postEndorseSeg = await db!.query(
+      `SELECT count(*)::int AS segment_count, max(timeline_version)::int AS max_timeline_version
+         FROM policy_timeline_segments WHERE tenant_id=$1 AND policy_id=$2`,
+      [tenantId, bound.policyId],
+    )
+    // The endorsement must actually persist segments against the policy's
+    // real term window, not silently fall back to today's date.
+    expect(postEndorseSeg.rows[0].segment_count).toBeGreaterThan(0)
+    expect(postEndorseSeg.rows[0].max_timeline_version).toBe(1)
+
+    // A cancellation dated before the endorsement above: out-of-sequence.
+    const cancelled = await tx((db) =>
+      cancelPolicy(
+        db,
+        tenantId,
+        bound.policyId,
+        { effectiveDate: '2026-07-15', reason: 'backdated OOS cancel' },
+        actor,
+      ),
+    )
+    expect(cancelled.transactionType).toBe('Cancel')
+
+    const cancelTxRow = await db!.query(
+      `SELECT metadata FROM policy_transactions
+        WHERE tenant_id=$1 AND policy_id=$2 AND type='CANCEL'
+        ORDER BY processed_at DESC LIMIT 1`,
+      [tenantId, bound.policyId],
+    )
+    const cancelMetadata = cancelTxRow.rows[0]?.metadata
+    expect(cancelMetadata.outOfSequence).toBe(true)
+    expect(cancelMetadata.rebasedTransactions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ transactionType: 'ENDORSE' })]),
+    )
+    expect(cancelMetadata.retroAdjustment).toBeTruthy()
+
+    // Before issue #52's fix, getPolicyState would still be reading the
+    // endorsement-only persisted segment cache here and would not reflect
+    // the backdated cancellation at all.
+    const asOfState = await getPolicyState(null as any, tenantId, bound.policyId, '2026-07-20')
+    expect(asOfState.timelineVersion).toBeGreaterThanOrEqual(2)
+    expect(asOfState.segmentStart).toBe('2026-07-15')
   })
 })
