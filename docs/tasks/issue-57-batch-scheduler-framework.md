@@ -15,7 +15,7 @@ as the first real job type.
 
 ## Important Files
 
-- `server/migrations/040_job_queue_framework.sql`: `job_definitions`,
+- `server/migrations/042_job_queue_framework.sql`: `job_definitions`,
   `job_schedules`, `job_runs`, `job_run_events` with tenant RLS on the three
   tenant-scoped tables.
 - `server/src/jobs/registry.ts`: typed job registry with Zod payload

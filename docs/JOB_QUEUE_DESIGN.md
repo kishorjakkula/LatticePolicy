@@ -256,7 +256,7 @@ Operational smoke tests:
 
 Slices 1-3 above are implemented:
 
-- Migration `server/migrations/040_job_queue_framework.sql` creates
+- Migration `server/migrations/042_job_queue_framework.sql` creates
   `job_definitions`, `job_schedules`, `job_runs`, and `job_run_events` exactly
   as scoped above, with tenant RLS on the three tenant-scoped tables.
 - `server/src/jobs/registry.ts`: typed job registry with Zod payload
