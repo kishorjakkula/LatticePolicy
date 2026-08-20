@@ -24,6 +24,11 @@ export const queryKeys = {
     eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
     ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
   },
+  dashboard: {
+    summary: () => ['dashboard', 'summary'] as const,
+    outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
+    notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
+  },
   customers: {
     all: () => ['customers'] as const,
     search: (opts: Record<string, any>) => ['customers', 'search', opts] as const,
