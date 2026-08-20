@@ -5,6 +5,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { tenancyMiddleware, requireTenant } from './tenancy.js'
 import { authMiddleware, handleLogin, handleMfaSetupConfirm, handleMfaVerify } from './auth.js'
+import { ssoRoutes } from './routes/sso.routes.js'
 import { routes } from './routes/index.js'
 import { httpLogger, logger } from './logger.js'
 import { getCache } from './cache.js'
@@ -18,7 +19,26 @@ export function createApp() {
   const app = express()
 
   if (isManagedDeployment() || isTruthyEnv(process.env.TRUST_PROXY)) app.set('trust proxy', 1)
-  app.use(helmet({ crossOriginEmbedderPolicy: false }))
+  app.use(helmet({
+    crossOriginEmbedderPolicy: false,
+    // JSON API by default; only /api-docs renders HTML, so a strict default-src
+    // is safe here without breaking any JSON route. Production tightens further
+    // by dropping the inline-style allowance non-managed/demo docs pages use.
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        // /api-docs renders swagger-ui from a CDN with an inline bootstrap
+        // script; everything else in this app is JSON and never reaches these.
+        scriptSrc: ["'self'", 'https://unpkg.com', "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https://unpkg.com'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"]
+      }
+    },
+    hsts: isManagedDeployment() ? { maxAge: 15552000, includeSubDomains: true, preload: true } : false
+  }))
   const allowedOrigins = getAllowedOrigins()
   app.use(cors({
     origin: (origin, callback) => {
@@ -106,6 +126,7 @@ export function createApp() {
   app.post('/auth/login', loginLimiter, handleLogin)
   app.post('/auth/mfa/verify', authLimiter, handleMfaVerify)
   app.post('/auth/mfa/setup/confirm', authLimiter, handleMfaSetupConfirm)
+  app.use('/auth/sso', loginLimiter, ssoRoutes)
 
   app.use('/api/v1', requireTenant, idempotencyMiddleware, routes)
 

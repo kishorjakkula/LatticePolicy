@@ -52,6 +52,11 @@ export function getMfaTokenSecret(): string {
   return process.env.MFA_TOKEN_SECRET || `${getJwtSecret()}-mfa`
 }
 
+export function getSsoStateSecret(): string {
+  assertDeploymentConfig()
+  return process.env.SSO_STATE_SECRET || `${getJwtSecret()}-sso-state`
+}
+
 export function getAllowedOrigins(): string[] {
   return String(process.env.ALLOWED_ORIGINS || '')
     .split(',')
