@@ -196,6 +196,7 @@ npm run dev:frontend
 - [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
 - [Commercial support and services](COMMERCIAL.md)
 - [Carrier onboarding and go-live certification kit](docs/CARRIER_ONBOARDING_KIT.md)
+- [Enterprise identity and security controls](docs/ENTERPRISE_IDENTITY_SECURITY.md)
 
 ## Extension Points
 

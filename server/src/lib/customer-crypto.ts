@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { logSensitiveAccess, type SensitiveAccessContext } from './security-audit.js'
 
 const CUSTOMER_DATA_KEY = process.env.CUSTOMER_DATA_KEY || process.env.JWT_SECRET || 'lattice-policy-customer-dev-key'
 
@@ -31,7 +32,7 @@ export function encryptSensitiveValue(value: unknown): string | null {
   return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`
 }
 
-export function decryptSensitiveValue(value: unknown): string | null {
+export function decryptSensitiveValue(value: unknown, auditContext?: SensitiveAccessContext): string | null {
   const raw = String(value || '').trim()
   if (!raw) return null
   const pieces = raw.split('.')
@@ -43,6 +44,7 @@ export function decryptSensitiveValue(value: unknown): string | null {
     const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, iv)
     decipher.setAuthTag(tag)
     const decrypted = Buffer.concat([decipher.update(payload), decipher.final()])
+    logSensitiveAccess({ resource: 'customer_sensitive_field', field: 'encrypted_value', ...auditContext })
     return decrypted.toString('utf8')
   } catch {
     return null

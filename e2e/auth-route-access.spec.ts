@@ -36,7 +36,7 @@ test.describe('authentication and route access', () => {
   test('customer can access portal and is redirected away from internal routes', async ({ page, request }) => {
     const admin = await loginApi(request, 'admin')
     const setup = await createPortalUserForPolicy(request, admin.token)
-    const customer = await loginApi(request, setup.username)
+    const customer = await loginApi(request, setup.username, setup.password)
     await installAuthState(page, customer)
 
     await page.goto('/portal')

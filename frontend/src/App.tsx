@@ -34,6 +34,8 @@ const CustomerViewPage = lazy(() => import('./features/customers/CustomerViewPag
 const AgencyOnboardingPage = lazy(() => import('./features/admin/AgencyOnboardingPage').then(m => ({ default: m.AgencyOnboardingPage })))
 const NotificationTemplatesPage = lazy(() => import('./features/admin/NotificationTemplatesPage').then(m => ({ default: m.NotificationTemplatesPage })))
 const CompliancePage = lazy(() => import('./features/admin/CompliancePage').then(m => ({ default: m.CompliancePage })))
+const DataImportPage = lazy(() => import('./features/admin/DataImportPage').then(m => ({ default: m.DataImportPage })))
+const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDashboardPage').then(m => ({ default: m.OperationsDashboardPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 
 export default function App() {
@@ -102,6 +104,8 @@ export default function App() {
               <Route path="onboarding/*" element={<RequirePermission permission="page.admin.onboarding.view"><AgencyOnboardingPage /></RequirePermission>} />
               <Route path="notification-templates" element={<RequirePermission permission="page.admin.notifications.view"><NotificationTemplatesPage /></RequirePermission>} />
               <Route path="compliance" element={<RequirePermission permission="page.admin.compliance.view"><CompliancePage /></RequirePermission>} />
+              <Route path="import" element={<RequirePermission permission="page.admin.import.view"><DataImportPage /></RequirePermission>} />
+              <Route path="dashboard" element={<RequirePermission permission="page.admin.dashboard.view"><OperationsDashboardPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>
