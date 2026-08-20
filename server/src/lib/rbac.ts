@@ -69,6 +69,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.onboarding.view', scope: 'menu', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Admin Menu: Agency Onboarding', description: 'View agency and broker onboarding section in Administration', sortOrder: 37 },
   { permissionCode: 'menu.admin.notifications.view', scope: 'menu', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Admin Menu: Notifications', description: 'View Notification Templates section in Administration', sortOrder: 38 },
   { permissionCode: 'menu.admin.compliance.view', scope: 'menu', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Admin Menu: Compliance', description: 'View Compliance section in Administration', sortOrder: 39 },
+  { permissionCode: 'menu.admin.import.view', scope: 'menu', resourceKey: 'admin.import', actionKey: 'view', label: 'Admin Menu: Data Import', description: 'View Data Import section in Administration', sortOrder: 40 },
+  { permissionCode: 'menu.admin.dashboard.view', scope: 'menu', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Admin Menu: Operations Dashboard', description: 'View Operations Dashboard section in Administration', sortOrder: 41 },
+  { permissionCode: 'menu.admin.jobs.view', scope: 'menu', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Admin Menu: Jobs', description: 'View Batch Jobs section in Administration', sortOrder: 42 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -85,6 +88,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.onboarding.view', scope: 'page', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Page: Admin Agency Onboarding', description: 'Access agency and broker onboarding administration page', sortOrder: 210 },
   { permissionCode: 'page.admin.notifications.view', scope: 'page', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Page: Admin Notification Templates', description: 'Access notification template administration page', sortOrder: 215 },
   { permissionCode: 'page.admin.compliance.view', scope: 'page', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Page: Admin Compliance', description: 'Access compliance administration page', sortOrder: 216 },
+  { permissionCode: 'page.admin.import.view', scope: 'page', resourceKey: 'admin.import', actionKey: 'view', label: 'Page: Admin Data Import', description: 'Access data migration/import administration page', sortOrder: 217 },
+  { permissionCode: 'page.admin.dashboard.view', scope: 'page', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Page: Admin Operations Dashboard', description: 'Access operations dashboard page', sortOrder: 218 },
+  { permissionCode: 'page.admin.jobs.view', scope: 'page', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Page: Admin Jobs', description: 'Access batch job administration page', sortOrder: 219 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -122,7 +128,12 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'admin.notifications.read', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'read', label: 'Admin API: Notifications Read', description: 'Read notification templates and render previews', sortOrder: 520 },
   { permissionCode: 'admin.notifications.manage', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'manage', label: 'Admin API: Notifications Manage', description: 'Create, edit, and activate/deactivate notification templates', sortOrder: 530 },
   { permissionCode: 'admin.compliance.read', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'read', label: 'Admin API: Compliance Read', description: 'Read state/product eligibility records and OFAC screen queue', sortOrder: 540 },
-  { permissionCode: 'admin.compliance.manage', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'manage', label: 'Admin API: Compliance Manage', description: 'Manage eligibility records, import OFAC list entries, and disposition OFAC screens', sortOrder: 550 }
+  { permissionCode: 'admin.compliance.manage', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'manage', label: 'Admin API: Compliance Manage', description: 'Manage eligibility records, import OFAC list entries, and disposition OFAC screens', sortOrder: 550 },
+  { permissionCode: 'admin.import.read', scope: 'api', resourceKey: 'admin.import', actionKey: 'read', label: 'Admin API: Data Import Read', description: 'Read legacy data import batches, staged rows, and reconciliation status', sortOrder: 560 },
+  { permissionCode: 'admin.import.manage', scope: 'api', resourceKey: 'admin.import', actionKey: 'manage', label: 'Admin API: Data Import Manage', description: 'Stage, validate, commit, and retry legacy data import batches', sortOrder: 570 },
+  { permissionCode: 'admin.dashboard.read', scope: 'api', resourceKey: 'admin.dashboard', actionKey: 'read', label: 'Admin API: Operations Dashboard Read', description: 'Read aggregated operational failure and pending-work summaries across outbox, notifications, OFAC, and UW referrals', sortOrder: 580 },
+  { permissionCode: 'admin.jobs.read', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'read', label: 'Admin API: Jobs Read', description: 'Read job definitions and run history', sortOrder: 590 },
+  { permissionCode: 'admin.jobs.manage', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'manage', label: 'Admin API: Jobs Manage', description: 'Manually enqueue job runs and retry dead-lettered runs', sortOrder: 600 }
 ]
 
 type RoleSeed = {
@@ -219,6 +230,32 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'admin.forms.approve',
       'admin.compliance.read',
       'admin.compliance.manage'
+    ]
+  },
+  {
+    roleCode: 'jobs_admin',
+    roleName: 'Jobs Administrator',
+    description: 'Reads job run history and manually enqueues or retries batch operational jobs',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.jobs.view',
+      'page.admin.jobs.view',
+      'admin.jobs.read',
+      'admin.jobs.manage'
+    ]
+  },
+  {
+    roleCode: 'data_import_admin',
+    roleName: 'Data Import Administrator',
+    description: 'Stages, validates, commits, and retries legacy book-of-business import batches',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.import.view',
+      'page.admin.import.view',
+      'admin.import.read',
+      'admin.import.manage'
     ]
   },
   {

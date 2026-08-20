@@ -26,6 +26,8 @@ export const tenants = pgTable('tenants', {
   defaultLocale: text('default_locale'),
   defaultCurrency: char('default_currency', { length: 3 }),
   mfaRequired: boolean('mfa_required').notNull().default(false),
+  localAuthEnabled: boolean('local_auth_enabled').notNull().default(true),
+  ssoConfig: jsonb('sso_config').notNull().default(sql`'{}'::jsonb`),
   customerKeyPattern: text('customer_key_pattern').notNull().default('CUST-{YYYY}-{SEQ6}'),
   customerValidationConfig: jsonb('customer_validation_config').notNull().default(sql`'{}'::jsonb`),
   customerWorkflowConfig: jsonb('customer_workflow_config').notNull().default(sql`'{}'::jsonb`),
@@ -45,6 +47,11 @@ export const users = pgTable('users', {
   mfaEnabled: boolean('mfa_enabled').notNull().default(false),
   mfaSecret: text('mfa_secret'),
   customerId: uuid('customer_id'),
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  passwordUpdatedAt: timestamp('password_updated_at', { withTimezone: true }).notNull().defaultNow(),
+  authProvider: text('auth_provider').notNull().default('local'),
+  externalSubject: text('external_subject'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -870,3 +877,72 @@ export const fieldMeta = pgTable('field_meta', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Batch Job Queue (migration 040)
+// ---------------------------------------------------------------------------
+export const jobDefinitions = pgTable('job_definitions', {
+  jobCode: text('job_code').primaryKey(),
+  description: text('description').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  defaultSchedule: text('default_schedule'),
+  defaultMaxAttempts: integer('default_max_attempts').notNull().default(5),
+  defaultTimeoutSeconds: integer('default_timeout_seconds').notNull().default(300),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const jobSchedules = pgTable('job_schedules', {
+  scheduleId: uuid('schedule_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  jobCode: text('job_code').notNull().references(() => jobDefinitions.jobCode, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(true),
+  scheduleExpression: text('schedule_expression'),
+  concurrencyKey: text('concurrency_key'),
+  requestPayload: jsonb('request_payload').notNull().default(sql`'{}'::jsonb`),
+  nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ux_job_schedules_tenant_job').on(t.tenantId, t.jobCode),
+  index('idx_job_schedules_due').on(t.enabled, t.nextRunAt),
+])
+
+export const jobRuns = pgTable('job_runs', {
+  runId: uuid('run_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  jobCode: text('job_code').notNull().references(() => jobDefinitions.jobCode, { onDelete: 'cascade' }),
+  scheduleId: uuid('schedule_id').references(() => jobSchedules.scheduleId, { onDelete: 'set null' }),
+  idempotencyKey: text('idempotency_key').notNull(),
+  status: text('status').notNull().default('Queued'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  checkpoint: jsonb('checkpoint').notNull().default(sql`'{}'::jsonb`),
+  requestPayload: jsonb('request_payload').notNull().default(sql`'{}'::jsonb`),
+  resultPayload: jsonb('result_payload').notNull().default(sql`'{}'::jsonb`),
+  lastError: text('last_error'),
+  lockedBy: text('locked_by'),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ux_job_runs_idempotency').on(t.tenantId, t.idempotencyKey),
+  index('idx_job_runs_dispatch').on(t.status, t.nextAttemptAt, t.createdAt),
+  index('idx_job_runs_tenant_history').on(t.tenantId, t.jobCode, t.createdAt),
+])
+
+export const jobRunEvents = pgTable('job_run_events', {
+  eventId: uuid('event_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  runId: uuid('run_id').notNull().references(() => jobRuns.runId, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  message: text('message'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_job_run_events_run').on(t.runId, t.createdAt),
+])

@@ -8,6 +8,9 @@ import { evaluateUW } from '../uw.js'
 import { formsAdminRoutes } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
 import { complianceAdminRoutes } from './compliance-admin.routes.js'
+import { adminJobsRoutes } from './admin-jobs.routes.js'
+import { dataImportRoutes } from './data-import.routes.js'
+import { adminDashboardRoutes } from './admin-dashboard.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
 import { notificationTemplatesRoutes } from '../notificationTemplates.js'
 import {
@@ -48,6 +51,18 @@ import {
   tenantAiMlConfigFromRow
 } from '../tenantAi.js'
 import {
+  defaultTenantLocalAuthEnabled,
+  defaultTenantSsoConfig,
+  getMemoryTenantLocalAuthEnabled,
+  getMemoryTenantSsoConfig,
+  normalizeTenantLocalAuthEnabled,
+  normalizeTenantSsoConfig,
+  setMemoryTenantLocalAuthEnabled,
+  setMemoryTenantSsoConfig,
+  tenantLocalAuthEnabledFromRow,
+  tenantSsoConfigFromRow
+} from '../tenantIdentity.js'
+import {
   createRole,
   deleteRole as deleteSecurityRole,
   ensureTenantRbacDefaults,
@@ -72,6 +87,9 @@ adminRoutes.use('/customers', requirePermission('admin.customers.read'), custome
 adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
 adminRoutes.use('/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
 adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
+adminRoutes.use('/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
+adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
+adminRoutes.use('/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
@@ -96,12 +114,13 @@ adminRoutes.post('/users', requirePermission('admin.users.manage'), async (req, 
         message: `Unknown or inactive role(s): ${roleValidation.missingRoleCodes.join(', ')}`
       })
     }
-    const user = await createUser({ username, password, tenantId, roles: roleValidation.validRoleCodes, customerRef })
+    const user = await createUser({ username, password, tenantId, roles: roleValidation.validRoleCodes, customerRef, enforcePasswordPolicy: true })
     return res.status(201).json(user)
   } catch (e: any) {
     if (String(e?.message) === 'USERNAME_EXISTS') return res.status(409).json({ code: 'USERNAME_EXISTS' })
     if (String(e?.message) === 'CUSTOMER_NOT_FOUND') return res.status(400).json({ code: 'CUSTOMER_NOT_FOUND', message: 'Linked customer not found' })
     if (String(e?.message) === 'CUSTOMER_LINK_REQUIRED') return res.status(400).json({ code: 'CUSTOMER_LINK_REQUIRED', message: 'Customer role requires a linked customer' })
+    if (String(e?.message).startsWith('WEAK_PASSWORD')) return res.status(400).json({ code: 'WEAK_PASSWORD', message: String(e.message).replace(/^WEAK_PASSWORD:\s*/, '') })
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
 })
@@ -124,7 +143,7 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
       }
       validatedRoles = roleValidation.validRoleCodes
     }
-    const patch: any = { password, roles: validatedRoles, disabled }
+    const patch: any = { password, roles: validatedRoles, disabled, enforcePasswordPolicy: true }
     if (Object.prototype.hasOwnProperty.call(body, 'customerRef')) patch.customerRef = body.customerRef
     const user = await updateUser(tenantId, id, patch)
     return res.json(user)
@@ -132,6 +151,7 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
     if (String(e?.message) === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
     if (String(e?.message) === 'CUSTOMER_NOT_FOUND') return res.status(400).json({ code: 'CUSTOMER_NOT_FOUND', message: 'Linked customer not found' })
     if (String(e?.message) === 'CUSTOMER_LINK_REQUIRED') return res.status(400).json({ code: 'CUSTOMER_LINK_REQUIRED', message: 'Customer role requires a linked customer' })
+    if (String(e?.message).startsWith('WEAK_PASSWORD')) return res.status(400).json({ code: 'WEAK_PASSWORD', message: String(e.message).replace(/^WEAK_PASSWORD:\s*/, '') })
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
 })
@@ -287,6 +307,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
     const policyNumberFormatsByProduct = getMemoryTenantPolicyNumberFormats(tenantId)
     const mfaRequired = getMemoryTenantMfaRequired(tenantId)
     const aiMlConfig = getMemoryTenantAiMlConfig(tenantId)
+    const localAuthEnabled = getMemoryTenantLocalAuthEnabled(tenantId)
+    const ssoConfig = getMemoryTenantSsoConfig(tenantId)
     const savedName = memoryTenantNames.get(tenantId) || tenantId
     return res.json({
       tenantId,
@@ -295,14 +317,16 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       dateFormatsByCountry: prefs.dateFormatsByCountry,
       policyNumberFormatsByProduct,
       mfaRequired,
-      aiMlConfig
+      aiMlConfig,
+      localAuthEnabled,
+      ssoConfig
     })
   }
   try {
     const r = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       return q(
-        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config FROM tenants WHERE tenant_id=$1',
+        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config FROM tenants WHERE tenant_id=$1',
         [tenantId]
       )
     })
@@ -311,6 +335,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       const policyNumberFormatsByProduct = defaultTenantPolicyNumberFormats()
       const mfaRequired = defaultTenantMfaRequired()
       const aiMlConfig = defaultTenantAiMlConfig()
+      const localAuthEnabled = defaultTenantLocalAuthEnabled()
+      const ssoConfig = defaultTenantSsoConfig()
       return res.json({
         tenantId,
         name: tenantId,
@@ -318,7 +344,9 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
         dateFormatsByCountry: defaults.dateFormatsByCountry,
         policyNumberFormatsByProduct,
         mfaRequired,
-        aiMlConfig
+        aiMlConfig,
+        localAuthEnabled,
+        ssoConfig
       })
     }
     const row = r.rows[0]
@@ -326,6 +354,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
     const policyNumberFormatsByProduct = tenantPolicyNumberFormatsFromRow(row)
     const mfaRequired = tenantMfaRequiredFromRow(row)
     const aiMlConfig = tenantAiMlConfigFromRow(row)
+    const localAuthEnabled = tenantLocalAuthEnabledFromRow(row)
+    const ssoConfig = tenantSsoConfigFromRow(row)
     return res.json({
       tenantId: row.tenant_id,
       name: row.name,
@@ -333,7 +363,9 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       dateFormatsByCountry: prefs.dateFormatsByCountry,
       policyNumberFormatsByProduct,
       mfaRequired,
-      aiMlConfig
+      aiMlConfig,
+      localAuthEnabled,
+      ssoConfig
     })
   } catch (e:any) { return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) }) }
 })
@@ -350,7 +382,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
     req.body?.dateFormatsByCountry != null ||
     req.body?.policyNumberFormatsByProduct != null ||
     req.body?.mfaRequired != null ||
-    req.body?.aiMlConfig != null
+    req.body?.aiMlConfig != null ||
+    req.body?.localAuthEnabled != null ||
+    req.body?.ssoConfig != null
   if (!nameProvided && !preferencesProvided) {
     return res.status(400).json({ code: 'INVALID_INPUT', message: 'Provide at least one tenant setting to update' })
   }
@@ -365,6 +399,8 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
     const currentPolicyNumberFormats = getMemoryTenantPolicyNumberFormats(tenantId)
     const currentMfaRequired = getMemoryTenantMfaRequired(tenantId)
     const currentAiMlConfig = getMemoryTenantAiMlConfig(tenantId)
+    const currentLocalAuthEnabled = getMemoryTenantLocalAuthEnabled(tenantId)
+    const currentSsoConfig = getMemoryTenantSsoConfig(tenantId)
     const nextPrefs = normalizeTenantDatePreferences(
       {
         defaultCountry: req.body?.defaultCountry ?? currentPrefs.defaultCountry,
@@ -386,6 +422,14 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       tenantId,
       req.body?.aiMlConfig ?? currentAiMlConfig
     )
+    const savedLocalAuthEnabled = setMemoryTenantLocalAuthEnabled(
+      tenantId,
+      req.body?.localAuthEnabled ?? currentLocalAuthEnabled
+    )
+    const savedSsoConfig = setMemoryTenantSsoConfig(
+      tenantId,
+      req.body?.ssoConfig ?? currentSsoConfig
+    )
     await cacheDeleteKey(buildCacheKey(['tenant-preferences', tenantId]))
     return res.json({
       tenantId,
@@ -394,7 +438,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       dateFormatsByCountry: saved.dateFormatsByCountry,
       policyNumberFormatsByProduct: savedPolicyNumberFormats,
       mfaRequired: savedMfaRequired,
-      aiMlConfig: savedAiMlConfig
+      aiMlConfig: savedAiMlConfig,
+      localAuthEnabled: savedLocalAuthEnabled,
+      ssoConfig: savedSsoConfig
     })
   }
   try {
@@ -406,11 +452,13 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       policyNumberFormatsByProduct: Record<string, string>
       mfaRequired: boolean
       aiMlConfig: any
+      localAuthEnabled: boolean
+      ssoConfig: any
     } | null = null
     await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       const existingResult = await q(
-        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config FROM tenants WHERE tenant_id=$1',
+        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config FROM tenants WHERE tenant_id=$1',
         [tenantId]
       )
       const existingRow = (existingResult as any).rows?.[0] || null
@@ -424,6 +472,12 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       const existingAiMlConfig = existingRow
         ? tenantAiMlConfigFromRow(existingRow)
         : defaultTenantAiMlConfig()
+      const existingLocalAuthEnabled = existingRow
+        ? tenantLocalAuthEnabledFromRow(existingRow)
+        : defaultTenantLocalAuthEnabled()
+      const existingSsoConfig = existingRow
+        ? tenantSsoConfigFromRow(existingRow)
+        : defaultTenantSsoConfig()
       const nextPrefs = normalizeTenantDatePreferences(
         {
           defaultCountry: req.body?.defaultCountry ?? existingPrefs.defaultCountry,
@@ -443,11 +497,19 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
         req.body?.aiMlConfig,
         existingAiMlConfig
       )
+      const nextLocalAuthEnabled = normalizeTenantLocalAuthEnabled(
+        req.body?.localAuthEnabled,
+        existingLocalAuthEnabled
+      )
+      const nextSsoConfig = normalizeTenantSsoConfig(
+        req.body?.ssoConfig,
+        existingSsoConfig
+      )
       const nextName = nameProvided ? name : (existingRow?.name || tenantId)
       if (existingRow) {
         await q(
           `UPDATE tenants
-           SET name=$2, default_country_code=$3, date_formats_by_country=$4, policy_number_formats_by_product=$5, mfa_required=$6, ai_ml_config=$7
+           SET name=$2, default_country_code=$3, date_formats_by_country=$4, policy_number_formats_by_product=$5, mfa_required=$6, ai_ml_config=$7, local_auth_enabled=$8, sso_config=$9
            WHERE tenant_id=$1`,
           [
             tenantId,
@@ -456,13 +518,15 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
             JSON.stringify(nextPrefs.dateFormatsByCountry),
             JSON.stringify(nextPolicyNumberFormats),
             nextMfaRequired,
-            JSON.stringify(nextAiMlConfig)
+            JSON.stringify(nextAiMlConfig),
+            nextLocalAuthEnabled,
+            JSON.stringify(nextSsoConfig)
           ]
         )
       } else {
         await q(
-          `INSERT INTO tenants (tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          `INSERT INTO tenants (tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             tenantId,
             nextName,
@@ -470,7 +534,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
             JSON.stringify(nextPrefs.dateFormatsByCountry),
             JSON.stringify(nextPolicyNumberFormats),
             nextMfaRequired,
-            JSON.stringify(nextAiMlConfig)
+            JSON.stringify(nextAiMlConfig),
+            nextLocalAuthEnabled,
+            JSON.stringify(nextSsoConfig)
           ]
         )
       }
@@ -481,7 +547,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
         dateFormatsByCountry: nextPrefs.dateFormatsByCountry,
         policyNumberFormatsByProduct: nextPolicyNumberFormats,
         mfaRequired: nextMfaRequired,
-        aiMlConfig: nextAiMlConfig
+        aiMlConfig: nextAiMlConfig,
+        localAuthEnabled: nextLocalAuthEnabled,
+        ssoConfig: nextSsoConfig
       }
     })
     await cacheDeleteKey(buildCacheKey(['tenant-preferences', tenantId]))

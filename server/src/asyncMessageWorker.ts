@@ -1,12 +1,12 @@
 import type { Pool } from 'pg'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { createDrizzleDb, getDb } from './db.js'
 import { asyncMessageOutbox } from './schema.js'
 import { logger } from './logger.js'
 
 type AsyncOutboxStatus = 'Pending' | 'Processing' | 'Retry' | 'Sent' | 'Failed'
 
-interface AsyncOutboxRow {
+export interface AsyncOutboxRow {
   message_id: string
   tenant_id: string
   topic: string
@@ -16,7 +16,7 @@ interface AsyncOutboxRow {
   created_at: string
 }
 
-interface AsyncPushConfig {
+export interface AsyncPushConfig {
   enabled: boolean
   webhookUrl: string
   authHeader: string
@@ -94,7 +94,8 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
   }
 }
 
-function loadConfig(): AsyncPushConfig {
+/** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same delivery config. */
+export function loadConfig(): AsyncPushConfig {
   return {
     enabled: parseBoolean(process.env.ASYNC_PUSH_ENABLED, true),
     webhookUrl: (process.env.ASYNC_PUSH_WEBHOOK_URL || '').trim(),
@@ -107,12 +108,16 @@ function loadConfig(): AsyncPushConfig {
   }
 }
 
-async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRow[]> {
+/** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same claim query. */
+export async function claimOutboxRows(pool: Pool, limit: number, tenantId?: string): Promise<AsyncOutboxRow[]> {
   // This query uses FOR UPDATE SKIP LOCKED with a CTE, which requires raw SQL.
   // We keep it as a raw query via a dedicated client transaction.
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const params: any[] = [PENDING_STATUSES, limit]
+    const tenantFilter = tenantId ? 'AND tenant_id = $3' : ''
+    if (tenantId) params.push(tenantId)
     const result = await client.query<AsyncOutboxRow>(
       `
         WITH candidate AS (
@@ -121,6 +126,7 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
           WHERE status = ANY($1::text[])
             AND next_attempt_at <= now()
             AND attempts < max_attempts
+            ${tenantFilter}
           ORDER BY next_attempt_at ASC, created_at ASC
           LIMIT $2
           FOR UPDATE SKIP LOCKED
@@ -133,7 +139,7 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
         WHERE outbox.message_id = candidate.message_id
         RETURNING outbox.message_id, outbox.tenant_id, outbox.topic, outbox.payload, outbox.attempts, outbox.max_attempts, outbox.created_at
       `,
-      [PENDING_STATUSES, limit]
+      params
     )
     await client.query('COMMIT')
     return result.rows
@@ -145,7 +151,13 @@ async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRo
   }
 }
 
-async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<void> {
+/**
+ * Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse
+ * the same dispatch behavior. Returns true when the row was sent
+ * successfully, false when it was scheduled for retry or marked Failed.
+ * Never throws for delivery failures; only a DB error propagates.
+ */
+export async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncPushConfig): Promise<boolean> {
   const db = createDrizzleDb(pool)
   const nextAttempts = row.attempts + 1
   try {
@@ -160,7 +172,11 @@ async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncP
         nextAttemptAt: new Date(),
         updatedAt: new Date()
       })
-      .where(eq(asyncMessageOutbox.messageId, row.message_id as any))
+      .where(and(
+        eq(asyncMessageOutbox.messageId, row.message_id as any),
+        eq(asyncMessageOutbox.tenantId, row.tenant_id)
+      ))
+    return true
   } catch (err) {
     const exhausted = nextAttempts >= row.max_attempts
     const delaySeconds = exhausted
@@ -179,13 +195,17 @@ async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config: AsyncP
           : sql`now() + make_interval(secs => ${delaySeconds})`,
         updatedAt: new Date()
       })
-      .where(eq(asyncMessageOutbox.messageId, row.message_id as any))
+      .where(and(
+        eq(asyncMessageOutbox.messageId, row.message_id as any),
+        eq(asyncMessageOutbox.tenantId, row.tenant_id)
+      ))
 
     if (exhausted) {
       logger.error({ messageId: row.message_id, attempts: nextAttempts, err: errorText }, '[async-push] Message failed permanently')
     } else {
       logger.warn({ messageId: row.message_id, attempts: nextAttempts, retryInSeconds: delaySeconds, err: errorText }, '[async-push] Message retry scheduled')
     }
+    return false
   }
 }
 
