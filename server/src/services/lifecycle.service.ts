@@ -28,6 +28,93 @@ import {
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import {
+  deriveTimelineSegments,
+  findTimelineStateAtDate,
+  findRebasedTransactions,
+  computeRetroResult,
+  type TimelineVersionInput,
+} from '../policyTimeline.js'
+import {
+  loadPolicyTimelineVersions,
+  loadCurrentTimelineVersion,
+  nextPolicyTransactionSequence,
+  persistPolicyTimelineSegments,
+} from './endorsement.service.js'
+
+// ── Out-of-sequence helpers (shared by cancel/reinstate) ───────────────────────
+
+/**
+ * Detect whether an effective date lands before an already-processed later
+ * transaction, and if so, compute the corrected historical premium basis and
+ * the segment set that must be persisted so `getPolicyState` (asOf) stays
+ * correct. Mirrors the same rebase detection endorsement.service.ts performs,
+ * so cancellation/reinstatement interact correctly with existing/later
+ * transactions the same way endorsements do (issue #52).
+ */
+async function computeOutOfSequenceContext(params: {
+  q: ReturnType<typeof toRawQuery>
+  tenantId: string
+  policyId: string
+  termEffective: string
+  termExpiration: string
+  eff: string
+  currentFullPremium: number
+}) {
+  const { q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium } = params
+  const timelineVersionsBefore = await loadPolicyTimelineVersions(q, tenantId, policyId)
+  const rebasedTransactions = findRebasedTransactions(timelineVersionsBefore, eff)
+  const isOutOfSequence = rebasedTransactions.length > 0
+  const oldSegments = deriveTimelineSegments({
+    tenantId,
+    versions: timelineVersionsBefore,
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  let effectiveFullPremium = currentFullPremium
+  if (isOutOfSequence) {
+    const stateAtEffective = findTimelineStateAtDate(oldSegments, eff)
+    if (stateAtEffective) effectiveFullPremium = stateAtEffective.premiumTotal
+  }
+  return { timelineVersionsBefore, rebasedTransactions, isOutOfSequence, oldSegments, effectiveFullPremium }
+}
+
+async function nextTimelineVersion(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string) {
+  const baseTimelineVersion = await loadCurrentTimelineVersion(q, tenantId, policyId)
+  return { baseTimelineVersion, timelineVersion: baseTimelineVersion + 1 }
+}
+
+/**
+ * Pure computation only — does not write to the database. The caller must
+ * persist `newSegments` via `persistPolicyTimelineSegments` AFTER the new
+ * transaction's `policy_versions` row has been inserted, since segment rows
+ * carry a foreign key to `policy_versions.version_id`.
+ */
+function computeNewSegmentsAndRetro(params: {
+  tenantId: string
+  termEffective: string
+  termExpiration: string
+  timelineVersionsBefore: TimelineVersionInput[]
+  oldSegments: ReturnType<typeof deriveTimelineSegments>
+  newTimelineVersion: TimelineVersionInput
+  eff: string
+}) {
+  const { tenantId, termEffective, termExpiration, timelineVersionsBefore, oldSegments, newTimelineVersion, eff } = params
+  const newSegments = deriveTimelineSegments({
+    tenantId,
+    versions: [...timelineVersionsBefore, newTimelineVersion],
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  const retroAdjustment = computeRetroResult({
+    oldSegments,
+    newSegments,
+    fromDate: eff,
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  return { newSegments, retroAdjustment }
+}
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -309,7 +396,15 @@ export async function cancelPolicy(
         : null)
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
-  let returnPremiumResult = { returnPremium: 0, earnedPremium: fullPremium, method: 'PRO_RATA' }
+  // Detect whether this cancellation lands before an already-processed later
+  // transaction and, if so, correct the refund/earned-premium basis using the
+  // premium that was actually in effect on `eff` (issue #52).
+  const oos = await computeOutOfSequenceContext({
+    q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium: fullPremium,
+  })
+  const effectiveFullPremium = oos.effectiveFullPremium
+
+  let returnPremiumResult = { returnPremium: 0, earnedPremium: effectiveFullPremium, method: 'PRO_RATA' }
   let resolvedCancellationType = 'PRO_RATA'
   let resolvedReasonDescription = reason || ''
 
@@ -326,7 +421,7 @@ export async function cancelPolicy(
 
       returnPremiumResult = computeReturnPremium({
         returnPremiumMethod: reasonRow.return_premium as any,
-        fullPremium,
+        fullPremium: effectiveFullPremium,
         cancelDate: eff,
         termEffectiveDate: termEffective,
         termExpirationDate: termExpiration,
@@ -337,9 +432,9 @@ export async function cancelPolicy(
 
   if (!cancellationReasonCode || returnPremiumResult.returnPremium === 0) {
     const factor = proRataFactor(eff, termEffective, termExpiration)
-    const proRataRefund = round2(fullPremium * factor)
+    const proRataRefund = round2(effectiveFullPremium * factor)
     if (returnPremiumResult.returnPremium === 0 && proRataRefund > 0) {
-      returnPremiumResult = { returnPremium: proRataRefund, earnedPremium: round2(fullPremium - proRataRefund), method: 'PRO_RATA' }
+      returnPremiumResult = { returnPremium: proRataRefund, earnedPremium: round2(effectiveFullPremium - proRataRefund), method: 'PRO_RATA' }
     }
   }
 
@@ -358,6 +453,20 @@ export async function cancelPolicy(
     transactionNumber,
     premium: simplePremium(-refund),
   }
+
+  const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
+  const { baseTimelineVersion, timelineVersion } = await nextTimelineVersion(q, tenantId, policyId)
+  const newCancelTimelineVersion: TimelineVersionInput = {
+    versionId, transactionId, transactionType: 'Cancel', transactionNumber,
+    effectiveDate: eff, processedAt, payload: txPayload,
+  }
+  const { newSegments, retroAdjustment } = computeNewSegmentsAndRetro({
+    tenantId, termEffective, termExpiration,
+    timelineVersionsBefore: oos.timelineVersionsBefore,
+    oldSegments: oos.oldSegments,
+    newTimelineVersion: newCancelTimelineVersion,
+    eff,
+  })
 
   const documentPacket = await buildPolicyDocumentPacket(q, {
     tenantId,
@@ -389,6 +498,11 @@ export async function cancelPolicy(
     forms: documentPacket.forms,
     documents: documentPacket.documents,
     createdBy: actor?.id || null,
+    effectiveDate: eff,
+    processedAt,
+    sequenceNo,
+    baseTimelineVersion,
+    timelineVersion,
     metadata: {
       reason: resolvedReasonDescription || reason || null,
       refund,
@@ -396,6 +510,9 @@ export async function cancelPolicy(
       cancellationType: resolvedCancellationType,
       returnPremiumMethod: returnPremiumResult.method,
       transactionNumber,
+      outOfSequence: oos.isOutOfSequence,
+      rebasedTransactions: oos.rebasedTransactions,
+      retroAdjustment,
     },
   })
 
@@ -426,7 +543,11 @@ export async function cancelPolicy(
     currency,
     payload: txPayload || null,
     transactionNumber,
+    baseTimelineVersion,
+    timelineVersion,
   })
+
+  await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)
 
   if (cancellationReasonCode || resolvedCancellationType) {
     await q(
@@ -554,8 +675,17 @@ export async function reinstatePolicy(
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
+
+  // Detect whether this reinstatement lands before an already-processed later
+  // transaction and, if so, correct the reinstatement charge basis using the
+  // premium that was actually in effect on `eff` (issue #52).
+  const oos = await computeOutOfSequenceContext({
+    q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium: fullPremium,
+  })
+  const effectiveFullPremium = oos.effectiveFullPremium
+
   const factor = proRataFactor(eff, termEffective, termExpiration)
-  const reinstatementCharge = round2(fullPremium * factor)
+  const reinstatementCharge = round2(effectiveFullPremium * factor)
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -570,6 +700,20 @@ export async function reinstatePolicy(
     transactionNumber,
     premium: simplePremium(reinstatementCharge),
   }
+
+  const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
+  const { baseTimelineVersion, timelineVersion } = await nextTimelineVersion(q, tenantId, policyId)
+  const newReinstateTimelineVersion: TimelineVersionInput = {
+    versionId, transactionId, transactionType: 'Reinstate', transactionNumber,
+    effectiveDate: eff, processedAt, payload: txPayload,
+  }
+  const { newSegments, retroAdjustment } = computeNewSegmentsAndRetro({
+    tenantId, termEffective, termExpiration,
+    timelineVersionsBefore: oos.timelineVersionsBefore,
+    oldSegments: oos.oldSegments,
+    newTimelineVersion: newReinstateTimelineVersion,
+    eff,
+  })
 
   const documentPacket = await buildPolicyDocumentPacket(q, {
     tenantId,
@@ -601,7 +745,19 @@ export async function reinstatePolicy(
     forms: documentPacket.forms,
     documents: documentPacket.documents,
     createdBy: actor?.id || null,
-    metadata: { reinstateDate: eff, transactionNumber, reinstatementCharge },
+    effectiveDate: eff,
+    processedAt,
+    sequenceNo,
+    baseTimelineVersion,
+    timelineVersion,
+    metadata: {
+      reinstateDate: eff,
+      transactionNumber,
+      reinstatementCharge,
+      outOfSequence: oos.isOutOfSequence,
+      rebasedTransactions: oos.rebasedTransactions,
+      retroAdjustment,
+    },
   })
 
   await persistPolicyDocumentPacket(db, {
@@ -631,7 +787,11 @@ export async function reinstatePolicy(
     currency,
     payload: txPayload || null,
     transactionNumber,
+    baseTimelineVersion,
+    timelineVersion,
   })
+
+  await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)
 
   await insertRating(db, {
     tenantId,

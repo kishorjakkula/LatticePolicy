@@ -117,7 +117,10 @@ Important lifecycle flows:
 
 - Quote -> rate -> underwriting decision -> bind -> policy projection and initial version.
 - Issue, endorse, cancel, reinstate, rewrite, renew, and non-renew transactions.
-- Effective-dated timelines support out-of-sequence endorsements and retro adjustment concepts.
+- Effective-dated timelines support out-of-sequence endorsements, cancellations,
+  and reinstatements, with retro adjustment and rebase metadata recorded on the
+  transaction. Renewal and rewrite start a new term window and are not part of
+  this mid-term rebase model (see `docs/tasks/issue-52-out-of-sequence-handling.md`).
 - Customer portal APIs must return customer-safe projections only and enforce linked-customer scope.
 
 ## Security And Tenancy
