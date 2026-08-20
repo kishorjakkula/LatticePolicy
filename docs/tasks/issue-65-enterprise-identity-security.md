@@ -18,7 +18,7 @@ were left untouched.
 
 ## Important Files
 
-- `server/migrations/040_enterprise_identity_security.sql`: adds
+- `server/migrations/041_enterprise_identity_security.sql`: adds
   `tenants.local_auth_enabled`, `tenants.sso_config`,
   `users.failed_login_attempts`, `users.locked_until`,
   `users.password_updated_at`, `users.auth_provider`,
