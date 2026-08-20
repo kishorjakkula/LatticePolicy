@@ -32,6 +32,12 @@ describe('validatePasswordPolicy', () => {
     const result = validatePasswordPolicy('Password123!')
     expect(result.ok).toBe(false)
   })
+
+  it('handles long symbol padding around weak passwords without regex backtracking risk', () => {
+    const result = validatePasswordPolicy(`${'!'.repeat(10_000)}Welcome2026!${'`'.repeat(10_000)}`)
+    expect(result.ok).toBe(false)
+    expect(result.errors).toContain('Password is too common; choose a less predictable value')
+  })
 })
 
 describe('lockout state machine', () => {

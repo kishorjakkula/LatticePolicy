@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { buildAuthorizationUrl, generateState, mapOidcClaimsToRoles, resolveClientSecret } from '../sso.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { buildAuthorizationUrl, exchangeCodeForTokens, generateState, mapOidcClaimsToRoles, resolveClientSecret } from '../sso.js'
 import { defaultTenantSsoConfig } from '../../config/tenant-identity.js'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('mapOidcClaimsToRoles', () => {
   const baseConfig = {
@@ -87,5 +91,82 @@ describe('resolveClientSecret', () => {
   it('returns empty string when no env var is configured', () => {
     const config = defaultTenantSsoConfig()
     expect(resolveClientSecret(config)).toBe('')
+  })
+})
+
+describe('exchangeCodeForTokens', () => {
+  const baseConfig = {
+    ...defaultTenantSsoConfig(),
+    issuer: 'https://idp.example.com',
+    authorizationEndpoint: 'https://idp.example.com/oauth2/authorize',
+    tokenEndpoint: 'https://idp.example.com/oauth2/token',
+    jwksUri: 'https://idp.example.com/oauth2/keys',
+    clientId: 'lattice-client',
+    redirectUri: 'https://api.example.com/auth/sso/acme/callback'
+  }
+
+  it('rejects non-public token endpoints before making an outbound request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(exchangeCodeForTokens({
+      ...baseConfig,
+      issuer: 'https://127.0.0.1',
+      authorizationEndpoint: 'https://127.0.0.1/authorize',
+      tokenEndpoint: 'https://127.0.0.1/token',
+      jwksUri: 'https://127.0.0.1/keys'
+    }, { code: 'abc' })).rejects.toThrow('public provider hostname')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects token endpoints that do not match the configured provider host', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(exchangeCodeForTokens({
+      ...baseConfig,
+      tokenEndpoint: 'https://tokens.example.net/oauth2/token'
+    }, { code: 'abc' })).rejects.toThrow('configured provider hostname')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects public provider hosts that are not enabled in server-owned OIDC presets', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(exchangeCodeForTokens({
+      ...baseConfig,
+      tokenEndpoint: 'https://idp.example.com/custom/token'
+    }, { code: 'abc' })).rejects.toThrow('must be one of')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('allows the supported Microsoft common token endpoint preset', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ id_token: 'id-token-456' })
+    })))
+
+    const tokens = await exchangeCodeForTokens({
+      ...baseConfig,
+      issuer: 'https://login.microsoftonline.com',
+      authorizationEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+      tokenEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+      jwksUri: 'https://login.microsoftonline.com/common/discovery/v2.0/keys'
+    }, { code: 'abc' })
+    expect(tokens.id_token).toBe('id-token-456')
+  })
+
+  it('exchanges codes with a validated public provider token endpoint', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ id_token: 'id-token-123', access_token: 'access-token-123' })
+    })))
+
+    const tokens = await exchangeCodeForTokens(baseConfig, { code: 'abc' })
+    expect(tokens.id_token).toBe('id-token-123')
+    expect(fetch).toHaveBeenCalledWith('https://idp.example.com/oauth2/token', expect.objectContaining({
+      method: 'POST'
+    }))
   })
 })

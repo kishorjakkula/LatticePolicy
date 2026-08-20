@@ -39,7 +39,7 @@ test.describe('browser workflows', () => {
   test('customer can open portal list and policy summary', async ({ page, request }) => {
     const admin = await loginApi(request, 'admin')
     const setup = await createPortalUserForPolicy(request, admin.token)
-    const customer = await loginApi(request, setup.username)
+    const customer = await loginApi(request, setup.username, setup.password)
     await installAuthState(page, customer)
 
     await page.goto('/portal')

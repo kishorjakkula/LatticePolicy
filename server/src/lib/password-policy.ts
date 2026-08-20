@@ -8,7 +8,18 @@ const COMMON_WEAK_PASSWORD_ROOTS = new Set([
 
 /** Strips common leading/trailing digits and symbols so "Password123!" still matches "password". */
 function toWeakPasswordRoot(value: string): string {
-  return value.trim().toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, '')
+  const normalized = value.trim().toLowerCase()
+  let start = 0
+  let end = normalized.length
+
+  while (start < end && !isAsciiLowercaseLetter(normalized.charCodeAt(start))) start += 1
+  while (end > start && !isAsciiLowercaseLetter(normalized.charCodeAt(end - 1))) end -= 1
+
+  return normalized.slice(start, end)
+}
+
+function isAsciiLowercaseLetter(code: number): boolean {
+  return code >= 97 && code <= 122
 }
 
 export type PasswordPolicyResult = {

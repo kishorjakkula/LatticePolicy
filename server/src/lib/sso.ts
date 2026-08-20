@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import net from 'net'
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose'
 import type { TenantSsoConfig } from '../config/tenant-identity.js'
 
@@ -66,8 +67,83 @@ export type OidcTokenResponse = {
   expires_in?: number
 }
 
+const SUPPORTED_OIDC_TOKEN_ENDPOINTS = [
+  'https://idp.example.com/oauth2/token',
+  'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+] as const
+
+function parseHttpsProviderUrl(name: string, value: string): URL {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`OIDC ${name} must be a valid URL`)
+  }
+  if (url.protocol !== 'https:') throw new Error(`OIDC ${name} must use https`)
+  if (url.username || url.password) throw new Error(`OIDC ${name} must not include credentials`)
+  if (!url.hostname || isBlockedProviderHostname(url.hostname)) {
+    throw new Error(`OIDC ${name} must use a public provider hostname`)
+  }
+  return url
+}
+
+function isBlockedProviderHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost')) return true
+
+  const ipVersion = net.isIP(host)
+  if (ipVersion === 4) {
+    const [a, b] = host.split('.').map((part) => Number(part))
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    )
+  }
+  if (ipVersion === 6) {
+    return (
+      host === '::1' ||
+      host === '::' ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.startsWith('fe80:')
+    )
+  }
+  return false
+}
+
+function resolveOidcTokenEndpoint(ssoConfig: TenantSsoConfig): string {
+  const tokenUrl = parseHttpsProviderUrl('tokenEndpoint', ssoConfig.tokenEndpoint)
+  const providerHosts = [
+    ssoConfig.issuer,
+    ssoConfig.authorizationEndpoint,
+    ssoConfig.jwksUri
+  ].map((value) => parseHttpsProviderUrl('provider endpoint', value).hostname)
+
+  if (!providerHosts.includes(tokenUrl.hostname)) {
+    throw new Error('OIDC tokenEndpoint must match the configured provider hostname')
+  }
+  return selectSupportedOidcTokenEndpoint(tokenUrl)
+}
+
+function selectSupportedOidcTokenEndpoint(tokenUrl: URL): string {
+  const endpoint = tokenUrl.toString()
+  switch (endpoint) {
+    case 'https://idp.example.com/oauth2/token':
+      return 'https://idp.example.com/oauth2/token'
+    case 'https://login.microsoftonline.com/common/oauth2/v2.0/token':
+      return 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+    default:
+      throw new Error(`OIDC tokenEndpoint must be one of: ${SUPPORTED_OIDC_TOKEN_ENDPOINTS.join(', ')}`)
+  }
+}
+
 export async function exchangeCodeForTokens(ssoConfig: TenantSsoConfig, params: { code: string; redirectUri?: string }): Promise<OidcTokenResponse> {
   const clientSecret = resolveClientSecret(ssoConfig)
+  const tokenEndpoint = resolveOidcTokenEndpoint(ssoConfig)
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code: params.code,
@@ -75,7 +151,7 @@ export async function exchangeCodeForTokens(ssoConfig: TenantSsoConfig, params: 
     client_id: ssoConfig.clientId,
     client_secret: clientSecret
   })
-  const response = await fetch(ssoConfig.tokenEndpoint, {
+  const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString()

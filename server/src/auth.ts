@@ -173,10 +173,11 @@ async function resolveTenantMfaRequired(tenantId: string): Promise<boolean> {
 
 export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
   const hdr = req.header('Authorization') || ''
-  const m = /^Bearer\s+(.+)$/.exec(hdr)
+  const bearerPrefix = 'Bearer '
+  const headerToken = hdr.startsWith(bearerPrefix) ? hdr.slice(bearerPrefix.length) : ''
   const queryTokenAllowed = req.path === '/api-docs' || req.path === '/openapi.json'
   const queryToken = queryTokenAllowed ? String((req.query as any)?.token || '').trim() : ''
-  const rawToken = (m?.[1] || queryToken || '').trim()
+  const rawToken = (headerToken || queryToken || '').trim()
   if (rawToken) {
     try {
       const payload: any = jwt.verify(rawToken, getJwtSecret())

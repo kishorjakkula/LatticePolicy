@@ -4,6 +4,7 @@ import { expect } from '@playwright/test'
 export const tenantId = process.env.E2E_TENANT_ID || 'sample-carrier'
 export const apiBaseUrl = process.env.E2E_API_BASE_URL || 'http://localhost:3300'
 export const defaultPassword = process.env.E2E_PASSWORD || 'password'
+export const createdUserPassword = process.env.E2E_CREATED_USER_PASSWORD || 'PortalUser!2026'
 
 export type AuthSession = {
   token: string
@@ -237,12 +238,12 @@ export async function createPortalUserForPolicy(request: APIRequestContext, admi
     expectedStatus: 201,
     data: {
       username,
-      password: defaultPassword,
+      password: createdUserPassword,
       roles: ['customer'],
       customerRef: customer.customerKey,
     },
   })
-  return { customer, policy, username, user }
+  return { customer, policy, username, password: createdUserPassword, user }
 }
 
 export async function seedDemoPolicies(request: APIRequestContext, adminToken: string) {

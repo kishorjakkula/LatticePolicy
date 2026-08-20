@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/65
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/164
 
 ## Summary
 
@@ -41,6 +41,9 @@ were left untouched.
   `tenants.local_auth_enabled`, rejects OIDC-provisioned accounts from
   password login, checks/records lockout state, and exported
   `buildAuthUser` (needed by `sso.routes.ts`).
+- `e2e/support/api.ts`: demo-user logins keep using the documented local
+  `password`, while E2E-created portal users use a policy-compliant generated
+  password so admin user creation exercises the real password policy.
 - `server/src/services/user.service.ts`: lockout read/write helpers
   (`recordFailedLoginAttempt`, `resetLoginFailureState`),
   `findOrCreateSsoUser`, and an **opt-in** `enforcePasswordPolicy` flag on
@@ -81,6 +84,15 @@ were left untouched.
   claim value matches `roleMapping`; if that list is also empty, the
   callback returns `403 SSO_NO_ROLE_MAPPING` rather than provisioning a
   roleless user.
+- OIDC token exchange validates configured provider URLs before any outbound
+  request: HTTPS only, no embedded credentials, no localhost/private IP
+  targets, and the token endpoint host must match the configured provider
+  host. The final outbound token endpoint is selected from server-owned
+  provider presets so tenant configuration cannot steer token exchange to an
+  arbitrary URL.
+- Authorization header parsing intentionally avoids a regular expression so
+  long malformed bearer headers cannot trigger CodeQL's polynomial-ReDoS
+  pattern.
 
 ## Automated Tests
 
@@ -88,6 +100,9 @@ were left untouched.
   - `server/src/lib/__tests__/sso.test.ts`
   - `server/src/lib/__tests__/password-policy.test.ts`
   - `server/src/__tests__/auth-local-auth-disabled.test.ts`
+  - `e2e/support/api.ts`, `e2e/workflows.spec.ts`, and
+    `e2e/auth-route-access.spec.ts` were updated so portal-user E2E setup uses
+    a password that satisfies the new admin-created-user policy.
 - Test layer used: unit tests for pure claim-mapping/policy logic (DB-free,
   fast, and directly satisfy the issue's "tests cover SSO claim mapping
   helpers" acceptance criterion), plus one API-level test of the
