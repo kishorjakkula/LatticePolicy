@@ -11,14 +11,14 @@ import type { JobHandler } from '../registry.js'
  * always-on worker (ASYNC_PUSH_ENABLED) or via this job (manually enqueued
  * or scheduled through the job queue).
  */
-export const asyncOutboxDeliveryRetryHandler: JobHandler = async ({ checkpoint }) => {
+export const asyncOutboxDeliveryRetryHandler: JobHandler = async ({ run, checkpoint }) => {
   const pool = getDb()
   if (!pool) {
     throw new Error('Database not initialized')
   }
 
   const config = loadAsyncPushConfig()
-  const batch = await claimOutboxRows(pool, config.batchSize)
+  const batch = await claimOutboxRows(pool, config.batchSize, run.tenant_id)
 
   let sent = 0
   let retriedOrFailed = 0

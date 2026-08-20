@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { createDrizzleDb, getDb } from './db.js'
 import { asyncMessageOutbox } from './schema.js'
 import { logger } from './logger.js'
@@ -109,12 +109,15 @@ export function loadConfig(): AsyncPushConfig {
 }
 
 /** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same claim query. */
-export async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncOutboxRow[]> {
+export async function claimOutboxRows(pool: Pool, limit: number, tenantId?: string): Promise<AsyncOutboxRow[]> {
   // This query uses FOR UPDATE SKIP LOCKED with a CTE, which requires raw SQL.
   // We keep it as a raw query via a dedicated client transaction.
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const params: any[] = [PENDING_STATUSES, limit]
+    const tenantFilter = tenantId ? 'AND tenant_id = $3' : ''
+    if (tenantId) params.push(tenantId)
     const result = await client.query<AsyncOutboxRow>(
       `
         WITH candidate AS (
@@ -123,6 +126,7 @@ export async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncO
           WHERE status = ANY($1::text[])
             AND next_attempt_at <= now()
             AND attempts < max_attempts
+            ${tenantFilter}
           ORDER BY next_attempt_at ASC, created_at ASC
           LIMIT $2
           FOR UPDATE SKIP LOCKED
@@ -135,7 +139,7 @@ export async function claimOutboxRows(pool: Pool, limit: number): Promise<AsyncO
         WHERE outbox.message_id = candidate.message_id
         RETURNING outbox.message_id, outbox.tenant_id, outbox.topic, outbox.payload, outbox.attempts, outbox.max_attempts, outbox.created_at
       `,
-      [PENDING_STATUSES, limit]
+      params
     )
     await client.query('COMMIT')
     return result.rows
@@ -168,7 +172,10 @@ export async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config:
         nextAttemptAt: new Date(),
         updatedAt: new Date()
       })
-      .where(eq(asyncMessageOutbox.messageId, row.message_id as any))
+      .where(and(
+        eq(asyncMessageOutbox.messageId, row.message_id as any),
+        eq(asyncMessageOutbox.tenantId, row.tenant_id)
+      ))
     return true
   } catch (err) {
     const exhausted = nextAttempts >= row.max_attempts
@@ -188,7 +195,10 @@ export async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config:
           : sql`now() + make_interval(secs => ${delaySeconds})`,
         updatedAt: new Date()
       })
-      .where(eq(asyncMessageOutbox.messageId, row.message_id as any))
+      .where(and(
+        eq(asyncMessageOutbox.messageId, row.message_id as any),
+        eq(asyncMessageOutbox.tenantId, row.tenant_id)
+      ))
 
     if (exhausted) {
       logger.error({ messageId: row.message_id, attempts: nextAttempts, err: errorText }, '[async-push] Message failed permanently')

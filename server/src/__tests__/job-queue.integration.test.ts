@@ -198,9 +198,6 @@ describe('job queue framework', () => {
     expect(payload.claimed).toBeGreaterThanOrEqual(1)
     expect(payload.sent).toBeGreaterThanOrEqual(1)
 
-    // The handler claims globally oldest-due async_message_outbox rows
-    // first, so with other integration test files' fixtures sharing this
-    // Postgres instance, our row may not land in the very first batch.
     // Drain directly (mirrors a worker polling repeatedly in production)
     // until either it is dispatched or there is nothing left to claim, then
     // re-read the row's actual status rather than trusting loop state.
@@ -212,7 +209,7 @@ describe('job queue framework', () => {
         return res.rows[0]?.status
       })
       if (current === 'Sent') break
-      const batch = await claimOutboxRows(pool, 25)
+      const batch = await claimOutboxRows(pool, 25, tenantA)
       if (batch.length === 0) break
       for (const row of batch) {
         await dispatchOutboxRow(pool, row, asyncPushConfig)
@@ -225,6 +222,64 @@ describe('job queue framework', () => {
       return res.rows[0]
     })
     expect(outboxRow.status).toBe('Sent')
+  })
+
+  it('the async_outbox_delivery_retry handler only dispatches rows for its run tenant', async () => {
+    const pool = getDb()!
+    const tenantASourceId = crypto.randomUUID()
+    const tenantBSourceId = crypto.randomUUID()
+
+    await withTenantTx(tenantA, async (db) => {
+      const q = toRawQuery(db)
+      await q(
+        `INSERT INTO async_message_outbox (tenant_id, source_table, source_id, topic, payload)
+         VALUES ($1, 'test_source', $2, 'test.topic', $3::jsonb)`,
+        [tenantA, tenantASourceId, JSON.stringify({ tenant: tenantA })]
+      )
+    })
+    await withTenantTx(tenantB, async (db) => {
+      const q = toRawQuery(db)
+      await q(
+        `INSERT INTO async_message_outbox (tenant_id, source_table, source_id, topic, payload)
+         VALUES ($1, 'test_source', $2, 'test.topic', $3::jsonb)`,
+        [tenantB, tenantBSourceId, JSON.stringify({ tenant: tenantB })]
+      )
+    })
+
+    const key = `test:handler-tenant:${suffix()}`
+    const { run } = await enqueueJob({ tenantId: tenantA, jobCode: 'async_outbox_delivery_retry', idempotencyKey: key })
+    const claimed = await claimSpecificRun(pool, run.run_id, 'worker-handler-tenant')
+
+    const def = getJobDefinition('async_outbox_delivery_retry')!
+    const result = await def.handler({
+      run: claimed,
+      requestPayload: claimed.request_payload,
+      checkpoint: (data) => checkpointRun(claimed, data),
+    })
+
+    expect((result.resultPayload as { claimed: number }).claimed).toBeGreaterThanOrEqual(1)
+
+    const statuses = await Promise.all([
+      withTenantTx(tenantA, async (db) => {
+        const q = toRawQuery(db)
+        const res = await q(
+          `SELECT status FROM async_message_outbox WHERE tenant_id = $1 AND source_id = $2`,
+          [tenantA, tenantASourceId]
+        )
+        return res.rows[0]?.status
+      }),
+      withTenantTx(tenantB, async (db) => {
+        const q = toRawQuery(db)
+        const res = await q(
+          `SELECT status FROM async_message_outbox WHERE tenant_id = $1 AND source_id = $2`,
+          [tenantB, tenantBSourceId]
+        )
+        return res.rows[0]?.status
+      })
+    ])
+
+    expect(statuses[0]).toBe('Sent')
+    expect(statuses[1]).toBe('Pending')
   })
 })
 

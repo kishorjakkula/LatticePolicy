@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/57
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/165
 
 ## Summary
 
@@ -26,7 +26,8 @@ as the first real job type.
 - `server/src/jobs/worker.ts`: stateless polling worker
   (`JOB_WORKER_ENABLED`, default off).
 - `server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts`: first handler,
-  reuses the existing outbox worker's claim/dispatch functions.
+  reuses the existing outbox worker's claim/dispatch functions, scoped to the
+  job run tenant.
 - `server/src/asyncMessageWorker.ts`: exported `claimOutboxRows`,
   `dispatchOutboxRow` (now returns a success boolean), and `loadConfig` so
   the job handler can reuse them without duplicating logic.
@@ -56,6 +57,10 @@ as the first real job type.
 - Only `async_outbox_delivery_retry` is registered as a job type in this
   slice; scheduler creation/next-run calculation and a UI dashboard are
   explicitly out of scope (see design doc's "Still Open" section).
+- `async_outbox_delivery_retry` must only claim outbox rows for the tenant on
+  the claimed `job_runs` row. The standalone async push worker can still claim
+  globally, but tenant-scoped job runs must not dispatch another tenant's
+  messages.
 
 ## Automated Tests
 
@@ -67,7 +72,9 @@ as the first real job type.
     RLS policies exist, duplicate enqueue idempotency, tenant isolation,
     two concurrent claims cannot claim the same run, checkpoint/complete,
     retry-then-dead-letter after exhausting attempts, and an end-to-end run
-    of the `async_outbox_delivery_retry` handler against a real outbox row.
+    of the `async_outbox_delivery_retry` handler against a real outbox row,
+    including a regression that a tenant A job leaves tenant B outbox rows
+    untouched.
 - Test layer used: unit tests for pure logic (registry, backoff), DB
   integration tests for concurrency/locking/RLS/retry behavior that can't be
   proven without a real Postgres instance.
