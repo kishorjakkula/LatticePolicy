@@ -45,6 +45,77 @@ export function useDeleteUserMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Data Import
+// ---------------------------------------------------------------------------
+
+export function useImportBatches() {
+  return useQuery({
+    queryKey: queryKeys.dataImport.batches(),
+    queryFn: () => adminApi.listImportBatches(),
+  })
+}
+
+export function useImportBatch(batchId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dataImport.batch(batchId ?? ''),
+    queryFn: () => adminApi.getImportBatch(batchId as string),
+    enabled: !!batchId,
+  })
+}
+
+export function useImportRows(batchId: string | null, status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dataImport.rows(batchId ?? '', status),
+    queryFn: () => adminApi.listImportRows(batchId as string, status),
+    enabled: !!batchId,
+  })
+}
+
+export function useStageImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: { entityType: string; sourceSystem: string; rows: any[]; notes?: string }) =>
+      adminApi.stageImportBatch(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+    },
+  })
+}
+
+export function useValidateImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => adminApi.validateImportBatch(batchId),
+    onSuccess: (_data, batchId) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+export function useCommitImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => adminApi.commitImportBatch(batchId),
+    onSuccess: (_data, batchId) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+export function useRetryImportRowMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ batchId, rowId }: { batchId: string; rowId: string }) => adminApi.retryImportRow(batchId, rowId),
+    onSuccess: (_data, { batchId }) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Compliance
 // ---------------------------------------------------------------------------
 

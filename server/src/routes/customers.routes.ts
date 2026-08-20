@@ -13,13 +13,13 @@ import {
 import { today, asDateOnly as _asDateOnly } from '../lib/date.utils.js'
 import { routeParam, sanitizeText } from '../lib/utils.js'
 
-type QueryFn = (text: string, params?: any[]) => Promise<any>
+export type QueryFn = (text: string, params?: any[]) => Promise<any>
 
 type CustomerEntityType = 'INDIVIDUAL' | 'COMPANY' | 'BOTH'
 type CustomerStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'MERGED' | 'PENDING_APPROVAL' | 'ARCHIVED'
 type CustomerContactType = 'PHONE' | 'EMAIL'
 
-type CustomerValidationConfig = {
+export type CustomerValidationConfig = {
   individual: {
     requireFirstAndLast: boolean
     requireDobOrSsnLast4: boolean
@@ -60,7 +60,7 @@ type PotentialMatch = {
   reasons: string[]
 }
 
-type NormalizedCustomerInput = {
+export type NormalizedCustomerInput = {
   entityType: CustomerEntityType
   status: CustomerStatus
   identity: {
@@ -1187,7 +1187,7 @@ customerAdminRoutes.delete('/:idOrKey', requirePermission('admin.customers.manag
   }
 })
 
-async function createCustomerRecord(
+export async function createCustomerRecord(
   q: QueryFn,
   input: {
     tenantId: string
@@ -1242,7 +1242,7 @@ async function createCustomerRecord(
   return { customer, potentialMatches }
 }
 
-async function updateCustomerRecord(
+export async function updateCustomerRecord(
   q: QueryFn,
   input: {
     tenantId: string
@@ -1844,7 +1844,7 @@ async function syncAttachments(
   }
 }
 
-async function findExistingCustomerByExternalIdentifiers(
+export async function findExistingCustomerByExternalIdentifiers(
   q: QueryFn,
   tenantId: string,
   identifiers: NormalizedCustomerInput['externalIdentifiers']
@@ -2806,7 +2806,7 @@ async function loadCustomerRecordByIdOrKey(
   return loadCustomerRecordById(q, tenantId, String(row.rows[0].customer_id), includeCollections)
 }
 
-async function loadCustomerRecordById(
+export async function loadCustomerRecordById(
   q: QueryFn,
   tenantId: string,
   customerId: string,
@@ -3073,7 +3073,7 @@ async function allocateCustomerKey(q: QueryFn, tenantId: string, pattern: string
     .replace(/\{SEQ8\}/g, seqStr.padStart(8, '0'))
 }
 
-async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<CustomerSettings> {
+export async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<CustomerSettings> {
   const result = await q(
     `SELECT customer_key_pattern, customer_validation_config, customer_workflow_config
        FROM tenants
@@ -3096,7 +3096,7 @@ async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<Custo
   }
 }
 
-function validateCustomerPayload(payload: NormalizedCustomerInput, config: CustomerValidationConfig): ValidationResult {
+export function validateCustomerPayload(payload: NormalizedCustomerInput, config: CustomerValidationConfig): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const hasContacts = (payload.contactPoints || []).some((item) => Boolean(item.value))
@@ -3157,7 +3157,7 @@ function validateCustomerPayload(payload: NormalizedCustomerInput, config: Custo
   return { valid: errors.length === 0, errors, warnings }
 }
 
-function normalizeCustomerInput(input: any): NormalizedCustomerInput {
+export function normalizeCustomerInput(input: any): NormalizedCustomerInput {
   const entityType = normalizeEntityType(input.entityType)
   const status = normalizeCustomerStatus(input.status, 'DRAFT')
   const identityInput = input.identity || {}

@@ -8,6 +8,7 @@ import { evaluateUW } from '../uw.js'
 import { formsAdminRoutes } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
 import { complianceAdminRoutes } from './compliance-admin.routes.js'
+import { dataImportRoutes } from './data-import.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
 import { notificationTemplatesRoutes } from '../notificationTemplates.js'
 import {
@@ -72,6 +73,7 @@ adminRoutes.use('/customers', requirePermission('admin.customers.read'), custome
 adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
 adminRoutes.use('/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
 adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
+adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
