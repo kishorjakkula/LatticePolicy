@@ -24,6 +24,11 @@ export const queryKeys = {
     eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
     ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
   },
+  dataImport: {
+    batches: () => ['data-import', 'batches'] as const,
+    batch: (batchId: string) => ['data-import', 'batches', batchId] as const,
+    rows: (batchId: string, status?: string) => ['data-import', 'batches', batchId, 'rows', status ?? null] as const,
+  },
   dashboard: {
     summary: () => ['dashboard', 'summary'] as const,
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,

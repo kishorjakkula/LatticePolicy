@@ -19,6 +19,7 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'menu.admin.onboarding.view',
     'menu.admin.notifications.view',
     'menu.admin.compliance.view',
+    'menu.admin.import.view',
     'page.search.view',
     'page.portal.view',
     'page.rating.view',
@@ -34,6 +35,7 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.onboarding.view',
     'page.admin.notifications.view',
     'page.admin.compliance.view',
+    'page.admin.import.view',
     'admin.forms.read',
     'admin.forms.manage',
     'admin.forms.approve',
@@ -63,6 +65,8 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.notifications.manage',
     'admin.compliance.read',
     'admin.compliance.manage',
+    'admin.import.read',
+    'admin.import.manage',
     'menu.admin.dashboard.view',
     'page.admin.dashboard.view',
     'admin.dashboard.read',
@@ -97,6 +101,13 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.forms.approve',
     'admin.compliance.read',
     'admin.compliance.manage'
+  ],
+  data_import_admin: [
+    'menu.admin.view',
+    'menu.admin.import.view',
+    'page.admin.import.view',
+    'admin.import.read',
+    'admin.import.manage'
   ],
   security_admin: [
     'menu.admin.view',

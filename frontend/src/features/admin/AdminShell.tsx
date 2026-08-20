@@ -40,6 +40,9 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.compliance.view') && (
             <NavLink to="/admin/compliance" className={adminMenuClass}>Compliance</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.import.view') && (
+            <NavLink to="/admin/import" className={adminMenuClass}>Data Import</NavLink>
+          )}
           {hasPermission(user, 'menu.admin.dashboard.view') && (
             <NavLink to="/admin/dashboard" className={adminMenuClass}>Operations Dashboard</NavLink>
           )}
