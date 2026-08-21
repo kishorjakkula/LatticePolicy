@@ -197,6 +197,9 @@ npm run dev:frontend
 - [Commercial support and services](COMMERCIAL.md)
 - [Carrier onboarding and go-live certification kit](docs/CARRIER_ONBOARDING_KIT.md)
 - [Enterprise identity and security controls](docs/ENTERPRISE_IDENTITY_SECURITY.md)
+- [Reinsurance treaty and facultative placement model](docs/REINSURANCE_MODEL.md)
+- [ACORD and GRLC canonical data mapping](docs/ACORD_GRLC_MAPPING.md)
+- [Bordereaux generation and validation framework](docs/tasks/issue-62-bordereaux-framework.md)
 
 ## Extension Points
 

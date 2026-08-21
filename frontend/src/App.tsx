@@ -24,6 +24,7 @@ const HeaderWireframesPage = lazy(() => import('./features/layout/HeaderWirefram
 const UsersPage = lazy(() => import('./features/admin/UsersPage').then(m => ({ default: m.UsersPage })))
 const TenantPage = lazy(() => import('./features/admin/TenantPage').then(m => ({ default: m.TenantPage })))
 const UwQueue = lazy(() => import('./features/uw/UwQueue').then(m => ({ default: m.UwQueue })))
+const PlacementsPage = lazy(() => import('./features/placements/PlacementsPage').then(m => ({ default: m.PlacementsPage })))
 const RatingWorkbenchPage = lazy(() => import('./features/rating/RatingWorkbenchPage').then(m => ({ default: m.RatingWorkbenchPage })))
 const AdministrationPage = lazy(() => import('./features/admin/AdministrationPage').then(m => ({ default: m.AdministrationPage })))
 const AdminShell = lazy(() => import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell })))
@@ -37,6 +38,8 @@ const CompliancePage = lazy(() => import('./features/admin/CompliancePage').then
 const DataImportPage = lazy(() => import('./features/admin/DataImportPage').then(m => ({ default: m.DataImportPage })))
 const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDashboardPage').then(m => ({ default: m.OperationsDashboardPage })))
 const ExposurePage = lazy(() => import('./features/admin/ExposurePage').then(m => ({ default: m.ExposurePage })))
+const ReinsurancePage = lazy(() => import('./features/admin/ReinsurancePage').then(m => ({ default: m.ReinsurancePage })))
+const BordereauxPage = lazy(() => import('./features/admin/BordereauxPage').then(m => ({ default: m.BordereauxPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 
 export default function App() {
@@ -94,6 +97,7 @@ export default function App() {
             <Route path="/policies/:id" element={<RequireAuth><RequirePermission permission="page.policy.view"><PolicyViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/customers/:id" element={<RequireAuth><RequirePermission permission="admin.customers.read"><CustomerViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/uw/queue" element={<RequireAuth><RequirePermission permission="page.uw_queue.view"><UwQueue /></RequirePermission></RequireAuth>} />
+            <Route path="/placements" element={<RequireAuth><RequirePermission permission="page.placements.view"><PlacementsPage /></RequirePermission></RequireAuth>} />
             <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminShell /></RequireAdmin></RequireAuth>}>
               <Route index element={<AdminIndexRedirect />} />
               <Route path="forms" element={<RequirePermission permission="page.admin.forms.view"><FormsManagementPage /></RequirePermission>} />
@@ -108,6 +112,8 @@ export default function App() {
               <Route path="import" element={<RequirePermission permission="page.admin.import.view"><DataImportPage /></RequirePermission>} />
               <Route path="dashboard" element={<RequirePermission permission="page.admin.dashboard.view"><OperationsDashboardPage /></RequirePermission>} />
               <Route path="exposure" element={<RequirePermission permission="page.admin.exposure.view"><ExposurePage /></RequirePermission>} />
+              <Route path="reinsurance" element={<RequirePermission permission="page.admin.reinsurance.view"><ReinsurancePage /></RequirePermission>} />
+              <Route path="bordereaux" element={<RequirePermission permission="page.admin.bordereaux.view"><BordereauxPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>

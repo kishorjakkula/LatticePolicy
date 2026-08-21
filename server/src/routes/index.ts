@@ -7,6 +7,7 @@ import { quoteRoutes } from './quotes.routes.js'
 import { policyRoutes } from './policies.routes.js'
 import { transactionRoutes } from './transactions.routes.js'
 import { uwRoutes } from './uw.routes.js'
+import { placementRoutes } from './placement.routes.js'
 import { productsRoutes } from './products.routes.js'
 import { adminRoutes } from './admin.routes.js'
 import { ratingRoutes } from './rating-workbench.routes.js'
@@ -23,6 +24,7 @@ routes.use('/', quoteRoutes)
 routes.use('/', policyRoutes)
 routes.use('/', transactionRoutes)
 routes.use('/', uwRoutes)
+routes.use('/', placementRoutes)
 routes.use('/', productsRoutes)
 routes.use('/admin', adminRoutes)
 routes.use('/rating', ratingRoutes)

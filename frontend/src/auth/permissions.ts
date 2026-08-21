@@ -73,6 +73,14 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'menu.admin.exposure.view',
     'page.admin.exposure.view',
     'admin.exposure.read',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
     'rating.models.read',
@@ -90,7 +98,11 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.policy.view',
     'page.uw_queue.view',
     'uw.referrals.read',
-    'uw.referrals.decide'
+    'uw.referrals.decide',
+    'menu.placements.view',
+    'page.placements.view',
+    'placement.read',
+    'placement.manage'
   ],
   forms_admin: ['menu.admin.view', 'menu.admin.forms.view', 'page.admin.forms.view', 'admin.forms.read', 'admin.forms.manage'],
   compliance_admin: [
@@ -104,6 +116,20 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.forms.approve',
     'admin.compliance.read',
     'admin.compliance.manage'
+  ],
+  reinsurance_admin: [
+    'menu.admin.view',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage'
+  ],
+  bordereaux_admin: [
+    'menu.admin.view',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage'
   ],
   data_import_admin: [
     'menu.admin.view',

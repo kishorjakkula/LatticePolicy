@@ -1,0 +1,18 @@
+{
+  "TreatyName": "2026 Property Quota Share",
+  "TreatyTypeCd": "QUOTA_SHARE",
+  "ContractTerm.EffectiveDt": "2026-01-01",
+  "ContractTerm.ExpirationDt": "2027-01-01",
+  "LOBCd": ["homeowners", "commercial-property"],
+  "TreatyLayer": [
+    {
+      "LayerNumber": 1,
+      "CededPct": 40,
+      "RetainedPct": 60,
+      "SecurityInfo": [
+        { "ReinsurerName": "Meridian Re", "ParticipationPct": 25, "IsLead": true },
+        { "ReinsurerName": "Harborline Re", "ParticipationPct": 15 }
+      ]
+    }
+  ]
+}

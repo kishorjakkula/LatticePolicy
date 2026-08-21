@@ -49,6 +49,12 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.exposure.view') && (
             <NavLink to="/admin/exposure" className={adminMenuClass}>Exposure</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.reinsurance.view') && (
+            <NavLink to="/admin/reinsurance" className={adminMenuClass}>Reinsurance</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.bordereaux.view') && (
+            <NavLink to="/admin/bordereaux" className={adminMenuClass}>Bordereaux</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">
