@@ -31,7 +31,7 @@
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
-    "yaml": "^2.6.0",
+    "yaml": "^2.8.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -46,5 +46,11 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "form-data": "4.0.6"
   }
 }
