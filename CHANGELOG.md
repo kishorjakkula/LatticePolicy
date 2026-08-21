@@ -4,6 +4,56 @@ All notable changes to LatticePolicy are documented here. This project is
 pre-1.0; minor versions may still include breaking internal changes, but
 release notes should call out API, migration, setup, and product-pack impact.
 
+## [0.2.1] - 2026-08-21
+
+### Added
+
+- Exposure management, bordereaux, reinsurance placement, ACORD/GRLC mapping,
+  operational admin, data import, job queue, enterprise identity, audit replay,
+  and carrier onboarding framework slices.
+- Customer portal policy document listing, notification template administration,
+  servicing document hooks, real document artifact rendering/storage adapters,
+  and idempotency reservation locking.
+- Contributor onboarding improvements, first-good-task guidance, local health
+  checks, and CI troubleshooting documentation.
+
+### Changed
+
+- Release container builds now use the repository root lockfile and standardized
+  Docker build context.
+- Root and workspace package metadata are aligned on the `0.2.1` release line.
+- GitHub Actions and npm dependency lines were refreshed across CI, server, and
+  frontend workspaces.
+
+### Fixed
+
+- Cleared npm audit / Dependabot vulnerabilities across root, server, and
+  frontend lockfiles.
+- Fixed server Docker runtime dependency resolution so the API starts from the
+  workspace path where production dependencies are installed.
+- Added product fixture validation for the personal auto product pack.
+- Stabilized the search error-state test.
+
+### Security
+
+- `npm run security:audit` reports zero unapproved vulnerabilities.
+- Dependency audit, dependency review, CodeQL, container scan, DB integration,
+  and Playwright E2E smoke checks are green on the release branch.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The pre-existing `@vitejs/plugin-react` peer range does not yet advertise
+  Vite 8 support; the project uses the documented legacy peer dependency
+  install path for frontend-only lockfile maintenance until that upstream range
+  catches up.
+- `loadDomPurify()` is now backed by an explicit frontend dependency but remains
+  unused; either wire it into PDF flows for defense in depth or remove it in a
+  follow-up.
+- Full production SSO, complete product governance, and production document
+  artifact storage hardening remain roadmap items.
+
 ## [0.2.0] - 2026-08-03
 
 ### Added
