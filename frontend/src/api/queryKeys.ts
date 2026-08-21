@@ -29,6 +29,10 @@ export const queryKeys = {
     batch: (batchId: string) => ['data-import', 'batches', batchId] as const,
     rows: (batchId: string, status?: string) => ['data-import', 'batches', batchId, 'rows', status ?? null] as const,
   },
+  exposure: {
+    summary: (filters?: { productCode?: string; state?: string; asOf?: string }) =>
+      ['exposure', 'summary', filters?.productCode ?? null, filters?.state ?? null, filters?.asOf ?? null] as const,
+  },
   dashboard: {
     summary: () => ['dashboard', 'summary'] as const,
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,

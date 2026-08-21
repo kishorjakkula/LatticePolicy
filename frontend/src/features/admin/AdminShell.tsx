@@ -46,6 +46,9 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.dashboard.view') && (
             <NavLink to="/admin/dashboard" className={adminMenuClass}>Operations Dashboard</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.exposure.view') && (
+            <NavLink to="/admin/exposure" className={adminMenuClass}>Exposure</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">

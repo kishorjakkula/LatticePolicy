@@ -165,6 +165,17 @@ export function useDispositionOfacScreenMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Exposure Management
+// ---------------------------------------------------------------------------
+
+export function useExposureSummary(filters?: { productCode?: string; state?: string; asOf?: string }) {
+  return useQuery({
+    queryKey: queryKeys.exposure.summary(filters),
+    queryFn: () => adminApi.getExposureSummary(filters),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Operations Dashboard
 // ---------------------------------------------------------------------------
 

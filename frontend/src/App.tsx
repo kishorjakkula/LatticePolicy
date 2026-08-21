@@ -36,6 +36,7 @@ const NotificationTemplatesPage = lazy(() => import('./features/admin/Notificati
 const CompliancePage = lazy(() => import('./features/admin/CompliancePage').then(m => ({ default: m.CompliancePage })))
 const DataImportPage = lazy(() => import('./features/admin/DataImportPage').then(m => ({ default: m.DataImportPage })))
 const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDashboardPage').then(m => ({ default: m.OperationsDashboardPage })))
+const ExposurePage = lazy(() => import('./features/admin/ExposurePage').then(m => ({ default: m.ExposurePage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 
 export default function App() {
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="compliance" element={<RequirePermission permission="page.admin.compliance.view"><CompliancePage /></RequirePermission>} />
               <Route path="import" element={<RequirePermission permission="page.admin.import.view"><DataImportPage /></RequirePermission>} />
               <Route path="dashboard" element={<RequirePermission permission="page.admin.dashboard.view"><OperationsDashboardPage /></RequirePermission>} />
+              <Route path="exposure" element={<RequirePermission permission="page.admin.exposure.view"><ExposurePage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>

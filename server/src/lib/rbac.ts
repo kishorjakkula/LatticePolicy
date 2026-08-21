@@ -72,6 +72,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.import.view', scope: 'menu', resourceKey: 'admin.import', actionKey: 'view', label: 'Admin Menu: Data Import', description: 'View Data Import section in Administration', sortOrder: 40 },
   { permissionCode: 'menu.admin.dashboard.view', scope: 'menu', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Admin Menu: Operations Dashboard', description: 'View Operations Dashboard section in Administration', sortOrder: 41 },
   { permissionCode: 'menu.admin.jobs.view', scope: 'menu', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Admin Menu: Jobs', description: 'View Batch Jobs section in Administration', sortOrder: 42 },
+  { permissionCode: 'menu.admin.exposure.view', scope: 'menu', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Admin Menu: Exposure', description: 'View Exposure Management section in Administration', sortOrder: 43 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -91,6 +92,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.import.view', scope: 'page', resourceKey: 'admin.import', actionKey: 'view', label: 'Page: Admin Data Import', description: 'Access data migration/import administration page', sortOrder: 217 },
   { permissionCode: 'page.admin.dashboard.view', scope: 'page', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Page: Admin Operations Dashboard', description: 'Access operations dashboard page', sortOrder: 218 },
   { permissionCode: 'page.admin.jobs.view', scope: 'page', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Page: Admin Jobs', description: 'Access batch job administration page', sortOrder: 219 },
+  { permissionCode: 'page.admin.exposure.view', scope: 'page', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Page: Admin Exposure', description: 'Access exposure management page', sortOrder: 220 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -133,6 +135,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'admin.import.manage', scope: 'api', resourceKey: 'admin.import', actionKey: 'manage', label: 'Admin API: Data Import Manage', description: 'Stage, validate, commit, and retry legacy data import batches', sortOrder: 570 },
   { permissionCode: 'admin.dashboard.read', scope: 'api', resourceKey: 'admin.dashboard', actionKey: 'read', label: 'Admin API: Operations Dashboard Read', description: 'Read aggregated operational failure and pending-work summaries across outbox, notifications, OFAC, and UW referrals', sortOrder: 580 },
   { permissionCode: 'admin.jobs.read', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'read', label: 'Admin API: Jobs Read', description: 'Read job definitions and run history', sortOrder: 590 },
+  { permissionCode: 'admin.exposure.read', scope: 'api', resourceKey: 'admin.exposure', actionKey: 'read', label: 'Admin API: Exposure Read', description: 'Read aggregated policy exposure summaries and export exposure datasets', sortOrder: 600 },
   { permissionCode: 'admin.jobs.manage', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'manage', label: 'Admin API: Jobs Manage', description: 'Manually enqueue job runs and retry dead-lettered runs', sortOrder: 600 }
 ]
 
@@ -243,6 +246,18 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.admin.jobs.view',
       'admin.jobs.read',
       'admin.jobs.manage'
+    ]
+  },
+  {
+    roleCode: 'exposure_admin',
+    roleName: 'Exposure Administrator',
+    description: 'Reviews aggregate policy exposure by product, jurisdiction, and class/industry for carrier and reinsurance operations',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.exposure.view',
+      'page.admin.exposure.view',
+      'admin.exposure.read'
     ]
   },
   {
