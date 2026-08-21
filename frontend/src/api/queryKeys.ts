@@ -24,6 +24,11 @@ export const queryKeys = {
     eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
     ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
   },
+  reinsurance: {
+    treaties: (status?: string) => ['reinsurance', 'treaties', status ?? null] as const,
+    facultative: (policyId?: string) => ['reinsurance', 'facultative', policyId ?? null] as const,
+    placements: (policyId: string) => ['reinsurance', 'placements', policyId] as const,
+  },
   dataImport: {
     batches: () => ['data-import', 'batches'] as const,
     batch: (batchId: string) => ['data-import', 'batches', batchId] as const,

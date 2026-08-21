@@ -21,6 +21,18 @@ export const adminApi = {
     request<{ items: any[] }>('GET', `/v1/admin/compliance/ofac/screens${disposition ? `?disposition=${disposition}` : ''}`),
   dispositionOfacScreen: (screenId: string, payload: { disposition: string; reason: string }) =>
     request<any>('PATCH', `/v1/admin/compliance/ofac/screens/${screenId}`, payload),
+  // Reinsurance administration
+  listTreaties: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/treaties${status ? `?status=${status}` : ''}`),
+  createTreaty: (payload: any) => request<any>('POST', '/v1/admin/reinsurance/treaties', payload),
+  updateTreaty: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/reinsurance/treaties/${id}`, patch),
+  listFacultative: (policyId?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/facultative${policyId ? `?policyId=${policyId}` : ''}`),
+  createFacultative: (payload: any) => request<any>('POST', '/v1/admin/reinsurance/facultative', payload),
+  computePlacement: (policyId: string, transactionId: string) =>
+    request<{ items: any[] }>('POST', `/v1/admin/reinsurance/policies/${policyId}/transactions/${transactionId}/compute`),
+  listPolicyPlacements: (policyId: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/policies/${policyId}/placements`),
   // Data import administration
   listImportBatches: () => request<any[]>('GET', '/v1/admin/import/batches'),
   getImportBatch: (batchId: string) => request<any>('GET', `/v1/admin/import/batches/${batchId}`),

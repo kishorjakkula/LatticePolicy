@@ -70,6 +70,10 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'menu.admin.dashboard.view',
     'page.admin.dashboard.view',
     'admin.dashboard.read',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
     'rating.models.read',
@@ -101,6 +105,13 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.forms.approve',
     'admin.compliance.read',
     'admin.compliance.manage'
+  ],
+  reinsurance_admin: [
+    'menu.admin.view',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage'
   ],
   data_import_admin: [
     'menu.admin.view',
