@@ -11,6 +11,7 @@ import { complianceAdminRoutes } from './compliance-admin.routes.js'
 import { adminJobsRoutes } from './admin-jobs.routes.js'
 import { dataImportRoutes } from './data-import.routes.js'
 import { adminDashboardRoutes } from './admin-dashboard.routes.js'
+import { exposureRoutes } from './exposure.routes.js'
 import { reinsuranceAdminRoutes } from './reinsurance-admin.routes.js'
 import { bordereauxRoutes } from './bordereaux.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
@@ -92,6 +93,7 @@ adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), compl
 adminRoutes.use('/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
 adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
 adminRoutes.use('/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
+adminRoutes.use('/exposure', requirePermission('admin.exposure.read'), exposureRoutes)
 adminRoutes.use('/reinsurance', reinsuranceAdminRoutes)
 adminRoutes.use('/bordereaux', bordereauxRoutes)
 

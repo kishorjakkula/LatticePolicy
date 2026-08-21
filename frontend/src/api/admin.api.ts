@@ -56,6 +56,15 @@ export const adminApi = {
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
   listDashboardNotifications: (status?: string) =>
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
+  // Exposure management
+  getExposureSummary: (opts?: { productCode?: string; state?: string; asOf?: string }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.state) params.set('state', opts.state)
+    if (opts?.asOf) params.set('asOf', opts.asOf)
+    const qs = params.toString()
+    return request<any>('GET', `/v1/admin/exposure/summary${qs ? `?${qs}` : ''}`)
+  },
   listSecurityPermissions: () => request<any[]>('GET', '/v1/admin/security/permissions'),
   listSecurityRoles: () => request<any[]>('GET', '/v1/admin/security/roles'),
   listSecurityRelationships: () => request<any>('GET', '/v1/admin/security/relationships'),

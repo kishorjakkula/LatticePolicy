@@ -75,6 +75,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.jobs.view', scope: 'menu', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Admin Menu: Jobs', description: 'View Batch Jobs section in Administration', sortOrder: 42 },
   { permissionCode: 'menu.admin.reinsurance.view', scope: 'menu', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Admin Menu: Reinsurance', description: 'View Reinsurance section in Administration', sortOrder: 43 },
   { permissionCode: 'menu.admin.bordereaux.view', scope: 'menu', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Admin Menu: Bordereaux', description: 'View Bordereaux section in Administration', sortOrder: 44 },
+  { permissionCode: 'menu.admin.exposure.view', scope: 'menu', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Admin Menu: Exposure', description: 'View Exposure Management section in Administration', sortOrder: 45 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -97,6 +98,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.jobs.view', scope: 'page', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Page: Admin Jobs', description: 'Access batch job administration page', sortOrder: 219 },
   { permissionCode: 'page.admin.reinsurance.view', scope: 'page', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Page: Admin Reinsurance', description: 'Access reinsurance treaty and facultative administration page', sortOrder: 220 },
   { permissionCode: 'page.admin.bordereaux.view', scope: 'page', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Page: Admin Bordereaux', description: 'Access bordereaux generation and validation administration page', sortOrder: 221 },
+  { permissionCode: 'page.admin.exposure.view', scope: 'page', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Page: Admin Exposure', description: 'Access exposure management page', sortOrder: 222 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -145,7 +147,8 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'admin.bordereaux.read', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'read', label: 'Admin API: Bordereaux Read', description: 'Read bordereaux batches, rows, and export generated data', sortOrder: 630 },
   { permissionCode: 'admin.bordereaux.manage', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'manage', label: 'Admin API: Bordereaux Manage', description: 'Generate risk/premium/transaction/cancellation/correction bordereaux batches', sortOrder: 640 },
   { permissionCode: 'placement.read', scope: 'api', resourceKey: 'placements', actionKey: 'read', label: 'Placement API: Read', description: 'Read large commercial placement workflow records', sortOrder: 650 },
-  { permissionCode: 'placement.manage', scope: 'api', resourceKey: 'placements', actionKey: 'manage', label: 'Placement API: Manage', description: 'Create placements, manage market participants/subjectivities, and transition placement status', sortOrder: 660 }
+  { permissionCode: 'placement.manage', scope: 'api', resourceKey: 'placements', actionKey: 'manage', label: 'Placement API: Manage', description: 'Create placements, manage market participants/subjectivities, and transition placement status', sortOrder: 660 },
+  { permissionCode: 'admin.exposure.read', scope: 'api', resourceKey: 'admin.exposure', actionKey: 'read', label: 'Admin API: Exposure Read', description: 'Read aggregated policy exposure summaries and export exposure datasets', sortOrder: 670 }
 ]
 
 type RoleSeed = {
@@ -259,6 +262,18 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.admin.jobs.view',
       'admin.jobs.read',
       'admin.jobs.manage'
+    ]
+  },
+  {
+    roleCode: 'exposure_admin',
+    roleName: 'Exposure Administrator',
+    description: 'Reviews aggregate policy exposure by product, jurisdiction, and class/industry for carrier and reinsurance operations',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.exposure.view',
+      'page.admin.exposure.view',
+      'admin.exposure.read'
     ]
   },
   {
