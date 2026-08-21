@@ -454,6 +454,53 @@ export const uwDecisions = pgTable('uw_decisions', {
 })
 
 // ---------------------------------------------------------------------------
+// Large Commercial Placements (migration 043)
+// ---------------------------------------------------------------------------
+export const commercialPlacements = pgTable('commercial_placements', {
+  placementId: uuid('placement_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  quoteId: uuid('quote_id'),
+  policyId: uuid('policy_id'),
+  productCode: text('product_code'),
+  insuredName: text('insured_name').notNull(),
+  effectiveDate: date('effective_date'),
+  facilityReference: text('facility_reference'),
+  status: text('status').notNull().default('Submission'),
+  terms: jsonb('terms').notNull().default(sql`'[]'::jsonb`),
+  documents: jsonb('documents').notNull().default(sql`'[]'::jsonb`),
+  statusHistory: jsonb('status_history').notNull().default(sql`'[]'::jsonb`),
+  createdBy: uuid('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const placementMarketParticipants = pgTable('placement_market_participants', {
+  participantId: uuid('participant_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  placementId: uuid('placement_id').notNull().references(() => commercialPlacements.placementId, { onDelete: 'cascade' }),
+  marketName: text('market_name').notNull(),
+  role: text('role').notNull().default('Following'),
+  subscriptionPercent: numeric('subscription_percent', { precision: 5, scale: 2 }).notNull(),
+  securityStatus: text('security_status').notNull().default('Provisional'),
+  brokerIntermediary: text('broker_intermediary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const placementSubjectivities = pgTable('placement_subjectivities', {
+  subjectivityId: uuid('subjectivity_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  placementId: uuid('placement_id').notNull().references(() => commercialPlacements.placementId, { onDelete: 'cascade' }),
+  description: text('description').notNull(),
+  status: text('status').notNull().default('Open'),
+  dueDate: date('due_date'),
+  resolvedBy: uuid('resolved_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
 // Quotes
 // ---------------------------------------------------------------------------
 export const quotes = pgTable('quotes', {

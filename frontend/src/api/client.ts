@@ -32,6 +32,8 @@ import { adminApi as _adminApi } from './admin.api'
 
 import { apiUw as _apiUw } from './uw.api'
 
+import { apiPlacements as _apiPlacements } from './placements.api'
+
 import {
   getCustomerPortalSummary, getCustomerPortalPolicy
 } from './portal.api'
@@ -64,6 +66,7 @@ export const adminApi = _adminApi
 export const apiDetails = _apiDetails
 export const apiPreview = _apiPreview
 export const apiUw = _apiUw
+export const apiPlacements = _apiPlacements
 
 // Convenient re-exports (backward compat)
 export const apiAdmin = adminApi
