@@ -58,6 +58,11 @@ export const queryKeys = {
     list: (page: number, pageSize: number, status?: string) => ['uw-referrals', 'list', page, pageSize, status ?? null] as const,
     detail: (referralId: string) => ['uw-referrals', 'detail', referralId] as const,
   },
+  placements: {
+    all: () => ['placements'] as const,
+    list: (page: number, pageSize: number, status?: string) => ['placements', 'list', page, pageSize, status ?? null] as const,
+    detail: (placementId: string) => ['placements', 'detail', placementId] as const,
+  },
   reference: {
     agencies: (opts: Record<string, any>) => ['reference', 'agencies', opts] as const,
     agencyContacts: (agencyId: string) => ['reference', 'agencies', agencyId, 'contacts'] as const,

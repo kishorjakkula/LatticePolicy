@@ -87,7 +87,11 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.policy.view',
     'page.uw_queue.view',
     'uw.referrals.read',
-    'uw.referrals.decide'
+    'uw.referrals.decide',
+    'menu.placements.view',
+    'page.placements.view',
+    'placement.read',
+    'placement.manage'
   ],
   forms_admin: ['menu.admin.view', 'menu.admin.forms.view', 'page.admin.forms.view', 'admin.forms.read', 'admin.forms.manage'],
   compliance_admin: [

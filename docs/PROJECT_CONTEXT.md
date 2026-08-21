@@ -123,6 +123,31 @@ Important lifecycle flows:
   this mid-term rebase model (see `docs/tasks/issue-52-out-of-sequence-handling.md`).
 - Customer portal APIs must return customer-safe projections only and enforce linked-customer scope.
 
+### Standard Quote Flow Versus Large Commercial Placement
+
+Most business uses the standard single-carrier quote/rate/bind flow above.
+Large commercial and reinsurance-style business — where multiple markets
+subscribe shares of one risk, subject to broker-negotiated subjectivities
+before a bind order is placed — uses a separate, additive placement workflow
+instead of being forced into the single-carrier quote shape:
+
+- Entities: `commercial_placements`, `placement_market_participants`,
+  `placement_subjectivities` (migration `043_large_commercial_placement.sql`).
+- Service: `server/src/services/placement.service.ts`; API under
+  `POST/GET /v1/placements` (see `server/src/routes/placement.routes.ts`),
+  gated by `placement.read` / `placement.manage`.
+- Status progression: `Submission -> Indication -> Quoted -> BindOrder ->
+  Bound -> Issued`, with `Declined`/`Withdrawn` as early exits from any
+  non-terminal state. Subscription shares across a placement's market
+  participants may not exceed 100%.
+- A placement optionally references a `quote_id` pre-bind and is linked to
+  the resulting `policy_id` once transitioned to `Bound`, but it does not
+  replace or gate the standard quote/bind path — use the standard flow for
+  ordinary personal/commercial business, and the placement workflow only
+  when a submission genuinely has multiple subscribing markets, subjectivities,
+  or a facility/line-slip reference to track. See
+  `docs/tasks/issue-64-large-commercial-placement-workflow.md` for details.
+
 ## Security And Tenancy
 
 - Tenant isolation is required for API work. Requests under `/api/v1` require tenant context.
