@@ -214,6 +214,25 @@ docker compose up -d --build
 docker compose ps
 ```
 
+## CI Troubleshooting
+
+GitHub Actions runs these checks for pull requests. Start with the failed job
+log, reproduce the closest command locally, and keep the follow-up focused on
+the reported failure.
+
+| Check | What it covers | Local command or next step |
+| --- | --- | --- |
+| Build, Test, Typecheck | Frontend/server builds, unit tests, and TypeScript | Run `npm run build`, `npm run test`, and `npm run typecheck`. |
+| DB Integration Tests | Database-backed migrations and persistence | Run `npm run test:integration`; confirm Docker is running if the test needs services. |
+| Playwright E2E Smoke | Browser workflow smoke tests against the stack | Run `npx playwright install chromium` once, then `npm run test:e2e:docker`. Review the uploaded Playwright report for screenshots and traces. |
+| CodeQL | JavaScript/TypeScript static security analysis | Review the finding and affected source path. Run the related build/typecheck command locally; CodeQL findings may require a security-focused code change rather than a test-only update. |
+| Dependency Audit | Dependency vulnerability policy | Run `npm run security:audit` and inspect the reported package chain before updating a dependency. |
+| Dependency Review | Risk introduced by dependency changes | Review the dependency diff and package metadata; remove an unnecessary dependency or document why the dependency is required. |
+| Container Scan | API and frontend image vulnerabilities | Rebuild the relevant image with `docker compose build server` or `docker compose build frontend`, then review the reported image package. |
+
+For local setup, ports, and service logs, see
+[Developer Local Setup](docs/DEVELOPER_SETUP.md).
+
 ## Review Process
 
 Maintainers and reviewers should focus first on correctness and framework safety.
