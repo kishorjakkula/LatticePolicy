@@ -4,6 +4,29 @@ All notable changes to LatticePolicy are documented here. This project is
 pre-1.0; minor versions may still include breaking internal changes, but
 release notes should call out API, migration, setup, and product-pack impact.
 
+## [0.2.3] - 2026-08-21
+
+### Changed
+
+- API container builds now upgrade Alpine `libcrypto3` and `libssl3` packages in
+  build and runtime stages so release image scans pick up the fixed OpenSSL
+  package line from the base distribution.
+- Root and workspace package metadata are aligned on the `0.2.3` release line.
+
+### Security
+
+- This release follows `v0.2.2` to clear the GHCR publish scan failure caused by
+  CVE-2026-45447 in Alpine OpenSSL packages bundled with the Node base image.
+- Application dependency audit remains clean with zero unapproved
+  vulnerabilities.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The frontend-only Vite/plugin peer range follow-up from `v0.2.1` still
+  applies.
+
 ## [0.2.2] - 2026-08-21
 
 ### Changed
