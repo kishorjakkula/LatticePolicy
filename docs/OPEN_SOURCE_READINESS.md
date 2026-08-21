@@ -53,8 +53,8 @@ Current verification:
 - Main branch CI is green for build, frontend tests, server tests, typecheck,
   DB integration tests, Playwright E2E smoke tests, dependency audit, CodeQL,
   and container scanning.
-- v0.2.0 release validation is tracked in
-  `docs/tasks/issue-102-v0.2.0-release-readiness.md`.
+- v0.2.1 release validation is tracked in
+  `docs/tasks/issue-192-v0.2.1-release-readiness.md`.
 
 ## Before Publishing
 
