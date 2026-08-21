@@ -7,8 +7,8 @@ Contributions should protect the framework qualities that matter most: tenant is
 ## Development Setup
 
 For the complete local setup workflow, see [Developer Local Setup](docs/DEVELOPER_SETUP.md).
-If you are looking for approachable starter work, see
-[First Good Tasks](docs/FIRST_GOOD_TASKS.md).
+If this is your first contribution, start with the [Contributor On-Ramp](docs/CONTRIBUTOR_ONRAMP.md)
+and [First Good Tasks](docs/FIRST_GOOD_TASKS.md).
 
 Prerequisites:
 
@@ -118,6 +118,32 @@ but the PR should explain why no future contributor context changed.
    - API changes should include docs or contract updates when appropriate.
    - Behavior changes should include automated tests at the right layer.
    - Non-trivial changes should include AI-readable Markdown context.
+
+## Finding Work
+
+Good starter contributions are intentionally small and well bounded. Look for:
+
+- `good first issue`: a task a new contributor can complete with limited project context.
+- `help wanted`: a task maintainers would like external contributors to pick up.
+- `type:docs`: documentation, examples, or contributor guidance.
+- `type:test`: focused test coverage or test fixture improvements.
+- `readiness:demo`: local setup, seed data, screenshots, or demo experience improvements.
+
+Before claiming an issue, leave a short comment describing the approach you plan
+to take. For larger issues, ask maintainers to confirm scope before writing code.
+If an issue is missing acceptance criteria, ask for clarification or propose a
+small first slice.
+
+Good first PRs usually touch one of these areas:
+
+- Improve docs or sample configuration.
+- Add a missing test around existing behavior.
+- Improve an error message, empty state, or setup note.
+- Add a small product-pack example.
+- Tighten a task note so future contributors can reproduce work.
+
+Avoid starting with tenant isolation, authentication, policy lifecycle,
+migrations, or customer portal authorization unless the issue is very explicit.
 
 ## Branching Process
 
