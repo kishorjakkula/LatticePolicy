@@ -73,6 +73,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.dashboard.view', scope: 'menu', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Admin Menu: Operations Dashboard', description: 'View Operations Dashboard section in Administration', sortOrder: 41 },
   { permissionCode: 'menu.admin.jobs.view', scope: 'menu', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Admin Menu: Jobs', description: 'View Batch Jobs section in Administration', sortOrder: 42 },
   { permissionCode: 'menu.admin.reinsurance.view', scope: 'menu', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Admin Menu: Reinsurance', description: 'View Reinsurance section in Administration', sortOrder: 43 },
+  { permissionCode: 'menu.admin.bordereaux.view', scope: 'menu', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Admin Menu: Bordereaux', description: 'View Bordereaux section in Administration', sortOrder: 44 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -93,6 +94,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.dashboard.view', scope: 'page', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Page: Admin Operations Dashboard', description: 'Access operations dashboard page', sortOrder: 218 },
   { permissionCode: 'page.admin.jobs.view', scope: 'page', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Page: Admin Jobs', description: 'Access batch job administration page', sortOrder: 219 },
   { permissionCode: 'page.admin.reinsurance.view', scope: 'page', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Page: Admin Reinsurance', description: 'Access reinsurance treaty and facultative administration page', sortOrder: 220 },
+  { permissionCode: 'page.admin.bordereaux.view', scope: 'page', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Page: Admin Bordereaux', description: 'Access bordereaux generation and validation administration page', sortOrder: 221 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -137,7 +139,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'admin.jobs.read', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'read', label: 'Admin API: Jobs Read', description: 'Read job definitions and run history', sortOrder: 590 },
   { permissionCode: 'admin.jobs.manage', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'manage', label: 'Admin API: Jobs Manage', description: 'Manually enqueue job runs and retry dead-lettered runs', sortOrder: 600 },
   { permissionCode: 'admin.reinsurance.read', scope: 'api', resourceKey: 'admin.reinsurance', actionKey: 'read', label: 'Admin API: Reinsurance Read', description: 'Read reinsurance treaties, layers, facultative certificates, and policy placements', sortOrder: 610 },
-  { permissionCode: 'admin.reinsurance.manage', scope: 'api', resourceKey: 'admin.reinsurance', actionKey: 'manage', label: 'Admin API: Reinsurance Manage', description: 'Create/update treaties and facultative certificates, and compute policy transaction placements', sortOrder: 620 }
+  { permissionCode: 'admin.reinsurance.manage', scope: 'api', resourceKey: 'admin.reinsurance', actionKey: 'manage', label: 'Admin API: Reinsurance Manage', description: 'Create/update treaties and facultative certificates, and compute policy transaction placements', sortOrder: 620 },
+  { permissionCode: 'admin.bordereaux.read', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'read', label: 'Admin API: Bordereaux Read', description: 'Read bordereaux batches, rows, and export generated data', sortOrder: 630 },
+  { permissionCode: 'admin.bordereaux.manage', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'manage', label: 'Admin API: Bordereaux Manage', description: 'Generate risk/premium/transaction/cancellation/correction bordereaux batches', sortOrder: 640 }
 ]
 
 type RoleSeed = {
@@ -260,6 +264,19 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.admin.reinsurance.view',
       'admin.reinsurance.read',
       'admin.reinsurance.manage'
+    ]
+  },
+  {
+    roleCode: 'bordereaux_admin',
+    roleName: 'Bordereaux Administrator',
+    description: 'Generates and reviews risk, premium, transaction, cancellation, and correction bordereaux',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.bordereaux.view',
+      'page.admin.bordereaux.view',
+      'admin.bordereaux.read',
+      'admin.bordereaux.manage'
     ]
   },
   {

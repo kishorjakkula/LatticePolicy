@@ -33,6 +33,12 @@ export const adminApi = {
     request<{ items: any[] }>('POST', `/v1/admin/reinsurance/policies/${policyId}/transactions/${transactionId}/compute`),
   listPolicyPlacements: (policyId: string) =>
     request<{ items: any[] }>('GET', `/v1/admin/reinsurance/policies/${policyId}/placements`),
+  // Bordereaux administration
+  listBordereauxBatches: (bordereauType?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/bordereaux/batches${bordereauType ? `?bordereauType=${bordereauType}` : ''}`),
+  getBordereauxBatch: (batchId: string) => request<any>('GET', `/v1/admin/bordereaux/batches/${batchId}`),
+  generateBordereauxBatch: (payload: any) => request<any>('POST', '/v1/admin/bordereaux/batches', payload),
+  listBordereauxRows: (batchId: string) => request<{ items: any[] }>('GET', `/v1/admin/bordereaux/batches/${batchId}/rows`),
   // Data import administration
   listImportBatches: () => request<any[]>('GET', '/v1/admin/import/batches'),
   getImportBatch: (batchId: string) => request<any>('GET', `/v1/admin/import/batches/${batchId}`),

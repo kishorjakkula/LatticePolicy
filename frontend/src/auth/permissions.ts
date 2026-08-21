@@ -74,6 +74,10 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.reinsurance.view',
     'admin.reinsurance.read',
     'admin.reinsurance.manage',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
     'rating.models.read',
@@ -112,6 +116,13 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.reinsurance.view',
     'admin.reinsurance.read',
     'admin.reinsurance.manage'
+  ],
+  bordereaux_admin: [
+    'menu.admin.view',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage'
   ],
   data_import_admin: [
     'menu.admin.view',
