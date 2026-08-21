@@ -10,6 +10,7 @@ assignees: ""
 
 - Version:
 - Release type: minor / patch
+- Release branch: `release/vX.Y.Z`
 - Target date:
 - Maintainer:
 
@@ -53,12 +54,15 @@ Deferred validation, if any:
 ## Release PR Checklist
 
 - [ ] Dedicated release PR only
+- [ ] Release branch created from current `origin/main`
 - [ ] Root and workspace package versions bumped
 - [ ] `CHANGELOG.md` updated
 - [ ] Release task note added under `docs/tasks/`
 - [ ] `docs/OPEN_SOURCE_READINESS.md` reviewed
 - [ ] GitHub release notes drafted
 - [ ] No unrelated feature work included
+- [ ] Release-approved branch fixes are also present on `main` or will be
+      carried back by the release branch merge
 
 ## Post-Merge Checklist
 

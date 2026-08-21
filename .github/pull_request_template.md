@@ -21,6 +21,8 @@ Test coverage notes / N/A explanation:
 - [ ] Patch release candidate
 - [ ] No release impact
 
+Target branch: `main` / `release/vX.Y.Z`
+
 Release notes / version bump needed now? Explain:
 
 -
