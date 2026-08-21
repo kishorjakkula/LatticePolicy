@@ -20,7 +20,9 @@ COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
-RUN npm ci --workspace=server --omit=dev
+RUN npm ci --workspace=server --omit=dev \
+    && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=build /app/server/dist ./server/dist
 COPY contracts ./contracts

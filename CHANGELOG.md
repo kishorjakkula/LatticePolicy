@@ -4,6 +4,30 @@ All notable changes to LatticePolicy are documented here. This project is
 pre-1.0; minor versions may still include breaking internal changes, but
 release notes should call out API, migration, setup, and product-pack impact.
 
+## [0.2.2] - 2026-08-21
+
+### Changed
+
+- API runtime container image now removes npm/npx after production dependency
+  installation so release image scans focus on the runtime app surface rather
+  than unused package-manager tooling bundled in the Node base image.
+- Root and workspace package metadata are aligned on the `0.2.2` release line.
+
+### Security
+
+- This release follows `v0.2.1` to unblock GHCR release image publishing after
+  Trivy flagged high/critical CVEs in npm CLI transitive packages inside the
+  API runtime base image.
+- Application dependency audit remains clean with zero unapproved
+  vulnerabilities.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The frontend-only Vite/plugin peer range follow-up from `v0.2.1` still
+  applies.
+
 ## [0.2.1] - 2026-08-21
 
 ### Added
