@@ -12,6 +12,7 @@ import { adminJobsRoutes } from './admin-jobs.routes.js'
 import { dataImportRoutes } from './data-import.routes.js'
 import { adminDashboardRoutes } from './admin-dashboard.routes.js'
 import { reinsuranceAdminRoutes } from './reinsurance-admin.routes.js'
+import { bordereauxRoutes } from './bordereaux.routes.js'
 import { onboardingAdminRoutes } from '../agencyOnboarding.js'
 import { notificationTemplatesRoutes } from '../notificationTemplates.js'
 import {
@@ -92,6 +93,7 @@ adminRoutes.use('/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
 adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
 adminRoutes.use('/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
 adminRoutes.use('/reinsurance', reinsuranceAdminRoutes)
+adminRoutes.use('/bordereaux', bordereauxRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId

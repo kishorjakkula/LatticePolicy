@@ -210,6 +210,35 @@ export function usePolicyPlacements(policyId: string) {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Admin - Bordereaux
+// ---------------------------------------------------------------------------
+
+export function useBordereauxBatches(bordereauType?: string) {
+  return useQuery({
+    queryKey: queryKeys.bordereaux.batches(bordereauType),
+    queryFn: () => adminApi.listBordereauxBatches(bordereauType),
+  })
+}
+
+export function useBordereauxRows(batchId: string) {
+  return useQuery({
+    queryKey: queryKeys.bordereaux.rows(batchId),
+    queryFn: () => adminApi.listBordereauxRows(batchId),
+    enabled: Boolean(batchId),
+  })
+}
+
+export function useGenerateBordereauxMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.generateBordereauxBatch(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bordereaux', 'batches'] })
+    },
+  })
+}
+
 export function useDispositionOfacScreenMutation() {
   const qc = useQueryClient()
   return useMutation({
