@@ -1,5 +1,6 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk upgrade --no-cache libcrypto3 libssl3
 
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
@@ -15,6 +16,7 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk upgrade --no-cache libcrypto3 libssl3
 
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
