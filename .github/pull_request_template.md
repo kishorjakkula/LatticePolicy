@@ -15,6 +15,18 @@ Test coverage notes / N/A explanation:
 
 -
 
+## Release Impact
+
+- [ ] Included in next planned release
+- [ ] Patch release candidate
+- [ ] No release impact
+
+Target branch: `main` / `release/vX.Y.Z`
+
+Release notes / version bump needed now? Explain:
+
+-
+
 ## AI Context
 
 - [ ] AI-readable Markdown context added/updated, or N/A explained below
