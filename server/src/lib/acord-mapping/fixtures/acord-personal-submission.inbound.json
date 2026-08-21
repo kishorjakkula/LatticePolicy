@@ -1,0 +1,23 @@
+{
+  "LOBCd": "auto",
+  "ContractTerm.EffectiveDt": "2026-09-01",
+  "ContractTerm.DurationPeriod.NumUnits": 6,
+  "PolicyState": "TX",
+  "InsuredOrPrincipal": {
+    "GeneralPartyInfo": {
+      "NameInfo": {
+        "PersonName.FullName": "Jordan Rivera"
+      },
+      "Addr": {
+        "Addr1": "410 Oak Street",
+        "City": "Austin",
+        "StateProvCd": "TX",
+        "PostalCode": "78701"
+      },
+      "Communications": {
+        "EmailInfo.EmailAddr": "jordan.rivera@example.com",
+        "PhoneInfo.PhoneNumber": "512-555-0142"
+      }
+    }
+  }
+}
