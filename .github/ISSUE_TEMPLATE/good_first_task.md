@@ -1,29 +1,37 @@
 ---
 name: Good first task
-about: Suggest a bounded starter task for new contributors
-title: "[Task]: "
-labels: type:task, good first issue, help wanted
+about: Small, well-scoped work suitable for a new contributor
+title: "[Good first task]: "
+labels: "good first issue, help wanted, type:task"
 assignees: ""
 ---
 
-## Summary
+## Goal
 
-## Why This Helps
+What should be improved?
 
-## Expected Files
+## Suggested Scope
+
+-
+
+## Files To Start With
 
 -
 
 ## Acceptance Criteria
 
--
+- [ ]
+- [ ]
+- [ ] Documentation or tests are updated, if needed.
 
-## Validation
+## Suggested Validation
 
 ```bash
-npm run build
-npm run test
-npm run typecheck
+
 ```
 
-## Notes For Contributors
+## Notes For New Contributors
+
+- Keep the PR small and focused.
+- Ask before expanding the scope.
+- Comment on this issue before starting so maintainers know it is active.

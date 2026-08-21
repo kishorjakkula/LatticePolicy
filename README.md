@@ -174,9 +174,24 @@ npm run dev:server
 npm run dev:frontend
 ```
 
+## Contributor On-Ramp
+
+New contributors can start with docs, tests, product-pack examples, small UI
+states, or demo experience improvements before taking on deeper policy lifecycle
+work.
+
+- Start here: [Contributor on-ramp](docs/CONTRIBUTOR_ONRAMP.md)
+- Pick scoped starter work: [First good tasks](docs/FIRST_GOOD_TASKS.md)
+- Read contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Review architecture context: [Project context](docs/PROJECT_CONTEXT.md)
+
+Maintainers label beginner-friendly work with `good first issue` and broader
+collaboration opportunities with `help wanted`.
+
 ## Documentation
 
 - [Developer local setup](docs/DEVELOPER_SETUP.md)
+- [Contributor on-ramp](docs/CONTRIBUTOR_ONRAMP.md)
 - [AI contributor process](docs/AI_CONTRIBUTOR_PROCESS.md)
 - [First good tasks](docs/FIRST_GOOD_TASKS.md)
 - [Roadmap](docs/ROADMAP.md)
