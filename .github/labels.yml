@@ -27,6 +27,9 @@
 - name: dependencies
   color: "0366d6"
   description: Pull requests that update dependency files.
+- name: release
+  color: "0e8a16"
+  description: Planned release checklist, release readiness, or publication work.
 - name: javascript
   color: "f1e05a"
   description: JavaScript or TypeScript dependency updates.

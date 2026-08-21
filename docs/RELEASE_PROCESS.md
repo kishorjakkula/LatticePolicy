@@ -14,6 +14,43 @@ treated as adoption checkpoints rather than a promise of production readiness.
 - Until `1.0.0`, breaking changes are allowed, but release notes must call them
   out clearly.
 
+## Release Cadence and Eligibility
+
+Do not cut a GitHub release for every merged pull request. Ordinary feature,
+bug fix, documentation, test, dependency, and refactor PRs should merge into
+`main` and wait for the next planned release.
+
+Use this default cadence:
+
+- **Minor release:** batch completed work into a planned adoption checkpoint
+  when there is a meaningful user-facing, contributor-facing, or operational
+  milestone.
+- **Patch release:** cut only for a narrow fix to an already-published release,
+  such as a failed release artifact, serious regression, security fix, broken
+  setup path, or migration/documentation correction that materially affects
+  adopters.
+- **No release:** skip releases for routine PRs, internal cleanup, issue
+  triage, docs polish, isolated tests, and dependency updates that do not need
+  adopters to move immediately.
+
+A release candidate must have a maintainer-owned release issue or milestone
+before version metadata is changed. The release issue should name the intended
+version, summarize included PRs, list deferred work, and record validation.
+
+## Pull Request Release Impact
+
+Every PR should state its release impact in the pull request description:
+
+- **Included in next planned release:** default for product, API, workflow, and
+  contributor improvements.
+- **Patch release candidate:** only when the PR fixes a released artifact or
+  urgent adopter-impacting problem.
+- **No release impact:** docs-only, tests-only, chores, or internal refactors.
+
+Do not bump package versions, update top-level release notes, create release
+tags, or publish GHCR images from a normal feature or fix PR. Those actions
+belong only in a dedicated release PR.
+
 ## Release Branch
 
 Create a focused release branch from current `origin/main`:
@@ -23,9 +60,9 @@ git fetch origin --prune
 git switch -c codex/v0.2.0-release-readiness origin/main
 ```
 
-Keep release branches limited to release readiness work: dependency/security
-updates, CI gates, docs, version metadata, release notes, and final bug fixes
-approved for the release.
+Keep release branches limited to release readiness work: version metadata,
+release notes, validation fixes, dependency/security updates needed for the
+release, and final bug fixes explicitly approved in the release issue.
 
 ## Quality Gate
 
@@ -57,6 +94,11 @@ release task note, and the GitHub release notes.
 - Confirm the GitHub release notes include known limitations.
 - Confirm no secrets, generated build output, local logs, or `node_modules`
   were committed.
+
+The release PR should reference the release issue and should not include
+unrelated feature work. If a late fix is required, merge it as its own PR first
+when practical, then include it in the release branch by rebasing or recreating
+the release branch from updated `main`.
 
 ## Migration Compatibility
 
