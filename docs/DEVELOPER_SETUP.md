@@ -246,6 +246,12 @@ The Docker E2E runner starts from clean PostgreSQL and Redis volumes so stale lo
 
 For UI changes, include screenshots in the pull request when the visual behavior changes.
 
+## Local Health Checks
+
+After starting the stack, use the [local health-check checklist](LOCAL_HEALTH_CHECKS.md)
+to verify the UI, API, PostgreSQL, and Redis and to troubleshoot common startup
+symptoms.
+
 ## Development Workflow
 
 1. Create a branch from the latest `main`.
