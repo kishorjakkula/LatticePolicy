@@ -24,6 +24,16 @@ export const queryKeys = {
     eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
     ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
   },
+  bordereaux: {
+    batches: (bordereauType?: string) => ['bordereaux', 'batches', bordereauType ?? null] as const,
+    batch: (batchId: string) => ['bordereaux', 'batch', batchId] as const,
+    rows: (batchId: string) => ['bordereaux', 'rows', batchId] as const,
+  },
+  reinsurance: {
+    treaties: (status?: string) => ['reinsurance', 'treaties', status ?? null] as const,
+    facultative: (policyId?: string) => ['reinsurance', 'facultative', policyId ?? null] as const,
+    placements: (policyId: string) => ['reinsurance', 'placements', policyId] as const,
+  },
   dataImport: {
     batches: () => ['data-import', 'batches'] as const,
     batch: (batchId: string) => ['data-import', 'batches', batchId] as const,

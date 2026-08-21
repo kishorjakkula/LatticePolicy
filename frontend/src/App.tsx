@@ -37,6 +37,8 @@ const NotificationTemplatesPage = lazy(() => import('./features/admin/Notificati
 const CompliancePage = lazy(() => import('./features/admin/CompliancePage').then(m => ({ default: m.CompliancePage })))
 const DataImportPage = lazy(() => import('./features/admin/DataImportPage').then(m => ({ default: m.DataImportPage })))
 const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDashboardPage').then(m => ({ default: m.OperationsDashboardPage })))
+const ReinsurancePage = lazy(() => import('./features/admin/ReinsurancePage').then(m => ({ default: m.ReinsurancePage })))
+const BordereauxPage = lazy(() => import('./features/admin/BordereauxPage').then(m => ({ default: m.BordereauxPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 
 export default function App() {
@@ -108,6 +110,8 @@ export default function App() {
               <Route path="compliance" element={<RequirePermission permission="page.admin.compliance.view"><CompliancePage /></RequirePermission>} />
               <Route path="import" element={<RequirePermission permission="page.admin.import.view"><DataImportPage /></RequirePermission>} />
               <Route path="dashboard" element={<RequirePermission permission="page.admin.dashboard.view"><OperationsDashboardPage /></RequirePermission>} />
+              <Route path="reinsurance" element={<RequirePermission permission="page.admin.reinsurance.view"><ReinsurancePage /></RequirePermission>} />
+              <Route path="bordereaux" element={<RequirePermission permission="page.admin.bordereaux.view"><BordereauxPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>
