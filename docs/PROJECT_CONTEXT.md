@@ -132,7 +132,7 @@ before a bind order is placed — uses a separate, additive placement workflow
 instead of being forced into the single-carrier quote shape:
 
 - Entities: `commercial_placements`, `placement_market_participants`,
-  `placement_subjectivities` (migration `043_large_commercial_placement.sql`).
+  `placement_subjectivities` (migration `045_large_commercial_placement.sql`).
 - Service: `server/src/services/placement.service.ts`; API under
   `POST/GET /v1/placements` (see `server/src/routes/placement.routes.ts`),
   gated by `placement.read` / `placement.manage`.

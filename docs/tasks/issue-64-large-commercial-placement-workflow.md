@@ -17,7 +17,7 @@ optionally references a quote pre-bind and the resulting policy once bound.
 
 ## Important Files
 
-- `server/migrations/043_large_commercial_placement.sql`: `commercial_placements`,
+- `server/migrations/045_large_commercial_placement.sql`: `commercial_placements`,
   `placement_market_participants`, `placement_subjectivities` tables, all
   tenant-scoped with RLS.
 - `server/src/services/placement.service.ts`: create/list/get placement,
