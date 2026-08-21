@@ -91,12 +91,15 @@ Do not duplicate implementation detail here — follow these docs directly:
 
 ## 4. ACORD/GRLC Mapping Worksheet
 
-LatticePolicy does not yet ship a canonical ACORD/GRLC mapping layer — this
-is open roadmap work tracked in
-[#60](https://github.com/kishorjakkula/LatticePolicy/issues/60) (Phase 4,
-`docs/ROADMAP.md`). Use this worksheet to record mapping decisions now so
-they can be validated against the mapping layer once it exists, and to scope
-any interim integration work.
+LatticePolicy ships a first canonical ACORD/GRLC mapping layer — see
+[ACORD and GRLC canonical data mapping](ACORD_GRLC_MAPPING.md)
+(`server/src/lib/acord-mapping/`), covering a personal/commercial submission
+flow and a reinsurance/large-commercial treaty flow, added by
+[#60](https://github.com/kishorjakkula/LatticePolicy/issues/60). It is a
+canonical JSON mapping structurally inspired by ACORD field names, not a
+full ACORD XML/XSD binding — read that doc's Known Gaps section before
+relying on it for a specific carrier integration. Use this worksheet to
+record any additional mapping decisions the mapping layer doesn't yet cover.
 
 For each ACORD/GRLC object type the carrier's integrations require, record:
 
