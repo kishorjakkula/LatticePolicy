@@ -153,6 +153,63 @@ export function useOfacScreens(disposition?: string) {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Admin - Reinsurance
+// ---------------------------------------------------------------------------
+
+export function useTreaties(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.treaties(status),
+    queryFn: () => adminApi.listTreaties(status),
+  })
+}
+
+export function useCreateTreatyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createTreaty(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] })
+    },
+  })
+}
+
+export function useFacultativeCertificates(policyId?: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.facultative(policyId),
+    queryFn: () => adminApi.listFacultative(policyId),
+  })
+}
+
+export function useCreateFacultativeMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createFacultative(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'facultative'] })
+    },
+  })
+}
+
+export function useComputePlacementMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ policyId, transactionId }: { policyId: string; transactionId: string }) =>
+      adminApi.computePlacement(policyId, transactionId),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.reinsurance.placements(variables.policyId) })
+    },
+  })
+}
+
+export function usePolicyPlacements(policyId: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.placements(policyId),
+    queryFn: () => adminApi.listPolicyPlacements(policyId),
+    enabled: Boolean(policyId),
+  })
+}
+
 export function useDispositionOfacScreenMutation() {
   const qc = useQueryClient()
   return useMutation({
