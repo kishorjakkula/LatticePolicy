@@ -48,6 +48,13 @@ started; `path-to-regexp`, `postcss`, `body-parser`, and `qs` alerts on
 `server/package-lock.json` were already stale (installed versions outside the
 flagged vulnerable ranges) and needed no action.
 
+The server Docker runtime now starts the compiled app from
+`/app/server/dist` instead of `/app/dist`, matching where
+`npm ci --workspace=server --omit=dev` installs workspace-scoped production
+dependencies (`/app/server/node_modules`). This prevents runtime-only imports
+such as `yaml` from being hidden from Node's module resolver in the production
+image.
+
 ### `frontend/` (frontend/package.json, frontend/package-lock.json)
 
 | Package | Before | After | Type | Fix approach |

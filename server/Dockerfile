@@ -22,11 +22,11 @@ COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
 RUN npm ci --workspace=server --omit=dev
 
-COPY --from=build /app/server/dist ./dist
+COPY --from=build /app/server/dist ./server/dist
 COPY contracts ./contracts
 COPY products ./products
 COPY tenants ./tenants
-COPY server/migrations ./migrations
+COPY server/migrations ./server/migrations
 
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["node", "server/dist/index.js"]
