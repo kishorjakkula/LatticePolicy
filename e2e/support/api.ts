@@ -1,5 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
+import { randomBytes } from 'node:crypto'
 
 export const tenantId = process.env.E2E_TENANT_ID || 'sample-carrier'
 export const apiBaseUrl = process.env.E2E_API_BASE_URL || 'http://localhost:3300'
@@ -28,7 +29,7 @@ type ApiOptions = {
 }
 
 function e2eSuffix() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
 }
 
 export function uniqueName(prefix: string) {
