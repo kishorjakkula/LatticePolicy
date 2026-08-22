@@ -269,6 +269,49 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full branching, pull request, 
 
 ## Troubleshooting
 
+### Docker is not running, or a build fails partway through
+
+Confirm Docker Desktop is running and the daemon is reachable:
+
+```bash
+docker info
+```
+
+If `docker info` fails or hangs, start Docker Desktop and wait for it to
+report "running" before retrying `docker compose up -d --build`.
+
+If a build or image pull fails with an error mentioning `containerd`,
+`blob`, or `input/output error`, Docker Desktop's local image storage is
+corrupted rather than anything in this repository. Restarting Docker
+Desktop is usually enough; if the error persists, use Docker Desktop's
+"Troubleshoot > Clean / Purge data" option (this removes locally cached
+images and containers, so only do this if you are comfortable
+re-downloading them).
+
+### Node version does not match the pinned version
+
+This project pins Node 20 in `.node-version` and `.nvmrc`. Using an
+older or much newer Node can cause `npm install` or `npm run build`
+failures that are easy to mistake for a code problem.
+
+```bash
+node --version
+```
+
+If the version is not `20.x`, install and use Node 20, for example with
+`nvm`:
+
+```bash
+nvm install 20
+nvm use 20
+```
+
+Then reinstall dependencies:
+
+```bash
+npm install
+```
+
 ### Docker says a port is already in use
 
 Another local process may be using one of the expected ports.
@@ -292,6 +335,22 @@ docker compose logs db
 ```
 
 Also confirm `DATABASE_URL`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` match the Docker Compose configuration.
+
+### API cannot connect to Redis
+
+Check that the cache container is running and responding:
+
+```bash
+docker compose ps cache
+docker compose exec cache redis-cli ping
+docker compose logs cache
+```
+
+A healthy Redis instance replies `PONG`. Also confirm `REDIS_URL` and
+`CACHE_ENABLED` match the Docker Compose configuration. The API can
+still run without a working cache, but responses that rely on cached
+lookups may be slower or show cache-miss errors in the server logs
+until Redis is reachable again.
 
 ### Login returns tenant required
 
