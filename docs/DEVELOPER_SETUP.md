@@ -200,6 +200,28 @@ curl -X POST http://localhost:3300/auth/login \
   -d "{\"tenantId\":\"sample-carrier\",\"username\":\"agent1\",\"password\":\"password\"}"
 ```
 
+## Demo Data
+
+Local development and the Docker Compose stack are pre-configured around one
+demo tenant so contributors have consistent data to explore without any
+manual setup.
+
+- **Tenant**: `sample-carrier`. Its configuration lives under
+  [`tenants/sample-carrier/`](../tenants/sample-carrier/), including
+  `config.yaml` and per-product field metadata overrides.
+- **Demo users**: `admin`, `uw1`, and `agent1`, all with password `password`.
+  See [Local Login](#local-login) above for the full role table and login
+  request shape. These are local/demo-only credentials and must never be
+  reused for a production or shared environment.
+- **Sample seed data**: example policy/quote fixtures live under
+  [`contracts/sample-data/`](../contracts/sample-data/) (for example
+  `ho_policy_seed.sql` and `pas_mvp_seed.sql`). Product coverage/rate
+  configuration used by the demo tenant lives under
+  [`products/`](../products/).
+- **Local URLs**: see the [Full Docker Stack](#option-1-full-docker-stack)
+  service table above for the UI, API, PostgreSQL, and Redis addresses used
+  by the demo stack.
+
 ## Common Commands
 
 | Command | Purpose |
