@@ -3016,14 +3016,20 @@ function normalizeTemplateAssetPayload(input: any) {
   }
 }
 
+function stripTrailingBase64Padding(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 61 /* '=' */) end--
+  return value.slice(0, end)
+}
+
 function decodeBase64ToBuffer(value: string): Buffer | null {
   if (!value) return null
   try {
     const normalized = value.replace(/\s+/g, '')
     const buffer = Buffer.from(normalized, 'base64')
     if (!buffer.length) return null
-    const compareA = normalized.replace(/=+$/g, '')
-    const compareB = buffer.toString('base64').replace(/=+$/g, '')
+    const compareA = stripTrailingBase64Padding(normalized)
+    const compareB = stripTrailingBase64Padding(buffer.toString('base64'))
     if (compareA !== compareB) return null
     return buffer
   } catch {

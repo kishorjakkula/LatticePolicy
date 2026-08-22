@@ -23,7 +23,7 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
-import { diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
+import { applyJsonPatch, diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
@@ -84,8 +84,6 @@ type PremiumDeltaInput = {
   currency: string
 }
 
-type PatchOp = { path: string; op: 'add' | 'replace' | 'remove'; value?: any }
-
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
 function clamp01(value: number): number {
@@ -144,28 +142,6 @@ function generateTransactionNumber(prefix = 'EN-'): string {
 
 function reserveTransactionNumber(mode: TransactionNumberMode): string {
   return generateTransactionNumber(transactionNumberPrefix(mode))
-}
-
-function applyJsonPatch(obj: any, ops: PatchOp[]): any {
-  for (const op of ops) {
-    const path = op.path || ''
-    const parts = path.split('/').slice(1).map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
-    let target = obj
-    for (let i = 0; i < parts.length - 1; i++) {
-      const key = parts[i]
-      if (!(key in target) || typeof target[key] !== 'object' || target[key] === null) {
-        target[key] = {}
-      }
-      target = target[key]
-    }
-    const last = parts[parts.length - 1]
-    if (op.op === 'remove') {
-      if (last in target) delete target[last]
-    } else if (op.op === 'add' || op.op === 'replace') {
-      target[last] = op.value
-    }
-  }
-  return obj
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
