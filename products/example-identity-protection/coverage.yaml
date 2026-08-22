@@ -1,0 +1,9 @@
+product: example-identity-protection
+version: 1.0.0
+coverages:
+  - code: MONITOR
+    name: Identity Monitoring
+    selectable: true
+    limits: [10000, 25000, 50000]
+ratingKeys:
+  - monitoringLimit
