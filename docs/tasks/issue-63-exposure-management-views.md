@@ -18,7 +18,9 @@ minimal internal UI for carrier/reinsurer review.
 - `server/src/services/exposure.service.ts`: `extractExposureDimensions`
   (pure, per-product normalization from a policy version's risk/coverage
   payload), `loadExposureRows`/`computeExposureSummary` (tenant-scoped
-  aggregation with `asOf` support), `exposureRowsToCsv`.
+  aggregation with `asOf` support), `exposureRowsToCsv`,
+  `loadTreatyProgramLabels` (bulk join against `policy_reinsurance_placements`
+  for the treaty/program dimension, added once #61 merged).
 - `server/src/routes/exposure.routes.ts`: `GET /summary` and
   `GET /export.csv`, mounted at `/api/v1/admin/exposure`.
 - `server/src/routes/admin.routes.ts`: mounts the exposure router behind
@@ -27,8 +29,8 @@ minimal internal UI for carrier/reinsurer review.
   `page.admin.exposure.view`, `admin.exposure.read` permissions and a new
   `exposure_admin` role.
 - `frontend/src/features/admin/ExposurePage.tsx`: filterable summary view
-  (product/state/asOf) with by-product, by-state, and by-class/industry
-  tables.
+  (product/state/asOf) with by-product, by-state, by-class/industry, and
+  by-treaty/program tables.
 - `frontend/src/api/admin.api.ts`, `hooks/admin.hooks.ts`, `queryKeys.ts`,
   `App.tsx`, `AdminShell.tsx`, `auth/permissions.ts`: standard admin page
   wiring, following the pattern used by the compliance/dashboard/import
@@ -67,40 +69,67 @@ minimal internal UI for carrier/reinsurer review.
   - `server/src/__tests__/exposure.integration.test.ts` (2 DB integration
     tests: aggregation by product/state excluding non-issued and
     cross-tenant policies; API-level `productCode` filter plus
-    `admin.exposure.read` RBAC enforcement — admin allowed, agent denied).
+    `admin.exposure.read` RBAC enforcement — admin allowed, agent denied.
+    Updated for the treaty/program dimension: `exposure.service.test.ts`'s
+    CSV test now covers the `treatyProgram` column; a new
+    `exposure.integration.test.ts` case seeds a treaty-placed policy, a
+    facultative-placed policy, an unplaced policy, and a placement on
+    another tenant's policy, asserting each labels correctly and that the
+    other tenant's treaty never leaks into this tenant's aggregation.
 - Test layer used: unit tests for the pure extraction/CSV logic, DB-backed
-  integration tests for tenant isolation, status filtering, and RBAC.
+  integration tests for tenant isolation, status filtering, RBAC, and now
+  treaty/facultative/unplaced labeling.
 - Why this layer is enough: extraction/aggregation math is pure and cheap to
-  verify without a database; tenant isolation and status filtering need a
-  real Postgres row set to prove the SQL clauses are correct.
+  verify without a database; tenant isolation, status filtering, and the
+  treaty/program join need a real Postgres row set to prove the SQL clauses
+  are correct.
 
 ## Validation
 
 ```bash
 npm run build
-npm run test        # 78 frontend + 178 server passing
+npm run test        # 97 frontend + 244 server passing
 npm run typecheck
-npm run test:integration   # 14 files / 47 tests passing against a disposable Postgres 15 container
 ```
 
-Ran `test:integration` twice: once against a container reused across many
-manual iterations (surfaced 3 unrelated pre-existing flaky failures in
-`compliance-admin`, `customer-portal-security`, and `data-import` caused by
-accumulated state from repeated manual runs, not by this change — confirmed
-by re-running the same three files alone, which also failed, then
-re-running the entire suite once against a completely fresh container,
-where all 14 files/47 tests passed), and once clean against a fresh
-container, which passed completely including this issue's 2 new tests.
+`npm run test:integration` could not be run for the treaty/program dimension
+addition: this environment's local Docker Desktop storage is corrupted
+(`containerd` blob-store/metadata I/O errors — the same pre-existing,
+unrelated issue documented in PR #197's task note), so `docker pull` and
+`docker compose` both fail before a container can start. The original slice's
+`test:integration` run (14 files / 47 tests) is documented above and remains
+valid for the unaffected code paths; the new treaty/program integration test
+is written and should be run in CI or a clean environment before merge to
+confirm it passes for real, since it has not been executed against a live
+database in this environment.
+
+## Treaty/Program Dimension (Added)
+
+Issue #61 (reinsurance treaty/facultative model) has since merged, so the
+previously-deferred treaty/program dimension is now implemented:
+
+- `loadTreatyProgramLabels` in `server/src/services/exposure.service.ts`
+  bulk-loads each policy's latest `policy_reinsurance_placements` row (one
+  query for the whole batch, `DISTINCT ON (policy_id) ... ORDER BY
+  computed_at DESC`, not N+1) and joins `reinsurance_treaties` /
+  `reinsurance_programs` / `reinsurance_facultative_certificates` to build a
+  human-readable label.
+- Facultative placements label as `Facultative: <certificate_number>`; treaty
+  placements label as `<treaty_name> (<program_name>)` (or just
+  `<treaty_name>` if the treaty has no parent program); policies with no
+  computed placement label as `Unplaced (Direct)`
+  (`UNPLACED_TREATY_PROGRAM_LABEL`).
+- `computePlacementForTransaction` (from #61) is on-demand, not auto-wired
+  into bind/servicing transactions — most policies are expected to be
+  Unplaced unless a placement was explicitly computed for them. This is
+  documented behavior, not a bug: see docs/REINSURANCE_MODEL.md's
+  "Deliberately Deferred: Automatic Lifecycle Wiring" section.
+- `ExposureSummary.byTreatyProgram` and the CSV export's `treatyProgram`
+  column expose the new dimension; `ExposurePage.tsx` renders it as a fourth
+  group table.
 
 ## Follow-Ups Or Risks
 
-- Treaty/program aggregation dimension (from the issue's expected scope) is
-  not implemented: issue #61 (reinsurance treaty/facultative model) was
-  developed in parallel and was not merged to `main` at the time this issue
-  was implemented, so `policy_reinsurance_placements`/`reinsurance_treaties`
-  tables were not available to join against. Once #61 merges, add an
-  optional `treatyProgram` grouping to `computeExposureSummary` that joins
-  `policy_reinsurance_placements` for policies that have a placement.
 - Historical (`asOf` in the past) exposure queries call `getPolicyState`
   once per matching policy (N+1). Acceptable for a first slice at
   demo/pilot book sizes; if this needs to scale to a large in-force book,
