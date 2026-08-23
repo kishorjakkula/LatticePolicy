@@ -198,6 +198,7 @@ collaboration opportunities with `help wanted`.
 - [Release process](docs/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
 - [GitHub roadmap setup](docs/GITHUB_ROADMAP_SETUP.md)
+- [Epic development workflow](docs/EPIC_WORKFLOW.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [API](docs/API.md)
 - [Domain model](docs/DOMAIN.md)
