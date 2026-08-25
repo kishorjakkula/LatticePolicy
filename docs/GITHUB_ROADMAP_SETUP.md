@@ -83,6 +83,9 @@ For each new issue:
 5. Add a milestone when the issue belongs to a roadmap phase.
 6. Mark `good first issue` only when expected files, validation commands, and
    acceptance criteria are clear.
+7. For an epic specifically, follow `docs/EPIC_WORKFLOW.md` — epics need a
+   periodic audit against real child-issue state, not just a one-time
+   checklist at creation.
 
 ## Pull Request Rules
 
