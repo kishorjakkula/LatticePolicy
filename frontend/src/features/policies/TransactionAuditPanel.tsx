@@ -101,6 +101,10 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
     timelineTransaction?.metadata?.isOutOfSequence ||
     timelineTransaction?.metadata?.rebased ||
     null
+  const rebasedTransactions: Array<{ transactionType?: string; transactionNumber?: string | null; effectiveDate?: string }> =
+    Array.isArray(timelineTransaction?.metadata?.rebasedTransactions) ? timelineTransaction!.metadata!.rebasedTransactions : []
+  const retroAdjustment: { totalDelta?: number; feesDelta?: number; taxesDelta?: number } | null =
+    timelineTransaction?.metadata?.retroAdjustment || null
 
   async function handleDownload(documentId: string) {
     try {
@@ -136,9 +140,29 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
       </div>
 
       {outOfSequence ? (
-        <p className="muted" data-testid="out-of-sequence-flag">
-          Out-of-sequence / rebased transaction: {typeof outOfSequence === 'string' ? outOfSequence : 'yes'}
-        </p>
+        <div className="policy-oos-notice" data-testid="out-of-sequence-flag">
+          <p className="muted">
+            Out-of-sequence / rebased transaction: {typeof outOfSequence === 'string' ? outOfSequence : 'yes'}
+          </p>
+          {rebasedTransactions.length > 0 ? (
+            <p className="muted" data-testid="out-of-sequence-rebased-list">
+              Rebased {rebasedTransactions.length === 1 ? 'transaction' : 'transactions'}:{' '}
+              {rebasedTransactions
+                .map(
+                  (t) =>
+                    `${t.transactionType || 'Transaction'}${t.transactionNumber ? ` ${t.transactionNumber}` : ''} (eff. ${formatDisplayDate(t.effectiveDate, { fallback: t.effectiveDate || '-' })})`
+                )
+                .join(', ')}
+            </p>
+          ) : null}
+          {retroAdjustment && (retroAdjustment.totalDelta || retroAdjustment.feesDelta || retroAdjustment.taxesDelta) ? (
+            <p className="muted" data-testid="out-of-sequence-retro-adjustment">
+              Retro premium impact: {formatCurrency({ amount: retroAdjustment.totalDelta || 0, currency: version.premium?.total?.currency || 'USD' })}
+              {' '}(fees {formatCurrency({ amount: retroAdjustment.feesDelta || 0, currency: version.premium?.total?.currency || 'USD' })}, taxes{' '}
+              {formatCurrency({ amount: retroAdjustment.taxesDelta || 0, currency: version.premium?.total?.currency || 'USD' })})
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {reasonNote?.noteText ? (
