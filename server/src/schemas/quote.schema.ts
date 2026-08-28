@@ -6,7 +6,7 @@ export const CreateQuoteSchema = z.object({
   effectiveDate: DateOnlySchema.optional(),
   termMonths: z.number().int().positive().optional(),
   state: z.string().optional(),
-  payload: z.record(z.unknown()).optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
 }).passthrough()
 
 export const DraftQuoteSchema = z.object({
