@@ -65,9 +65,50 @@ async function seedPolicy(opts: {
   return policyId
 }
 
+async function seedTreatyPlacement(opts: { forTenantId: string; policyId: string; treatyName: string; programName: string }) {
+  const db = getDb()!
+  const programRes = await db.query(
+    `INSERT INTO reinsurance_programs (tenant_id, program_name, program_year, status)
+     VALUES ($1,$2,2026,'Active') RETURNING program_id`,
+    [opts.forTenantId, opts.programName],
+  )
+  const programId = programRes.rows[0].program_id
+  const treatyRes = await db.query(
+    `INSERT INTO reinsurance_treaties (tenant_id, program_id, treaty_name, treaty_type, status, effective_date, expiration_date)
+     VALUES ($1,$2,$3,'QUOTA_SHARE','Active','2026-01-01','2027-01-01') RETURNING treaty_id`,
+    [opts.forTenantId, programId, opts.treatyName],
+  )
+  const treatyId = treatyRes.rows[0].treaty_id
+  await db.query(
+    `INSERT INTO policy_reinsurance_placements (tenant_id, policy_id, placement_type, treaty_id, retained_percent, ceded_percent)
+     VALUES ($1,$2,'TREATY',$3,60,40)`,
+    [opts.forTenantId, opts.policyId, treatyId],
+  )
+}
+
+async function seedFacultativePlacement(opts: { forTenantId: string; policyId: string; certificateNumber: string }) {
+  const db = getDb()!
+  const certRes = await db.query(
+    `INSERT INTO reinsurance_facultative_certificates
+       (tenant_id, policy_id, certificate_number, status, effective_date, expiration_date, ceded_percent, retained_percent)
+     VALUES ($1,$2,$3,'Active','2026-01-01','2027-01-01',25,75) RETURNING certificate_id`,
+    [opts.forTenantId, opts.policyId, opts.certificateNumber],
+  )
+  const certificateId = certRes.rows[0].certificate_id
+  await db.query(
+    `INSERT INTO policy_reinsurance_placements (tenant_id, policy_id, placement_type, facultative_certificate_id, retained_percent, ceded_percent)
+     VALUES ($1,$2,'FACULTATIVE',$3,75,25)`,
+    [opts.forTenantId, opts.policyId, certificateId],
+  )
+}
+
 async function cleanup() {
   const db = getDb()
   if (!db) return
+  await db.query(`DELETE FROM policy_reinsurance_placements WHERE tenant_id IN ($1,$2) AND policy_id IN (SELECT policy_id FROM policies WHERE policy_number LIKE 'EXP-%')`, [tenantId, otherTenantId])
+  await db.query(`DELETE FROM reinsurance_facultative_certificates WHERE tenant_id IN ($1,$2) AND policy_id IN (SELECT policy_id FROM policies WHERE policy_number LIKE 'EXP-%')`, [tenantId, otherTenantId])
+  await db.query(`DELETE FROM reinsurance_treaties WHERE tenant_id IN ($1,$2) AND treaty_name LIKE 'EXP-%'`, [tenantId, otherTenantId])
+  await db.query(`DELETE FROM reinsurance_programs WHERE tenant_id IN ($1,$2) AND program_name LIKE 'EXP-%'`, [tenantId, otherTenantId])
   await db.query(`DELETE FROM policy_versions WHERE tenant_id IN ($1,$2) AND policy_id IN (SELECT policy_id FROM policies WHERE policy_number LIKE 'EXP-%')`, [tenantId, otherTenantId])
   await db.query(`DELETE FROM policies WHERE tenant_id IN ($1,$2) AND policy_number LIKE 'EXP-%'`, [tenantId, otherTenantId])
 }
@@ -177,5 +218,86 @@ describe('exposure management (database path)', () => {
     await createUser({ username: `exposure-agent-${run}`, password, tenantId, roles: ['agent'] })
     const agentToken = await login(`exposure-agent-${run}`, tenantId)
     await authReq('get', '/api/v1/admin/exposure/summary', agentToken).expect(403)
+  })
+
+  it('aggregates exposure by treaty/program, distinguishing treaty, facultative, unplaced, and tenant isolation', async () => {
+    const run = suffix()
+
+    const treatyPolicyId = await seedPolicy({
+      forTenantId: tenantId,
+      policyNumber: `EXP-TREATY-${run}`,
+      status: 'Issued',
+      productCode: 'homeowners',
+      state: 'CA',
+      risks: [{ type: 'dwelling', address: '1 Elm St, Sacramento, CA 95814', construction: 'frame', yearBuilt: 2010 }],
+      coverages: [{ code: 'DwellingA', selected: true, limit: 300000 }],
+    })
+    await seedTreatyPlacement({
+      forTenantId: tenantId,
+      policyId: treatyPolicyId,
+      treatyName: `EXP-Treaty-${run}`,
+      programName: `EXP-Program-${run}`,
+    })
+
+    const facPolicyId = await seedPolicy({
+      forTenantId: tenantId,
+      policyNumber: `EXP-FAC-${run}`,
+      status: 'Issued',
+      productCode: 'homeowners',
+      state: 'CA',
+      risks: [{ type: 'dwelling', address: '2 Oak St, Sacramento, CA 95814', construction: 'frame', yearBuilt: 2015 }],
+      coverages: [{ code: 'DwellingA', selected: true, limit: 500000 }],
+    })
+    await seedFacultativePlacement({
+      forTenantId: tenantId,
+      policyId: facPolicyId,
+      certificateNumber: `EXP-FacCert-${run}`,
+    })
+
+    await seedPolicy({
+      forTenantId: tenantId,
+      policyNumber: `EXP-UNPLACED-${run}`,
+      status: 'Issued',
+      productCode: 'homeowners',
+      state: 'CA',
+      risks: [{ type: 'dwelling', address: '3 Pine St, Sacramento, CA 95814', construction: 'frame', yearBuilt: 2018 }],
+      coverages: [{ code: 'DwellingA', selected: true, limit: 200000 }],
+    })
+
+    // A placement for another tenant's policy must never leak into this
+    // tenant's treaty/program aggregation.
+    const otherPolicyId = await seedPolicy({
+      forTenantId: otherTenantId,
+      policyNumber: `EXP-OTHER-TREATY-${run}`,
+      status: 'Issued',
+      productCode: 'homeowners',
+      state: 'CA',
+      risks: [{ type: 'dwelling', address: '9 Birch St, Sacramento, CA 95814', construction: 'frame', yearBuilt: 2012 }],
+      coverages: [{ code: 'DwellingA', selected: true, limit: 350000 }],
+    })
+    await seedTreatyPlacement({
+      forTenantId: otherTenantId,
+      policyId: otherPolicyId,
+      treatyName: `EXP-OtherTreaty-${run}`,
+      programName: `EXP-OtherProgram-${run}`,
+    })
+
+    const rows = await loadExposureRows(getDb() as any, tenantId, {})
+    const treatyRow = rows.find((r) => r.policyNumber === `EXP-TREATY-${run}`)
+    const facRow = rows.find((r) => r.policyNumber === `EXP-FAC-${run}`)
+    const unplacedRow = rows.find((r) => r.policyNumber === `EXP-UNPLACED-${run}`)
+
+    expect(treatyRow?.treatyProgram).toBe(`EXP-Treaty-${run} (EXP-Program-${run})`)
+    expect(facRow?.treatyProgram).toBe(`Facultative: EXP-FacCert-${run}`)
+    expect(unplacedRow?.treatyProgram).toBe('Unplaced (Direct)')
+
+    // The other tenant's treaty must not appear in this tenant's aggregation.
+    expect(rows.some((r) => r.treatyProgram.includes(`EXP-OtherTreaty-${run}`))).toBe(false)
+
+    const summary = await computeExposureSummary(getDb() as any, tenantId, {})
+    const treatyGroup = summary.byTreatyProgram.find((g) => g.key === `EXP-Treaty-${run} (EXP-Program-${run})`)
+    expect(treatyGroup?.policyCount).toBe(1)
+    const facGroup = summary.byTreatyProgram.find((g) => g.key === `Facultative: EXP-FacCert-${run}`)
+    expect(facGroup?.policyCount).toBe(1)
   })
 })

@@ -16,6 +16,9 @@
 import { toRawQuery, withTenantTx, type DrizzleDB } from '../db.js'
 import { getPolicyState } from './policy.service.js'
 
+/** Label used when a policy has no computed reinsurance placement row. */
+export const UNPLACED_TREATY_PROGRAM_LABEL = 'Unplaced (Direct)'
+
 export interface ExposureRow {
   policyId: string
   policyNumber: string | null
@@ -29,6 +32,15 @@ export interface ExposureRow {
   tiv: number | null
   effectiveDate: string | null
   expirationDate: string | null
+  /**
+   * Treaty/program label from the policy's latest computed
+   * `policy_reinsurance_placements` row (see docs/REINSURANCE_MODEL.md),
+   * or UNPLACED_TREATY_PROGRAM_LABEL when no placement has been computed.
+   * Placement computation is on-demand (not auto-wired into bind/servicing
+   * transactions), so most policies are expected to be Unplaced unless a
+   * treaty/facultative placement was explicitly computed for them.
+   */
+  treatyProgram: string
 }
 
 export interface ExposureFilters {
@@ -52,6 +64,7 @@ export interface ExposureSummary {
   byProduct: ExposureAggregateGroup[]
   byState: ExposureAggregateGroup[]
   byClassOrIndustry: ExposureAggregateGroup[]
+  byTreatyProgram: ExposureAggregateGroup[]
 }
 
 function toNumberOrNull(value: unknown): number | null {
@@ -151,6 +164,54 @@ export function extractExposureDimensions(
 }
 
 /**
+ * Bulk-load each policy's latest computed reinsurance placement (if any) and
+ * return a policyId -> treaty/program label map. One query for the whole
+ * batch (not N+1): `DISTINCT ON (policy_id)` ordered by `computed_at DESC`
+ * picks the most recent placement per policy.
+ *
+ * Facultative placements take precedence in the underlying data model (see
+ * docs/REINSURANCE_MODEL.md's Facultative Precedence section), so a policy
+ * with both a facultative certificate and treaty layers only ever has
+ * FACULTATIVE rows persisted for the same transaction; there is no
+ * competing-row ambiguity to resolve here.
+ */
+async function loadTreatyProgramLabels(
+  q: (text: string, params?: any[]) => Promise<any>,
+  tenantId: string,
+  policyIds: string[]
+): Promise<Map<string, string>> {
+  const labels = new Map<string, string>()
+  if (policyIds.length === 0) return labels
+
+  const res = await q(
+    `SELECT DISTINCT ON (p.policy_id)
+            p.policy_id,
+            p.placement_type,
+            t.treaty_name,
+            pr.program_name,
+            fc.certificate_number
+       FROM policy_reinsurance_placements p
+       LEFT JOIN reinsurance_treaties t ON t.treaty_id = p.treaty_id
+       LEFT JOIN reinsurance_programs pr ON pr.program_id = t.program_id
+       LEFT JOIN reinsurance_facultative_certificates fc ON fc.certificate_id = p.facultative_certificate_id
+      WHERE p.tenant_id = $1 AND p.policy_id = ANY($2::uuid[])
+      ORDER BY p.policy_id, p.computed_at DESC`,
+    [tenantId, policyIds]
+  )
+
+  for (const row of res.rows as any[]) {
+    const label =
+      row.placement_type === 'FACULTATIVE'
+        ? `Facultative: ${row.certificate_number || 'Unlabeled'}`
+        : row.program_name
+          ? `${row.treaty_name} (${row.program_name})`
+          : row.treaty_name || 'Unlabeled Treaty'
+    labels.set(String(row.policy_id), label)
+  }
+  return labels
+}
+
+/**
  * Load normalized exposure rows for a tenant's in-force ("Issued") book,
  * optionally filtered by product/state and evaluated as of a specific date.
  *
@@ -192,6 +253,9 @@ export async function loadExposureRows(
     const today = new Date().toISOString().slice(0, 10)
     const asOf = filters.asOf && filters.asOf !== today ? filters.asOf : undefined
 
+    const policyIds = (policiesRes.rows as any[]).map((row) => String(row.policy_id))
+    const treatyProgramLabels = await loadTreatyProgramLabels(q, tenantId, policyIds)
+
     const rows: ExposureRow[] = []
     for (const row of policiesRes.rows as any[]) {
       const policyId = String(row.policy_id)
@@ -229,6 +293,7 @@ export async function loadExposureRows(
         expirationDate: row.term_expiration_date
           ? new Date(row.term_expiration_date).toISOString().slice(0, 10)
           : null,
+        treatyProgram: treatyProgramLabels.get(policyId) || UNPLACED_TREATY_PROGRAM_LABEL,
       })
     }
     return rows
@@ -269,6 +334,7 @@ export async function computeExposureSummary(
     byProduct: aggregateBy(rows, (r) => r.productCode),
     byState: aggregateBy(rows, (r) => r.state),
     byClassOrIndustry: aggregateBy(rows, (r) => r.classOrIndustry),
+    byTreatyProgram: aggregateBy(rows, (r) => r.treatyProgram),
   }
 }
 
@@ -286,6 +352,7 @@ export function exposureRowsToCsv(rows: ExposureRow[]): string {
     'tiv',
     'effectiveDate',
     'expirationDate',
+    'treatyProgram',
   ]
   const escape = (v: any) => {
     const s = v == null ? '' : String(v)
@@ -307,6 +374,7 @@ export function exposureRowsToCsv(rows: ExposureRow[]): string {
         row.tiv,
         row.effectiveDate,
         row.expirationDate,
+        row.treatyProgram,
       ]
         .map(escape)
         .join(',')

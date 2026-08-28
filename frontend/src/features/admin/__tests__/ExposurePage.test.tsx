@@ -29,7 +29,7 @@ describe('ExposurePage', () => {
 
   it('shows empty-state messaging for each group when there is no exposure data', () => {
     useExposureSummaryMock.mockReturnValue({
-      data: { policyCount: 0, asOf: '2026-01-01', totalTiv: 0, byProduct: [], byState: [], byClassOrIndustry: [] },
+      data: { policyCount: 0, asOf: '2026-01-01', totalTiv: 0, byProduct: [], byState: [], byClassOrIndustry: [], byTreatyProgram: [] },
       isLoading: false,
       error: null,
     })
@@ -37,7 +37,8 @@ describe('ExposurePage', () => {
     expect(screen.getByText('By Product')).toBeInTheDocument()
     expect(screen.getByText('By State')).toBeInTheDocument()
     expect(screen.getByText('By Class / Industry')).toBeInTheDocument()
-    expect(screen.getAllByText('No exposure data for the current filters.')).toHaveLength(3)
+    expect(screen.getByText('By Treaty / Program')).toBeInTheDocument()
+    expect(screen.getAllByText('No exposure data for the current filters.')).toHaveLength(4)
   })
 
   it('renders grouped exposure rows when data is present', () => {
