@@ -105,6 +105,31 @@ describe('TransactionAuditPanel', () => {
     expect(screen.getByText(/No ledger events recorded/i)).toBeInTheDocument()
   })
 
+  test('displays rebased transactions and retro premium impact for an out-of-sequence transaction', () => {
+    const oosTransaction = {
+      ...baseTransaction,
+      metadata: {
+        outOfSequence: true,
+        rebasedTransactions: [
+          { transactionType: 'ENDORSE', transactionNumber: 'END-002', effectiveDate: '2026-02-01' },
+        ],
+        retroAdjustment: { totalDelta: 42.5, feesDelta: 1.5, taxesDelta: 3 },
+      },
+    }
+    render(
+      <TransactionAuditPanel
+        policyId="p-1"
+        version={baseVersion as any}
+        timelineTransaction={oosTransaction as any}
+        ledgerEvents={[]}
+      />,
+      { wrapper },
+    )
+    expect(screen.getByTestId('out-of-sequence-flag')).toBeInTheDocument()
+    expect(screen.getByTestId('out-of-sequence-rebased-list')).toHaveTextContent('END-002')
+    expect(screen.getByTestId('out-of-sequence-retro-adjustment')).toHaveTextContent('$42.50')
+  })
+
   test('opens a document via the download API on click', async () => {
     const { api } = await import('../../../api/client')
     render(

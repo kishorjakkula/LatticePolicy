@@ -17,7 +17,7 @@ export function usePolicy(id: string) {
 export function usePolicyAsOf(id: string, asOf: string | null) {
   return useQuery({
     queryKey: [...queryKeys.policies.detail(id), 'asOf', asOf],
-    queryFn: () => api.getPolicy(id, asOf || undefined),
+    queryFn: () => api.getPolicyState(id, asOf || undefined),
     enabled: !!id && !!asOf,
   })
 }

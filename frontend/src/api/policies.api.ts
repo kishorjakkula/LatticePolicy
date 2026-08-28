@@ -3,8 +3,10 @@ import { request, tenantId, authHeaders, handleUnauthorized, API_PREFIX } from '
 
 export const issuePolicy = (id: string) => request<any>('POST', `/v1/policies/${id}/issue`)
 
-export const getPolicy = (id: string, asOf?: string) =>
-  request<any>('GET', `/v1/policies/${id}${asOf ? `?asOf=${encodeURIComponent(asOf)}` : ''}`)
+export const getPolicy = (id: string) => request<any>('GET', `/v1/policies/${id}`)
+
+export const getPolicyState = (id: string, asOf?: string) =>
+  request<any>('GET', `/v1/policies/${id}/state${asOf ? `?asOf=${encodeURIComponent(asOf)}` : ''}`)
 
 export const getPolicyVersions = (id: string) => request<any[]>('GET', `/v1/policies/${id}/versions`)
 

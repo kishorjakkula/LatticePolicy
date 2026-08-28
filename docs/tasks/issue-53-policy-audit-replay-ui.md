@@ -92,18 +92,35 @@ All green: 70 frontend + 113 server unit tests, 26/26 integration tests
 (including the 2 new ones), clean build, and clean root typecheck
 (`npm run typecheck`).
 
+## Follow-Ups Closed Out (this change)
+
+- **As-of inspection UI**: added `PolicyAsOfPanel.tsx`, a collapsible "View
+  policy as of a date" panel on `PolicyViewPage` with a date input calling
+  `usePolicyAsOf`. Along the way, fixed a real pre-existing wiring bug:
+  `usePolicyAsOf` called `api.getPolicy(id, asOf)`, which hit
+  `GET /v1/policies/:id?asOf=...` — a query param the base policy endpoint
+  never read. Issue #52's real as-of endpoint is
+  `GET /v1/policies/:id/state?asOf=...`. Split `getPolicy(id)` (plain) from a
+  new `getPolicyState(id, asOf)` hitting the correct endpoint, and repointed
+  the hook at it. Verified server-side that `/policies/:id/state` exists and
+  reads `asOf` (`server/src/routes/policies.routes.ts`).
+- **Out-of-sequence/rebased metadata display**: issue #52 has since merged
+  and populates `outOfSequence` / `rebasedTransactions` / `retroAdjustment`
+  on `policy_transactions.metadata` for cancellation/reinstatement (see
+  `server/src/__tests__/policy-lifecycle.integration.test.ts`). Traced the
+  full path before assuming it "just works": `getPolicyTimeline` selects the
+  raw `metadata` JSONB column and passes it through unmodified
+  (`metadata: row.metadata || null`, `server/src/services/policy.service.ts`)
+  — no field-stripping in between. `TransactionAuditPanel.tsx` now reads
+  `timelineTransaction.metadata.rebasedTransactions` /
+  `.retroAdjustment` and renders a rebased-transactions list and a retro
+  premium-impact line when present, backed by a new render test case in
+  `TransactionAuditPanel.test.tsx`. No new server code was needed — the data
+  path was already correct end-to-end once traced; the gap was purely that
+  the frontend never rendered fields that existed.
+
 ## Follow-Ups Or Risks
 
-- As-of inspection: `usePolicyAsOf` and `getPolicy(id, asOf)` are wired
-  end-to-end to the existing backend `getPolicyState` as-of support, but no
-  date-picker control was added to `PolicyViewPage` to drive it from the UI
-  in this change — the primary ask (transaction-level audit detail) was
-  prioritized given the scope of this issue. A follow-up UI-only change can
-  add an "As of" date input that calls `usePolicyAsOf` and swaps the
-  displayed policy summary.
-- Out-of-sequence/rebased metadata display is implemented defensively but has
-  no real data to render yet; it will activate automatically once issue #52
-  lands.
 - Ledger-event correlation is best-effort, matched via
   `payload.transactionNumber` on the ledger row (the only correlation key
   ledger events currently carry). Ledger events that don't include a

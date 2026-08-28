@@ -6,7 +6,7 @@ import {
 } from './quotes.api'
 
 import {
-  issuePolicy, getPolicy, getPolicyVersions, getFullPolicy, getPolicyTimeline,
+  issuePolicy, getPolicy, getPolicyState, getPolicyVersions, getFullPolicy, getPolicyTimeline,
   searchPolicies, exportPoliciesCsv, getPolicyAiInsights,
   reserveEndorsementNumber, reserveTransactionNumber,
   endorsePolicy, endorsePreview,
@@ -43,7 +43,7 @@ export const api = {
   createQuote, bindQuote, copyQuote, createQuoteDraft, updateQuoteDraft,
   searchQuotes, getQuote, inferQuoteAiInsights, exportQuotesCsv,
   // Policies
-  issuePolicy, getPolicy, getPolicyVersions, getFullPolicy, getPolicyTimeline,
+  issuePolicy, getPolicy, getPolicyState, getPolicyVersions, getFullPolicy, getPolicyTimeline,
   searchPolicies, exportPoliciesCsv, getPolicyAiInsights,
   reserveEndorsementNumber, reserveTransactionNumber,
   endorsePolicy, endorsePreview,

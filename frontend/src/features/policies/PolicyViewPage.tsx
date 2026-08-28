@@ -35,6 +35,7 @@ import {
   formatDisplayDateTime as nt,
 } from "../../shared/dateDisplay";
 import { TransactionAuditPanel as AuditPanel } from "./TransactionAuditPanel";
+import { PolicyAsOfPanel } from "./PolicyAsOfPanel";
 function je(n) {
   if (!n) return "";
   const t = new Date(n);
@@ -698,6 +699,7 @@ function Tt() {
                 ],
               }),
             }),
+          e.jsx(PolicyAsOfPanel, { policyId: r.policyId }),
           e.jsxs("div", {
             className: "card policy-section-card policy-versions-card",
             children: [
