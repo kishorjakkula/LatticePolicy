@@ -222,6 +222,11 @@ Recommended GitHub Project fields:
 For the full GitHub setup process, label taxonomy, milestone list, triage rules,
 and Wiki synchronization guidance, see `docs/GITHUB_ROADMAP_SETUP.md`.
 
+For how an epic moves after it's created — child-issue completion
+conventions, the audit procedure for reconciling epic status against real
+issue state, who is authorized to close an epic, and audit cadence — see
+`docs/EPIC_WORKFLOW.md`.
+
 ## Phase Definition Of Done
 
 A roadmap phase is complete when:

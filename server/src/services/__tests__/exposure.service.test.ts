@@ -104,12 +104,15 @@ describe('exposureRowsToCsv', () => {
         tiv: 150000,
         effectiveDate: '2026-01-01',
         expirationDate: '2027-01-01',
+        treatyProgram: 'Unplaced (Direct)',
       },
     ]
     const csv = exposureRowsToCsv(rows)
     const lines = csv.split('\n')
     expect(lines[0]).toContain('policyId')
+    expect(lines[0]).toContain('treatyProgram')
     expect(lines[1]).toContain('p1')
     expect(lines[1]).toContain('150000')
+    expect(lines[1]).toContain('Unplaced (Direct)')
   })
 })

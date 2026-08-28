@@ -91,6 +91,7 @@ export function ExposurePage() {
           <GroupTable title="By Product" groups={data.byProduct || []} />
           <GroupTable title="By State" groups={data.byState || []} />
           <GroupTable title="By Class / Industry" groups={data.byClassOrIndustry || []} />
+          <GroupTable title="By Treaty / Program" groups={data.byTreatyProgram || []} />
         </>
       )}
     </div>
