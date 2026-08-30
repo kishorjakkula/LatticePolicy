@@ -287,13 +287,19 @@ describe('policy transaction lifecycle persistence', () => {
     )
     expect(cancelled.transactionType).toBe('Cancel')
 
-    const persisted = await db!.query(
-      `SELECT claim_reference, metadata FROM policy_versions
+    const persistedVersion = await db!.query(
+      `SELECT claim_reference FROM policy_versions
         WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type='Cancel'`,
       [tenantId, bound.policyId],
     )
-    expect(persisted.rows[0].claim_reference).toBe('CLM-2026-000456')
-    expect(persisted.rows[0].metadata.claimReference).toBe('CLM-2026-000456')
+    expect(persistedVersion.rows[0].claim_reference).toBe('CLM-2026-000456')
+
+    const persistedTransaction = await db!.query(
+      `SELECT metadata FROM policy_transactions
+        WHERE tenant_id=$1 AND policy_id=$2 AND type='CANCEL'`,
+      [tenantId, bound.policyId],
+    )
+    expect(persistedTransaction.rows[0].metadata.claimReference).toBe('CLM-2026-000456')
   })
 
   it('previews and renews policies, records non-renewal, and rejects rewrite before cancellation', async () => {

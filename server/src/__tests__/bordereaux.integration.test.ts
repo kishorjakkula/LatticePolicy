@@ -88,7 +88,7 @@ async function seedCancelledTransactionWithClaimReference(
 
   const txnResult = await db.query(
     `INSERT INTO policy_transactions (tenant_id, policy_id, type, status, effective_date)
-     VALUES ($1,$2,'Cancel','Issued',$3)
+     VALUES ($1,$2,'CANCEL','Issued',$3)
      RETURNING transaction_id`,
     [tenantId, policyId, effectiveDate]
   )
