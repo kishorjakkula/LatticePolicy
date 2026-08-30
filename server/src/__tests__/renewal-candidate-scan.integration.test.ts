@@ -65,7 +65,7 @@ async function seedPolicy(opts: {
   if (opts.alreadyRenewed) {
     await db.query(
       `INSERT INTO policy_transactions (tenant_id, policy_id, type, status, effective_date)
-       VALUES ($1,$2,'Renew','Issued',$3)`,
+       VALUES ($1,$2,'RENEW','Issued',$3)`,
       [opts.tenantId, policyId, opts.termExpirationDate]
     )
   }

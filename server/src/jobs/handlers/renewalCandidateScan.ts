@@ -39,7 +39,7 @@ export function computeRenewalWindowBounds(windowDays: number, now: Date = new D
  * Exclusions are enforced in SQL, not just the date window:
  * - `status = 'Issued'` excludes cancelled/reinstated-then-cancelled policies.
  * - `non_renewed_at IS NULL` excludes policies already marked non-renewal.
- * - `NOT EXISTS (... type = 'Renew' ...)` excludes already-renewed policies.
+ * - `NOT EXISTS (... type = 'RENEW' ...)` excludes already-renewed policies.
  *   This check is used instead of trusting `term_expiration_date` alone,
  *   because renewPolicy() does not update the policies.term_expiration_date
  *   column when it renews a policy (see docs/tasks for this issue) — relying
@@ -62,7 +62,7 @@ export const renewalCandidateScanHandler: JobHandler = async ({ run, requestPayl
           AND term_expiration_date <= $3::date
           AND NOT EXISTS (
             SELECT 1 FROM policy_transactions pt
-             WHERE pt.tenant_id = $1 AND pt.policy_id = policies.policy_id AND pt.type = 'Renew'
+             WHERE pt.tenant_id = $1 AND pt.policy_id = policies.policy_id AND pt.type = 'RENEW'
           )
         ORDER BY term_expiration_date ASC`,
       [run.tenant_id, from, to]
