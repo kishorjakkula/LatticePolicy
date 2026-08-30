@@ -96,7 +96,7 @@ async function seedCancelledTransactionWithClaimReference(
 
   await db.query(
     `INSERT INTO policy_versions (tenant_id, policy_id, transaction_id, effective_date, transaction_type, premium_total, claim_reference)
-     VALUES ($1,$2,$3,$4,'Cancel',0,$5)`,
+     VALUES ($1,$2,$3,$4,'CANCEL',0,$5)`,
     [tenantId, policyId, transactionId, effectiveDate, claimReference]
   )
 

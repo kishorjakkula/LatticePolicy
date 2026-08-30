@@ -289,7 +289,7 @@ describe('policy transaction lifecycle persistence', () => {
 
     const persistedVersion = await db!.query(
       `SELECT claim_reference FROM policy_versions
-        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type='Cancel'`,
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type='CANCEL'`,
       [tenantId, bound.policyId],
     )
     expect(persistedVersion.rows[0].claim_reference).toBe('CLM-2026-000456')
