@@ -266,6 +266,36 @@ describe('policy transaction lifecycle persistence', () => {
     expect(cancelHandoff.premiumImpact.amount).toBeLessThanOrEqual(0)
   })
 
+  it('persists an external claim reference on a cancellation (issue #225)', async () => {
+    await initDb()
+    await ensureTenant()
+    await ensureServicingForm()
+    const db = getDb()
+    expect(db).toBeTruthy()
+
+    const bound = await createBoundPolicy()
+    await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
+
+    const cancelled = await tx((db) =>
+      cancelPolicy(
+        db,
+        tenantId,
+        bound.policyId,
+        { effectiveDate: '2026-10-01', reason: 'total loss', claimReference: 'CLM-2026-000456' },
+        actor,
+      ),
+    )
+    expect(cancelled.transactionType).toBe('Cancel')
+
+    const persisted = await db!.query(
+      `SELECT claim_reference, metadata FROM policy_versions
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type='Cancel'`,
+      [tenantId, bound.policyId],
+    )
+    expect(persisted.rows[0].claim_reference).toBe('CLM-2026-000456')
+    expect(persisted.rows[0].metadata.claimReference).toBe('CLM-2026-000456')
+  })
+
   it('previews and renews policies, records non-renewal, and rejects rewrite before cancellation', async () => {
     await initDb()
     await ensureTenant()

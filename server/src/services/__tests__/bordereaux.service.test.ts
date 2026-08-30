@@ -70,9 +70,20 @@ describe('validateBordereauRow', () => {
       policyId: 'p1',
       transactionId: 't1',
       policyNumber: 'POL-1',
-      data: { transactionType: 'NB', effectiveDate: '2026-01-01' }
+      data: { transactionType: 'Cancel', effectiveDate: '2026-01-01', claimReference: 'CLM-123' }
     })
     expect(result.isValid).toBe(true)
+  })
+
+  it('requires claimReference for a CLAIMS_REFERENCE_HANDOFF row', () => {
+    const result = validateBordereauRow('CLAIMS_REFERENCE_HANDOFF', {
+      policyId: 'p1',
+      transactionId: 't1',
+      policyNumber: 'POL-1',
+      data: { transactionType: 'Cancel', effectiveDate: '2026-01-01' }
+    })
+    expect(result.isValid).toBe(false)
+    expect(result.errors).toContain('claimReference is required for a claims-reference-handoff bordereau row')
   })
 })
 

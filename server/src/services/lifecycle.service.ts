@@ -379,6 +379,7 @@ export async function cancelPolicy(
   const q = toRawQuery(db)
   const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
   const cancellationReasonCode = typeof body?.cancellationReasonCode === 'string' ? body.cancellationReasonCode.trim() : ''
+  const claimReference = typeof body?.claimReference === 'string' ? body.claimReference.trim() : ''
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
@@ -507,6 +508,7 @@ export async function cancelPolicy(
       reason: resolvedReasonDescription || reason || null,
       refund,
       cancellationReasonCode: cancellationReasonCode || null,
+      claimReference: claimReference || null,
       cancellationType: resolvedCancellationType,
       returnPremiumMethod: returnPremiumResult.method,
       transactionNumber,
@@ -545,6 +547,7 @@ export async function cancelPolicy(
     transactionNumber,
     baseTimelineVersion,
     timelineVersion,
+    claimReference: claimReference || null,
   })
 
   await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)

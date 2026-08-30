@@ -52,6 +52,9 @@ export function validateBordereauRow(type: BordereauType, row: BordereauRowCandi
     if (type === 'CANCELLATION' && !d.cancellationReasonCode) {
       errors.push('cancellationReasonCode is required for a cancellation bordereau row')
     }
+    if (type === 'CLAIMS_REFERENCE_HANDOFF' && !d.claimReference) {
+      errors.push('claimReference is required for a claims-reference-handoff bordereau row')
+    }
   }
 
   return { isValid: errors.length === 0, errors }
@@ -169,10 +172,13 @@ async function buildTransactionRows(
   if (input.bordereauType === 'CANCELLATION') {
     clauses.push(`pv.transaction_type = 'Cancel'`)
   }
+  if (input.bordereauType === 'CLAIMS_REFERENCE_HANDOFF') {
+    clauses.push(`pv.claim_reference IS NOT NULL`)
+  }
   const result = await q(
     `SELECT pv.version_id, pv.policy_id, pv.transaction_id, pv.transaction_type, pv.effective_date,
             pv.premium_total, pv.premium_fees, pv.premium_taxes, pv.currency,
-            pv.cancellation_reason_code, pv.return_premium_amount,
+            pv.cancellation_reason_code, pv.return_premium_amount, pv.claim_reference,
             p.policy_number, p.product_code, p.jurisdiction_code
        FROM policy_versions pv
        JOIN policies p ON p.policy_id = pv.policy_id AND p.tenant_id = pv.tenant_id
@@ -183,29 +189,43 @@ async function buildTransactionRows(
   const rows: BordereauRowCandidate[] = []
   for (const r of result.rows) {
     const placement = await loadReinsurancePlacement(q, tenantId, r.policy_id, r.transaction_id)
+    const data = input.bordereauType === 'CLAIMS_REFERENCE_HANDOFF'
+      ? {
+          // Distinct, minimal shape for a claims-reference handoff row: this
+          // is a pointer to an external claim, not a premium/cancellation
+          // report, so premium and cancellation fields are intentionally
+          // omitted rather than reused from the generic TRANSACTION shape.
+          transactionType: r.transaction_type,
+          effectiveDate: r.effective_date,
+          claimReference: r.claim_reference,
+          productCode: r.product_code,
+          stateCode: r.jurisdiction_code,
+          treatyId: placement?.treatyId ?? null
+        }
+      : {
+          transactionType: r.transaction_type,
+          effectiveDate: r.effective_date,
+          premiumTotal: r.premium_total != null ? Number(r.premium_total) : null,
+          premiumFees: r.premium_fees != null ? Number(r.premium_fees) : null,
+          premiumTaxes: r.premium_taxes != null ? Number(r.premium_taxes) : null,
+          returnPremiumAmount: r.return_premium_amount != null ? Number(r.return_premium_amount) : null,
+          currency: r.currency,
+          cancellationReasonCode: r.cancellation_reason_code,
+          productCode: r.product_code,
+          stateCode: r.jurisdiction_code,
+          treatyId: placement?.treatyId ?? null,
+          cededPercent: placement?.cededPercent ?? null,
+          retainedPercent: placement?.retainedPercent ?? null,
+          cededPremium:
+            placement?.cededPercent != null && r.premium_total != null
+              ? Math.round(Number(r.premium_total) * (placement.cededPercent / 100) * 100) / 100
+              : null
+        }
     rows.push({
       policyId: r.policy_id,
       transactionId: r.transaction_id,
       policyNumber: r.policy_number,
-      data: {
-        transactionType: r.transaction_type,
-        effectiveDate: r.effective_date,
-        premiumTotal: r.premium_total != null ? Number(r.premium_total) : null,
-        premiumFees: r.premium_fees != null ? Number(r.premium_fees) : null,
-        premiumTaxes: r.premium_taxes != null ? Number(r.premium_taxes) : null,
-        returnPremiumAmount: r.return_premium_amount != null ? Number(r.return_premium_amount) : null,
-        currency: r.currency,
-        cancellationReasonCode: r.cancellation_reason_code,
-        productCode: r.product_code,
-        stateCode: r.jurisdiction_code,
-        treatyId: placement?.treatyId ?? null,
-        cededPercent: placement?.cededPercent ?? null,
-        retainedPercent: placement?.retainedPercent ?? null,
-        cededPremium:
-          placement?.cededPercent != null && r.premium_total != null
-            ? Math.round(Number(r.premium_total) * (placement.cededPercent / 100) * 100) / 100
-            : null
-      }
+      data
     })
   }
   return rows
