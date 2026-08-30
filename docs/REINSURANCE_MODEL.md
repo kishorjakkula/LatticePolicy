@@ -113,20 +113,35 @@ using `layer_number` and `retention_amount`/`limit_amount` if it needs to.
 Encoding real attachment-point math correctly requires domain input this
 issue didn't have — treat it as a deliberate gap, not an oversight.
 
-## Deliberately Deferred: Automatic Lifecycle Wiring
+## Automatic Lifecycle Wiring
 
-`computePlacementForTransaction` is exposed via an on-demand admin API
-(`POST /api/v1/admin/reinsurance/policies/:policyId/transactions/:transactionId/compute`),
-**not** automatically called from `quote-bind.service.ts`, `lifecycle.service.ts`,
-or `endorsement.service.ts`. Every one of those services already has real,
-tested production behavior; wiring an unproven new computation into all of
-them risked a regression for a feature area (reinsurance) that has zero prior
-production usage in this codebase. The right trigger point (at bind, at every
-servicing transaction, on a batch cadence, or only when a bordereaux run needs
-it) is a decision that follow-up issues (#62 bordereaux, #64 large commercial
-placement) are better positioned to make once their own requirements are
-concrete. Wiring it in is a small, focused change once that's decided — call
-`computePlacementForTransaction` from the relevant transaction service.
+`computePlacementForTransaction` is called automatically, via the
+non-throwing `computePlacementForTransactionSafely` wrapper, from:
+
+- `quote-bind.service.ts` — after bind, before the quote is marked Converted.
+- `endorsement.service.ts` — at the end of `executeEndorsement`.
+- `lifecycle.service.ts` — at the end of `renewPolicy` and `rewritePolicy`.
+
+Reinsurance placement is a secondary concern relative to the policy
+transaction it's attached to: `computePlacementForTransactionSafely` catches
+any error from the compute path, logs it via the standard `logger`, and
+resolves to `[]` rather than letting a reinsurance-subsystem failure block or
+roll back a bind/endorsement/renewal/rewrite. A policy with no applicable
+treaty or facultative arrangement is represented the same way it always has
+been — zero `policy_reinsurance_placements` rows for that transaction — not a
+special "Unplaced" row; consumers (bordereaux, exposure aggregation) already
+treat absence of a placement row as Unplaced/Direct.
+
+The on-demand admin compute API
+(`POST /api/v1/admin/reinsurance/policies/:policyId/transactions/:transactionId/compute`)
+is unchanged and still useful for backfilling placements on policies bound
+before this wiring existed, or for recomputing after a treaty edit.
+
+Cancellation, reinstatement, and non-renewal transactions do not recompute
+placement — they don't change the underlying product/state/effective-date
+inputs `computePlacementForTransaction` matches on, so there is nothing new
+to compute; the existing placement from the policy's prior transaction
+remains the applicable one.
 
 ## API
 

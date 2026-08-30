@@ -23,6 +23,7 @@ import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRa
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 import {
   buildPolicyDocumentPacket,
   persistPolicyDocumentPacket,
@@ -1150,6 +1151,8 @@ export async function renewPolicy(
     correlationId: transactionNumber,
   })
 
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
+
   return version
 }
 
@@ -1462,6 +1465,8 @@ export async function rewritePolicy(
     actorId: actor?.id || null,
     correlationId: transactionNumber,
   })
+
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
 
   return version
 }
