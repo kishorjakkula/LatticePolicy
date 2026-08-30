@@ -16,7 +16,7 @@ transaction.
 
 ## Important Files
 
-- `server/migrations/046_renewal_candidate_scan_job.sql`: seeds the
+- `server/migrations/047_renewal_candidate_scan_job.sql`: seeds the
   `job_definitions` row, disabled by default (matches the framework's
   opt-in convention).
 - `server/src/jobs/handlers/renewalCandidateScan.ts`: the handler, plus
