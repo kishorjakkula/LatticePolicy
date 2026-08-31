@@ -50,7 +50,6 @@ jobs:
         continue-on-error: true
         with:
           fail-on-severity: high
-          allow-ghsas: GHSA-qwww-vcr4-c8h2
 
   container-scan:
     name: Container Scan

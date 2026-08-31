@@ -71,3 +71,16 @@ No open npm audit exceptions are currently documented for the public-readiness
 baseline. Keep running `npm run security:audit` and `npm audit` from the
 repository root after dependency changes, because the project uses the root npm
 workspace lockfile as the source of truth.
+
+The temporary React Router exception is fully retired. The RSC Mode CSRF advisory
+(`GHSA-qwww-vcr4-c8h2`, high) affects `react-router` `>= 7.12.0, < 7.18.2` and was
+first patched in `7.18.2`, so the advisory stopped applying once the project moved
+onto the `7.18.2` line. `react-router-dom` is now on `7.18.3` (resolving
+`react-router` `7.18.3`), a further patch bump on the same already-patched line;
+it required no downgrade and reintroduces no older high-severity advisories.
+
+Both exception surfaces are now empty: the advisory allowlist in
+`scripts/check-npm-audit.mjs` is an empty set, and the stale
+`allow-ghsas: GHSA-qwww-vcr4-c8h2` entry has been removed from the
+dependency-review step in `.github/workflows/security.yml`. Keep both empty unless
+a new exception is deliberately documented here.
