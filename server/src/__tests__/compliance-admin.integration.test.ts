@@ -5,6 +5,7 @@ import { closeDb, getDb, initDb } from '../db.js'
 import { createApp } from '../app.js'
 import { createUser } from '../users.js'
 import { checkStateEligibility, screenOfac } from '../lib/policy-compliance.js'
+import { createRole } from '../lib/rbac.js'
 
 const app = createApp()
 const tenantId = 'sample-carrier'
@@ -89,7 +90,19 @@ describe('compliance admin: eligibility and OFAC review (database path)', () => 
 
   it('denies eligibility management to a user without admin.compliance.manage with the standardized error contract', async () => {
     const run = suffix()
-    await createUser({ username: `compliance-agent-${run}`, password, tenantId, roles: ['agent'] })
+    // A plain 'agent' role lacks menu.admin.view entirely, so the request
+    // would be rejected by the outer /admin router gate instead of the
+    // compliance route's own admin.compliance.manage check this test is
+    // meant to exercise. Create a role that clears the outer admin-area and
+    // compliance-read gates but deliberately omits admin.compliance.manage,
+    // so the request reaches the route handler's own migrated check.
+    const roleCode = `compliance-reader-${run}`
+    await createRole(
+      tenantId,
+      { roleCode, roleName: `Compliance Reader ${run}`, permissionCodes: ['menu.admin.view', 'admin.compliance.read'] },
+      'integration-test',
+    )
+    await createUser({ username: `compliance-agent-${run}`, password, tenantId, roles: [roleCode] })
     const token = await login(`compliance-agent-${run}`)
 
     const res = await authReq('post', '/api/v1/admin/compliance/eligibility', token)
