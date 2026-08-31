@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/221
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/236
 
 ## Summary
 
