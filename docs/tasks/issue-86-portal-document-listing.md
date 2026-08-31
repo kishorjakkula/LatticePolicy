@@ -60,8 +60,14 @@ started by `scripts/test-integration.sh`.
 
 ## Follow-Ups Or Risks
 
-- No portal UI list view was added in this change; only the API. A future
-  frontend task can wire this into the customer portal UI using existing
-  component patterns.
+- ~~No portal UI list view was added in this change; only the API.~~ Done in
+  issue #214 — see `docs/tasks/issue-214-portal-document-list-ui.md`. That
+  change ended up calling the general `GET /policies/:id/documents` endpoint
+  from issue #88 rather than this issue's dedicated
+  `/customer-portal/policies/:policyId/documents` route, since #88's endpoint
+  already supports portal callers (`customer.portal.read` permission) with a
+  working content-retrieval counterpart, giving the frontend one consistent
+  contract for both listing and downloading. This route still exists and is
+  unchanged; it is just not the one the portal UI ended up calling.
 - Retrieval of actual document content/bytes is out of scope here and depends
-  on issue #88 (real artifact rendering and storage adapters).
+  on issue #88 (real artifact rendering and storage adapters). Done in #88.

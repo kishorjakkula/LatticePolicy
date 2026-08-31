@@ -46,6 +46,14 @@ export function usePolicyTimeline(id: string) {
   })
 }
 
+export function usePolicyDocuments(id: string) {
+  return useQuery({
+    queryKey: queryKeys.policies.documents(id),
+    queryFn: () => api.getPolicyDocuments(id),
+    enabled: !!id,
+  })
+}
+
 export function usePolicyAiInsights(id: string) {
   return useQuery({
     queryKey: queryKeys.policies.aiInsights(id),

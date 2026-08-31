@@ -4,6 +4,7 @@ import { formatDisplayDate } from '../../shared/dateDisplay'
 import carrierLogo from '../../assets/sample-carrier-logo.svg'
 import { loadJsPdf } from '../../lib/pdf'
 import { useCustomerPortalSummary, useCustomerPortalPolicy } from '../../api/hooks'
+import { PortalDocumentsPanel } from './PortalDocumentsPanel'
 
 type PortalPolicy = {
   policyId: string
@@ -466,6 +467,8 @@ export function CustomerPortalPage() {
               </>
             )}
           </section>
+
+          {selectedPolicyId ? <PortalDocumentsPanel policyId={selectedPolicyId} /> : null}
         </>
       )}
     </div>

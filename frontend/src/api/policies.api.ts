@@ -14,6 +14,9 @@ export const getFullPolicy = (id: string) => request<any>('GET', `/v1/policies/$
 
 export const getPolicyTimeline = (id: string) => request<any>('GET', `/v1/policies/${id}/timeline`)
 
+export const getPolicyDocuments = (id: string) =>
+  request<{ documents: any[] }>('GET', `/v1/policies/${encodeURIComponent(id)}/documents`)
+
 export const searchPolicies = (q: string, opts?: { product?: string; status?: string; effectiveFrom?: string; effectiveTo?: string; page?: number; pageSize?: number; sortBy?: string; sortDir?: 'asc'|'desc' }) => {
   const params = new URLSearchParams()
   if (q != null) params.set('q', q)

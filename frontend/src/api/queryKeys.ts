@@ -9,6 +9,7 @@ export const queryKeys = {
     timeline: (id: string) => ['policies', id, 'timeline'] as const,
     interests: (id: string) => ['policies', id, 'interests'] as const,
     aiInsights: (id: string) => ['policies', id, 'ai-insights'] as const,
+    documents: (id: string) => ['policies', id, 'documents'] as const,
   },
   quotes: {
     all: () => ['quotes'] as const,

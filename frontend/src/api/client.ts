@@ -12,7 +12,7 @@ import {
   endorsePolicy, endorsePreview,
   cancelPolicy, reinstatePolicy, rewritePolicy, renewPolicy, nonRenewPolicy,
   getAdditionalInterests, createAdditionalInterest, updateAdditionalInterest, deleteAdditionalInterest,
-  getCancellationReasonCodes, downloadPolicyDocument,
+  getCancellationReasonCodes, downloadPolicyDocument, getPolicyDocuments,
   apiDetails as _apiDetails, apiPreview as _apiPreview
 } from './policies.api'
 
@@ -49,7 +49,7 @@ export const api = {
   endorsePolicy, endorsePreview,
   cancelPolicy, reinstatePolicy, rewritePolicy, renewPolicy, nonRenewPolicy,
   getAdditionalInterests, createAdditionalInterest, updateAdditionalInterest, deleteAdditionalInterest,
-  getCancellationReasonCodes, downloadPolicyDocument,
+  getCancellationReasonCodes, downloadPolicyDocument, getPolicyDocuments,
   // Rating
   listRatingModels, importRatingWorkbook, getRatingModelVersion,
   publishRatingModelVersion, getPublishedRatingModel,
