@@ -181,7 +181,10 @@ const routeDefs: RouteDef[] = [
   { method: 'patch', path: '/v1/admin/onboarding/jobs/{jobId}/rows/{rowId}', tag: 'Admin - Onboarding', summary: 'Edit onboarding staging row' },
   { method: 'get', path: '/v1/admin/onboarding/jobs/{jobId}/results', tag: 'Admin - Onboarding', summary: 'Get onboarding artifacts/results' },
   { method: 'get', path: '/v1/admin/onboarding/history', tag: 'Admin - Onboarding', summary: 'List onboarding job history' },
-  { method: 'get', path: '/v1/admin/onboarding/audit', tag: 'Admin - Onboarding', summary: 'Get onboarding audit events' }
+  { method: 'get', path: '/v1/admin/onboarding/audit', tag: 'Admin - Onboarding', summary: 'Get onboarding audit events' },
+
+  { method: 'get', path: '/v1/admin/exposure/summary', tag: 'Admin - Exposure', summary: 'Get aggregated exposure summary' },
+  { method: 'get', path: '/v1/admin/exposure/export.csv', tag: 'Admin - Exposure', summary: 'Export exposure dataset as CSV' }
 ]
 
 function pathToParameters(path: string) {
