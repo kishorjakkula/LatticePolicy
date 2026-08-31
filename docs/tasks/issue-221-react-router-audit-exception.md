@@ -27,8 +27,13 @@ same already-patched line), and removes the last stale exception surface.
 - `package-lock.json`: root workspace lockfile is the source of truth for audits;
   updated `react-router` and `react-router-dom` to `7.18.3`.
 - `.github/workflows/security.yml`: the dependency-review step still carried
-  `allow-ghsas: GHSA-qwww-vcr4-c8h2`. This was the one remaining live exception
-  and has been removed.
+  `allow-ghsas: GHSA-qwww-vcr4-c8h2` and has been removed. Code review on this
+  PR also caught that the same step had `continue-on-error: true`, which meant
+  removing the allowlist alone would not have changed anything: a genuinely
+  high-severity dependency introduced by a future PR would still fail this
+  step internally, but `continue-on-error: true` swallows that failure and the
+  job reports overall success regardless. Removed `continue-on-error: true` so
+  `fail-on-severity: high` is an enforcing setting again, not a cosmetic one.
 - `scripts/check-npm-audit.mjs`: `allowedAdvisories` was **already** an empty set
   (emptied in `ac2d23a`, #139). No change was needed here.
 - `docs/OPEN_SOURCE_READINESS.md`: "Remaining Security Work" now records the
@@ -85,6 +90,13 @@ Results on this branch:
 
 ## Follow-Ups Or Risks
 
+- **Branch protection does not require the "Dependency Review" job to pass.**
+  `main`'s required status checks currently list only `Build, Test, Typecheck`.
+  Even with `continue-on-error: true` removed, a failing dependency-review
+  step does not by itself block a merge unless the job is also added to the
+  branch protection required-checks list. That is a repository settings
+  change, not a file in this diff, and is deliberately left as a follow-up
+  for a maintainer to apply rather than changed here.
 - `npm run typecheck` is currently a **no-op**. The root script is
   `npm run typecheck --workspaces --if-present`, and no workspace defines a
   `typecheck` script, so it exits 0 without checking anything. Server types are

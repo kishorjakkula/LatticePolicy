@@ -47,7 +47,6 @@ jobs:
 
       - name: Dependency review
         uses: actions/dependency-review-action@v5
-        continue-on-error: true
         with:
           fail-on-severity: high
 
