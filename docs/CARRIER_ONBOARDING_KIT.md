@@ -226,6 +226,7 @@ Docker Compose deployment configured for that tenant
 
 - `docs/PROJECT_CONTEXT.md`, `docs/ARCHITECTURE.md`, `docs/DOMAIN.md`
 - `docs/PRODUCT_PACK_CONTRACT.md`
+- `docs/DATA_IMPORT_TEMPLATES.md` — legacy book import template field mappings
 - `docs/NOTIFICATIONS.md`, `docs/MULTITENANCY.md`
 - `docs/ROADMAP.md`, `docs/GITHUB_ROADMAP_SETUP.md`
 - `docs/TEST_PLAN.md`

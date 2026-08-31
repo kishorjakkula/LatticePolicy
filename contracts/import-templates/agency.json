@@ -1,0 +1,53 @@
+{
+  "entityType": "agency",
+  "status": "framework-only",
+  "note": "Rows of this type can be staged today (server/src/services/data-import.service.ts's SUPPORTED_ENTITY_TYPES/IMPORTABLE_ENTITY_TYPES_FRAMEWORK_ONLY), but validation always fails with an explicit 'no validator/commit handler yet' error, and commit is rejected. This file proposes the target shape a future commit handler would write into the parties / party_roles / party_contacts / party_licenses tables (server/src/schema.ts) - it is a design proposal, not a working import.",
+  "mapsTo": {
+    "party": "parties (type='agency')",
+    "roles": "party_roles (roleCode='AGENCY')",
+    "contacts": "party_contacts",
+    "licenses": "party_licenses"
+  },
+  "fields": [
+    { "name": "orgName", "required": true, "mapsTo": "parties.org.name" },
+    { "name": "taxId", "required": false, "mapsTo": "parties.org.taxId" },
+    { "name": "status", "required": false, "mapsTo": "parties.status", "default": "Active" },
+    { "name": "contacts[].contactType", "required": false, "mapsTo": "party_contacts.contact_type" },
+    { "name": "contacts[].value", "required": false, "mapsTo": "party_contacts.contact_value" },
+    { "name": "licenses[].licenseType", "required": false, "mapsTo": "party_licenses.license_type" },
+    { "name": "licenses[].licenseNumber", "required": false, "mapsTo": "party_licenses.license_number" },
+    { "name": "licenses[].jurisdictionCode", "required": false, "mapsTo": "party_licenses.jurisdiction_code" },
+    { "name": "externalIdentifiers[].sourceSystem", "required": true, "mapsTo": "import_external_refs.source_system" },
+    { "name": "externalIdentifiers[].externalId", "required": true, "mapsTo": "import_external_refs.external_id" }
+  ],
+  "sampleRows": [
+    {
+      "orgName": "Summit Ridge Insurance Agency",
+      "taxId": "84-1234567",
+      "status": "Active",
+      "contacts": [
+        { "contactType": "email", "value": "ops@summitridge.example" },
+        { "contactType": "phone", "value": "512-555-0100" }
+      ],
+      "licenses": [
+        { "licenseType": "AgencyLicense", "licenseNumber": "TX-AG-88213", "jurisdictionCode": "TX" }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "AGY-000042" }
+      ]
+    },
+    {
+      "orgName": "Coastal Producers Group",
+      "status": "Active",
+      "contacts": [
+        { "contactType": "email", "value": "hello@coastalproducers.example" }
+      ],
+      "licenses": [
+        { "licenseType": "AgencyLicense", "licenseNumber": "FL-AG-40217", "jurisdictionCode": "FL" }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "AGY-000091" }
+      ]
+    }
+  ]
+}

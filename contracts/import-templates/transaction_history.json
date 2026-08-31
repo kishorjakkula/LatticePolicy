@@ -1,0 +1,34 @@
+{
+  "entityType": "transaction_history",
+  "status": "framework-only",
+  "note": "No commit handler yet. Maps to policy_transactions. This is a read-only audit record of what happened historically in the legacy system - it must NOT be used to drive current policy state (that is policy.json/policy_term.json's job through the real lifecycle). Treat this as backfilling the audit trail after the current-state import has already completed.",
+  "mapsTo": {
+    "transaction": "policy_transactions"
+  },
+  "fields": [
+    { "name": "policyExternalId", "required": true, "mapsTo": "policy_transactions.policy_id (resolved)" },
+    { "name": "type", "required": true, "description": "Must match this codebase's txn_type_enum values exactly (NB, ENDORSE, CANCEL, REINSTATE, REWRITE, RENEW, NON_RENEWAL - all uppercase).", "mapsTo": "policy_transactions.type" },
+    { "name": "status", "required": true, "mapsTo": "policy_transactions.status" },
+    { "name": "effectiveDate", "required": false, "mapsTo": "policy_transactions.effective_date" },
+    { "name": "processedAt", "required": false, "description": "Original processed timestamp from the legacy system, preserved for audit - distinct from effectiveDate.", "mapsTo": "policy_transactions.processed_at" },
+    { "name": "snapshot", "required": false, "description": "Legacy system's own record of the transaction, kept as-is for audit rather than reshaped.", "mapsTo": "policy_transactions.snapshot" }
+  ],
+  "sampleRows": [
+    {
+      "policyExternalId": "POL-100234",
+      "type": "NB",
+      "status": "Issued",
+      "effectiveDate": "2026-01-01",
+      "processedAt": "2026-01-02T14:00:00Z",
+      "snapshot": { "legacySystem": "legacy-pas-v1", "legacyTransactionId": "TXN-9001" }
+    },
+    {
+      "policyExternalId": "POL-200098",
+      "type": "NB",
+      "status": "Issued",
+      "effectiveDate": "2026-03-15",
+      "processedAt": "2026-03-16T09:00:00Z",
+      "snapshot": { "legacySystem": "legacy-pas-v1", "legacyTransactionId": "TXN-9042" }
+    }
+  ]
+}
