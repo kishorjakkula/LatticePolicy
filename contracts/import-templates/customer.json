@@ -1,0 +1,47 @@
+{
+  "entityType": "customer",
+  "status": "implemented",
+  "note": "This is the only entity type with a real commit handler today (server/src/services/data-import.service.ts). The payload shape below is the exact NormalizedCustomerInput shape server/src/routes/customers.routes.ts already accepts at POST /api/v1/admin/customers/import - this file is not a proposal, it documents what already works.",
+  "sampleRows": [
+    {
+      "entityType": "person",
+      "identity": {
+        "person": {
+          "firstName": "Ada",
+          "lastName": "Lovelace",
+          "dob": "1980-06-15",
+          "ssnLast4": "1234"
+        }
+      },
+      "contactPoints": [
+        { "contactType": "email", "value": "ada.lovelace@example.com", "preferred": true }
+      ],
+      "addresses": [
+        { "addressType": "mailing", "line1": "1 Analytical Engine Way", "city": "Austin", "state": "TX", "postalCode": "78701", "country": "US", "primary": true }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "CUST-000123", "idType": "legacy_customer_id" }
+      ]
+    },
+    {
+      "entityType": "company",
+      "identity": {
+        "company": {
+          "legalName": "Lovelace Analytics LLC",
+          "feinLast4": "5678",
+          "entityLegalType": "LLC",
+          "incorporationState": "TX"
+        }
+      },
+      "contactPoints": [
+        { "contactType": "email", "value": "billing@lovelace-analytics.example", "preferred": true }
+      ],
+      "addresses": [
+        { "addressType": "business", "line1": "500 Founders Blvd", "city": "Austin", "state": "TX", "postalCode": "78702", "country": "US", "primary": true }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "CUST-000456", "idType": "legacy_customer_id" }
+      ]
+    }
+  ]
+}
