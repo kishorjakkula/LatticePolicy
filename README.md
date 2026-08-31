@@ -218,6 +218,7 @@ collaboration opportunities with `help wanted`.
 - [ACORD and GRLC canonical data mapping](docs/ACORD_GRLC_MAPPING.md)
 - [Bordereaux generation and validation framework](docs/tasks/issue-62-bordereaux-framework.md)
 - [Data migration and legacy book import framework](docs/DATA_IMPORT_DESIGN.md)
+- [Data import templates](docs/DATA_IMPORT_TEMPLATES.md)
 
 ## Extension Points
 
