@@ -1009,7 +1009,8 @@ export async function executeEndorsement(
     })
   }
 
-  for (const path of changes) {
+  for (const entry of changes) {
+    const path = typeof entry === 'string' ? entry : entry.path
     const oldVal = prevPayload ? getByPath(prevPayload, path) : null
     const newVal = getByPath(newPayload, path)
     const oldJson = jsonParam(oldVal)
