@@ -161,6 +161,26 @@ carriers bind policies with backdated effective dates in normal operation
 (this is exercised elsewhere in the test suite), so no new backdating logic
 is needed for legacy import specifically.
 
+### Transaction-scope caveat (found during implementation)
+
+`commitImportBatch` runs inside one outer `withTenantTx` opened by the route
+handler, and writes `import_rows`/`import_batches` through that same
+transaction. But `createOrRateQuote`/`bindQuote`/`issuePolicy` each open and
+commit their **own** independent `withTenantTx` internally — they were
+designed as standalone request handlers, not as steps composable inside a
+caller's transaction. This means a policy can be durably issued in the
+database moments before the outer transaction records the corresponding
+`import_external_refs` entry and marks the row `Committed`. If the outer
+transaction then fails for an unrelated reason (e.g. a lost DB connection)
+in that narrow window, the issued policy would exist without a recorded
+external ref, and a retry would not find it via `findExistingExternalRef` —
+risking a second create→bind→issue run for the same legacy record. Fixing
+this properly means changing `createOrRateQuote`/`bindQuote`/`issuePolicy`
+to accept an existing transaction instead of always opening their own, which
+is a larger refactor touching every other caller of those three functions
+(live quote/bind/issue HTTP handlers included), not just data import — out
+of scope here and called out explicitly rather than silently accepted.
+
 ### Commit failure handling
 
 Unchanged from the existing generic pattern: `commitImportBatch`'s
