@@ -123,7 +123,7 @@ dataImportRoutes.post('/batches/:batchId/commit', async (req, res) => {
   const batchId = routeParam(req.params.batchId)
   try {
     const batch = await withTenantTx(tenantId, async (db) =>
-      commitImportBatch(toRawQuery(db), tenantId, batchId, currentActorId(req))
+      commitImportBatch(db, toRawQuery(db), tenantId, batchId, currentActorId(req))
     )
     res.json(batch)
   } catch (e: any) {
@@ -141,7 +141,7 @@ dataImportRoutes.post('/batches/:batchId/rows/:rowId/retry', async (req, res) =>
   const rowId = routeParam(req.params.rowId)
   try {
     const row = await withTenantTx(tenantId, async (db) =>
-      retryImportRow(toRawQuery(db), tenantId, batchId, rowId, currentActorId(req))
+      retryImportRow(db, toRawQuery(db), tenantId, batchId, rowId, currentActorId(req))
     )
     res.json(row)
   } catch (e: any) {
