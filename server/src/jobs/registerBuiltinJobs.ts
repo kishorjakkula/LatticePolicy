@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { registerJob } from './registry.js'
 import { asyncOutboxDeliveryRetryHandler } from './handlers/asyncOutboxDeliveryRetry.js'
+import { renewalCandidateScanHandler } from './handlers/renewalCandidateScan.js'
 
 const asyncOutboxDeliveryRetryPayloadSchema = z.object({}).passthrough()
+const renewalCandidateScanPayloadSchema = z.object({ windowDays: z.number().int().positive().optional() }).passthrough()
 
 let registered = false
 
@@ -22,5 +24,14 @@ export function registerBuiltinJobs(): void {
     payloadSchema: asyncOutboxDeliveryRetryPayloadSchema,
     defaultMaxAttempts: 5,
     backoff: { baseSeconds: 10, maxSeconds: 600 },
+  })
+
+  registerJob({
+    jobCode: 'renewal_candidate_scan',
+    description: "Scans a tenant's in-force policies for upcoming renewals and creates a renewal-reminder notification intent per candidate.",
+    handler: renewalCandidateScanHandler,
+    payloadSchema: renewalCandidateScanPayloadSchema,
+    defaultMaxAttempts: 3,
+    backoff: { baseSeconds: 60, maxSeconds: 3600 },
   })
 }

@@ -192,10 +192,17 @@ async outbox delivery retry so implementation can build on the current
 `async_message_outbox` worker before adding broader scheduling features.
 
 Typical Job Types
-- Renewal pre-processing and offer generation.
+
+Implemented (see `server/src/jobs/registerBuiltinJobs.ts` and
+`docs/JOB_QUEUE_DESIGN.md`):
+- Scheduled email reminders and delivery retries (`async_outbox_delivery_retry`).
+- Renewal candidate scanning (`renewal_candidate_scan`) — identifies and
+  notifies on upcoming renewals; does not yet generate a renewal offer or
+  auto-bind a renewal.
+
+Planned, not yet implemented:
 - Premium recomputation for queued policy changes.
 - Forms/documents pre-generation and packet assembly.
-- Scheduled email reminders and delivery retries.
 - Data reconciliation and stale draft cleanup.
 - Export/report generation.
 
