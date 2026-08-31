@@ -43,6 +43,7 @@
     "test:e2e:docker": "sh scripts/test-e2e-docker.sh",
     "security:audit": "node scripts/check-npm-audit.mjs",
     "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
+    "check:import-templates": "node scripts/check-import-templates.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
