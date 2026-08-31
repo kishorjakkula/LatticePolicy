@@ -1,0 +1,37 @@
+{
+  "entityType": "policy_term",
+  "status": "framework-only",
+  "note": "No commit handler yet. Maps to policy_versions - the effective-dated snapshot of a policy term (premium, payload, transaction linkage), not the policies row itself (see policy.json for that). A legacy term import only makes sense after the parent policy row has been committed and replayed through the real lifecycle (see policy.json's note), since policy_versions.transaction_id references policy_transactions.",
+  "mapsTo": {
+    "term": "policy_versions"
+  },
+  "fields": [
+    { "name": "policyExternalId", "required": true, "description": "External identifier matching a policy row imported via policy.json.", "mapsTo": "policy_versions.policy_id (resolved)" },
+    { "name": "effectiveDate", "required": true, "mapsTo": "policy_versions.effective_date" },
+    { "name": "transactionType", "required": true, "description": "e.g. NB, RENEW - must match this codebase's transaction type convention.", "mapsTo": "policy_versions.transaction_type" },
+    { "name": "premiumTotal", "required": false, "mapsTo": "policy_versions.premium_total" },
+    { "name": "premiumFees", "required": false, "mapsTo": "policy_versions.premium_fees" },
+    { "name": "premiumTaxes", "required": false, "mapsTo": "policy_versions.premium_taxes" },
+    { "name": "currency", "required": false, "mapsTo": "policy_versions.currency", "default": "USD" }
+  ],
+  "sampleRows": [
+    {
+      "policyExternalId": "POL-100234",
+      "effectiveDate": "2026-01-01",
+      "transactionType": "NB",
+      "premiumTotal": 1284.00,
+      "premiumFees": 25.00,
+      "premiumTaxes": 41.50,
+      "currency": "USD"
+    },
+    {
+      "policyExternalId": "POL-200098",
+      "effectiveDate": "2026-03-15",
+      "transactionType": "NB",
+      "premiumTotal": 2190.00,
+      "premiumFees": 30.00,
+      "premiumTaxes": 65.75,
+      "currency": "USD"
+    }
+  ]
+}
