@@ -123,12 +123,11 @@ describe('reinsurance placement auto-compute wiring', () => {
           {
             type: 'dwelling',
             yearBuilt: 2005,
-            constructionType: 'Frame',
-            dwellingLimit: 300000,
-            address: { line1: '1 Elm St', city: 'Austin', state: 'TX', zip: '78701' },
+            construction: 'frame',
+            address: '1 Elm St, Austin, TX 78701',
           },
         ],
-        coverages: [{ code: 'DWELLING', selected: true, limit: 300000 }],
+        coverages: [{ code: 'A', selected: true, limit: 300000 }],
       },
       null,
       'integration-test',
@@ -159,10 +158,16 @@ describe('reinsurance placement auto-compute wiring', () => {
       [tenantId, 'Sample Carrier', 'en-US', 'USD'],
     )
 
+    // Uses TX rather than CA (the quotePayload() default and the state the
+    // earlier "computes a real placement" test's treaty covers) so this
+    // test's own treaty is the only one matching its quote. sample-carrier
+    // is a shared tenant across this file's sequential tests with no
+    // cleanup between them, so a CA/personal-auto treaty from an earlier
+    // test would otherwise also match here and inflate the placement count.
     const treatyResult = await db.query(
       `INSERT INTO reinsurance_treaties
          (tenant_id, treaty_name, treaty_type, status, effective_date, expiration_date, product_codes, state_codes)
-       VALUES ($1,$2,'QUOTA_SHARE','Active','2026-01-01','2027-01-01',ARRAY['personal-auto']::text[],ARRAY['CA']::text[])
+       VALUES ($1,$2,'QUOTA_SHARE','Active','2026-01-01','2027-01-01',ARRAY['personal-auto']::text[],ARRAY['TX']::text[])
        RETURNING treaty_id`,
       [tenantId, `Endorsement Wiring Treaty ${run}`],
     )
@@ -173,7 +178,7 @@ describe('reinsurance placement auto-compute wiring', () => {
       [tenantId, treatyId],
     )
 
-    const quote = await createOrRateQuote({} as any, tenantId, quotePayload(), null, 'integration-test')
+    const quote = await createOrRateQuote({} as any, tenantId, quotePayload({ state: 'TX' }), null, 'integration-test')
     const bound = await bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)
 
     const bindPlacementsBefore = await db.query(
