@@ -181,10 +181,18 @@ describe('reinsurance placement auto-compute wiring', () => {
     const quote = await createOrRateQuote({} as any, tenantId, quotePayload({ state: 'TX' }), null, 'integration-test')
     const bound = await bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)
 
+    // Scoped to this test's own treaty_id, not just transaction_id: another
+    // integration test file (exposure.integration.test.ts) seeds a treaty
+    // with no product_codes/state_codes set, which treatyApplies() treats as
+    // a wildcard matching every product/state. sample-carrier is a shared
+    // tenant across the whole suite with no cross-file cleanup, so an
+    // aggregate count here would be fragile to that (and any other) treaty's
+    // existence. Scoping by treaty_id tests what this test actually intends:
+    // binding creates exactly one row for THIS treaty's layer.
     const bindPlacementsBefore = await db.query(
       `SELECT count(*)::int AS count FROM policy_reinsurance_placements
-        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3`,
-      [tenantId, bound.policyId, bound.transactionId],
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3 AND treaty_id=$4`,
+      [tenantId, bound.policyId, bound.transactionId, treatyId],
     )
     expect(bindPlacementsBefore.rows[0].count).toBe(1)
 
@@ -205,16 +213,16 @@ describe('reinsurance placement auto-compute wiring', () => {
 
     const endorsementPlacements = await db.query(
       `SELECT count(*)::int AS count FROM policy_reinsurance_placements
-        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3`,
-      [tenantId, bound.policyId, endorsed.transactionId],
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3 AND treaty_id=$4`,
+      [tenantId, bound.policyId, endorsed.transactionId, treatyId],
     )
     expect(endorsementPlacements.rows[0].count).toBe(1)
 
     // The original bind transaction's placement row is untouched by the endorsement's own compute.
     const bindPlacementsAfter = await db.query(
       `SELECT count(*)::int AS count FROM policy_reinsurance_placements
-        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3`,
-      [tenantId, bound.policyId, bound.transactionId],
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3 AND treaty_id=$4`,
+      [tenantId, bound.policyId, bound.transactionId, treatyId],
     )
     expect(bindPlacementsAfter.rows[0].count).toBe(1)
   })
