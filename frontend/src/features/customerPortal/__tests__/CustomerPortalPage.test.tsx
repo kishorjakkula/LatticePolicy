@@ -5,15 +5,18 @@ import { CustomerPortalPage } from '../CustomerPortalPage'
 import {
   useCustomerPortalPolicy,
   useCustomerPortalSummary,
+  usePolicyDocuments,
 } from '../../../api/hooks'
 
 vi.mock('../../../api/hooks', () => ({
   useCustomerPortalSummary: vi.fn(),
   useCustomerPortalPolicy: vi.fn(),
+  usePolicyDocuments: vi.fn(),
 }))
 
 const mockUseSummary = vi.mocked(useCustomerPortalSummary)
 const mockUsePolicy = vi.mocked(useCustomerPortalPolicy)
+const mockUseDocuments = vi.mocked(usePolicyDocuments)
 
 function renderPortal() {
   return render(
@@ -26,6 +29,7 @@ function renderPortal() {
 describe('CustomerPortalPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseDocuments.mockReturnValue({ data: { documents: [] }, isLoading: false, error: null } as any)
   })
 
   it('renders the customer policy list and selected policy details', async () => {
