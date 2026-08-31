@@ -24,19 +24,21 @@ for (const file of files) {
     ok = false
     continue
   }
+  let fileOk = true
   if (typeof content.entityType !== 'string' || !content.entityType) {
     console.error(`${file}: missing string field "entityType"`)
-    ok = false
+    fileOk = false
   }
   if (typeof content.status !== 'string' || !content.status) {
     console.error(`${file}: missing string field "status"`)
-    ok = false
+    fileOk = false
   }
   if (!Array.isArray(content.sampleRows) || content.sampleRows.length === 0) {
     console.error(`${file}: "sampleRows" must be a non-empty array`)
-    ok = false
+    fileOk = false
   }
-  if (ok) console.log(`${file}: OK (${content.sampleRows.length} sample rows)`)
+  if (fileOk) console.log(`${file}: OK (${content.sampleRows.length} sample rows)`)
+  else ok = false
 }
 
 process.exit(ok ? 0 : 1)
