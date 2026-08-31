@@ -48,6 +48,12 @@ export const queryKeys = {
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
     notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
   },
+  jobs: {
+    definitions: () => ['jobs', 'definitions'] as const,
+    runs: (opts?: { jobCode?: string; status?: string; limit?: number }) =>
+      ['jobs', 'runs', opts?.jobCode ?? null, opts?.status ?? null, opts?.limit ?? null] as const,
+    run: (runId: string) => ['jobs', 'runs', runId] as const,
+  },
   customers: {
     all: () => ['customers'] as const,
     search: (opts: Record<string, any>) => ['customers', 'search', opts] as const,

@@ -40,6 +40,7 @@ const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDa
 const ExposurePage = lazy(() => import('./features/admin/ExposurePage').then(m => ({ default: m.ExposurePage })))
 const ReinsurancePage = lazy(() => import('./features/admin/ReinsurancePage').then(m => ({ default: m.ReinsurancePage })))
 const BordereauxPage = lazy(() => import('./features/admin/BordereauxPage').then(m => ({ default: m.BordereauxPage })))
+const JobsAdminPage = lazy(() => import('./features/admin/JobsAdminPage').then(m => ({ default: m.JobsAdminPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 
 export default function App() {
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="exposure" element={<RequirePermission permission="page.admin.exposure.view"><ExposurePage /></RequirePermission>} />
               <Route path="reinsurance" element={<RequirePermission permission="page.admin.reinsurance.view"><ReinsurancePage /></RequirePermission>} />
               <Route path="bordereaux" element={<RequirePermission permission="page.admin.bordereaux.view"><BordereauxPage /></RequirePermission>} />
+              <Route path="jobs" element={<RequirePermission permission="page.admin.jobs.view"><JobsAdminPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>
