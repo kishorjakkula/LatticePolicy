@@ -5,6 +5,7 @@ import { closeDb, getDb, initDb } from '../db.js'
 import { createApp } from '../app.js'
 import { createUser } from '../users.js'
 import { checkStateEligibility, screenOfac } from '../lib/policy-compliance.js'
+import { createRole } from '../lib/rbac.js'
 
 const app = createApp()
 const tenantId = 'sample-carrier'
@@ -87,14 +88,55 @@ describe('compliance admin: eligibility and OFAC review (database path)', () => 
     expect(list.body.items).toHaveLength(1)
   })
 
-  it('denies eligibility management to a user without admin.compliance.manage', async () => {
+  it('denies eligibility management to a user without admin.compliance.manage with the standardized error contract', async () => {
     const run = suffix()
-    await createUser({ username: `compliance-agent-${run}`, password, tenantId, roles: ['agent'] })
+    // A plain 'agent' role lacks menu.admin.view entirely, so the request
+    // would be rejected by the outer /admin router gate instead of the
+    // compliance route's own admin.compliance.manage check this test is
+    // meant to exercise. Create a role that clears the outer admin-area and
+    // compliance-read gates but deliberately omits admin.compliance.manage,
+    // so the request reaches the route handler's own migrated check.
+    const roleCode = `compliance-reader-${run}`
+    await createRole(
+      tenantId,
+      { roleCode, roleName: `Compliance Reader ${run}`, permissionCodes: ['menu.admin.view', 'admin.compliance.read'] },
+      'integration-test',
+    )
+    await createUser({ username: `compliance-agent-${run}`, password, tenantId, roles: [roleCode] })
     const token = await login(`compliance-agent-${run}`)
 
-    await authReq('post', '/api/v1/admin/compliance/eligibility', token)
+    const res = await authReq('post', '/api/v1/admin/compliance/eligibility', token)
       .send({ productCode: `test-product-${run}`, stateCode: 'CA', status: 'ACTIVE' })
       .expect(403)
+    expect(res.body).toMatchObject({ code: 'FORBIDDEN', message: 'Forbidden' })
+    expect(typeof res.body.traceId).toBe('string')
+  })
+
+  it('returns the standardized error contract for an invalid eligibility payload', async () => {
+    const run = suffix()
+    await createUser({ username: `compliance-admin-badinput-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`compliance-admin-badinput-${run}`)
+
+    const res = await authReq('post', '/api/v1/admin/compliance/eligibility', token)
+      .send({ productCode: '', stateCode: 'XYZ' })
+      .expect(400)
+    expect(res.body).toMatchObject({
+      code: 'INVALID_INPUT',
+      message: 'productCode and a 2-letter stateCode are required',
+    })
+    expect(typeof res.body.traceId).toBe('string')
+  })
+
+  it('returns the standardized error contract for an eligibility record that does not exist', async () => {
+    const run = suffix()
+    await createUser({ username: `compliance-admin-notfound-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`compliance-admin-notfound-${run}`)
+
+    const res = await authReq('patch', `/api/v1/admin/compliance/eligibility/${crypto.randomUUID()}`, token)
+      .send({ status: 'SUSPENDED' })
+      .expect(404)
+    expect(res.body).toMatchObject({ code: 'NOT_FOUND', message: 'Eligibility record not found' })
+    expect(typeof res.body.traceId).toBe('string')
   })
 
   it('reviews and dispositions an OFAC potential hit, then auto-clears repeat matches', async () => {
