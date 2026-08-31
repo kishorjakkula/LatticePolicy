@@ -812,6 +812,7 @@ export async function executeEndorsement(
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('endorse')
   const version: any = {
     versionId,
+    transactionId,
     effectiveDate: eff,
     processedDate: processedAt,
     transactionType: 'Endorse',
