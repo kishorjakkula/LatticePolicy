@@ -81,6 +81,10 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.bordereaux.view',
     'admin.bordereaux.read',
     'admin.bordereaux.manage',
+    'menu.admin.jobs.view',
+    'page.admin.jobs.view',
+    'admin.jobs.read',
+    'admin.jobs.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
     'rating.models.read',
@@ -199,6 +203,13 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.notifications.view',
     'admin.notifications.read',
     'admin.notifications.manage'
+  ],
+  jobs_admin: [
+    'menu.admin.view',
+    'menu.admin.jobs.view',
+    'page.admin.jobs.view',
+    'admin.jobs.read',
+    'admin.jobs.manage'
   ],
   read_only: ['menu.search.view', 'page.search.view', 'page.policy.view']
 }

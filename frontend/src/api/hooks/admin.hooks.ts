@@ -293,6 +293,42 @@ export function useImportOfacSdnListMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Job Queue
+// ---------------------------------------------------------------------------
+
+export function useJobDefinitions() {
+  return useQuery({
+    queryKey: queryKeys.jobs.definitions(),
+    queryFn: () => adminApi.listJobDefinitions(),
+  })
+}
+
+export function useJobRuns(opts?: { jobCode?: string; status?: string; limit?: number }) {
+  return useQuery({
+    queryKey: queryKeys.jobs.runs(opts),
+    queryFn: () => adminApi.listJobRuns(opts),
+  })
+}
+
+export function useJobRun(runId?: string) {
+  return useQuery({
+    queryKey: queryKeys.jobs.run(runId ?? ''),
+    queryFn: () => adminApi.getJobRun(runId as string),
+    enabled: Boolean(runId),
+  })
+}
+
+export function useRetryJobRunMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => adminApi.retryJobRun(runId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['jobs', 'runs'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Security
 // ---------------------------------------------------------------------------
 
