@@ -23,10 +23,11 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
-import { applyJsonPatch, diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
+import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -565,7 +566,10 @@ async function computeEndorsementTimeline(
     effectiveDate,
     processedAt,
     payload: nextPayload,
-    changes: changes.map((path: string) => ({ path, newValue: getByPath(nextPayload, path) })),
+    changes: changes.map((entry: string | PatchOp) => {
+      const path = typeof entry === 'string' ? entry : entry.path
+      return { path, newValue: getByPath(nextPayload, path) }
+    }),
   }
   const newSegments = deriveTimelineSegments({
     tenantId,
@@ -808,6 +812,7 @@ export async function executeEndorsement(
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('endorse')
   const version: any = {
     versionId,
+    transactionId,
     effectiveDate: eff,
     processedDate: processedAt,
     transactionType: 'Endorse',
@@ -1005,7 +1010,8 @@ export async function executeEndorsement(
     })
   }
 
-  for (const path of changes) {
+  for (const entry of changes) {
+    const path = typeof entry === 'string' ? entry : entry.path
     const oldVal = prevPayload ? getByPath(prevPayload, path) : null
     const newVal = getByPath(newPayload, path)
     const oldJson = jsonParam(oldVal)
@@ -1103,6 +1109,8 @@ export async function executeEndorsement(
     actorId: actor?.id || null,
     correlationId: transactionNumber,
   })
+
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
 
   return version
 }

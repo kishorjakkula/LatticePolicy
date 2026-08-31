@@ -33,6 +33,7 @@ import {
 } from './document-generation.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -549,6 +550,8 @@ export async function bindQuote(
       actorId: normalizedActorId,
       correlationId: transactionNumber,
     })
+
+    await computePlacementForTransactionSafely(txDb, tenantId, policyId, transactionId)
 
     // Update quote status to Converted
     const quoteUpdatedAt = new Date().toISOString()

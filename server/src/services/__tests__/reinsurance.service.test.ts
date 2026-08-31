@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { treatyApplies, validateParticipantShares } from '../reinsurance.service.js'
+import { treatyApplies, validateParticipantShares, computePlacementForTransactionSafely } from '../reinsurance.service.js'
 
 describe('validateParticipantShares', () => {
   it('allows an empty participant list', () => {
@@ -73,5 +73,18 @@ describe('treatyApplies', () => {
 
   it('applies when stateCode is null and the treaty has no state restriction', () => {
     expect(treatyApplies(baseTreaty, { productCode: 'auto', stateCode: null, asOfDate: '2026-06-01' })).toBe(true)
+  })
+})
+
+describe('computePlacementForTransactionSafely', () => {
+  it('swallows a DB/lookup failure and resolves to an empty array instead of throwing', async () => {
+    // A db handle that toRawQuery cannot resolve a real client from — this
+    // forces computePlacementForTransaction to fail internally, simulating
+    // any unexpected reinsurance-subsystem error. The wrapper must not let
+    // this propagate to the caller (bind/endorsement/renewal/rewrite).
+    const brokenDb = {} as any
+    await expect(
+      computePlacementForTransactionSafely(brokenDb, 'sample-carrier', 'policy-1', 'transaction-1')
+    ).resolves.toEqual([])
   })
 })

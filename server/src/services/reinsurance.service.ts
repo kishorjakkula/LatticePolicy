@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
 import { BadRequestError, NotFoundError } from '../errors/domain.errors.js'
+import { logger } from '../logger.js'
 
 // ---------------------------------------------------------------------------
 // Layer / participant share validation (pure — no DB access).
@@ -226,9 +227,9 @@ function toIsoDate(value: string | Date): string {
  * Idempotent per (tenant, transaction): re-computing replaces prior rows for
  * that transaction rather than accumulating duplicates.
  *
- * This is called on demand (via the compute API), not automatically hooked
- * into bind/issue/endorsement/etc. lifecycle services — see
- * docs/REINSURANCE_MODEL.md for why that wiring is deliberately deferred.
+ * Called automatically from bind and servicing transaction services (see
+ * computePlacementForTransactionSafely below) as well as on demand via the
+ * admin compute API. See docs/REINSURANCE_MODEL.md for details.
  */
 export async function computePlacementForTransaction(
   db: DrizzleDB,
@@ -298,6 +299,31 @@ export async function computePlacementForTransaction(
   }
 
   return matches
+}
+
+/**
+ * Non-throwing wrapper around computePlacementForTransaction for use from
+ * transaction lifecycle services (bind, endorsement, renewal, rewrite).
+ * Reinsurance placement is a secondary concern: a failure here must never
+ * fail or roll back the primary policy transaction it's attached to. Any
+ * error is logged and swallowed; callers get an empty array on failure,
+ * identical in shape to "no treaty/facultative arrangement applies".
+ */
+export async function computePlacementForTransactionSafely(
+  db: DrizzleDB,
+  tenantId: string,
+  policyId: string,
+  transactionId: string
+): Promise<PlacementMatch[]> {
+  try {
+    return await computePlacementForTransaction(db, tenantId, policyId, transactionId)
+  } catch (err) {
+    logger.error(
+      { err, tenantId, policyId, transactionId },
+      'Automatic reinsurance placement computation failed; transaction proceeds unaffected'
+    )
+    return []
+  }
 }
 
 export function assertValidTreatyType(value: string) {
