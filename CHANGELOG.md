@@ -4,6 +4,22 @@ All notable changes to LatticePolicy are documented here. This project is
 pre-1.0; minor versions may still include breaking internal changes, but
 release notes should call out API, migration, setup, and product-pack impact.
 
+## [Unreleased]
+
+### Security
+
+- Upgraded `react-router-dom` to `7.18.3` (resolving `react-router` `7.18.3`) in
+  the `frontend` workspace and the root workspace lockfile.
+- Retired the temporary React Router advisory exception tracked since `0.2.0`.
+  The RSC Mode CSRF advisory (`GHSA-qwww-vcr4-c8h2`) affects `react-router`
+  `>= 7.12.0, < 7.18.2` and was first patched in `7.18.2`, so it had already
+  stopped applying on the previous `7.18.2` pin; `7.18.3` stays on that patched
+  line. No downgrade was needed and no older high-severity advisories were
+  reintroduced.
+- Removed the matching `allow-ghsas: GHSA-qwww-vcr4-c8h2` entry from the
+  dependency-review step in `.github/workflows/security.yml`. The advisory
+  allowlist in `scripts/check-npm-audit.mjs` was already empty.
+
 ## [0.2.3] - 2026-08-21
 
 ### Changed
