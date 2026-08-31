@@ -205,7 +205,7 @@ describe('reinsurance placement auto-compute wiring', () => {
           effectiveDate: '2026-08-01',
           changes: [{ op: 'replace', path: '/applicant/lastName', value: 'Lovelace-Byron' }],
         },
-        { id: 'integration-test' },
+        { id: null, username: 'integration-test' },
       ),
     )
     expect(endorsed.transactionId).toBeTruthy()
