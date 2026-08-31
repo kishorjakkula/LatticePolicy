@@ -1,0 +1,44 @@
+{
+  "entityType": "risk",
+  "status": "framework-only",
+  "note": "No commit handler yet. Maps to risk_units, whose attributes JSONB shape depends on kind - autoVehicle rows mirror auto_vehicles' columns, dwelling rows mirror dwellings' columns (server/src/schema.ts). Two sample rows are given, one per kind actually modeled today.",
+  "mapsTo": {
+    "risk": "risk_units",
+    "attributes (autoVehicle)": "auto_vehicles (year, make, model, vin, symbol, garagingZip, usage, annualMiles)",
+    "attributes (dwelling)": "dwellings (address, construction, protectionClass, yearBuilt, roofAgeYears, squareFeet)"
+  },
+  "fields": [
+    { "name": "policyExternalId", "required": true, "description": "External identifier matching a policy row imported via policy.json.", "mapsTo": "risk_units.policy_id (resolved)" },
+    { "name": "kind", "required": true, "description": "autoVehicle or dwelling - determines which attribute shape is expected.", "mapsTo": "risk_units.kind" },
+    { "name": "attributes", "required": true, "description": "Shape depends on kind; see mapsTo.autoVehicle / mapsTo.dwelling above.", "mapsTo": "risk_units.attributes" },
+    { "name": "effectiveDate", "required": false, "mapsTo": "risk_units.effective_date" }
+  ],
+  "sampleRows": [
+    {
+      "policyExternalId": "POL-100234",
+      "kind": "autoVehicle",
+      "attributes": {
+        "year": 2021,
+        "make": "Honda",
+        "model": "Accord",
+        "vin": "1HGCV1F34MA012345",
+        "garagingZip": "78701",
+        "usage": "commute",
+        "annualMiles": 12000
+      },
+      "effectiveDate": "2026-01-01"
+    },
+    {
+      "policyExternalId": "POL-200098",
+      "kind": "dwelling",
+      "attributes": {
+        "address": { "line1": "88 Harbor View Rd", "city": "Miami", "state": "FL", "postalCode": "33101" },
+        "construction": "frame",
+        "yearBuilt": 1998,
+        "protectionClass": 4,
+        "squareFeet": 2100
+      },
+      "effectiveDate": "2026-03-15"
+    }
+  ]
+}
