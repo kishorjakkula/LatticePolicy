@@ -1,0 +1,34 @@
+{
+  "entityType": "coverage",
+  "status": "framework-only",
+  "note": "No commit handler yet. Maps to coverages, keyed to a product's coverage definitionCode (see products/<product>/coverage.yaml for the real codes per product, e.g. 'A' for Dwelling in homeowners).",
+  "mapsTo": {
+    "coverage": "coverages"
+  },
+  "fields": [
+    { "name": "policyExternalId", "required": true, "mapsTo": "coverages.policy_id (resolved)" },
+    { "name": "riskExternalId", "required": false, "description": "If this coverage applies to a specific risk unit rather than the whole policy; matches a risk row's identity.", "mapsTo": "coverages.risk_unit_id (resolved)" },
+    { "name": "definitionCode", "required": true, "description": "Must match a real coverage code for the policy's product (see products/<product>/coverage.yaml).", "mapsTo": "coverages.definition_code" },
+    { "name": "limits", "required": false, "mapsTo": "coverages.limits" },
+    { "name": "deductibles", "required": false, "mapsTo": "coverages.deductibles" },
+    { "name": "selected", "required": false, "mapsTo": "coverages.selected", "default": true },
+    { "name": "effectiveDate", "required": false, "mapsTo": "coverages.effective_date" }
+  ],
+  "sampleRows": [
+    {
+      "policyExternalId": "POL-100234",
+      "definitionCode": "BI",
+      "limits": { "perPerson": 100000, "perAccident": 300000 },
+      "selected": true,
+      "effectiveDate": "2026-01-01"
+    },
+    {
+      "policyExternalId": "POL-200098",
+      "definitionCode": "A",
+      "limits": { "dwelling": 350000 },
+      "deductibles": { "allPeril": 1000 },
+      "selected": true,
+      "effectiveDate": "2026-03-15"
+    }
+  ]
+}
