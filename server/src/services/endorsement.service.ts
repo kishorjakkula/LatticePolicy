@@ -23,7 +23,7 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
-import { applyJsonPatch, diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
+import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
@@ -566,7 +566,10 @@ async function computeEndorsementTimeline(
     effectiveDate,
     processedAt,
     payload: nextPayload,
-    changes: changes.map((path: string) => ({ path, newValue: getByPath(nextPayload, path) })),
+    changes: changes.map((entry: string | PatchOp) => {
+      const path = typeof entry === 'string' ? entry : entry.path
+      return { path, newValue: getByPath(nextPayload, path) }
+    }),
   }
   const newSegments = deriveTimelineSegments({
     tenantId,
