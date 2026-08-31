@@ -216,6 +216,7 @@ export const policyVersions = pgTable('policy_versions', {
   cancellationReasonCode: text('cancellation_reason_code'),
   cancellationType: text('cancellation_type'),
   returnPremiumAmount: numeric('return_premium_amount', { precision: 14, scale: 2 }),
+  claimReference: text('claim_reference'),
 })
 
 export const policyVersionChanges = pgTable('policy_version_changes', {
