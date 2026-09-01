@@ -13,6 +13,24 @@ function suffix() {
   return crypto.randomUUID().slice(0, 8)
 }
 
+function personalAutoQuotePayload(overrides: Record<string, any> = {}) {
+  return {
+    productCode: 'personal-auto',
+    effectiveDate: '2026-07-01',
+    termMonths: 12,
+    state: 'CA',
+    applicant: { firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com' },
+    risks: [
+      { type: 'autoVehicle', year: 2023, make: 'Toyota', model: 'Camry', garagingZip: '94105', symbol: 'A', usage: 'commute' }
+    ],
+    coverages: [
+      { code: 'BI', selected: true, limit: 100000 },
+      { code: 'PD', selected: true, limit: 50000 }
+    ],
+    ...overrides
+  }
+}
+
 async function ensureTenant() {
   const db = getDb()
   await db!.query(
@@ -143,7 +161,8 @@ describe('data import framework: stage, validate, commit, retry (database path)'
       .send({
         entityType: 'policy',
         sourceSystem,
-        rows: [{ externalId: `POL-${run}`, payload: {} }]
+        // Missing externalIdentifiers and quote entirely: fails validatePolicyRow.
+        rows: [{ payload: {} }]
       })
       .expect(201)
     const batchId = stageRes.body.batchId
@@ -152,8 +171,117 @@ describe('data import framework: stage, validate, commit, retry (database path)'
     expect(validateRes.body.invalidCount).toBe(1)
     expect(validateRes.body.status).toBe('Failed')
 
-    // Framework-only entity type: no commit handler, so commit is rejected because
-    // nothing reached the Valid state.
+    // Nothing reached the Valid state, so commit is rejected before any commit handler runs.
     await authReq('post', `/api/v1/admin/import/batches/${batchId}/commit`, adminToken).send({}).expect(409)
+  })
+
+  it('stages, validates, and commits a policy batch by replaying quote -> bind -> issue, then treats a duplicate import as an idempotent skip', async () => {
+    const run = suffix()
+    await createUser({ username: `import-admin3-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`import-admin3-${run}`)
+
+    const sourceSystem = `LEGACY_PAS_${run}`
+    const externalId = `POL-${run}`
+
+    const stageRes = await authReq('post', '/api/v1/admin/import/batches', token)
+      .send({
+        entityType: 'policy',
+        sourceSystem,
+        rows: [
+          {
+            payload: {
+              externalIdentifiers: [{ sourceSystem, externalId }],
+              quote: personalAutoQuotePayload()
+            }
+          }
+        ]
+      })
+      .expect(201)
+    const batchId = stageRes.body.batchId
+
+    const validateRes = await authReq('post', `/api/v1/admin/import/batches/${batchId}/validate`, token).send({}).expect(200)
+    expect(validateRes.body.validCount).toBe(1)
+    expect(validateRes.body.status).toBe('Validated')
+
+    const commitRes = await authReq('post', `/api/v1/admin/import/batches/${batchId}/commit`, token).send({}).expect(200)
+    expect(commitRes.body.committedCount).toBe(1)
+    expect(commitRes.body.status).toBe('Committed')
+
+    const committedRowsRes = await authReq('get', `/api/v1/admin/import/batches/${batchId}/rows?status=Committed`, token).expect(200)
+    expect(committedRowsRes.body).toHaveLength(1)
+    const policyId = committedRowsRes.body[0].committedEntityId
+    expect(policyId).toBeTruthy()
+    expect(committedRowsRes.body[0].commitMode).toBe('created')
+
+    // The commit handler replayed the real quote -> bind -> issue services, so
+    // the resulting record is a genuinely Issued policy, not a raw table insert.
+    const policyRes = await authReq('get', `/api/v1/policies/${policyId}`, token).expect(200)
+    expect(policyRes.body.internalStatus).toBe('Issued')
+
+    // Re-importing the same external identifier must not re-run create -> bind -> issue
+    // a second time: it is detected via import_external_refs and skipped, returning
+    // the same policyId — a policy is not master data the way a customer is.
+    const secondBatchRes = await authReq('post', '/api/v1/admin/import/batches', token)
+      .send({
+        entityType: 'policy',
+        sourceSystem,
+        rows: [
+          {
+            payload: {
+              externalIdentifiers: [{ sourceSystem, externalId }],
+              quote: personalAutoQuotePayload()
+            }
+          }
+        ]
+      })
+      .expect(201)
+    const secondBatchId = secondBatchRes.body.batchId
+    await authReq('post', `/api/v1/admin/import/batches/${secondBatchId}/validate`, token).send({}).expect(200)
+    const secondCommitRes = await authReq('post', `/api/v1/admin/import/batches/${secondBatchId}/commit`, token).send({}).expect(200)
+    expect(secondCommitRes.body.committedCount).toBe(1)
+
+    const secondRowsRes = await authReq('get', `/api/v1/admin/import/batches/${secondBatchId}/rows?status=Committed`, token).expect(200)
+    expect(secondRowsRes.body[0].committedEntityId).toBe(policyId)
+    expect(secondRowsRes.body[0].commitMode).toBe('skipped')
+  })
+
+  it('marks a policy row Failed with the underwriting decline reason when bind is rejected, without corrupting the batch', async () => {
+    const run = suffix()
+    await createUser({ username: `import-admin4-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`import-admin4-${run}`)
+
+    const sourceSystem = `LEGACY_PAS_${run}`
+
+    // Contract-valid quote (passes AJV schema validation, so it is marked Valid
+    // at the validate step) but underwritten to a hard Decline, so bindQuote
+    // rejects it at commit time — a real business-rule failure, not a shape error.
+    const stageRes = await authReq('post', '/api/v1/admin/import/batches', token)
+      .send({
+        entityType: 'policy',
+        sourceSystem,
+        rows: [
+          {
+            payload: {
+              externalIdentifiers: [{ sourceSystem, externalId: `POL-${run}` }],
+              quote: personalAutoQuotePayload({ uwAnswers: { driverAge: 15 } })
+            }
+          }
+        ]
+      })
+      .expect(201)
+    const batchId = stageRes.body.batchId
+
+    const validateRes = await authReq('post', `/api/v1/admin/import/batches/${batchId}/validate`, token).send({}).expect(200)
+    expect(validateRes.body.validCount).toBe(1)
+    expect(validateRes.body.status).toBe('Validated')
+
+    const commitRes = await authReq('post', `/api/v1/admin/import/batches/${batchId}/commit`, token).send({}).expect(200)
+    expect(commitRes.body.committedCount).toBe(0)
+    expect(commitRes.body.failedCount).toBe(1)
+    expect(commitRes.body.status).toBe('PartiallyCommitted')
+
+    const failedRowsRes = await authReq('get', `/api/v1/admin/import/batches/${batchId}/rows?status=Failed`, token).expect(200)
+    expect(failedRowsRes.body).toHaveLength(1)
+    expect(failedRowsRes.body[0].errorMessage).toMatch(/Underwriting decision: Decline/)
   })
 })

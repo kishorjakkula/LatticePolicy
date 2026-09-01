@@ -55,6 +55,9 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.bordereaux.view') && (
             <NavLink to="/admin/bordereaux" className={adminMenuClass}>Bordereaux</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.jobs.view') && (
+            <NavLink to="/admin/jobs" className={adminMenuClass}>Jobs</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">

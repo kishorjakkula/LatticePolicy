@@ -56,6 +56,18 @@ export const adminApi = {
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
   listDashboardNotifications: (status?: string) =>
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
+  // Job queue administration
+  listJobDefinitions: () => request<{ items: any[] }>('GET', '/v1/admin/jobs/definitions'),
+  listJobRuns: (opts?: { jobCode?: string; status?: string; limit?: number }) => {
+    const params = new URLSearchParams()
+    if (opts?.jobCode) params.set('jobCode', opts.jobCode)
+    if (opts?.status) params.set('status', opts.status)
+    if (opts?.limit) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    return request<{ items: any[] }>('GET', `/v1/admin/jobs/runs${qs ? `?${qs}` : ''}`)
+  },
+  getJobRun: (runId: string) => request<{ run: any; events: any[] }>('GET', `/v1/admin/jobs/runs/${runId}`),
+  retryJobRun: (runId: string) => request<{ run: any }>('POST', `/v1/admin/jobs/runs/${runId}/retry`, {}),
   // Exposure management
   getExposureSummary: (opts?: { productCode?: string; state?: string; asOf?: string }) => {
     const params = new URLSearchParams()

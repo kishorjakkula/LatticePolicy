@@ -9,6 +9,7 @@ export const queryKeys = {
     timeline: (id: string) => ['policies', id, 'timeline'] as const,
     interests: (id: string) => ['policies', id, 'interests'] as const,
     aiInsights: (id: string) => ['policies', id, 'ai-insights'] as const,
+    documents: (id: string) => ['policies', id, 'documents'] as const,
   },
   quotes: {
     all: () => ['quotes'] as const,
@@ -47,6 +48,12 @@ export const queryKeys = {
     summary: () => ['dashboard', 'summary'] as const,
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
     notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
+  },
+  jobs: {
+    definitions: () => ['jobs', 'definitions'] as const,
+    runs: (opts?: { jobCode?: string; status?: string; limit?: number }) =>
+      ['jobs', 'runs', opts?.jobCode ?? null, opts?.status ?? null, opts?.limit ?? null] as const,
+    run: (runId: string) => ['jobs', 'runs', runId] as const,
   },
   customers: {
     all: () => ['customers'] as const,

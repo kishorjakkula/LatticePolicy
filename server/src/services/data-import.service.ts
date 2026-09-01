@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from '../uuid.js'
 import { sanitizeText } from '../lib/utils.js'
+import type { DrizzleDB } from '../db.js'
 import {
   createCustomerRecord,
   updateCustomerRecord,
@@ -10,14 +11,17 @@ import {
   validateCustomerPayload
 } from '../routes/customers.routes.js'
 import type { QueryFn, CustomerValidationConfig } from '../routes/customers.routes.js'
+import { validateQuoteDetailed } from '../contracts.js'
+import { createOrRateQuote } from './quote.service.js'
+import { bindQuote } from './quote-bind.service.js'
+import { issuePolicy } from './lifecycle.service.js'
 
-export const SUPPORTED_ENTITY_TYPES = ['customer'] as const
+export const SUPPORTED_ENTITY_TYPES = ['customer', 'policy'] as const
 export type ImportEntityType = (typeof SUPPORTED_ENTITY_TYPES)[number]
 
 export const IMPORTABLE_ENTITY_TYPES_FRAMEWORK_ONLY = [
   'agency',
   'producer',
-  'policy',
   'policy_term',
   'risk',
   'coverage',
@@ -94,9 +98,11 @@ function mapRow(row: any): ImportRow {
 }
 
 function externalIdFor(entityType: string, rawPayload: any): string | null {
-  if (entityType === 'customer') {
+  if (entityType === 'customer' || entityType === 'policy') {
     // externalIdentifiers must live inside `payload` (same shape normalizeCustomerInput
-    // expects), not as a sibling of it — see validateCustomerRow/commitCustomerRow.
+    // expects for customer, and the same convention reused for policy), not as a
+    // sibling of it — see validateCustomerRow/commitCustomerRow and
+    // validatePolicyRow/commitPolicyRow.
     const identifiers = rawPayload?.payload?.externalIdentifiers
     const first = Array.isArray(identifiers) ? identifiers[0] : null
     return first ? sanitizeText(first.externalId) || null : null
@@ -197,6 +203,26 @@ function validateCustomerRow(
   }
 }
 
+function validatePolicyRow(rawPayload: any): { valid: boolean; errors: string[] } {
+  try {
+    const payload = rawPayload?.payload || rawPayload || {}
+    const errors: string[] = []
+    if (!Array.isArray(payload.externalIdentifiers) || payload.externalIdentifiers.length === 0) {
+      errors.push('payload.externalIdentifiers must include at least one entry (sourceSystem + externalId) for import reconciliation')
+    }
+    // Reuse the exact same contract validator createOrRateQuote itself enforces at
+    // commit time, so a row marked Valid here is guaranteed to pass quote validation
+    // at commit — see docs/DATA_IMPORT_DESIGN.md.
+    const result = validateQuoteDetailed(payload.quote)
+    if (!result.valid) {
+      errors.push(...result.errors.map((e) => `quote${e.path}: ${e.message}`))
+    }
+    return { valid: errors.length === 0, errors }
+  } catch (e: any) {
+    return { valid: false, errors: [String(e?.message || e)] }
+  }
+}
+
 async function validateRow(
   q: QueryFn,
   tenantId: string,
@@ -206,6 +232,9 @@ async function validateRow(
   if (entityType === 'customer') {
     const settings = await loadCustomerSettings(q, tenantId)
     return validateCustomerRow(rawPayload, settings.validation)
+  }
+  if (entityType === 'policy') {
+    return validatePolicyRow(rawPayload)
   }
   return {
     valid: false,
@@ -279,6 +308,60 @@ async function commitCustomerRow(
   return { entityId: created.customer.customerId, mode: 'created' }
 }
 
+async function findExistingExternalRef(
+  q: QueryFn,
+  tenantId: string,
+  entityType: string,
+  sourceSystem: string,
+  externalId: string | null
+): Promise<string | null> {
+  if (!externalId) return null
+  const result = await q(
+    `SELECT committed_entity_id FROM import_external_refs
+      WHERE tenant_id = $1 AND entity_type = $2 AND source_system = $3 AND external_id = $4`,
+    [tenantId, entityType, sourceSystem, externalId]
+  )
+  return result.rows[0]?.committed_entity_id || null
+}
+
+/**
+ * Commits a staged policy row by replaying the real quote -> bind -> issue
+ * sequence (createOrRateQuote / bindQuote / issuePolicy) instead of writing
+ * directly to policy tables, so the resulting policy has full state-machine
+ * validation, rating, UW evaluation, and a real transaction/version audit
+ * trail — see docs/DATA_IMPORT_DESIGN.md.
+ *
+ * createOrRateQuote/bindQuote declare a `db` parameter but never read it
+ * (both open their own withTenantTx internally), so a dummy value is safe
+ * there — the same pattern this repo's own reinsurance-lifecycle-wiring
+ * integration test already uses. issuePolicy genuinely uses `db` directly,
+ * so the real DrizzleDB is threaded through only as far as that one call.
+ *
+ * Policies are not master data: re-importing an already-committed policy
+ * (detected via import_external_refs, since policies have no dedicated
+ * identity table the way customers do) is a no-op that returns the existing
+ * policyId, never a second create -> bind -> issue run.
+ */
+async function commitPolicyRow(
+  db: DrizzleDB,
+  q: QueryFn,
+  tenantId: string,
+  actor: string,
+  batch: ImportBatch,
+  row: ImportRow
+): Promise<{ entityId: string; mode: 'created' | 'skipped' }> {
+  const payload = row.rawPayload?.payload || row.rawPayload || {}
+  const existingPolicyId = await findExistingExternalRef(q, tenantId, 'policy', batch.sourceSystem, row.externalId)
+  if (existingPolicyId) {
+    return { entityId: existingPolicyId, mode: 'skipped' }
+  }
+
+  const quote = await createOrRateQuote({} as any, tenantId, payload.quote, null, actor)
+  const bound = await bindQuote({} as any, tenantId, quote.quoteId, payload.bind || {}, actor, null)
+  await issuePolicy(db, tenantId, bound.policyId, {}, { id: null, username: actor })
+  return { entityId: bound.policyId, mode: 'created' }
+}
+
 async function recordExternalRef(
   q: QueryFn,
   tenantId: string,
@@ -306,6 +389,7 @@ async function recordExternalRef(
 }
 
 export async function commitImportBatch(
+  db: DrizzleDB,
   q: QueryFn,
   tenantId: string,
   batchId: string,
@@ -322,9 +406,11 @@ export async function commitImportBatch(
   let failedCount = batch.failedCount
   for (const row of rows) {
     try {
-      let result: { entityId: string; mode: 'created' | 'updated' }
+      let result: { entityId: string; mode: 'created' | 'updated' | 'skipped' }
       if (batch.entityType === 'customer') {
         result = await commitCustomerRow(q, tenantId, actor, batchId, row)
+      } else if (batch.entityType === 'policy') {
+        result = await commitPolicyRow(db, q, tenantId, actor, batch, row)
       } else {
         throw new Error(`no commit handler for entity type '${batch.entityType}'`)
       }
@@ -370,6 +456,7 @@ export async function commitImportBatch(
 }
 
 export async function retryImportRow(
+  db: DrizzleDB,
   q: QueryFn,
   tenantId: string,
   batchId: string,
@@ -396,9 +483,11 @@ export async function retryImportRow(
   }
 
   try {
-    let result: { entityId: string; mode: 'created' | 'updated' }
+    let result: { entityId: string; mode: 'created' | 'updated' | 'skipped' }
     if (batch.entityType === 'customer') {
       result = await commitCustomerRow(q, tenantId, actor, batchId, row)
+    } else if (batch.entityType === 'policy') {
+      result = await commitPolicyRow(db, q, tenantId, actor, batch, row)
     } else {
       throw new Error(`no commit handler for entity type '${batch.entityType}'`)
     }
