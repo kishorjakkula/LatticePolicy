@@ -20,7 +20,7 @@
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "drizzle-orm": "^1.0.0-rc.3",
+    "drizzle-orm": "^1.0.0-rc.5-169397b",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
