@@ -16,14 +16,14 @@
     "smoke:transactions": "node scripts/smoke-transactions.mjs"
   },
   "dependencies": {
-    "@sentry/node": "^10.72.0",
+    "@sentry/node": "^10.73.0",
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "drizzle-orm": "^1.0.0-rc.5-169397b",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.2",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "jose": "^6.2.10",
@@ -32,18 +32,18 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.4.1",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.0",
     "drizzle-kit": "^1.0.0-rc.5-ab785fc",
     "supertest": "^7.0.0",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
