@@ -114,11 +114,10 @@ before merge.
   future renewal path is added that doesn't insert one, this exclusion
   would silently stop working. No code today does that, but flagging for
   awareness.
-- `interval:24h` is set as the `default_schedule` in the migration, but
-  actual recurring firing depends on job queue design slice 4
-  (scheduler creation/next-run calculation), which is not implemented —
-  same limitation the first job type (`async_outbox_delivery_retry`) has.
-  This job is runnable today via manual enqueue or the admin "run now"
-  API, not yet on an automatic timer.
+- `interval:24h` is set as the `default_schedule` in the migration. Issue #260
+  subsequently implemented recurring scheduler firing, so an enabled tenant
+  `job_schedules` row now runs this job automatically when `next_run_at` is
+  due and `JOB_WORKER_ENABLED=true`. Manual enqueue and admin "run now" remain
+  available.
 - The integration test could not be executed due to the Docker
   environment issue described above; please verify it passes in CI.
