@@ -211,6 +211,12 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.jobs.read',
     'admin.jobs.manage'
   ],
+  exposure_admin: [
+    'menu.admin.view',
+    'menu.admin.exposure.view',
+    'page.admin.exposure.view',
+    'admin.exposure.read'
+  ],
   read_only: ['menu.search.view', 'page.search.view', 'page.policy.view']
 }
 
