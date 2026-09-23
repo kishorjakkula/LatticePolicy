@@ -252,6 +252,16 @@ Operational smoke tests:
 4. Add scheduler creation/next-run calculation. Implemented by issue #260.
 5. Add UI dashboard after the API and permissions are stable.
 
+### Stale Quote Cleanup (Issue #263)
+
+- `stale_quote_cleanup` expires tenant-scoped `Draft` and `Rated` quotes whose
+  last activity is older than `staleAfterDays` (default 90 days).
+- The handler appends an `Expired` status-history entry and identifies itself
+  as `stale_quote_cleanup` in `updated_by`.
+- `dryRun: true` reports and checkpoints candidates without changing them.
+- Converted and already-expired quotes are never changed. The definition is
+  disabled by default and has a suggested daily schedule.
+
 ## Implementation Status (Issue #57)
 
 Slices 1-3 above are implemented:
@@ -324,7 +334,5 @@ tenant-scoped state changes.
   repeatedly block valid due schedules. The worker emits a warning containing
   the schedule and job identifiers.
 - Slice 5, the UI dashboard for schedule management, remains open.
-- No additional job types beyond `async_outbox_delivery_retry` are
-  registered yet. Stale-quote-cleanup and renewal-candidate-scan jobs
-  mentioned in the issue are good first follow-up jobs to add using the
-  pattern above.
+- Built-in jobs currently include `async_outbox_delivery_retry`,
+  `renewal_candidate_scan`, and `stale_quote_cleanup`.
