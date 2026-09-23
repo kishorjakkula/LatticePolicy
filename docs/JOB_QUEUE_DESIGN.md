@@ -249,7 +249,7 @@ Operational smoke tests:
    handler.
 2. Add admin read APIs for definitions and run history.
 3. Add manual retry API for dead-lettered runs.
-4. Add scheduler creation/next-run calculation.
+4. Add scheduler creation/next-run calculation. Implemented by issue #260.
 5. Add UI dashboard after the API and permissions are stable.
 
 ## Implementation Status (Issue #57)
@@ -311,11 +311,19 @@ tenant-scoped state changes.
    retry/dead-letter) using the patterns in
    `server/src/__tests__/job-queue.integration.test.ts`.
 
-### Still Open
+### Scheduler Behavior (Issue #260)
 
-- Slice 4 (scheduler creation/next-run calculation) and slice 5 (UI
-  dashboard) are not implemented — `job_schedules` rows can be inserted
-  manually but nothing yet turns a schedule into automatic recurring runs.
+- Each worker iteration first claims due `job_schedules` rows with
+  `FOR UPDATE SKIP LOCKED`, creates idempotent `job_runs`, and advances the
+  schedule in the same transaction.
+- Supported expressions are `interval:<number><unit>`, where the unit is
+  seconds (`s`), minutes (`m`), hours (`h`), or days (`d`).
+- After downtime, the next run advances to the first interval after the
+  current time rather than enqueueing every missed occurrence.
+- Unsupported or invalid expressions are disabled so one bad schedule cannot
+  repeatedly block valid due schedules. The worker emits a warning containing
+  the schedule and job identifiers.
+- Slice 5, the UI dashboard for schedule management, remains open.
 - No additional job types beyond `async_outbox_delivery_retry` are
   registered yet. Stale-quote-cleanup and renewal-candidate-scan jobs
   mentioned in the issue are good first follow-up jobs to add using the

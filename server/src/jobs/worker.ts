@@ -4,6 +4,7 @@ import { getDb } from '../db.js'
 import { logger } from '../logger.js'
 import { getJobDefinition } from './registry.js'
 import { claimDueRuns, checkpointRun, completeRun, retryOrDeadLetterRun, type JobRunRow } from './jobQueue.js'
+import { runSchedulerTick } from './scheduler.js'
 
 interface JobWorkerConfig {
   enabled: boolean
@@ -42,13 +43,11 @@ export function startJobWorker(): StopJobWorker {
     if (stopped || running) return
     running = true
     try {
-      const batch = await claimDueRuns(db, config.batchSize, config.workerId, config.lockSeconds)
+      const { runs } = await runJobWorkerIteration(db, config)
+      const batch = runs
       if (batch.length === 0) {
         schedule(config.pollMs)
         return
-      }
-      for (const run of batch) {
-        await executeRun(db, run)
       }
       schedule(25)
     } catch (err) {
@@ -67,6 +66,18 @@ export function startJobWorker(): StopJobWorker {
     if (timer) clearTimeout(timer)
     logger.info('[jobs] Worker stopped')
   }
+}
+
+export async function runJobWorkerIteration(
+  pool: Pool,
+  config: Pick<JobWorkerConfig, 'batchSize' | 'workerId' | 'lockSeconds'>
+): Promise<{ scheduledRunsCreated: number; runs: JobRunRow[] }> {
+  const scheduler = await runSchedulerTick(pool, config.batchSize)
+  const runs = await claimDueRuns(pool, config.batchSize, config.workerId, config.lockSeconds)
+  for (const run of runs) {
+    await executeRun(pool, run)
+  }
+  return { scheduledRunsCreated: scheduler.runsCreated, runs }
 }
 
 async function executeRun(pool: Pool, run: JobRunRow): Promise<void> {

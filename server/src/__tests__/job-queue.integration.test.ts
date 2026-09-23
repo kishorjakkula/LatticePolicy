@@ -11,7 +11,8 @@ import {
   type JobRunRow,
 } from '../jobs/jobQueue.js'
 import { registerBuiltinJobs } from '../jobs/registerBuiltinJobs.js'
-import { getJobDefinition } from '../jobs/registry.js'
+import { getJobDefinition, registerJob } from '../jobs/registry.js'
+import { runJobWorkerIteration } from '../jobs/worker.js'
 import { claimOutboxRows, dispatchOutboxRow, loadConfig as loadAsyncPushConfig } from '../asyncMessageWorker.js'
 
 const tenantA = 'sample-carrier'
@@ -57,6 +58,76 @@ describe('job queue framework', () => {
     const def = getJobDefinition('async_outbox_delivery_retry')
     expect(def).toBeTruthy()
     expect(def?.defaultMaxAttempts).toBeGreaterThan(0)
+  })
+
+  it('fires a due schedule, executes its run, and advances the cadence', async () => {
+    const pool = getDb()!
+    const jobCode = `scheduler_test_${suffix()}`
+    const scheduledAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
+
+    registerJob({
+      jobCode,
+      description: 'Integration fixture for scheduler firing',
+      defaultMaxAttempts: 2,
+      backoff: { baseSeconds: 1, maxSeconds: 1 },
+      handler: async ({ requestPayload }) => ({ resultPayload: { executed: true, requestPayload } }),
+    })
+
+    await pool.query(
+      `INSERT INTO job_definitions
+         (job_code, description, enabled, default_schedule, default_max_attempts, default_timeout_seconds)
+       VALUES ($1, $2, true, 'interval:1h', 2, 60)`,
+      [jobCode, 'Integration fixture for scheduler firing']
+    )
+
+    try {
+      const schedule = await withTenantTx(tenantA, async (db) => {
+        const q = toRawQuery(db)
+        const result = await q(
+          `INSERT INTO job_schedules
+             (tenant_id, job_code, enabled, schedule_expression, request_payload, next_run_at)
+           VALUES ($1, $2, true, 'interval:1h', $3::jsonb, $4)
+           RETURNING schedule_id`,
+          [tenantA, jobCode, JSON.stringify({ source: 'scheduler-integration' }), scheduledAt]
+        )
+        return result.rows[0] as { schedule_id: string }
+      })
+
+      const iteration = await runJobWorkerIteration(pool, {
+        batchSize: 1000,
+        workerId: `scheduler-test-${suffix()}`,
+        lockSeconds: 60,
+      })
+      expect(iteration.scheduledRunsCreated).toBeGreaterThanOrEqual(1)
+
+      const state = await withTenantTx(tenantA, async (db) => {
+        const q = toRawQuery(db)
+        const [runResult, scheduleResult] = await Promise.all([
+          q(
+            `SELECT status, attempts, request_payload, result_payload
+             FROM job_runs
+             WHERE schedule_id = $1`,
+            [schedule.schedule_id]
+          ),
+          q(
+            `SELECT last_run_at, next_run_at
+             FROM job_schedules
+             WHERE schedule_id = $1`,
+            [schedule.schedule_id]
+          ),
+        ])
+        return { run: runResult.rows[0], schedule: scheduleResult.rows[0] }
+      })
+
+      expect(state.run.status).toBe('Succeeded')
+      expect(state.run.attempts).toBe(1)
+      expect(state.run.request_payload).toEqual({ source: 'scheduler-integration' })
+      expect(state.run.result_payload).toMatchObject({ executed: true })
+      expect(new Date(state.schedule.last_run_at).toISOString()).toBe(scheduledAt.toISOString())
+      expect(new Date(state.schedule.next_run_at).getTime()).toBeGreaterThan(Date.now())
+    } finally {
+      await pool.query(`DELETE FROM job_definitions WHERE job_code = $1`, [jobCode])
+    }
   })
 
   it('duplicate enqueue with the same tenant/idempotency key returns the existing run', async () => {
