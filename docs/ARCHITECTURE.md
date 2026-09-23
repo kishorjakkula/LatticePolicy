@@ -199,6 +199,8 @@ Implemented (see `server/src/jobs/registerBuiltinJobs.ts` and
 - Renewal candidate scanning (`renewal_candidate_scan`) — identifies and
   notifies on upcoming renewals; does not yet generate a renewal offer or
   auto-bind a renewal.
+- Stale quote cleanup (`stale_quote_cleanup`) — expires inactive draft/rated
+  quotes after a configurable age, with a dry-run mode for operational review.
 
 Planned, not yet implemented:
 - Premium recomputation for queued policy changes.
