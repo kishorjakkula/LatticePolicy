@@ -34,6 +34,34 @@ describe('OpenAPI contract drift checks', () => {
     )
   })
 
+  it('documents structured errors for transaction routes', () => {
+    for (const path of [
+      '/v1/policies/{id}/issue',
+      '/v1/policies/{id}/endorse/preview',
+      '/v1/policies/{id}/endorse',
+      '/v1/policies/{id}/cancel',
+      '/v1/policies/{id}/reinstate',
+      '/v1/policies/{id}/rewrite',
+      '/v1/policies/{id}/renew',
+      '/v1/policies/{id}/renew/preview',
+      '/v1/policies/{id}/non-renew',
+      '/v1/policies/{id}/endorse/reserve-number',
+      '/v1/policies/{id}/transactions/reserve-number',
+    ]) {
+      const operation = spec.paths[path]?.post
+      expect(operation, `${path} should be in OpenAPI`).toBeTruthy()
+      expect(operation.responses['400'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/ValidationErrorResponse'
+      )
+      expect(operation.responses['404'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/ErrorResponse'
+      )
+      expect(operation.responses['500'].content['application/json'].schema.$ref).toBe(
+        '#/components/schemas/ErrorResponse'
+      )
+    }
+  })
+
   it('keeps expected high-value API routes represented in the spec', () => {
     for (const route of [
       '/v1/quotes',

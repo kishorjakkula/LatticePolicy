@@ -57,6 +57,7 @@ const routeDefs: RouteDef[] = [
   { method: 'post', path: '/v1/policies/{id}/rewrite', tag: 'Transactions', summary: 'Issue rewrite' },
   { method: 'post', path: '/v1/policies/{id}/renew', tag: 'Transactions', summary: 'Issue renewal' },
   { method: 'post', path: '/v1/policies/{id}/renew/preview', tag: 'Transactions', summary: 'Preview renewal' },
+  { method: 'post', path: '/v1/policies/{id}/non-renew', tag: 'Transactions', summary: 'Record policy non-renewal' },
 
   { method: 'get', path: '/v1/uw/referrals', tag: 'UW Queue', summary: 'List underwriting referrals' },
   { method: 'get', path: '/v1/uw/referrals/{referralId}', tag: 'UW Queue', summary: 'Get an underwriting referral' },
