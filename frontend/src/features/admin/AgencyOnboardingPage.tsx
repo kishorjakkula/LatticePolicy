@@ -489,7 +489,7 @@ export function AgencyOnboardingPage() {
     setContactFieldErrors({})
   }
 
-  function openChildAgency(agencyId: string, mode: Exclude<PopupMode, 'create'>) {
+  function openChildAgency(agencyId: string, mode: Exclude<PopupMode, 'create' | null>) {
     if (!agencyId) return
     openAgencyInPage(agencyId, mode)
   }
