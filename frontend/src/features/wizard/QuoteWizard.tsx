@@ -268,6 +268,7 @@ type PolicyIdCardsDocumentModel = {
   effectiveDate: string
   expirationDate: string
   state: string
+  country: string
   vehicles: PolicyVehicleCard[]
 }
 
@@ -1257,7 +1258,12 @@ export function QuoteWizard() {
     if (commissionPctValue == null || total <= 0) return null
     return (total * commissionPctValue) / 100
   }, [visiblePremium, commissionPctValue])
-  const coveragePremiumRows = useMemo(() => {
+  const coveragePremiumRows = useMemo<Array<{
+    code: string
+    name: string
+    amountFormatted: string
+    share: string
+  }>>(() => {
     const byCoverage = Array.isArray(visiblePremium?.byCoverage) ? visiblePremium.byCoverage : []
     const premiumCurrency = visiblePremium?.total?.currency || 'USD'
     if (!byCoverage.length) {
@@ -3042,6 +3048,7 @@ export function QuoteWizard() {
         effectiveDate,
         expirationDate,
         state: q.state || '-',
+        country: q.country || '',
         vehicles: buildVehicleCards(q)
       }
       const blob = await buildPolicyIdCardsPdf(model)
