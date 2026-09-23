@@ -15,8 +15,8 @@ export function coerceDateOnly(value: any, fallback?: string): string {
   if (typeof value === 'string') {
     const trimmed = value.trim()
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
-    const parsed = new Date(trimmed)
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
+    const parsed = parseStringDateOnly(trimmed)
+    if (parsed) return parsed
   }
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10)
@@ -38,9 +38,30 @@ export function asDateOnly(s?: unknown): string | undefined {
   if (isoPrefix) return isoPrefix[1]
   const parsed = new Date(raw)
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10)
+    return hasExplicitTimezone(raw)
+      ? parsed.toISOString().slice(0, 10)
+      : formatLocalDateOnly(parsed)
   }
   return undefined
+}
+
+function parseStringDateOnly(raw: string): string | undefined {
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return hasExplicitTimezone(raw)
+    ? parsed.toISOString().slice(0, 10)
+    : formatLocalDateOnly(parsed)
+}
+
+function hasExplicitTimezone(raw: string): boolean {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) || /\b(?:UTC|GMT)\b/i.test(raw)
+}
+
+function formatLocalDateOnly(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /**
