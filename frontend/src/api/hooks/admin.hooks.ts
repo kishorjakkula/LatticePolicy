@@ -505,6 +505,16 @@ export function useUpdateNotificationTemplateMutation() {
   })
 }
 
+export function useCloneNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.cloneNotificationTemplate(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
 export function useSetNotificationTemplateActiveMutation() {
   const qc = useQueryClient()
   return useMutation({

@@ -346,6 +346,8 @@ export const adminApi = {
     expirationDate: string | null
     metadata: Record<string, unknown>
   }>) => request<any>('PATCH', `/v1/admin/notification-templates/${id}`, payload),
+  cloneNotificationTemplate: (id: string) =>
+    request<any>('POST', `/v1/admin/notification-templates/${encodeURIComponent(id)}/clone`),
   activateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/activate`),
   deactivateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/deactivate`),
   previewNotificationTemplate: (payload: { subjectTemplate: string; bodyTemplate: string; sampleFields?: Record<string, unknown> }) =>

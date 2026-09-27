@@ -5,6 +5,7 @@ import {
   useNotificationTemplates,
   useCreateNotificationTemplateMutation,
   useUpdateNotificationTemplateMutation,
+  useCloneNotificationTemplateMutation,
   useSetNotificationTemplateActiveMutation,
   usePreviewNotificationTemplateMutation,
 } from '../../api/hooks'
@@ -111,6 +112,7 @@ export function NotificationTemplatesPage() {
 
   const createMutation = useCreateNotificationTemplateMutation()
   const updateMutation = useUpdateNotificationTemplateMutation()
+  const cloneMutation = useCloneNotificationTemplateMutation()
   const activeMutation = useSetNotificationTemplateActiveMutation()
   const previewMutation = usePreviewNotificationTemplateMutation()
 
@@ -153,6 +155,16 @@ export function NotificationTemplatesPage() {
     setFormError(null)
     try {
       await activeMutation.mutateAsync({ id: item.templateId, active: !item.active })
+    } catch (e: any) {
+      setFormError(e.message || String(e))
+    }
+  }
+
+  const onClone = async (item: NotificationTemplate) => {
+    setFormError(null)
+    try {
+      const cloned = await cloneMutation.mutateAsync(item.templateId)
+      onEdit(cloned)
     } catch (e: any) {
       setFormError(e.message || String(e))
     }
@@ -332,6 +344,7 @@ export function NotificationTemplatesPage() {
                 <td>{item.active ? 'Active' : 'Inactive'}</td>
                 <td style={{ display: 'flex', gap: 8 }}>
                   <button className="btn-secondary" onClick={() => onEdit(item)}>Edit</button>
+                  <button className="btn-secondary" onClick={() => void onClone(item)} disabled={cloneMutation.isPending}>Clone</button>
                   <button className="btn-secondary" onClick={() => onToggleActive(item)}>
                     {item.active ? 'Deactivate' : 'Activate'}
                   </button>

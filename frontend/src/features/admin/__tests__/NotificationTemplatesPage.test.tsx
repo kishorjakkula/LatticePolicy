@@ -8,6 +8,7 @@ import { NotificationTemplatesPage } from '../NotificationTemplatesPage'
 const useNotificationTemplatesMock = vi.fn()
 const createMutateMock = vi.fn()
 const updateMutateMock = vi.fn()
+const cloneMutateMock = vi.fn()
 const setActiveMutateMock = vi.fn()
 const previewMutateMock = vi.fn()
 
@@ -15,6 +16,7 @@ vi.mock('../../../api/hooks', () => ({
   useNotificationTemplates: (...args: any[]) => useNotificationTemplatesMock(...args),
   useCreateNotificationTemplateMutation: () => ({ mutateAsync: createMutateMock, isPending: false }),
   useUpdateNotificationTemplateMutation: () => ({ mutateAsync: updateMutateMock, isPending: false }),
+  useCloneNotificationTemplateMutation: () => ({ mutateAsync: cloneMutateMock, isPending: false }),
   useSetNotificationTemplateActiveMutation: () => ({ mutateAsync: setActiveMutateMock }),
   usePreviewNotificationTemplateMutation: () => ({ mutateAsync: previewMutateMock, isPending: false }),
 }))
@@ -76,6 +78,23 @@ describe('NotificationTemplatesPage', () => {
 
     expect(screen.getByDisplayValue('pa-cancel-ca')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Policy {{policyNumber}} cancellation notice')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument()
+  })
+
+  it('clones a template and opens the inactive copy for editing', async () => {
+    const user = userEvent.setup()
+    cloneMutateMock.mockResolvedValue({
+      ...sampleTemplate,
+      templateId: 'tmpl-copy',
+      templateCode: 'pa-cancel-ca-copy',
+      active: false,
+    })
+    render(<NotificationTemplatesPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Clone' }))
+
+    await waitFor(() => expect(cloneMutateMock).toHaveBeenCalledWith('tmpl-1'))
+    expect(screen.getByDisplayValue('pa-cancel-ca-copy')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument()
   })
 
