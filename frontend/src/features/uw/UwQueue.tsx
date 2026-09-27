@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ActionButton } from '../../components/ActionButton'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
-import { useUwReferrals, useDecideReferralMutation } from '../../api/hooks'
+import {
+  useAddReferralCommentMutation,
+  useAssignReferralMutation,
+  useDecideReferralMutation,
+  useUwReferrals,
+} from '../../api/hooks'
 
 const STATUS_BADGE: Record<string, string> = {
   Open: 'yellow',
@@ -19,6 +24,10 @@ export function UwQueue() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>('Open')
+  const [selectedReferral, setSelectedReferral] = useState<any | null>(null)
+  const [assignedTo, setAssignedTo] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
   const navigate = useNavigate()
   const canDecide = hasPermission(user, 'uw.referrals.decide')
 
@@ -27,6 +36,48 @@ export function UwQueue() {
   const total = data?.total ?? 0
 
   const decideMutation = useDecideReferralMutation()
+  const assignMutation = useAssignReferralMutation()
+  const commentMutation = useAddReferralCommentMutation()
+
+  const openReferral = (referral: any) => {
+    setSelectedReferral(referral)
+    setAssignedTo(referral.assignedTo || '')
+    setCommentText('')
+    setActionError(null)
+  }
+
+  const onAssign = async (event: FormEvent) => {
+    event.preventDefault()
+    const nextAssignee = assignedTo.trim()
+    if (!selectedReferral || !nextAssignee) return
+    setActionError(null)
+    try {
+      const updated = await assignMutation.mutateAsync({
+        referralId: selectedReferral.referralId,
+        assignedTo: nextAssignee,
+      })
+      setSelectedReferral((current: any) => ({ ...current, ...updated }))
+    } catch (e: any) {
+      setActionError(e.message || String(e))
+    }
+  }
+
+  const onAddComment = async (event: FormEvent) => {
+    event.preventDefault()
+    const text = commentText.trim()
+    if (!selectedReferral || !text) return
+    setActionError(null)
+    try {
+      const updated = await commentMutation.mutateAsync({
+        referralId: selectedReferral.referralId,
+        text,
+      })
+      setSelectedReferral((current: any) => ({ ...current, ...updated }))
+      setCommentText('')
+    } catch (e: any) {
+      setActionError(e.message || String(e))
+    }
+  }
 
   const onDecide = async (v: any, decision: 'Approved' | 'Declined' | 'InfoRequested') => {
     const reason = window.prompt(
@@ -93,6 +144,7 @@ export function UwQueue() {
                     <td><span className={`badge ${STATUS_BADGE[v.status] || 'gray'}`}>{v.status}</span></td>
                     <td className="muted">{v.assignedTo || '-'}</td>
                     <td style={{ display:'flex', gap: 6 }}>
+                      <ActionButton variant="secondary" size="sm" onClick={() => openReferral(v)}>Review</ActionButton>
                       {v.policyId && (
                         <ActionButton variant="secondary" size="sm" onClick={() => navigate(`/policies/${v.policyId}`)}>Open</ActionButton>
                       )}
@@ -121,6 +173,79 @@ export function UwQueue() {
               </select>
             </div>
           </div>
+          {selectedReferral && (
+            <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="referral-review-title">
+              <div className="modal-panel">
+                <div className="modal-header">
+                  <div>
+                    <h2 id="referral-review-title">Referral review</h2>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      {selectedReferral.policyNumber || 'Pre-bind quote'} · {selectedReferral.productCode || 'Unknown product'}
+                    </div>
+                  </div>
+                  <ActionButton variant="secondary" size="sm" onClick={() => setSelectedReferral(null)}>Close</ActionButton>
+                </div>
+
+                {actionError && <p className="error" role="alert">{actionError}</p>}
+
+                <form onSubmit={onAssign} style={{ marginBottom: 20 }}>
+                  <label htmlFor="referral-assignee">Assignee user UUID</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+                    <input
+                      id="referral-assignee"
+                      value={assignedTo}
+                      onChange={(event) => setAssignedTo(event.target.value)}
+                      placeholder="Enter a user UUID"
+                      pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}"
+                      title="Enter a valid user UUID"
+                      disabled={!canDecide || assignMutation.isPending}
+                    />
+                    <ActionButton
+                      type="submit"
+                      size="sm"
+                      disabled={!canDecide || !assignedTo.trim() || assignMutation.isPending}
+                    >
+                      {assignMutation.isPending ? 'Assigning…' : 'Assign'}
+                    </ActionButton>
+                  </div>
+                </form>
+
+                <section aria-labelledby="referral-comments-title">
+                  <h3 id="referral-comments-title">Comments</h3>
+                  {(selectedReferral.comments || []).length === 0 ? (
+                    <p className="muted">No comments yet.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+                      {(selectedReferral.comments || []).map((comment: any, index: number) => (
+                        <div key={`${comment.at || 'comment'}-${index}`} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                          <div style={{ fontSize: 13 }}>{comment.text}</div>
+                          <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                            {comment.by || 'Unknown user'}{comment.at ? ` · ${formatDisplayDate(comment.at, { fallback: '' })}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <form onSubmit={onAddComment}>
+                    <label htmlFor="referral-comment">Add comment</label>
+                    <textarea
+                      id="referral-comment"
+                      rows={3}
+                      value={commentText}
+                      onChange={(event) => setCommentText(event.target.value)}
+                      placeholder="Add underwriting context"
+                      disabled={commentMutation.isPending}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                      <ActionButton type="submit" size="sm" disabled={!commentText.trim() || commentMutation.isPending}>
+                        {commentMutation.isPending ? 'Adding…' : 'Add comment'}
+                      </ActionButton>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

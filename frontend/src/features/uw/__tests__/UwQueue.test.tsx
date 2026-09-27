@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { UwQueue } from '../UwQueue'
 import { useAuth } from '../../../auth/AuthContext'
@@ -10,10 +11,14 @@ vi.mock('../../../auth/AuthContext', () => ({
 
 const mockUseUwReferrals = vi.fn()
 const mockDecideMutateAsync = vi.fn()
+const mockAssignMutateAsync = vi.fn()
+const mockCommentMutateAsync = vi.fn()
 
 vi.mock('../../../api/hooks', () => ({
   useUwReferrals: (...args: any[]) => mockUseUwReferrals(...args),
   useDecideReferralMutation: () => ({ mutateAsync: mockDecideMutateAsync }),
+  useAssignReferralMutation: () => ({ mutateAsync: mockAssignMutateAsync, isPending: false }),
+  useAddReferralCommentMutation: () => ({ mutateAsync: mockCommentMutateAsync, isPending: false }),
 }))
 
 const mockUseAuth = vi.mocked(useAuth)
@@ -39,6 +44,7 @@ const openReferral = {
   status: 'Open',
   reasons: ['Driver age under 18 (refer)'],
   assignedTo: null,
+  comments: [{ by: 'agent-1', text: 'Please review the driver history.', at: '2026-06-30T12:00:00Z' }],
   policyNumber: null,
 }
 
@@ -114,5 +120,46 @@ describe('UwQueue', () => {
     renderQueue()
 
     expect(screen.getByText('No referrals found')).toBeInTheDocument()
+  })
+
+  it('assigns a referral from the review dialog', async () => {
+    const user = userEvent.setup()
+    mockUseAuth.mockReturnValue({
+      user: { id: 'uw-1', username: 'uw1', tenantId: 'sample-carrier', roles: ['underwriter'], permissions: ['uw.referrals.decide'] },
+    } as any)
+    mockUseUwReferrals.mockReturnValue({ data: { items: [openReferral], total: 1 }, isLoading: false, error: null })
+    const assigneeId = '22222222-2222-4222-8222-222222222222'
+    mockAssignMutateAsync.mockResolvedValue({ ...openReferral, assignedTo: assigneeId })
+
+    renderQueue()
+    await user.click(screen.getByRole('button', { name: 'Review' }))
+    await user.type(screen.getByLabelText('Assignee user UUID'), assigneeId)
+    await user.click(screen.getByRole('button', { name: 'Assign' }))
+
+    expect(mockAssignMutateAsync).toHaveBeenCalledWith({ referralId: 'ref-1', assignedTo: assigneeId })
+    expect(screen.getByLabelText('Assignee user UUID')).toHaveValue(assigneeId)
+  })
+
+  it('shows existing comments and adds a new comment', async () => {
+    const user = userEvent.setup()
+    mockUseAuth.mockReturnValue({
+      user: { id: 'uw-1', username: 'uw1', tenantId: 'sample-carrier', roles: ['underwriter'], permissions: ['uw.referrals.decide'] },
+    } as any)
+    mockUseUwReferrals.mockReturnValue({ data: { items: [openReferral], total: 1 }, isLoading: false, error: null })
+    mockCommentMutateAsync.mockResolvedValue({
+      ...openReferral,
+      comments: [...openReferral.comments, { by: 'uw-1', text: 'Reviewed loss runs.', at: '2026-07-01T12:00:00Z' }],
+    })
+
+    renderQueue()
+    await user.click(screen.getByRole('button', { name: 'Review' }))
+    expect(screen.getByText('Please review the driver history.')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Add comment'), 'Reviewed loss runs.')
+    await user.click(screen.getByRole('button', { name: 'Add comment' }))
+
+    expect(mockCommentMutateAsync).toHaveBeenCalledWith({ referralId: 'ref-1', text: 'Reviewed loss runs.' })
+    expect(screen.getByText('Reviewed loss runs.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Add comment')).toHaveValue('')
   })
 })
