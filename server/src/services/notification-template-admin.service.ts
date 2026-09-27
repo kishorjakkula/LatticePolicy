@@ -301,6 +301,59 @@ export async function updateNotificationTemplate(
   }
 }
 
+export async function cloneNotificationTemplate(
+  db: DrizzleDB,
+  tenantId: string,
+  templateId: string,
+  actor: string
+): Promise<NotificationTemplateRow | null> {
+  const source = await getNotificationTemplate(db, tenantId, templateId)
+  if (!source) return null
+
+  const q = toRawQuery(db)
+  await q(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, [tenantId, source.templateCode])
+  const existing = await q(
+    `SELECT template_code FROM notification_templates
+      WHERE tenant_id = $1 AND template_code LIKE $2`,
+    [tenantId, `${source.templateCode}-copy%`]
+  )
+  const existingCodes = new Set(existing.rows.map((row: { template_code: string }) => row.template_code))
+  let templateCode = ''
+  for (let copyNumber = 1; copyNumber <= 100; copyNumber += 1) {
+    const candidate = `${source.templateCode}-copy${copyNumber === 1 ? '' : `-${copyNumber}`}`
+    if (!existingCodes.has(candidate)) {
+      templateCode = candidate
+      break
+    }
+  }
+  if (!templateCode) throw new Error('TEMPLATE_CLONE_CODE_EXHAUSTED')
+
+  return createNotificationTemplate(
+    db,
+    tenantId,
+    {
+      templateCode,
+      eventType: source.eventType,
+      channel: source.channel,
+      productCode: source.productCode,
+      transactionType: source.transactionType,
+      locale: source.locale,
+      subjectTemplate: source.subjectTemplate,
+      bodyTemplate: source.bodyTemplate,
+      visibility: source.visibility,
+      effectiveDate: source.effectiveDate,
+      expirationDate: source.expirationDate,
+      active: false,
+      metadata: {
+        ...source.metadata,
+        clonedFromTemplateId: source.templateId,
+        createdBy: actor,
+      },
+    },
+    actor
+  )
+}
+
 export async function setNotificationTemplateActive(
   db: DrizzleDB,
   tenantId: string,

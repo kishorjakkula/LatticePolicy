@@ -182,6 +182,20 @@ describe('notification template admin API', () => {
     expect(updated.body.subjectTemplate).toBe('Updated subject {{policyNumber}}')
     expect(updated.body.bodyTemplate).toBe(created.body.bodyTemplate)
 
+    const cloned = await authPost(`/api/v1/admin/notification-templates/${templateId}/clone`, token).expect(201)
+    expect(cloned.body).toMatchObject({
+      templateCode: `${templateCode}-copy`,
+      eventType: created.body.eventType,
+      subjectTemplate: updated.body.subjectTemplate,
+      bodyTemplate: created.body.bodyTemplate,
+      active: false,
+    })
+    expect(cloned.body.templateId).not.toBe(templateId)
+    expect(cloned.body.metadata).toMatchObject({ clonedFromTemplateId: templateId })
+
+    const secondClone = await authPost(`/api/v1/admin/notification-templates/${templateId}/clone`, token).expect(201)
+    expect(secondClone.body.templateCode).toBe(`${templateCode}-copy-2`)
+
     const deactivated = await authPost(`/api/v1/admin/notification-templates/${templateId}/deactivate`, token).expect(200)
     expect(deactivated.body.active).toBe(false)
 

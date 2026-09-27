@@ -96,6 +96,8 @@ const routeDefs: RouteDef[] = [
   { method: 'delete', path: '/v1/admin/underwriting-companies/{id}', tag: 'Admin - UW Companies', summary: 'Delete UW company' },
   { method: 'post', path: '/v1/admin/seed', tag: 'Admin - Utilities', summary: 'Seed demo data' },
 
+  { method: 'post', path: '/v1/admin/notification-templates/{id}/clone', tag: 'Admin - Notifications', summary: 'Clone notification template' },
+
   { method: 'get', path: '/v1/admin/forms', tag: 'Admin - Forms', summary: 'List forms' },
   { method: 'post', path: '/v1/admin/forms', tag: 'Admin - Forms', summary: 'Create form' },
   { method: 'post', path: '/v1/admin/forms/seed/iso-personal-auto-us', tag: 'Admin - Forms', summary: 'Seed ISO personal auto forms (demo)' },

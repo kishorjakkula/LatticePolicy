@@ -5,6 +5,7 @@ import { requirePermission } from '../auth.js'
 import { routeParam } from '../lib/utils.js'
 import {
   createNotificationTemplate,
+  cloneNotificationTemplate,
   getNotificationTemplate,
   listNotificationTemplates,
   previewNotificationTemplate,
@@ -111,6 +112,21 @@ notificationTemplatesRoutes.patch('/:id', requirePermission('admin.notifications
     if (e?.message === 'TEMPLATE_CODE_EXISTS') {
       return res.status(409).json({ code: 'DUPLICATE', message: 'A template with this templateCode already exists' })
     }
+    return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
+  }
+})
+
+notificationTemplatesRoutes.post('/:id/clone', requirePermission('admin.notifications.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const templateId = routeParam(req.params.id)
+  const actor = currentActor(req)
+  try {
+    const cloned = await withTenantTx(tenantId, (db) =>
+      cloneNotificationTemplate(db, tenantId, templateId, actor)
+    )
+    if (!cloned) return res.status(404).json({ code: 'NOT_FOUND' })
+    return res.status(201).json(cloned)
+  } catch (e: any) {
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
 })
