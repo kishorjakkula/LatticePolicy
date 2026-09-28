@@ -46,10 +46,13 @@ Frontend build variables:
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Yes | Public API base URL used by the browser app. |
-| `VITE_USE_MOCK=0` | Yes | Disables the frontend mock API in production builds. |
+| `VITE_USE_MOCK=0` | Expected | Explicitly disables the frontend mock API. It may be omitted by the standard Docker build when `VITE_API_BASE_URL` is present, because that also resolves mock mode to off. |
 | `VITE_SENTRY_DSN` | Optional | Browser-side error tracking DSN. |
 
 Important: Vite variables are compiled into the frontend image at build time. If the API URL changes, rebuild and redeploy the frontend image.
+See [Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md)
+for the full variable contract, URL shape, public-value warning, CORS pairing,
+and release verification checklist.
 
 The API fails fast in managed environments when required variables are missing
 or unsafe. Managed environments include `NODE_ENV=production` and

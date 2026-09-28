@@ -207,6 +207,7 @@ collaboration opportunities with `help wanted`.
 - [Multitenancy](docs/MULTITENANCY.md)
 - [Data model ERD](docs/DATA_MODEL_ERD.md)
 - [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)
+- [Frontend production configuration](docs/FRONTEND_PRODUCTION_CONFIGURATION.md)
 - [Production runbooks](docs/PRODUCTION_RUNBOOKS.md)
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)

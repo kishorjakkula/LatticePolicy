@@ -71,6 +71,11 @@ Local defaults:
 
 Do not commit `.env` or real secrets.
 
+These values are local defaults. For managed builds, frontend `VITE_*` values
+are public build-time inputs rather than container runtime configuration. See
+[Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md) for
+the API URL shape, mock-mode guardrail, CORS pairing, and deployment examples.
+
 ## Option 1: Full Docker Stack
 
 This is the fastest path for first-time contributors because it runs the database, cache, API, and UI together.

@@ -47,6 +47,9 @@ Frontend Container App:
 - Target port: `80`.
 - `VITE_API_BASE_URL` must be supplied to the Docker build through the GitHub repository variable; do not rely on a runtime env var for the static frontend.
 
+For the complete frontend build contract and verification checklist, see
+[Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md).
+
 ## 4) Demo-private access model
 
 For demos, use a public HTTPS URL with invite-only application access:

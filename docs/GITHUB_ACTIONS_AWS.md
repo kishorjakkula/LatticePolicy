@@ -78,6 +78,8 @@ Update these fields before first deploy:
 - Frontend task port (`80`) and load balancer target group mapping
 
 Do not configure `VITE_API_BASE_URL` as a frontend ECS runtime environment variable. Vite compiles this value during the Docker build, and the deploy workflow passes it through `--build-arg`.
+For the complete frontend build contract and verification checklist, see
+[Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md).
 
 ## 4) Deployment behavior
 
