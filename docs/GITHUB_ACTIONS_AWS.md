@@ -74,7 +74,9 @@ Update these fields before first deploy:
 - `taskRoleArn`
 - CloudWatch log groups/region
 - API task secrets (`DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`, optional `REDIS_URL`) with AWS Secrets Manager or SSM Parameter Store ARNs
-- API test/demo-private environment variables (`NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `REGISTRATION_ENABLED=false`, `DEMO_ACCESS_MODE=invite_only`, and optional `DEMO_ALLOWED_EMAIL_DOMAINS`)
+- API test/demo-private environment variables (`NODE_ENV=production`,
+  `DEPLOYMENT_ENV=test`, `DEMO_ACCESS_MODE=invite_only`, and exact users in
+  `DEMO_ALLOWED_EMAILS`)
 - Frontend task port (`80`) and load balancer target group mapping
 
 Do not configure `VITE_API_BASE_URL` as a frontend ECS runtime environment variable. Vite compiles this value during the Docker build, and the deploy workflow passes it through `--build-arg`.

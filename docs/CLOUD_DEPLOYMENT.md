@@ -29,10 +29,8 @@ API container environment variables:
 | `MFA_TOKEN_SECRET` | Yes | Separate secret for MFA challenge tokens. |
 | `MFA_ISSUER=LatticePolicy` | Recommended | Authenticator app issuer name. |
 | `ALLOWED_ORIGINS` | Yes | Comma-separated browser origins allowed to call the API. |
-| `REGISTRATION_ENABLED=false` | Recommended for demos | Disables public account creation for invite-only demos. |
 | `DEMO_ACCESS_MODE=invite_only` | Recommended for demos | Restricts demo access to explicitly allowed users. |
 | `DEMO_ALLOWED_EMAILS` | Required for invite-only demos | Comma-separated list of usernames/email addresses allowed to log in. |
-| `DEMO_ALLOWED_EMAIL_DOMAINS` | Optional | Optional domain allowlist for invited organizations. |
 | `REDIS_URL` | Required when cache is enabled | Redis connection string. |
 | `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache and requires `REDIS_URL`. |
 | `SENTRY_DSN` | Optional | Server-side error tracking DSN. |
@@ -65,6 +63,10 @@ frontend builds also fail when mock mode is enabled or `VITE_API_BASE_URL` is
 missing/non-HTTPS, except for localhost/127.0.0.1 URLs used by local smoke
 tests.
 
+See [Production runtime configuration](PRODUCTION_RUNTIME_CONFIGURATION.md) for
+the authoritative API guardrail contract, safe configuration pattern,
+verification checklist, and troubleshooting guidance.
+
 ## Private Validation Access
 
 For a cloud validation/demo environment, deploy the application behind HTTPS but
@@ -78,7 +80,8 @@ keep the application private by policy:
 - Set `ALLOWED_ORIGINS` to the deployed frontend origin only.
 - Keep demo users in a demo tenant and assign the least-privileged role needed
   for the walkthrough.
-- Do not enable public self-registration for validation environments.
+- Provision validation users through controlled administration; the API does
+  not expose public self-registration.
 - Add a cloud WAF, IP allowlist, or identity-aware proxy if the demo audience
   is small and known.
 
@@ -86,9 +89,8 @@ The same environment variables are used on AWS and Azure. The cloud provider
 should inject them from Secrets Manager, SSM Parameter Store, Key Vault, or the
 platform equivalent.
 
-Runtime enforcement of `REGISTRATION_ENABLED`, `DEMO_ACCESS_MODE`, and allowlist
-variables must be verified before using the deployment with sensitive carrier or
-customer data.
+Runtime enforcement of `DEMO_ACCESS_MODE` and the exact-user allowlist must be
+verified before using the deployment with sensitive carrier or customer data.
 
 ## Container Images
 
@@ -192,7 +194,7 @@ API task:
 
 - Image: ECR API image
 - Container port: `3000`
-- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `REGISTRATION_ENABLED=false`, `DEMO_ACCESS_MODE=invite_only`
+- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `DEMO_ACCESS_MODE=invite_only`
 - Secrets: `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `REDIS_URL`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`
 - Health check path: `/health`
 
@@ -361,7 +363,7 @@ az containerapp create \
   --target-port 3000 \
   --ingress external \
   --registry-server $ACR_LOGIN_SERVER \
-  --env-vars NODE_ENV=production DEPLOYMENT_ENV=test PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info REGISTRATION_ENABLED=false DEMO_ACCESS_MODE=invite_only
+  --env-vars NODE_ENV=production DEPLOYMENT_ENV=test PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info DEMO_ACCESS_MODE=invite_only
 ```
 
 After creating the app, add secrets and secret-backed environment variables for `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`, and `REDIS_URL`.
