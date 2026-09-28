@@ -32,7 +32,13 @@ function authReq(method: 'get' | 'post' | 'patch', path: string, token: string) 
   return (request(app) as any)[method](path).set('Authorization', `Bearer ${token}`).set('X-Tenant', tenantId)
 }
 
-async function seedPolicyWithTransaction(run: string, productCode: string, stateCode: string, premiumTotal: number) {
+async function seedPolicyWithTransaction(
+  run: string,
+  productCode: string,
+  stateCode: string,
+  premiumTotal: number,
+  effectiveDate = '2026-06-01'
+) {
   const db = getDb()!
   const policyResult = await db.query(
     `INSERT INTO policies (tenant_id, policy_number, status, product_code, jurisdiction_code, term_effective_date, term_expiration_date)
@@ -44,16 +50,16 @@ async function seedPolicyWithTransaction(run: string, productCode: string, state
 
   const txnResult = await db.query(
     `INSERT INTO policy_transactions (tenant_id, policy_id, type, status, effective_date)
-     VALUES ($1,$2,'NB','Issued','2026-06-01')
+     VALUES ($1,$2,'NB','Issued',$3)
      RETURNING transaction_id`,
-    [tenantId, policyId]
+    [tenantId, policyId, effectiveDate]
   )
   const transactionId = txnResult.rows[0].transaction_id
 
   await db.query(
     `INSERT INTO policy_versions (tenant_id, policy_id, transaction_id, effective_date, transaction_type, premium_total)
-     VALUES ($1,$2,$3,'2026-06-01','NB',$4)`,
-    [tenantId, policyId, transactionId, premiumTotal]
+     VALUES ($1,$2,$3,$4,'NB',$5)`,
+    [tenantId, policyId, transactionId, effectiveDate, premiumTotal]
   )
 
   return { policyId, transactionId }
@@ -114,6 +120,79 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
     expect(placements.body.items).toHaveLength(1)
     expect(Number(placements.body.items[0].ceded_premium)).toBe(4000)
     expect(Number(placements.body.items[0].retained_premium)).toBe(6000)
+  })
+
+  it('creates a linked treaty version and resolves placements by transaction effective date', async () => {
+    const run = suffix()
+    const productCode = `ri-version-${run}`
+
+    await createUser({ username: `reinsurance-version-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`reinsurance-version-${run}`)
+
+    const created = await authReq('post', '/api/v1/admin/reinsurance/treaties', token)
+      .send({
+        treatyName: `Versioned Treaty ${run}`,
+        treatyType: 'QUOTA_SHARE',
+        effectiveDate: '2026-01-01',
+        expirationDate: '2027-01-01',
+        productCodes: [productCode],
+        layers: [{
+          cededPercent: 25,
+          retainedPercent: 75,
+          participants: [{ reinsurerName: 'Version Re', participationPercent: 100, isLead: true }]
+        }]
+      })
+      .expect(201)
+
+    const updated = await authReq('patch', `/api/v1/admin/reinsurance/treaties/${created.body.treaty_id}`, token)
+      .send({ effectiveDate: '2026-07-01', brokerName: 'Updated Broker' })
+      .expect(200)
+
+    expect(updated.body).toMatchObject({ version: 2, broker_name: 'Updated Broker' })
+    expect(updated.body.treaty_id).not.toBe(created.body.treaty_id)
+
+    const versions = await getDb()!.query(
+      `SELECT treaty_id, version, superseded_by
+         FROM reinsurance_treaties
+        WHERE tenant_id = $1 AND treaty_name = $2
+        ORDER BY version`,
+      [tenantId, `Versioned Treaty ${run}`]
+    )
+    expect(versions.rows).toHaveLength(2)
+    expect(versions.rows[0]).toMatchObject({ version: 1, superseded_by: updated.body.treaty_id })
+    expect(versions.rows[1]).toMatchObject({ version: 2, superseded_by: null })
+
+    const clonedChildren = await getDb()!.query(
+      `SELECT count(DISTINCT l.layer_id)::int AS layers, count(p.participant_id)::int AS participants
+         FROM reinsurance_treaty_layers l
+         LEFT JOIN reinsurance_market_participants p ON p.layer_id = l.layer_id AND p.tenant_id = l.tenant_id
+        WHERE l.tenant_id = $1 AND l.treaty_id = $2`,
+      [tenantId, updated.body.treaty_id]
+    )
+    expect(clonedChildren.rows[0]).toEqual({ layers: 1, participants: 1 })
+
+    const past = await seedPolicyWithTransaction(`${run}-past`, productCode, 'NY', 1000, '2026-06-01')
+    const pastPlacement = await authReq(
+      'post',
+      `/api/v1/admin/reinsurance/policies/${past.policyId}/transactions/${past.transactionId}/compute`,
+      token
+    ).expect(200)
+    expect(pastPlacement.body.items).toHaveLength(1)
+    expect(pastPlacement.body.items[0].treatyId).toBe(created.body.treaty_id)
+
+    const current = await seedPolicyWithTransaction(`${run}-current`, productCode, 'NY', 1000, '2026-08-01')
+    const currentPlacement = await authReq(
+      'post',
+      `/api/v1/admin/reinsurance/policies/${current.policyId}/transactions/${current.transactionId}/compute`,
+      token
+    ).expect(200)
+    expect(currentPlacement.body.items).toHaveLength(1)
+    expect(currentPlacement.body.items[0].treatyId).toBe(updated.body.treaty_id)
+
+    const listed = await authReq('get', '/api/v1/admin/reinsurance/treaties', token).expect(200)
+    const listedVersions = listed.body.items.filter((item: any) => item.treaty_name === `Versioned Treaty ${run}`)
+    expect(listedVersions).toHaveLength(1)
+    expect(listedVersions[0].treaty_id).toBe(updated.body.treaty_id)
   })
 
   it('does not match a treaty outside its product applicability', async () => {

@@ -32,8 +32,9 @@ columns).
   `SURPLUS`, `EXCESS_OF_LOSS`, `FACULTATIVE_OBLIGATORY`), `status`, an
   effective/expiration window, and applicability filters — `product_codes`
   and `state_codes` text arrays (`NULL` or empty means "applies to all").
-  `version`/`superseded_by` exist for future effective-dated term versioning
-  but are not yet driven by any service logic (see Follow-Ups).
+  `version`/`superseded_by` form an immutable version chain. Treaty edits
+  create a new row and copy its layers and participants instead of mutating
+  the prior version.
 - **`reinsurance_treaty_layers`**: one or more layers under a treaty
   (`layer_number`, `retention_amount`, `limit_amount`, `ceded_percent`,
   `retained_percent`, optional `premium_rate`). A quota share treaty
@@ -102,6 +103,30 @@ it is used **exclusively** — matching treaty layers are not also returned.
 This matches standard reinsurance practice: a facultative placement is a
 risk-specific override of the standard treaty program, not an addition to it.
 
+## Treaty Versioning
+
+`PATCH /treaties/:id` creates a new treaty version atomically. The prior row
+is preserved and its `superseded_by` points to the new treaty ID; layers and
+market participants are copied to new IDs under the new version. Attempting
+to edit an already-superseded ID returns a conflict so concurrent or stale
+administrative edits cannot fork a version chain.
+
+The optional `effectiveDate` patch field controls when the new version starts.
+Callers should provide it for prospective changes. When omitted, the previous
+effective date is retained for backward compatibility and the new version is
+treated as replacing the old terms for the existing effective window.
+
+Placement lookup groups treaty rows by version chain and selects the highest
+version whose effective date is on or before the transaction effective date.
+It then applies that version's status, expiration, product, and state rules.
+This prevents a superseded version from becoming a fallback when a newer
+version cancels, expires, or narrows the treaty. Existing persisted placement
+rows continue to reference the historical treaty and layer IDs.
+
+The normal `GET /treaties` response includes only the current leaf of each
+version chain, keeping the existing admin-list contract free of duplicate
+historical rows.
+
 ## Layer Stacking
 
 This first slice does **not** model excess-of-loss attachment-point stacking
@@ -155,9 +180,6 @@ All routes are tenant-scoped and RBAC-gated (`admin.reinsurance.read` /
 
 ## Follow-Ups Or Known Gaps
 
-- Treaty term versioning (`version`/`superseded_by` columns) exists in the
-  schema but no service logic creates a new version or supersedes a prior
-  one yet — updates currently mutate the treaty row in place via `PATCH`.
 - No admin UI exists yet for editing layers/participants after treaty
   creation, or for editing facultative certificate participants — only
   initial creation is wired in the frontend (`ReinsurancePage.tsx`).
