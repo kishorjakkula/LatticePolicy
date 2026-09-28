@@ -118,6 +118,39 @@ async function ensureServicingForm() {
   )
 }
 
+async function ensureEndorsementCoverageForms() {
+  const db = getDb()!
+  const forms = [
+    { id: '11111111-1111-4111-8111-111111111262', code: 'PA-BI-END-262', coverageCode: 'BI' },
+    { id: '22222222-2222-4222-8222-222222222262', code: 'PA-PD-END-262', coverageCode: 'PD' },
+  ]
+  for (const form of forms) {
+    await db.query(
+      `INSERT INTO forms_admin_forms (
+          form_id, tenant_id, carrier_code, authority, form_number, form_title,
+          edition_date, form_type, line_of_business, workflow_status, active
+        ) VALUES ($1,$2,'SAMPLE','ISO',$3,$4,'2026-01-01','Endorsement','personal-auto','Approved',true)
+       ON CONFLICT (tenant_id, carrier_code, authority, form_number, edition_date)
+       DO UPDATE SET workflow_status='Approved', active=true`,
+      [form.id, tenantId, form.code, `${form.coverageCode} Coverage Change`],
+    )
+    await db.query(
+      `INSERT INTO forms_admin_applicability (
+          tenant_id, form_id, line_of_business, product_code, transaction_types,
+          endorsement_change_criteria, active
+        ) VALUES ($1,$2,'personal-auto','personal-auto',ARRAY['Endorse']::text[],$3::jsonb,true)
+       ON CONFLICT DO NOTHING`,
+      [tenantId, form.id, JSON.stringify({ coverageCodes: [form.coverageCode], changeTypes: ['modified'], match: 'all' })],
+    )
+    await db.query(
+      `INSERT INTO forms_admin_jurisdictions (
+          tenant_id, form_id, state_code, regulatory_status, effective_date
+        ) VALUES ($1,$2,'CA','Approved','2026-01-01') ON CONFLICT DO NOTHING`,
+      [tenantId, form.id],
+    )
+  }
+}
+
 async function createBoundPolicy() {
   const quote = await createOrRateQuote(
     {} as any,
@@ -136,6 +169,47 @@ function tx<T>(fn: Parameters<typeof withTenantTx<T>>[1]) {
 describe('policy transaction lifecycle persistence', () => {
   afterAll(async () => {
     await closeDb()
+  })
+
+  it('generates an endorsement packet scoped to the changed coverage', async () => {
+    await initDb()
+    await ensureTenant()
+    await ensureEndorsementCoverageForms()
+    const db = getDb()!
+    const bound = await createBoundPolicy()
+    await tx((innerDb) => issuePolicy(innerDb, tenantId, bound.policyId, {}, actor))
+
+    const current = await db.query(
+      `SELECT payload FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 ORDER BY processed_at DESC LIMIT 1`,
+      [tenantId, bound.policyId],
+    )
+    const payload = JSON.parse(JSON.stringify(current.rows[0].payload))
+    payload.coverages = payload.coverages.map((coverage: any) =>
+      coverage.code === 'BI' ? { ...coverage, limit: 250000 } : coverage,
+    )
+
+    const endorsed = await tx((innerDb) => executeEndorsement(
+      innerDb,
+      tenantId,
+      bound.policyId,
+      { effectiveDate: '2026-08-01', payload, transactionNumber: 'EN-DOC-262' },
+      actor,
+    ))
+    const persisted = await db.query(
+      `SELECT code FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3 ORDER BY code`,
+      [tenantId, bound.policyId, endorsed.transactionId],
+    )
+    const document = await db.query(
+      `SELECT metadata FROM documents WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3 AND type='POLICY_PACKET'`,
+      [tenantId, bound.policyId, endorsed.transactionId],
+    )
+
+    expect(persisted.rows.map((row: any) => row.code)).toEqual(['PA-BI-END-262'])
+    expect(document.rows).toHaveLength(1)
+    expect(document.rows[0].metadata).toMatchObject({
+      transactionType: 'Endorse',
+      endorsementChanges: { modifiedCoverageCodes: ['BI'] },
+    })
   })
 
   it('issues, cancels, rejects duplicate cancel, and reinstates an issued policy', async () => {

@@ -254,8 +254,8 @@ formsAdminRoutes.post('/', async (req, res) => {
           await q(
             `INSERT INTO forms_admin_applicability (
                 tenant_id, form_id, line_of_business, product_code, risk_unit_association,
-                transaction_types, active, created_by, updated_by, updated_at
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8,now())`,
+                transaction_types, endorsement_change_criteria, active, created_by, updated_by, updated_at
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$9,now())`,
             [
               tenantId,
               row.form_id,
@@ -263,6 +263,7 @@ formsAdminRoutes.post('/', async (req, res) => {
               a.productCode,
               a.riskUnitAssociation,
               a.transactionTypes,
+              JSON.stringify(a.endorsementChangeCriteria),
               a.active,
               actor
             ]
@@ -1150,8 +1151,8 @@ formsAdminRoutes.post('/:id/applicability', async (req, res) => {
       const result = await q(
         `INSERT INTO forms_admin_applicability (
             tenant_id, form_id, line_of_business, product_code, risk_unit_association, transaction_types,
-            active, created_by, updated_by, updated_at
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8,now())
+            endorsement_change_criteria, active, created_by, updated_by, updated_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$9,now())
          RETURNING *`,
         [
           tenantId,
@@ -1160,6 +1161,7 @@ formsAdminRoutes.post('/:id/applicability', async (req, res) => {
           payload.productCode,
           payload.riskUnitAssociation,
           payload.transactionTypes,
+          JSON.stringify(payload.endorsementChangeCriteria),
           payload.active,
           actor
         ]
@@ -1204,6 +1206,7 @@ formsAdminRoutes.patch('/:id/applicability/:applicabilityId', async (req, res) =
         productCode: req.body?.productCode ?? current.product_code,
         riskUnitAssociation: req.body?.riskUnitAssociation ?? current.risk_unit_association,
         transactionTypes: req.body?.transactionTypes ?? current.transaction_types,
+        endorsementChangeCriteria: req.body?.endorsementChangeCriteria ?? current.endorsement_change_criteria,
         active: req.body?.active ?? current.active
       })
       const error = validateApplicabilityPayload(payload)
@@ -1214,8 +1217,9 @@ formsAdminRoutes.patch('/:id/applicability/:applicabilityId', async (req, res) =
                 product_code = $5,
                 risk_unit_association = $6,
                 transaction_types = $7,
-                active = $8,
-                updated_by = $9,
+                endorsement_change_criteria = $8::jsonb,
+                active = $9,
+                updated_by = $10,
                 updated_at = now()
           WHERE tenant_id = $1 AND form_id = $2 AND applicability_id = $3
           RETURNING *`,
@@ -1227,6 +1231,7 @@ formsAdminRoutes.patch('/:id/applicability/:applicabilityId', async (req, res) =
           payload.productCode,
           payload.riskUnitAssociation,
           payload.transactionTypes,
+          JSON.stringify(payload.endorsementChangeCriteria),
           payload.active,
           actor
         ]
@@ -2074,10 +2079,10 @@ async function copyFormChildren(q: QueryFn, tenantId: string, sourceFormId: stri
   await q(
     `INSERT INTO forms_admin_applicability (
         tenant_id, form_id, line_of_business, product_code, risk_unit_association, transaction_types,
-        active, created_by, updated_by, updated_at
+        endorsement_change_criteria, active, created_by, updated_by, updated_at
      )
      SELECT tenant_id, $3, line_of_business, product_code, risk_unit_association, transaction_types,
-            active, $4, $4, now()
+            endorsement_change_criteria, active, $4, $4, now()
        FROM forms_admin_applicability
       WHERE tenant_id = $1 AND form_id = $2`,
     [tenantId, sourceFormId, targetFormId, actor]
@@ -2352,6 +2357,7 @@ function mapApplicabilityRow(row: any) {
     productCode: row.product_code,
     riskUnitAssociation: row.risk_unit_association,
     transactionTypes: normalizeStringArray(row.transaction_types || []),
+    endorsementChangeCriteria: row.endorsement_change_criteria || {},
     active: Boolean(row.active),
     createdAt: row.created_at,
     createdBy: row.created_by || null,
@@ -2507,11 +2513,15 @@ function validateJurisdictionPayload(payload: ReturnType<typeof normalizeJurisdi
 }
 
 function normalizeApplicabilityPayload(input: any) {
+  const rawCriteria = input?.endorsementChangeCriteria
   return {
     lineOfBusiness: normalizeLabel(input?.lineOfBusiness),
     productCode: normalizeProductCode(input?.productCode),
     riskUnitAssociation: normalizeRiskUnitAssociation(input?.riskUnitAssociation) || 'Policy',
     transactionTypes: normalizeTransactionTypeArray(input?.transactionTypes),
+    endorsementChangeCriteria: rawCriteria && typeof rawCriteria === 'object' && !Array.isArray(rawCriteria)
+      ? rawCriteria
+      : {},
     active: input?.active == null ? true : Boolean(input.active)
   }
 }
@@ -2521,6 +2531,17 @@ function validateApplicabilityPayload(payload: ReturnType<typeof normalizeApplic
   if (!payload.productCode) return 'productCode is required'
   if (!payload.riskUnitAssociation) return 'riskUnitAssociation is required'
   if (!RISK_UNIT_ASSOCIATIONS.includes(payload.riskUnitAssociation as any)) return 'riskUnitAssociation is invalid'
+  const criteria = payload.endorsementChangeCriteria as any
+  if (criteria.match != null && !['any', 'all'].includes(criteria.match)) return 'endorsementChangeCriteria.match is invalid'
+  if (criteria.alwaysAttachOnEndorsement != null && typeof criteria.alwaysAttachOnEndorsement !== 'boolean') {
+    return 'endorsementChangeCriteria.alwaysAttachOnEndorsement must be a boolean'
+  }
+  for (const field of ['coverageCodes', 'changeTypes', 'changedPathPatterns']) {
+    if (criteria[field] != null && !Array.isArray(criteria[field])) return `endorsementChangeCriteria.${field} must be an array`
+  }
+  if (Array.isArray(criteria.changeTypes) && criteria.changeTypes.some((value: unknown) => !['added', 'removed', 'modified'].includes(String(value)))) {
+    return 'endorsementChangeCriteria.changeTypes contains an invalid value'
+  }
   return null
 }
 

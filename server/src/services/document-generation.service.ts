@@ -25,6 +25,24 @@ export type PolicyDocumentContext = {
   effectiveDate: string
   generatedBy?: string | null
   correlationId?: string | null
+  endorsementChanges?: EndorsementChangeSet | null
+}
+
+export type EndorsementChangeType = 'added' | 'removed' | 'modified'
+
+export type EndorsementChangeSet = {
+  changedPaths: string[]
+  addedCoverageCodes: string[]
+  removedCoverageCodes: string[]
+  modifiedCoverageCodes: string[]
+}
+
+export type EndorsementChangeCriteria = {
+  alwaysAttachOnEndorsement?: boolean
+  match?: 'any' | 'all'
+  coverageCodes?: string[]
+  changeTypes?: EndorsementChangeType[]
+  changedPathPatterns?: string[]
 }
 
 export type SelectedPolicyForm = {
@@ -78,6 +96,10 @@ function normalizeText(value: unknown): string {
 function normalizeTransactionType(type: string): string {
   const normalized = normalizeText(type).toLowerCase()
   if (normalized === 'issue' || normalized === 'newbusiness' || normalized === 'new_business') return 'nb'
+  if (normalized === 'endorsement') return 'endorse'
+  if (normalized === 'cancellation') return 'cancel'
+  if (normalized === 'reinstatement') return 'reinstate'
+  if (normalized === 'renewal') return 'renew'
   if (normalized === 'nonrenewal' || normalized === 'non-renewal' || normalized === 'non_renewal') return 'nonrenewal'
   return normalized
 }
@@ -99,6 +121,79 @@ function editionToString(value: unknown): string | null {
   return String(value).slice(0, 10)
 }
 
+function coverageMap(payload: any): Map<string, any> {
+  const entries = Array.isArray(payload?.coverages) ? payload.coverages : []
+  const result = new Map<string, any>()
+  for (const coverage of entries) {
+    const code = normalizeText(coverage?.code || coverage?.coverageCode).toUpperCase()
+    if (code) result.set(code, coverage)
+  }
+  return result
+}
+
+export function buildEndorsementChangeSet(
+  previousPayload: any,
+  nextPayload: any,
+  changedPaths: string[] = []
+): EndorsementChangeSet {
+  const previous = coverageMap(previousPayload)
+  const next = coverageMap(nextPayload)
+  const addedCoverageCodes: string[] = []
+  const removedCoverageCodes: string[] = []
+  const modifiedCoverageCodes: string[] = []
+
+  for (const [code, coverage] of next) {
+    if (!previous.has(code)) addedCoverageCodes.push(code)
+    else if (stableStringify(previous.get(code)) !== stableStringify(coverage)) modifiedCoverageCodes.push(code)
+  }
+  for (const code of previous.keys()) {
+    if (!next.has(code)) removedCoverageCodes.push(code)
+  }
+
+  return {
+    changedPaths: [...new Set(changedPaths.map(normalizeText).filter(Boolean))].sort(),
+    addedCoverageCodes: addedCoverageCodes.sort(),
+    removedCoverageCodes: removedCoverageCodes.sort(),
+    modifiedCoverageCodes: modifiedCoverageCodes.sort(),
+  }
+}
+
+function pathMatches(pattern: string, path: string): boolean {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
+  return new RegExp(`^${escaped}$`).test(path)
+}
+
+export function matchesEndorsementChanges(
+  criteria: EndorsementChangeCriteria | null | undefined,
+  changes: EndorsementChangeSet | null | undefined
+): boolean {
+  if (!criteria || typeof criteria !== 'object') return false
+  if (criteria.alwaysAttachOnEndorsement === true) return true
+  if (!changes) return false
+
+  const coverageCodes = (criteria.coverageCodes || []).map((code) => normalizeText(code).toUpperCase()).filter(Boolean)
+  const changeTypes = (criteria.changeTypes || []).filter((type) => ['added', 'removed', 'modified'].includes(type))
+  const pathPatterns = (criteria.changedPathPatterns || []).map(normalizeText).filter(Boolean)
+  if (!coverageCodes.length && !changeTypes.length && !pathPatterns.length) return false
+
+  const changedByType: Record<EndorsementChangeType, string[]> = {
+    added: changes.addedCoverageCodes,
+    removed: changes.removedCoverageCodes,
+    modified: changes.modifiedCoverageCodes,
+  }
+  const changedCoverageCodes = new Set(Object.values(changedByType).flat())
+  const checks: boolean[] = []
+  if (coverageCodes.length && changeTypes.length) {
+    checks.push(changeTypes.some((type) => coverageCodes.some((code) => changedByType[type].includes(code))))
+  } else if (coverageCodes.length) {
+    checks.push(coverageCodes.some((code) => changedCoverageCodes.has(code)))
+  } else if (changeTypes.length) {
+    checks.push(changeTypes.some((type) => changedByType[type].length > 0))
+  }
+  if (pathPatterns.length) checks.push(pathPatterns.some((pattern) => changes.changedPaths.some((path) => pathMatches(pattern, path))))
+  return criteria.match === 'all' ? checks.every(Boolean) : checks.some(Boolean)
+}
+
 function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPolicyForm[]): GeneratedPolicyDocument[] {
   if (!forms.length) return []
   const generatedAt = new Date().toISOString()
@@ -115,6 +210,7 @@ function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPoli
     generatedAt,
     generatedBy: context.generatedBy || null,
     correlationId: context.correlationId || null,
+    endorsementChanges: context.endorsementChanges || null,
     visibility,
     customerSafe: visibility.includes('customer'),
     forms: forms.map((form) => ({
@@ -190,7 +286,7 @@ export async function selectPolicyForms(
 
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
-            a.transaction_types, o.output_format, o.packet_placement, o.sort_order,
+            a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
             d.visibility, j.state_code, j.regulatory_status, f.metadata
        FROM forms_admin_forms f
        JOIN forms_admin_applicability a
@@ -217,6 +313,8 @@ export async function selectPolicyForms(
   const seen = new Set<string>()
   for (const row of adminRows.rows as any[]) {
     if (!matchesTransactionType(row.transaction_types, context.transactionType)) continue
+    if (normalizeTransactionType(context.transactionType) === 'endorse' &&
+        !matchesEndorsementChanges(row.endorsement_change_criteria, context.endorsementChanges)) continue
     if (state && row.state_code && !['approved', 'active', 'filed'].includes(String(row.regulatory_status || '').toLowerCase())) continue
     const code = normalizeText(row.form_number)
     if (!code || seen.has(`admin:${row.form_id}`)) continue
@@ -239,6 +337,7 @@ export async function selectPolicyForms(
         packetPlacement: row.packet_placement || 'End',
         outputFormat: row.output_format || 'PDF',
         formMetadata: row.metadata || {},
+        endorsementChangeCriteria: row.endorsement_change_criteria || null,
       },
     })
   }
@@ -256,6 +355,8 @@ export async function selectPolicyForms(
   for (const row of catalogRows.rows as any[]) {
     const applicability = row.applicability || {}
     if (!matchesTransactionType(applicability.transactionTypes || applicability.transactions, context.transactionType)) continue
+    if (normalizeTransactionType(context.transactionType) === 'endorse' &&
+        !matchesEndorsementChanges(applicability.endorsementChanges, context.endorsementChanges)) continue
     const formState = normalizeText(row.jurisdiction?.state || row.jurisdiction?.region || applicability.state).toUpperCase()
     if (state && formState && formState !== state) continue
     const code = normalizeText(row.code)
@@ -278,6 +379,7 @@ export async function selectPolicyForms(
       metadata: {
         source: 'forms_catalog',
         render: row.render || {},
+        endorsementChangeCriteria: applicability.endorsementChanges || null,
       },
     })
   }

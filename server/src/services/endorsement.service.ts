@@ -28,6 +28,11 @@ import { validatePolicyTransactionState, type PolicyTransactionAction } from '..
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
+import {
+  buildEndorsementChangeSet,
+  buildPolicyDocumentPacket,
+  persistPolicyDocumentPacket,
+} from './document-generation.service.js'
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -873,15 +878,27 @@ export async function executeEndorsement(
     lastTimelineVersion: timelineVersion,
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
+  const endorsementChanges = buildEndorsementChangeSet(
+    prevPayload,
+    newPayload,
+    changes.map((entry: any) => typeof entry === 'string' ? entry : entry.path).filter(Boolean),
+  )
+  const documentContext = {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Endorse' as const,
+    transactionNumber,
+    productCode: policyField(policyRow, 'productCode', 'product_code') || newPayload?.productCode,
+    state: newPayload?.state || newPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+    endorsementChanges,
+  }
+  const documentPacket = await buildPolicyDocumentPacket(q, documentContext)
 
-  // Intentional no-op: endorsement document/form generation is not wired to
-  // document-generation.service.ts yet. Endorsements only touch specific
-  // coverages (see `changes` above), and form applicability rules in
-  // forms_admin_applicability / forms_catalog are not currently coverage-diff
-  // aware, so a generic product/state/transaction-type packet would attach
-  // the same forms regardless of which coverage actually changed. Wire this
-  // up once coverage-diff-aware form selection exists (see issue #89 task
-  // note for details and the follow-up issue reference).
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -895,8 +912,8 @@ export async function executeEndorsement(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     effectiveDate: eff,
     processedAt,
@@ -939,6 +956,8 @@ export async function executeEndorsement(
     baseTimelineVersion,
     timelineVersion,
   })
+
+  await persistPolicyDocumentPacket(db, documentContext, documentPacket)
 
   if (referralId) {
     await q(
