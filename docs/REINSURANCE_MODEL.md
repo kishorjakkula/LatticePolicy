@@ -111,6 +111,13 @@ market participants are copied to new IDs under the new version. Attempting
 to edit an already-superseded ID returns a conflict so concurrent or stale
 administrative edits cannot fork a version chain.
 
+The patch may include a complete `layers` array to replace layer terms and
+market participants in the new version. Participant shares are validated per
+layer: each share must be greater than zero and at most 100%, and the layer's
+total may not exceed 100%. Omitting `layers` copies the previous version's
+children unchanged. `GET /treaties` includes participants nested under each
+layer so the admin editor can round-trip the complete structure.
+
 The optional `effectiveDate` patch field controls when the new version starts.
 Callers should provide it for prospective changes. When omitted, the previous
 effective date is retained for backward compatibility and the new version is
@@ -180,9 +187,8 @@ All routes are tenant-scoped and RBAC-gated (`admin.reinsurance.read` /
 
 ## Follow-Ups Or Known Gaps
 
-- No admin UI exists yet for editing layers/participants after treaty
-  creation, or for editing facultative certificate participants — only
-  initial creation is wired in the frontend (`ReinsurancePage.tsx`).
+- Facultative certificate participants can only be supplied during initial
+  creation; there is no certificate edit workflow yet.
 - No OFAC-style "import" mechanism for reinsurer/market reference data;
   reinsurer names are free text per participant row.
 - Layer stacking/attachment math (see above) is intentionally not modeled.

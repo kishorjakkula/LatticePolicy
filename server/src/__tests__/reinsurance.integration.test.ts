@@ -145,7 +145,22 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
       .expect(201)
 
     const updated = await authReq('patch', `/api/v1/admin/reinsurance/treaties/${created.body.treaty_id}`, token)
-      .send({ effectiveDate: '2026-07-01', brokerName: 'Updated Broker' })
+      .send({
+        effectiveDate: '2026-07-01',
+        brokerName: 'Updated Broker',
+        layers: [{
+          layerNumber: 1,
+          layerType: 'QUOTA_SHARE',
+          retentionAmount: 50000,
+          limitAmount: 250000,
+          cededPercent: 35,
+          retainedPercent: 65,
+          participants: [
+            { reinsurerName: 'Version Re', participationPercent: 60, isLead: true },
+            { reinsurerName: 'New Capacity Re', participationPercent: 40 }
+          ]
+        }]
+      })
       .expect(200)
 
     expect(updated.body).toMatchObject({ version: 2, broker_name: 'Updated Broker' })
@@ -169,7 +184,7 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
         WHERE l.tenant_id = $1 AND l.treaty_id = $2`,
       [tenantId, updated.body.treaty_id]
     )
-    expect(clonedChildren.rows[0]).toEqual({ layers: 1, participants: 1 })
+    expect(clonedChildren.rows[0]).toEqual({ layers: 1, participants: 2 })
 
     const past = await seedPolicyWithTransaction(`${run}-past`, productCode, 'NY', 1000, '2026-06-01')
     const pastPlacement = await authReq(
@@ -179,6 +194,7 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
     ).expect(200)
     expect(pastPlacement.body.items).toHaveLength(1)
     expect(pastPlacement.body.items[0].treatyId).toBe(created.body.treaty_id)
+    expect(pastPlacement.body.items[0]).toMatchObject({ cededPercent: 25, retainedPercent: 75 })
 
     const current = await seedPolicyWithTransaction(`${run}-current`, productCode, 'NY', 1000, '2026-08-01')
     const currentPlacement = await authReq(
@@ -188,11 +204,15 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
     ).expect(200)
     expect(currentPlacement.body.items).toHaveLength(1)
     expect(currentPlacement.body.items[0].treatyId).toBe(updated.body.treaty_id)
+    expect(currentPlacement.body.items[0]).toMatchObject({ cededPercent: 35, retainedPercent: 65 })
+    expect(currentPlacement.body.items[0].participants).toHaveLength(2)
 
     const listed = await authReq('get', '/api/v1/admin/reinsurance/treaties', token).expect(200)
     const listedVersions = listed.body.items.filter((item: any) => item.treaty_name === `Versioned Treaty ${run}`)
     expect(listedVersions).toHaveLength(1)
     expect(listedVersions[0].treaty_id).toBe(updated.body.treaty_id)
+    expect(listedVersions[0].layers[0].participants).toHaveLength(2)
+    expect(listedVersions[0].layers[0].participants[0]).toEqual(expect.objectContaining({ reinsurerName: 'Version Re' }))
   })
 
   it('does not match a treaty outside its product applicability', async () => {
@@ -287,6 +307,44 @@ describe('reinsurance treaty and facultative placement (database path)', () => {
         ]
       })
       .expect(400)
+  })
+
+  it('rejects a versioned layer edit when participant shares exceed 100%', async () => {
+    const run = suffix()
+    await createUser({ username: `reinsurance-edit-invalid-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`reinsurance-edit-invalid-${run}`)
+
+    const created = await authReq('post', '/api/v1/admin/reinsurance/treaties', token)
+      .send({
+        treatyName: `Invalid Edit ${run}`,
+        treatyType: 'QUOTA_SHARE',
+        effectiveDate: '2026-01-01',
+        expirationDate: '2027-01-01',
+        productCodes: [`invalid-edit-${run}`],
+        layers: [{ cededPercent: 50, retainedPercent: 50, participants: [] }]
+      })
+      .expect(201)
+
+    const rejected = await authReq('patch', `/api/v1/admin/reinsurance/treaties/${created.body.treaty_id}`, token)
+      .send({
+        effectiveDate: '2026-07-01',
+        layers: [{
+          cededPercent: 50,
+          retainedPercent: 50,
+          participants: [
+            { reinsurerName: 'A Re', participationPercent: 70 },
+            { reinsurerName: 'B Re', participationPercent: 40 }
+          ]
+        }]
+      })
+      .expect(400)
+    expect(rejected.body.code).toBe('REINSURANCE_INVALID_INPUT')
+
+    const versions = await getDb()!.query(
+      `SELECT count(*)::int AS count FROM reinsurance_treaties WHERE tenant_id = $1 AND treaty_name = $2`,
+      [tenantId, `Invalid Edit ${run}`]
+    )
+    expect(versions.rows[0].count).toBe(1)
   })
 
   it('denies treaty management to a user without admin.reinsurance.manage, and enforces tenant isolation on placements', async () => {
