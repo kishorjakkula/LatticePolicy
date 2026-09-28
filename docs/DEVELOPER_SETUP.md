@@ -76,6 +76,15 @@ are public build-time inputs rather than container runtime configuration. See
 [Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md) for
 the API URL shape, mock-mode guardrail, CORS pairing, and deployment examples.
 
+Local mode may use HTTP origins, demo credentials, and an in-memory API fallback
+when PostgreSQL is unavailable. Managed test, validation, staging, and
+production deployments instead fail fast on missing or unsafe configuration,
+require PostgreSQL, and do not allow database-free demo login. Do not copy the
+local `.env` values into a shared environment. See
+[Production runtime configuration](PRODUCTION_RUNTIME_CONFIGURATION.md) for the
+managed-environment boundary, required secrets, CORS rules, invite-only access,
+and deployment checks.
+
 ## Option 1: Full Docker Stack
 
 This is the fastest path for first-time contributors because it runs the database, cache, API, and UI together.
