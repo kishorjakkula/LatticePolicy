@@ -14,7 +14,7 @@ sync tooling, and package version metadata.
 - #100 Playwright E2E smoke tests in CI
 - #101 GitHub labels and milestones sync
 - #102 Release, versioning, changelog, and migration process
-- #104 License recognition
+- #104 License recognition (closed; GitHub now reports `Apache-2.0`)
 
 ## Files Changed
 
