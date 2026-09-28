@@ -8,11 +8,13 @@ import { ReinsurancePage } from '../ReinsurancePage'
 const useTreatiesMock = vi.fn()
 const useFacultativeCertificatesMock = vi.fn()
 const createTreatyMutateMock = vi.fn()
+const updateTreatyMutateMock = vi.fn()
 const createFacultativeMutateMock = vi.fn()
 
 vi.mock('../../../api/hooks', () => ({
   useTreaties: (...args: any[]) => useTreatiesMock(...args),
   useCreateTreatyMutation: () => ({ mutateAsync: createTreatyMutateMock, isPending: false }),
+  useUpdateTreatyMutation: () => ({ mutateAsync: updateTreatyMutateMock, isPending: false }),
   useFacultativeCertificates: (...args: any[]) => useFacultativeCertificatesMock(...args),
   useCreateFacultativeMutation: () => ({ mutateAsync: createFacultativeMutateMock, isPending: false }),
 }))
@@ -30,7 +32,11 @@ describe('ReinsurancePage', () => {
             status: 'Active',
             effective_date: '2026-01-01',
             expiration_date: '2027-01-01',
-            layers: [{ layerId: 'layer-1', layerNumber: 1, layerType: 'QUOTA_SHARE', cededPercent: '40', retainedPercent: '60' }],
+            layers: [{
+              layerId: 'layer-1', layerNumber: 1, layerType: 'QUOTA_SHARE', cededPercent: '40', retainedPercent: '60',
+              retentionAmount: '100000', limitAmount: '500000', premiumRate: null,
+              participants: [{ participantId: 'participant-1', reinsurerName: 'Acme Re', participationPercent: '60', isLead: true }],
+            }],
           },
         ],
       },
@@ -85,6 +91,47 @@ describe('ReinsurancePage', () => {
         })
       )
     })
+  })
+
+  it('edits layer terms and participant shares as a new treaty version', async () => {
+    const user = userEvent.setup()
+    render(<ReinsurancePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const ceded = screen.getByLabelText('Layer 1 ceded percent')
+    const share = screen.getByLabelText('Layer 1 participant 1 share')
+    await user.clear(ceded)
+    await user.type(ceded, '35')
+    await user.clear(share)
+    await user.type(share, '55')
+    await user.click(screen.getByRole('button', { name: 'Save Version' }))
+
+    await waitFor(() => {
+      expect(updateTreatyMutateMock).toHaveBeenCalledWith({
+        id: 'treaty-1',
+        patch: expect.objectContaining({
+          effectiveDate: '2026-01-01',
+          layers: [expect.objectContaining({
+            cededPercent: 35,
+            participants: [expect.objectContaining({ reinsurerName: 'Acme Re', participationPercent: 55 })],
+          })],
+        }),
+      })
+    })
+  })
+
+  it('rejects participant edits whose shares exceed 100%', async () => {
+    const user = userEvent.setup()
+    render(<ReinsurancePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Add Participant' }))
+    await user.type(screen.getByLabelText('Layer 1 participant 2 reinsurer'), 'Beta Re')
+    await user.type(screen.getByLabelText('Layer 1 participant 2 share'), '50')
+    await user.click(screen.getByRole('button', { name: 'Save Version' }))
+
+    expect(await screen.findByText(/total no more than 100%/)).toBeInTheDocument()
+    expect(updateTreatyMutateMock).not.toHaveBeenCalled()
   })
 
   it('switches to the facultative certificates tab', async () => {

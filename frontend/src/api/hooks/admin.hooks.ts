@@ -174,6 +174,16 @@ export function useCreateTreatyMutation() {
   })
 }
 
+export function useUpdateTreatyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: any }) => adminApi.updateTreaty(id, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] })
+    },
+  })
+}
+
 export function useFacultativeCertificates(policyId?: string) {
   return useQuery({
     queryKey: queryKeys.reinsurance.facultative(policyId),

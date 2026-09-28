@@ -40,7 +40,18 @@ reinsuranceAdminRoutes.get('/treaties', requirePermission('admin.reinsurance.rea
                 COALESCE(json_agg(json_build_object(
                   'layerId', l.layer_id, 'layerNumber', l.layer_number, 'layerType', l.layer_type,
                   'retentionAmount', l.retention_amount, 'limitAmount', l.limit_amount,
-                  'cededPercent', l.ceded_percent, 'retainedPercent', l.retained_percent
+                  'cededPercent', l.ceded_percent, 'retainedPercent', l.retained_percent,
+                  'premiumRate', l.premium_rate,
+                  'participants', COALESCE((
+                    SELECT json_agg(json_build_object(
+                      'participantId', p.participant_id, 'reinsurerName', p.reinsurer_name,
+                      'reinsurerReference', p.reinsurer_reference,
+                      'participationPercent', p.participation_percent,
+                      'brokerName', p.broker_name, 'isLead', p.is_lead
+                    ) ORDER BY p.is_lead DESC, p.participation_percent DESC)
+                    FROM reinsurance_market_participants p
+                    WHERE p.tenant_id = t.tenant_id AND p.layer_id = l.layer_id
+                  ), '[]'::json)
                 ) ORDER BY l.layer_number) FILTER (WHERE l.layer_id IS NOT NULL), '[]') AS layers
            FROM reinsurance_treaties t
            LEFT JOIN reinsurance_treaty_layers l ON l.treaty_id = t.treaty_id AND l.tenant_id = t.tenant_id
@@ -157,13 +168,40 @@ reinsuranceAdminRoutes.patch('/treaties/:id', requirePermission('admin.reinsuran
   const treatyId = routeParam(req.params.id)
   const body = req.body || {}
   try {
-    const updatableFields = ['effectiveDate', 'expirationDate', 'brokerName', 'brokerReference', 'productCodes', 'stateCodes', 'status']
+    const updatableFields = ['effectiveDate', 'expirationDate', 'brokerName', 'brokerReference', 'productCodes', 'stateCodes', 'status', 'layers']
     if (!updatableFields.some((field) => body[field] !== undefined)) {
       throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'No updatable fields provided')
     }
     if (body.status !== undefined) {
       if (!['Draft', 'Active', 'Expired', 'Cancelled'].includes(body.status)) {
         throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'status must be one of Draft, Active, Expired, Cancelled')
+      }
+    }
+    if (body.layers !== undefined) {
+      if (!Array.isArray(body.layers) || body.layers.length === 0) {
+        throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'At least one layer is required')
+      }
+      const layerNumbers = new Set<number>()
+      for (let i = 0; i < body.layers.length; i += 1) {
+        const layer = body.layers[i]
+        const layerNumber = Number(layer.layerNumber ?? i + 1)
+        if (!Number.isInteger(layerNumber) || layerNumber < 1 || layerNumbers.has(layerNumber)) {
+          throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'Layer numbers must be unique positive integers')
+        }
+        layerNumbers.add(layerNumber)
+        if (!Number.isFinite(Number(layer.cededPercent)) || !Number.isFinite(Number(layer.retainedPercent))) {
+          throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'Each layer requires cededPercent and retainedPercent')
+        }
+        const participants = Array.isArray(layer.participants) ? layer.participants : []
+        const validation = validateParticipantShares(
+          participants.map((participant: any) => ({ participationPercent: Number(participant.participationPercent) }))
+        )
+        if (!validation.valid) {
+          throw new BadRequestError('REINSURANCE_INVALID_INPUT', validation.error || 'Invalid participant shares')
+        }
+        if (participants.some((participant: any) => !String(participant.reinsurerName || '').trim())) {
+          throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'Each participant requires reinsurerName')
+        }
       }
     }
 
@@ -214,13 +252,24 @@ reinsuranceAdminRoutes.patch('/treaties/:id', requirePermission('admin.reinsuran
         ]
       )
 
-      const layers = await q(
+      const existingLayers = await q(
         `SELECT * FROM reinsurance_treaty_layers
           WHERE tenant_id = $1 AND treaty_id = $2
           ORDER BY layer_number`,
         [tenantId, treatyId]
       )
-      for (const layer of layers.rows) {
+      const layers = body.layers ?? existingLayers.rows.map((layer: any) => ({
+        layerNumber: layer.layer_number,
+        layerType: layer.layer_type,
+        retentionAmount: layer.retention_amount,
+        limitAmount: layer.limit_amount,
+        cededPercent: layer.ceded_percent,
+        retainedPercent: layer.retained_percent,
+        premiumRate: layer.premium_rate,
+        metadata: layer.metadata,
+        sourceLayerId: layer.layer_id
+      }))
+      for (const [index, layer] of layers.entries()) {
         const nextLayerId = uuidv4()
         await q(
           `INSERT INTO reinsurance_treaty_layers
@@ -228,21 +277,37 @@ reinsuranceAdminRoutes.patch('/treaties/:id', requirePermission('admin.reinsuran
               ceded_percent, retained_percent, premium_rate, metadata)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
           [
-            nextLayerId, tenantId, nextTreatyId, layer.layer_number, layer.layer_type,
-            layer.retention_amount, layer.limit_amount, layer.ceded_percent, layer.retained_percent,
-            layer.premium_rate, layer.metadata
+            nextLayerId, tenantId, nextTreatyId, layer.layerNumber ?? index + 1, layer.layerType ?? current.treaty_type,
+            layer.retentionAmount ?? null, layer.limitAmount ?? null, layer.cededPercent, layer.retainedPercent,
+            layer.premiumRate ?? null, layer.metadata ?? null
           ]
         )
-        await q(
-          `INSERT INTO reinsurance_market_participants
-             (participant_id, tenant_id, layer_id, reinsurer_name, reinsurer_reference,
-              participation_percent, broker_name, is_lead, metadata)
-           SELECT uuid_generate_v4(), tenant_id, $1, reinsurer_name, reinsurer_reference,
-                  participation_percent, broker_name, is_lead, metadata
-             FROM reinsurance_market_participants
-            WHERE tenant_id = $2 AND layer_id = $3`,
-          [nextLayerId, tenantId, layer.layer_id]
-        )
+        if (body.layers !== undefined) {
+          for (const participant of layer.participants ?? []) {
+            await q(
+              `INSERT INTO reinsurance_market_participants
+                 (participant_id, tenant_id, layer_id, reinsurer_name, reinsurer_reference,
+                  participation_percent, broker_name, is_lead, metadata)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+              [
+                uuidv4(), tenantId, nextLayerId, String(participant.reinsurerName).trim(),
+                participant.reinsurerReference || null, participant.participationPercent,
+                participant.brokerName || null, participant.isLead === true, participant.metadata ?? null
+              ]
+            )
+          }
+        } else {
+          await q(
+            `INSERT INTO reinsurance_market_participants
+               (participant_id, tenant_id, layer_id, reinsurer_name, reinsurer_reference,
+                participation_percent, broker_name, is_lead, metadata)
+             SELECT uuid_generate_v4(), tenant_id, $1, reinsurer_name, reinsurer_reference,
+                    participation_percent, broker_name, is_lead, metadata
+               FROM reinsurance_market_participants
+              WHERE tenant_id = $2 AND layer_id = $3`,
+            [nextLayerId, tenantId, layer.sourceLayerId]
+          )
+        }
       }
 
       await q(
