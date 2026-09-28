@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildPolicyDocumentPacket } from '../document-generation.service.js'
+import {
+  buildEndorsementChangeSet,
+  buildPolicyDocumentPacket,
+  matchesEndorsementChanges,
+} from '../document-generation.service.js'
 
 function createQuery(rowsByTable: Record<string, any[]>) {
   return async (text: string) => {
@@ -206,5 +210,63 @@ describe('document generation service', () => {
     })
     expect(packet.forms).toHaveLength(0)
     expect(packet.documents).toHaveLength(0)
+  })
+
+  it('normalizes coverage changes and evaluates conservative endorsement criteria', () => {
+    const changes = buildEndorsementChangeSet(
+      { coverages: [{ code: 'BI', limit: 100000 }, { code: 'PD', limit: 50000 }] },
+      { coverages: [{ code: 'BI', limit: 250000 }, { code: 'COMP', deductible: 500 }] },
+      ['/coverages/0/limit', '/coverages/1'],
+    )
+
+    expect(changes).toEqual({
+      changedPaths: ['/coverages/0/limit', '/coverages/1'],
+      addedCoverageCodes: ['COMP'],
+      removedCoverageCodes: ['PD'],
+      modifiedCoverageCodes: ['BI'],
+    })
+    expect(matchesEndorsementChanges(undefined, changes)).toBe(false)
+    expect(matchesEndorsementChanges({}, changes)).toBe(false)
+    expect(matchesEndorsementChanges({ coverageCodes: ['BI'], changeTypes: ['modified'], match: 'all' }, changes)).toBe(true)
+    expect(matchesEndorsementChanges({ coverageCodes: ['PD'], changeTypes: ['modified'], match: 'all' }, changes)).toBe(false)
+    expect(matchesEndorsementChanges({ changedPathPatterns: ['/coverages/*/limit'] }, changes)).toBe(true)
+    expect(matchesEndorsementChanges({ alwaysAttachOnEndorsement: true }, changes)).toBe(true)
+  })
+
+  it('attaches only forms whose endorsement criteria match the changed coverage', async () => {
+    const packet = await buildPolicyDocumentPacket(createQuery({
+      forms_admin_forms: [
+        {
+          form_id: '88888888-8888-4888-8888-888888888888', form_number: 'PA-BI-END',
+          form_title: 'BI Change', transaction_types: ['Endorse'],
+          endorsement_change_criteria: { coverageCodes: ['BI'] }, visibility: ['internal'],
+          state_code: 'CA', regulatory_status: 'Approved', sort_order: 10,
+        },
+        {
+          form_id: '99999999-9999-4999-8999-999999999999', form_number: 'PA-PD-END',
+          form_title: 'PD Change', transaction_types: ['Endorse'],
+          endorsement_change_criteria: { coverageCodes: ['PD'] }, visibility: ['internal'],
+          state_code: 'CA', regulatory_status: 'Approved', sort_order: 20,
+        },
+        {
+          form_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', form_number: 'PA-GENERIC-END',
+          form_title: 'Unscoped Endorsement', transaction_types: ['Endorse'],
+          endorsement_change_criteria: {}, visibility: ['internal'],
+          state_code: 'CA', regulatory_status: 'Approved', sort_order: 30,
+        },
+      ],
+    }), {
+      ...context,
+      transactionType: 'Endorse',
+      endorsementChanges: {
+        changedPaths: ['/coverages/0/limit'],
+        addedCoverageCodes: [], removedCoverageCodes: [], modifiedCoverageCodes: ['BI'],
+      },
+    })
+
+    expect(packet.forms.map((form) => form.code)).toEqual(['PA-BI-END'])
+    expect(packet.documents[0].metadata).toMatchObject({
+      endorsementChanges: { modifiedCoverageCodes: ['BI'] },
+    })
   })
 })
