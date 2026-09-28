@@ -147,14 +147,35 @@ export async function lookupPlacementMatches(
   }
 
   const treatyResult = await q(
-    `SELECT treaty_id, treaty_name, status, effective_date, expiration_date, product_codes, state_codes
+    `SELECT treaty_id, treaty_name, status, effective_date, expiration_date, product_codes, state_codes,
+            version, superseded_by
        FROM reinsurance_treaties
-      WHERE tenant_id = $1 AND status = 'Active'
-        AND $2 >= effective_date AND $2 < expiration_date`,
-    [query.tenantId, query.asOfDate]
+      WHERE tenant_id = $1`,
+    [query.tenantId]
   )
 
-  const applicableTreaties = treatyResult.rows.filter((t: any) =>
+  const predecessorById = new Map<string, string>()
+  for (const treaty of treatyResult.rows) {
+    if (treaty.superseded_by) predecessorById.set(treaty.superseded_by, treaty.treaty_id)
+  }
+  const rootId = (treatyId: string) => {
+    let current = treatyId
+    const visited = new Set<string>()
+    while (predecessorById.has(current) && !visited.has(current)) {
+      visited.add(current)
+      current = predecessorById.get(current)!
+    }
+    return current
+  }
+  const effectiveVersions = new Map<string, any>()
+  for (const treaty of treatyResult.rows) {
+    if (query.asOfDate < toIsoDate(treaty.effective_date)) continue
+    const root = rootId(treaty.treaty_id)
+    const selected = effectiveVersions.get(root)
+    if (!selected || Number(treaty.version) > Number(selected.version)) effectiveVersions.set(root, treaty)
+  }
+
+  const applicableTreaties = [...effectiveVersions.values()].filter((t: any) =>
     treatyApplies(
       {
         status: t.status,

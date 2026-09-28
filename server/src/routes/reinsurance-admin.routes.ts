@@ -3,7 +3,7 @@ import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { requirePermission } from '../auth.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { routeParam } from '../lib/utils.js'
-import { BadRequestError, NotFoundError } from '../errors/domain.errors.js'
+import { BadRequestError, ConflictError, NotFoundError } from '../errors/domain.errors.js'
 import {
   assertValidTreatyType,
   computePlacementForTransaction,
@@ -27,7 +27,7 @@ reinsuranceAdminRoutes.get('/treaties', requirePermission('admin.reinsurance.rea
   try {
     const rows = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      const clauses = ['t.tenant_id = $1']
+      const clauses = ['t.tenant_id = $1', 't.superseded_by IS NULL']
       const params: any[] = [tenantId]
       if (status) {
         clauses.push(`t.status = $2`)
@@ -157,44 +157,102 @@ reinsuranceAdminRoutes.patch('/treaties/:id', requirePermission('admin.reinsuran
   const treatyId = routeParam(req.params.id)
   const body = req.body || {}
   try {
-    const sets: string[] = []
-    const params: any[] = []
-    let idx = 1
-    const fieldMap: Array<[string, any]> = [
-      ['broker_name', body.brokerName],
-      ['broker_reference', body.brokerReference],
-      ['expiration_date', body.expirationDate],
-      ['product_codes', body.productCodes],
-      ['state_codes', body.stateCodes]
-    ]
-    for (const [column, value] of fieldMap) {
-      if (value !== undefined) {
-        sets.push(`${column} = $${idx}`)
-        params.push(value)
-        idx += 1
-      }
+    const updatableFields = ['effectiveDate', 'expirationDate', 'brokerName', 'brokerReference', 'productCodes', 'stateCodes', 'status']
+    if (!updatableFields.some((field) => body[field] !== undefined)) {
+      throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'No updatable fields provided')
     }
     if (body.status !== undefined) {
       if (!['Draft', 'Active', 'Expired', 'Cancelled'].includes(body.status)) {
         throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'status must be one of Draft, Active, Expired, Cancelled')
       }
-      sets.push(`status = $${idx}`)
-      params.push(body.status)
-      idx += 1
     }
-    sets.push(`updated_at = now()`)
-    if (sets.length === 1) throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'No updatable fields provided')
 
     const row = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
-      params.push(tenantId, treatyId)
-      const result = await q(
-        `UPDATE reinsurance_treaties SET ${sets.join(', ')} WHERE tenant_id = $${idx} AND treaty_id = $${idx + 1} RETURNING *`,
-        params
+      const currentResult = await q(
+        `SELECT * FROM reinsurance_treaties
+          WHERE tenant_id = $1 AND treaty_id = $2
+          FOR UPDATE`,
+        [tenantId, treatyId]
       )
-      return result.rows[0]
+      const current = currentResult.rows[0]
+      if (!current) throw new NotFoundError('REINSURANCE_NOT_FOUND', 'Treaty not found')
+      if (current.superseded_by) {
+        throw new ConflictError('REINSURANCE_VERSION_CONFLICT', 'Treaty version has already been superseded')
+      }
+
+      const effectiveDate = body.effectiveDate ?? current.effective_date
+      const expirationDate = body.expirationDate ?? current.expiration_date
+      if (String(expirationDate).slice(0, 10) <= String(effectiveDate).slice(0, 10)) {
+        throw new BadRequestError('REINSURANCE_INVALID_INPUT', 'expirationDate must be after effectiveDate')
+      }
+
+      const nextTreatyId = uuidv4()
+      const inserted = await q(
+        `INSERT INTO reinsurance_treaties
+           (treaty_id, tenant_id, program_id, treaty_name, treaty_type, status, effective_date, expiration_date,
+            version, broker_name, broker_reference, currency, product_codes, state_codes, metadata, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         RETURNING *`,
+        [
+          nextTreatyId,
+          tenantId,
+          current.program_id,
+          current.treaty_name,
+          current.treaty_type,
+          body.status ?? current.status,
+          effectiveDate,
+          expirationDate,
+          Number(current.version) + 1,
+          body.brokerName !== undefined ? body.brokerName : current.broker_name,
+          body.brokerReference !== undefined ? body.brokerReference : current.broker_reference,
+          current.currency,
+          body.productCodes !== undefined ? body.productCodes : current.product_codes,
+          body.stateCodes !== undefined ? body.stateCodes : current.state_codes,
+          current.metadata,
+          req.user?.id || null
+        ]
+      )
+
+      const layers = await q(
+        `SELECT * FROM reinsurance_treaty_layers
+          WHERE tenant_id = $1 AND treaty_id = $2
+          ORDER BY layer_number`,
+        [tenantId, treatyId]
+      )
+      for (const layer of layers.rows) {
+        const nextLayerId = uuidv4()
+        await q(
+          `INSERT INTO reinsurance_treaty_layers
+             (layer_id, tenant_id, treaty_id, layer_number, layer_type, retention_amount, limit_amount,
+              ceded_percent, retained_percent, premium_rate, metadata)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [
+            nextLayerId, tenantId, nextTreatyId, layer.layer_number, layer.layer_type,
+            layer.retention_amount, layer.limit_amount, layer.ceded_percent, layer.retained_percent,
+            layer.premium_rate, layer.metadata
+          ]
+        )
+        await q(
+          `INSERT INTO reinsurance_market_participants
+             (participant_id, tenant_id, layer_id, reinsurer_name, reinsurer_reference,
+              participation_percent, broker_name, is_lead, metadata)
+           SELECT uuid_generate_v4(), tenant_id, $1, reinsurer_name, reinsurer_reference,
+                  participation_percent, broker_name, is_lead, metadata
+             FROM reinsurance_market_participants
+            WHERE tenant_id = $2 AND layer_id = $3`,
+          [nextLayerId, tenantId, layer.layer_id]
+        )
+      }
+
+      await q(
+        `UPDATE reinsurance_treaties
+            SET superseded_by = $1, updated_at = now()
+          WHERE tenant_id = $2 AND treaty_id = $3`,
+        [nextTreatyId, tenantId, treatyId]
+      )
+      return inserted.rows[0]
     })
-    if (!row) throw new NotFoundError('REINSURANCE_NOT_FOUND', 'Treaty not found')
     res.json(row)
   } catch (err) {
     next(err)
