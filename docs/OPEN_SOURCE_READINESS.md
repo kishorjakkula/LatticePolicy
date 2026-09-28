@@ -1,6 +1,7 @@
 # Open Source Readiness
 
-This checklist tracks work needed before publishing the repository publicly.
+This checklist records the repository's public-release baseline and the checks
+maintainers should repeat before releases or major public announcements.
 
 ## Completed
 
@@ -12,7 +13,7 @@ This checklist tracks work needed before publishing the repository publicly.
 - Added generated `tmpclaude-*-cwd` files to `.gitignore`.
 - Removed local generated `tmpclaude-*-cwd` files from the workspace.
 - Ran non-breaking `npm audit fix`.
-- Split claims API/UI into a separate sibling project at `C:\JK\MVP\Claims`.
+- Split claims API/UI into a separate sibling Claims project.
 - Removed claims services from Policy workspaces, Docker Compose, production proxy routing, and public README.
 - Updated root build/test scripts to run sequentially to avoid local workspace fan-out memory failures.
 - Reviewed sample product, tenant, and contract seed data as synthetic/demo data.
@@ -48,7 +49,10 @@ This checklist tracks work needed before publishing the repository publicly.
 Current verification:
 
 - GitHub recognizes the repository license as Apache License 2.0 after the
-  canonical `LICENSE` normalization.
+  canonical `LICENSE` normalization. This was reconfirmed on 2026-09-27 from
+  the GitHub repository and license APIs, which both report SPDX identifier
+  `Apache-2.0`. Issue #104 is closed; it is historical work, not an open
+  publishing blocker.
 - `npm audit --audit-level=high` reports 0 vulnerabilities.
 - Main branch CI is green for build, frontend tests, server tests, typecheck,
   DB integration tests, Playwright E2E smoke tests, dependency audit, CodeQL,
@@ -56,7 +60,7 @@ Current verification:
 - v0.2.3 release validation is tracked in
   `docs/tasks/issue-194-v0.2.3-release-readiness.md`.
 
-## Before Publishing
+## Before Releases Or Public Announcements
 
 - Re-run `npm run security:audit`, `npm run test`, `npm run typecheck`, and `npm run build` from the repository root.
 - Re-run `npm run test:integration` and `npm run test:e2e:docker` before cutting a release.
