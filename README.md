@@ -110,6 +110,22 @@ Benefits:
 
 The framework should treat "portal" as an access pattern, not a separate product. A portal user is a user with a constrained identity link, constrained permissions, constrained routes, and constrained data projections over the shared policy administration domain.
 
+## Product Tour
+
+These screens use the local `sample-carrier` tenant and synthetic demo data.
+
+| Sign in | Policy search |
+| --- | --- |
+| ![LatticePolicy sign-in screen](docs/assets/screenshots/login.png) | ![Policy search with an in-force policy result](docs/assets/screenshots/policy-search.png) |
+
+| Policy lifecycle | Role-based security |
+| --- | --- |
+| ![In-force policy detail and lifecycle actions](docs/assets/screenshots/policy-detail.png) | ![Administration security role and permission mapping](docs/assets/screenshots/admin-security.png) |
+
+### Customer Portal
+
+![Customer-safe policy summary and coverage view](docs/assets/screenshots/customer-portal.png)
+
 ## Repository Layout
 
 ```text
