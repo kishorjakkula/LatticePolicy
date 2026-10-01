@@ -4,7 +4,7 @@
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/83
 - Project: https://github.com/users/kishorjakkula/projects/1
-- Pull request: pending
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/298
 
 ## Summary
 
