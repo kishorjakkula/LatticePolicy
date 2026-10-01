@@ -8,11 +8,12 @@ const REQUIRED_PRODUCTION_ENV = [
   'DATABASE_URL',
   'JWT_SECRET',
   'CUSTOMER_DATA_KEY',
+  'PII_LOOKUP_KEY',
   'MFA_TOKEN_SECRET',
   'ALLOWED_ORIGINS'
 ] as const
 
-const REQUIRED_SECRET_ENV = ['JWT_SECRET', 'CUSTOMER_DATA_KEY', 'MFA_TOKEN_SECRET'] as const
+const REQUIRED_SECRET_ENV = ['JWT_SECRET', 'CUSTOMER_DATA_KEY', 'PII_LOOKUP_KEY', 'MFA_TOKEN_SECRET'] as const
 const UNSAFE_SECRET_VALUES = new Set([
   'change-me',
   'change-me-please-use-a-long-random-string',

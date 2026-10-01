@@ -51,6 +51,7 @@ services:
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-local}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       CUSTOMER_DATA_KEY: ${CUSTOMER_DATA_KEY:-customer-data-key-for-local-docker-e2e}
+      PII_LOOKUP_KEY: ${PII_LOOKUP_KEY:-pii-lookup-key-for-local-docker-e2e}
       MFA_TOKEN_SECRET: ${MFA_TOKEN_SECRET:-mfa-token-secret-for-local-docker-e2e}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
       PORT: 3000

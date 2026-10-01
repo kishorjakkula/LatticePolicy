@@ -1,4 +1,4 @@
-type RouteDef = {
+export type RouteDef = {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete'
   path: string
   tag: string
@@ -7,7 +7,7 @@ type RouteDef = {
   requiresAuth?: boolean
 }
 
-const routeDefs: RouteDef[] = [
+export const routeDefs: RouteDef[] = [
   { method: 'get', path: '/health', tag: 'System', summary: 'Health check', requiresAuth: false, requiresTenant: false },
   { method: 'post', path: '/auth/login', tag: 'Auth', summary: 'Login', requiresAuth: false, requiresTenant: false },
   { method: 'post', path: '/auth/mfa/verify', tag: 'Auth', summary: 'Verify MFA', requiresAuth: false, requiresTenant: false },
@@ -716,6 +716,11 @@ const operationOverrides: Record<string, any> = {
 }
 
 export function buildOpenApiSpec(serverUrl: string) {
+  const routeKeys = routeDefs.map((route) => `${route.method.toUpperCase()} ${route.path}`)
+  const duplicates = routeKeys.filter((key, index) => routeKeys.indexOf(key) !== index)
+  if (duplicates.length) throw new Error(`Duplicate OpenAPI routes: ${Array.from(new Set(duplicates)).join(', ')}`)
+  const staleOverrides = Object.keys(operationOverrides).filter((key) => !routeKeys.includes(key))
+  if (staleOverrides.length) throw new Error(`OpenAPI overrides reference missing routes: ${staleOverrides.join(', ')}`)
   const paths: Record<string, any> = {}
   for (const route of routeDefs) {
     const path = route.path

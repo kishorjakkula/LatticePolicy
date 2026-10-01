@@ -66,6 +66,10 @@
           "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/customer-data-key"
         },
         {
+          "name": "PII_LOOKUP_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/pii-lookup-key"
+        },
+        {
           "name": "MFA_TOKEN_SECRET",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:111111111111:secret:lattice-policy/mfa-token-secret"
         },

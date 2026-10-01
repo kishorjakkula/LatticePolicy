@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { config } from '../../config'
@@ -18,6 +18,29 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const nav = useNavigate()
   const { login } = useAuth()
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== new URL(config.apiBaseUrl).origin) return
+      if (event.data?.type === 'lattice:sso:error') {
+        setError(String(event.data?.message || 'Single sign-on could not be completed'))
+        return
+      }
+      if (event.data?.type !== 'lattice:sso' || !event.data?.token || !event.data?.user) return
+      finishLogin(event.data.token, event.data.user, tenantId)
+    }
+    if (config.apiBaseUrl) window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [tenantId])
+
+  const startSso = () => {
+    setError(null)
+    if (!config.apiBaseUrl) return setError('SSO requires a configured API')
+    const tenant = tenantId.trim()
+    if (!tenant) return setError('Organization slug is required')
+    const popup = window.open(`${config.apiBaseUrl}/auth/sso/${encodeURIComponent(tenant)}/login?flow=popup`, 'lattice-sso', 'popup,width=520,height=720')
+    if (!popup) setError('Allow popups to continue with single sign-on')
+  }
 
   const resetMfaFlow = () => {
     setMfaStep('credentials')
@@ -195,6 +218,9 @@ export function LoginPage() {
             )}
           </div>
         </form>
+        {mfaStep === 'credentials' && config.apiBaseUrl && !config.useMock && (
+          <button type="button" className="btn secondary" onClick={startSso} disabled={loading}>Continue with SSO</button>
+        )}
         {mfaStep === 'credentials' && (
           <div className="login-demo-box">
             <strong>Demo Credentials</strong>

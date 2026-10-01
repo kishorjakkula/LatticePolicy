@@ -44,7 +44,10 @@ jobs:
             AZURE_CONTAINER_REGISTRY
             AZURE_CONTAINER_APP_API
             AZURE_CONTAINER_APP_FRONTEND
+            AZURE_CONTAINER_APP_MIGRATION_JOB
             VITE_API_BASE_URL
+            TEST_API_HEALTH_URL
+            TEST_FRONTEND_URL
           )
 
           missing=0
@@ -106,11 +109,23 @@ jobs:
           echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       - name: Run migration job
-        if: ${{ env.AZURE_CONTAINER_APP_MIGRATION_JOB != '' }}
         run: |
-          az containerapp job start \
+          execution_name=$(az containerapp job start \
             --name "$AZURE_CONTAINER_APP_MIGRATION_JOB" \
-            --resource-group "$AZURE_RESOURCE_GROUP"
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query name --output tsv)
+          for attempt in $(seq 1 60); do
+            status=$(az containerapp job execution show \
+              --name "$execution_name" \
+              --job-name "$AZURE_CONTAINER_APP_MIGRATION_JOB" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query properties.status --output tsv)
+            [ "$status" = "Succeeded" ] && exit 0
+            [ "$status" = "Failed" ] && exit 1
+            sleep 10
+          done
+          echo "Migration job timed out"
+          exit 1
 
       - name: Deploy API container app
         run: |
@@ -127,11 +142,10 @@ jobs:
             --image "${{ steps.frontend-image.outputs.image }}"
 
       - name: Smoke test API health
-        if: ${{ env.TEST_API_HEALTH_URL != '' }}
         run: |
-          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL"
+          body=$(curl --fail --silent --show-error --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL")
+          echo "$body" | grep -q '"status":"ok"'
 
       - name: Smoke test frontend
-        if: ${{ env.TEST_FRONTEND_URL != '' }}
         run: |
           curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_FRONTEND_URL"

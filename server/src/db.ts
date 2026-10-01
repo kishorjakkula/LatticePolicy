@@ -102,31 +102,48 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   await pool.query('ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS name text')
 }
 
-async function runMigrations() {
+const MIGRATION_LOCK_ID = 734_284_921
+
+export async function runMigrations() {
   if (!pool) return
   if (!fs.existsSync(MIGRATIONS_DIR)) return
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(file => /^\d+_.+\.sql$/i.test(file))
-    .sort()
+  const client = await pool.connect()
+  await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID])
 
-  for (const file of files) {
-    const version = parseInt(file.split('_')[0], 10)
-    if (Number.isNaN(version)) continue
+  try {
+    const files = fs.readdirSync(MIGRATIONS_DIR)
+      .filter(file => /^\d+_.+\.sql$/i.test(file))
+      .sort()
 
-    const applied = await pool.query(
-      'SELECT 1 FROM schema_migrations WHERE tenant_id = $1 AND version = $2',
-      ['system', version]
-    )
-    if (((applied.rowCount ?? 0) > 0)) continue
+    for (const file of files) {
+      const version = parseInt(file.split('_')[0], 10)
+      if (Number.isNaN(version)) continue
 
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')
-    // simple mode allows multi-statement migration files (BEGIN/DO blocks, etc.)
-    const simpleQuery = { text: sql, simple: true } as any
-    await pool.query(simpleQuery)
-    await pool.query(
-      'INSERT INTO schema_migrations (tenant_id, version, name) VALUES ($1,$2,$3)',
-      ['system', version, file]
-    )
+      const applied = await client.query(
+        'SELECT 1 FROM schema_migrations WHERE tenant_id = $1 AND version = $2',
+        ['system', version]
+      )
+      if (((applied.rowCount ?? 0) > 0)) continue
+
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')
+      const transactionalSql = sql
+        .replace(/^\s*BEGIN\s*;?/i, '')
+        .replace(/COMMIT\s*;?\s*$/i, '')
+      await client.query('BEGIN')
+      try {
+        await client.query({ text: transactionalSql, simple: true } as any)
+        await client.query(
+          'INSERT INTO schema_migrations (tenant_id, version, name) VALUES ($1,$2,$3)',
+          ['system', version, file]
+        )
+        await client.query('COMMIT')
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      }
+    }
+  } finally {
+    try { await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]) } finally { client.release() }
   }
 }

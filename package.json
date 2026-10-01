@@ -35,6 +35,7 @@
     "build": "npm run build:frontend && npm run build:server",
     "test:frontend": "npm run test --workspace=frontend",
     "test:server": "npm run test --workspace=server",
+    "test:coverage": "npm run test:coverage --workspace=frontend && npm run test:coverage --workspace=server",
     "test:local": "npm run test:frontend && npm run test:server",
     "test": "sh scripts/test.sh",
     "test:docker": "sh scripts/test-docker.sh",

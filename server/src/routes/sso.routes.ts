@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { getSsoStateSecret } from '../config.js'
 import { loadTenantSsoConfig } from '../config/tenant-identity.js'
@@ -11,6 +11,15 @@ export const ssoRoutes = Router()
 type SsoStatePayload = {
   tenantId: string
   nonce: string
+  flow?: 'popup'
+}
+
+function sendPopupResult(res: Response, targetOrigin: string, payload: Record<string, unknown>) {
+  const serialized = JSON.stringify(payload).replace(/</g, '\\u003c')
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+  return res.send(`<!doctype html><html><body><script>window.opener.postMessage(${serialized}, ${JSON.stringify(targetOrigin)});window.close();</script></body></html>`)
 }
 
 /**
@@ -27,7 +36,8 @@ ssoRoutes.get('/:tenantId/login', async (req, res) => {
     return res.status(404).json({ code: 'SSO_NOT_CONFIGURED', message: 'Single sign-on is not enabled for this tenant' })
   }
   const nonce = generateState()
-  const statePayload: SsoStatePayload = { tenantId, nonce }
+  const flow = String(req.query.flow || '') === 'popup' ? 'popup' : undefined
+  const statePayload: SsoStatePayload = { tenantId, nonce, flow }
   const state = jwt.sign(statePayload, getSsoStateSecret(), { expiresIn: '10m' })
   const url = buildAuthorizationUrl(ssoConfig, { state, nonce })
   return res.redirect(url)
@@ -38,9 +48,8 @@ ssoRoutes.get('/:tenantId/login', async (req, res) => {
  * the id_token against the tenant's JWKS, maps claims to internal roles, and
  * issues a normal LatticePolicy JWT the same shape /auth/login returns.
  *
- * Returns JSON rather than a browser redirect with a token fragment; wiring
- * this into the frontend SPA (popup or redirect-with-fragment handoff) is a
- * follow-up — see docs/tasks/issue-65-enterprise-identity-security.md.
+ * Popup flows hand the normal application token directly to the configured
+ * frontend origin. Non-popup clients receive the JSON response.
  */
 ssoRoutes.get('/:tenantId/callback', async (req, res) => {
   const tenantId = String(req.params.tenantId || '').trim()
@@ -73,6 +82,10 @@ ssoRoutes.get('/:tenantId/callback', async (req, res) => {
 
     const roles = mapOidcClaimsToRoles(ssoConfig, claims as Record<string, unknown>)
     if (!roles.length) {
+      if (statePayload.flow === 'popup') {
+        const targetOrigin = String(process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).find(Boolean)
+        if (targetOrigin) return sendPopupResult(res, targetOrigin, { type: 'lattice:sso:error', message: 'No application role is assigned to this account' })
+      }
       return res.status(403).json({ code: 'SSO_NO_ROLE_MAPPING', message: 'No tenant role could be mapped from identity provider claims' })
     }
 
@@ -80,8 +93,17 @@ ssoRoutes.get('/:tenantId/callback', async (req, res) => {
     const base = await findOrCreateSsoUser({ tenantId, externalSubject: subject, username, roles })
     const user = await buildAuthUser({ id: base.id, username: base.username, tenantId, roles: base.roles })
     const token = issueToken(user)
+    if (statePayload.flow === 'popup') {
+      const targetOrigin = String(process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).find(Boolean)
+      if (!targetOrigin) return res.status(500).json({ code: 'SSO_ORIGIN_REQUIRED', message: 'SSO popup requires an allowed frontend origin' })
+      return sendPopupResult(res, targetOrigin, { type: 'lattice:sso', token, user })
+    }
     return res.json({ token, user })
   } catch (err: any) {
+    if (statePayload.flow === 'popup') {
+      const targetOrigin = String(process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).find(Boolean)
+      if (targetOrigin) return sendPopupResult(res, targetOrigin, { type: 'lattice:sso:error', message: 'Single sign-on could not be completed' })
+    }
     return res.status(401).json({ code: 'SSO_AUTHENTICATION_FAILED', message: String(err?.message || err) })
   }
 })
