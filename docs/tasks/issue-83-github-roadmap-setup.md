@@ -3,15 +3,16 @@
 ## Links
 
 - Issue: https://github.com/kishorjakkula/LatticePolicy/issues/83
-- Pull request:
+- Project: https://github.com/users/kishorjakkula/projects/1
+- Pull request: pending
 
 ## Summary
 
-Issue #83 needs the GitHub roadmap planning structure to be repeatable and
-visible to contributors. This change adds repo-owned definitions for labels and
-milestones plus a maintainer guide for creating the GitHub Project board,
-triaging issues, and keeping Wiki functionality pages synchronized with merged
-development.
+Issue #83 establishes a repeatable GitHub roadmap planning structure visible
+to contributors. The public Project contains every open roadmap issue and epic,
+with fields for status, priority, readiness, domain, size, and owner. The
+repo-owned label and milestone definitions remain the source for issue
+metadata, while the documentation links directly to the live board.
 
 ## Important Files
 
@@ -21,6 +22,7 @@ development.
 - `docs/GITHUB_ROADMAP_SETUP.md`: maintainer-facing setup and triage process.
 - `docs/ROADMAP.md`: links roadmap execution to the GitHub setup guide.
 - `README.md`: exposes the setup guide from the documentation index.
+- GitHub Project #1: public planning data for all open roadmap work.
 
 ## Behavior Rules
 
@@ -42,10 +44,12 @@ development.
 
 ```bash
 git diff --check
+DRY_RUN=1 GITHUB_REPOSITORY=kishorjakkula/LatticePolicy npm run sync:github-roadmap
 ```
 
 ## Follow-Ups Or Risks
 
-- GitHub Projects, labels, and milestones still need to be created/applied in
-  GitHub using the definitions added here.
-- Add the public Project URL to `docs/ROADMAP.md` after the board exists.
+- GitHub Project custom views are maintained in the GitHub UI; the default
+  table and configured fields support filtering by domain, readiness, and
+  priority without additional repository changes.
+- Keep new roadmap issues synchronized with the project during triage.
