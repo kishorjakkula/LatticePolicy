@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { logSensitiveAccess, type SensitiveAccessContext } from './security-audit.js'
 
 const CUSTOMER_DATA_KEY = process.env.CUSTOMER_DATA_KEY || process.env.JWT_SECRET || 'lattice-policy-customer-dev-key'
+const PII_LOOKUP_KEY = process.env.PII_LOOKUP_KEY || `${CUSTOMER_DATA_KEY}-lookup`
 
 function deriveKey(secret: string): Buffer {
   return crypto.createHash('sha256').update(secret).digest()
@@ -19,7 +20,7 @@ export function normalizeSensitiveValue(value: unknown): string {
 export function hashSensitiveValue(value: unknown): string | null {
   const normalized = normalizeSensitiveValue(value)
   if (!normalized) return null
-  return crypto.createHash('sha256').update(normalized).digest('hex')
+  return crypto.createHmac('sha256', PII_LOOKUP_KEY).update(normalized).digest('hex')
 }
 
 export function encryptSensitiveValue(value: unknown): string | null {

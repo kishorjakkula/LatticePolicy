@@ -44,6 +44,9 @@ jobs:
       - name: Test server
         run: npm run test:server
 
+      - name: Enforce coverage thresholds
+        run: npm run test:coverage
+
       - name: Typecheck
         run: npm run typecheck
 

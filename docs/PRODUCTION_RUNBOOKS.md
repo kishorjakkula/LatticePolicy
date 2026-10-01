@@ -41,25 +41,19 @@ Do not promote a tag until:
 ## Migration Execution And Rollback
 
 Migrations live under `server/migrations/` as numbered, forward-only SQL
-files (`NNN_description.sql`). They are **not** run as a separate CLI step —
-`initDb()` in `server/src/db.ts` runs `runMigrations()` automatically on API
-process startup: it reads `server/migrations/`, checks the `schema_migrations`
-tracking table for versions already applied, and executes any new migration
-files in numeric order inside a single `pool.query` per file.
+files (`NNN_description.sql`). Run them deliberately with
+`npm run migrate --workspace=server` before API rollout. API startup also runs
+the same migration code as a safety net.
 
 Operational implications:
 
 - **No down-migrations exist.** There is no automated rollback of a schema
   change. Treat every migration as one-way.
-- **Do not run multiple API replicas against an unmigrated database
-  simultaneously.** Because migrations run at process boot with no
-  distributed lock, a rolling deploy where several replicas start against the
-  same empty/partial `schema_migrations` state can race. For a multi-replica
-  production deployment, run migrations as a single, deliberate step (a
-  one-off task using the API image, or a CI/CD deployment stage with direct
-  database access — see [Cloud Deployment](CLOUD_DEPLOYMENT.md#database-migrations))
-  **before** starting or updating any replica, not by letting each replica
-  migrate itself.
+- **Migration runners are serialized with a PostgreSQL advisory lock.** Each
+  migration and its tracking row commit atomically, so concurrent replicas
+  cannot apply one version twice and failed files are never recorded as
+  successful. Cloud deployment jobs should still complete the dedicated
+  migration command before updating API replicas.
 - **Review every new migration file for tenant isolation and repeatability**
   before it ships in a release, per [Release Process](RELEASE_PROCESS.md#migration-compatibility).
 

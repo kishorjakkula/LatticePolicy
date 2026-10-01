@@ -1,0 +1,43 @@
+name: Disaster Recovery Restore Drill
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 1 */3 *"
+
+permissions:
+  contents: read
+
+jobs:
+  restore-and-validate:
+    runs-on: ubuntu-latest
+    environment: disaster-recovery
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Restore backup into isolated drill database
+        env:
+          RESTORE_COMMAND: ${{ secrets.RESTORE_COMMAND }}
+          RESTORE_DATABASE_URL: ${{ secrets.RESTORE_DATABASE_URL }}
+        run: |
+          test -n "$RESTORE_COMMAND" || { echo "RESTORE_COMMAND is required"; exit 1; }
+          bash -euo pipefail -c "$RESTORE_COMMAND"
+          test -s restore-metadata.json || { echo "Restore adapter must write restore-metadata.json with restorePoint"; exit 1; }
+      - name: Validate isolated restored database
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.RESTORE_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          RESTORE_METADATA_FILE: restore-metadata.json
+        run: npm run validate:restore --workspace=server | tee restore-drill-evidence.json
+      - name: Publish restore evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: restore-drill-evidence-${{ github.run_id }}
+          path: |
+            restore-drill-evidence.json
+            restore-metadata.json
+          retention-days: 365

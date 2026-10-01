@@ -29,6 +29,7 @@ or configuration service:
 | `DATABASE_URL` | PostgreSQL connection string. Startup exits if the database cannot initialize. |
 | `JWT_SECRET` | Unique, non-placeholder secret of at least 32 characters. |
 | `CUSTOMER_DATA_KEY` | Unique, non-placeholder secret of at least 32 characters, separate from signing secrets. |
+| `PII_LOOKUP_KEY` | Unique secret used only for keyed PII lookup tokens; keep separate from encryption and signing keys. |
 | `MFA_TOKEN_SECRET` | Unique, non-placeholder secret of at least 32 characters. |
 | `ALLOWED_ORIGINS` | Comma-separated list of explicit HTTPS frontend origins. Wildcards, HTTP, localhost, and invalid URLs are rejected. |
 
@@ -61,6 +62,7 @@ DEPLOYMENT_ENV=staging
 DATABASE_URL=<secret-store-reference>
 JWT_SECRET=<unique-secret-store-reference>
 CUSTOMER_DATA_KEY=<different-secret-store-reference>
+PII_LOOKUP_KEY=<separate-pii-lookup-secret-reference>
 MFA_TOKEN_SECRET=<different-secret-store-reference>
 ALLOWED_ORIGINS=https://app.example.com
 CACHE_ENABLED=1
@@ -105,4 +107,3 @@ See [Cloud Deployment](CLOUD_DEPLOYMENT.md) for provider architecture and
   not supported.
 - **A browser request is blocked by CORS:** make `ALLOWED_ORIGINS` exactly match
   the frontend's public HTTPS origin, including scheme and port when present.
-

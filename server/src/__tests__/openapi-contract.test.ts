@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { buildOpenApiSpec } from '../openapi.js'
+import { buildOpenApiSpec, routeDefs } from '../openapi.js'
 
 describe('OpenAPI contract drift checks', () => {
   const spec = buildOpenApiSpec('http://localhost:3300') as any
+
+  it('keeps route keys and generated operation ids unique', () => {
+    const routeKeys = routeDefs.map((route) => `${route.method} ${route.path}`)
+    expect(new Set(routeKeys).size).toBe(routeKeys.length)
+    const operationIds = Object.values(spec.paths).flatMap((path: any) =>
+      Object.values(path).map((operation: any) => operation.operationId),
+    )
+    expect(new Set(operationIds).size).toBe(operationIds.length)
+  })
 
   it('documents standard traceable error responses', () => {
     expect(spec.components.schemas.ErrorResponse).toMatchObject({

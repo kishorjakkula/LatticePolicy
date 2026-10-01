@@ -13,6 +13,7 @@ import {
 const ORIGINAL_ENV = { ...process.env }
 const SAFE_JWT_SECRET = 'jwt-secret-for-production-runtime-tests-12345'
 const SAFE_CUSTOMER_DATA_KEY = 'customer-data-key-for-production-tests-12345'
+const SAFE_PII_LOOKUP_KEY = 'pii-lookup-key-for-production-tests-123456'
 const SAFE_MFA_TOKEN_SECRET = 'mfa-token-secret-for-production-tests-12345'
 
 beforeEach(() => {
@@ -24,6 +25,7 @@ beforeEach(() => {
   delete process.env.DEMO_ALLOWED_USERS
   delete process.env.DEPLOYMENT_ENV
   delete process.env.REDIS_URL
+  process.env.PII_LOOKUP_KEY = SAFE_PII_LOOKUP_KEY
 })
 
 afterEach(() => {
@@ -36,12 +38,13 @@ describe('runtime config', () => {
     delete process.env.DATABASE_URL
     delete process.env.JWT_SECRET
     delete process.env.CUSTOMER_DATA_KEY
+    delete process.env.PII_LOOKUP_KEY
     delete process.env.MFA_TOKEN_SECRET
     delete process.env.ALLOWED_ORIGINS
 
     expect(validateDeploymentConfig()).toEqual({
       ok: false,
-      missing: ['DATABASE_URL', 'JWT_SECRET', 'CUSTOMER_DATA_KEY', 'MFA_TOKEN_SECRET', 'ALLOWED_ORIGINS'],
+      missing: ['DATABASE_URL', 'JWT_SECRET', 'CUSTOMER_DATA_KEY', 'PII_LOOKUP_KEY', 'MFA_TOKEN_SECRET', 'ALLOWED_ORIGINS'],
       invalid: []
     })
   })
@@ -76,13 +79,14 @@ describe('runtime config', () => {
     delete process.env.DATABASE_URL
     delete process.env.JWT_SECRET
     delete process.env.CUSTOMER_DATA_KEY
+    delete process.env.PII_LOOKUP_KEY
     delete process.env.MFA_TOKEN_SECRET
     delete process.env.ALLOWED_ORIGINS
 
     expect(isManagedDeployment()).toBe(true)
     expect(validateDeploymentConfig()).toEqual({
       ok: false,
-      missing: ['DATABASE_URL', 'JWT_SECRET', 'CUSTOMER_DATA_KEY', 'MFA_TOKEN_SECRET', 'ALLOWED_ORIGINS'],
+      missing: ['DATABASE_URL', 'JWT_SECRET', 'CUSTOMER_DATA_KEY', 'PII_LOOKUP_KEY', 'MFA_TOKEN_SECRET', 'ALLOWED_ORIGINS'],
       invalid: []
     })
   })
