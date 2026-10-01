@@ -211,6 +211,7 @@ collaboration opportunities with `help wanted`.
 - [AI contributor process](docs/AI_CONTRIBUTOR_PROCESS.md)
 - [First good tasks](docs/FIRST_GOOD_TASKS.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Public GitHub roadmap board](https://github.com/users/kishorjakkula/projects/1)
 - [Release process](docs/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
 - [GitHub roadmap setup](docs/GITHUB_ROADMAP_SETUP.md)

@@ -13,13 +13,17 @@ represent that roadmap in GitHub Issues, Projects, labels, and milestones.
 
 ## Project Board
 
-Create a GitHub Project named:
+The public project is
+[LatticePolicy Carrier & Reinsurance Roadmap](https://github.com/users/kishorjakkula/projects/1).
+It is the executable view of the repository roadmap.
+
+Project name:
 
 ```text
 LatticePolicy Carrier & Reinsurance Roadmap
 ```
 
-Recommended views:
+Useful views and filters:
 
 - Roadmap table: all open issues grouped by `Status`.
 - Pilot board: filter `Readiness = Pilot`.
@@ -27,7 +31,7 @@ Recommended views:
 - Contributor board: filter `good first issue` or `help wanted`.
 - Domain board: group by `Domain`.
 
-Recommended fields:
+Configured fields:
 
 | Field | Type | Values |
 | --- | --- | --- |
@@ -123,17 +127,18 @@ Suggested Wiki pages:
 - Production Readiness
 - Contribution Areas
 
-## Initial Setup Checklist
+## Setup Checklist
 
-- [ ] Create the GitHub Project board.
-- [ ] Add project fields and views.
+- [x] Create the public GitHub Project.
+- [x] Add Status, Priority, Readiness, Domain, Size, and Owner fields.
 - [ ] Enable public issue creation for the repository unless maintainers are
   intentionally running invite-only planning.
 - [x] Run the `Sync Roadmap Metadata` GitHub Actions workflow with
   `dry_run=false` to create or update labels from `.github/labels.yml` and
   milestones from `.github/milestones.yml`.
-- [ ] Apply labels and milestones to roadmap issues.
-- [ ] Link the Project board from `docs/ROADMAP.md` after the public URL exists.
+- [x] Apply labels and milestones to roadmap issues.
+- [x] Add all open roadmap issues and epics to the Project.
+- [x] Link the Project from `docs/ROADMAP.md` and the README.
 - [ ] Link stable Wiki pages from README after they are created.
 
 For local validation before running the workflow:
