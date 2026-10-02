@@ -20,6 +20,7 @@
     "rehash:pii": "tsx scripts/rehash-sensitive-lookups.ts"
   },
   "dependencies": {
+    "@lattice-policy/types": "0.2.3",
     "@sentry/node": "^10.75.0",
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",

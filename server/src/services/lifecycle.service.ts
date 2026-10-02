@@ -35,6 +35,7 @@ import {
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import {
   deriveTimelineSegments,
   findTimelineStateAtDate,
@@ -211,34 +212,7 @@ async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantI
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
+  return mapProductRiskKind(productCode, risk)
 }
 
 function summarizeRisk(risk: any): string {
@@ -301,6 +275,7 @@ export async function issuePolicy(
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = policyRes.rows[0]
+  requireProductCapability(String(policyRow.product_code || ''), 'issue')
   const transition = assertPolicyTransactionState('issue', policyRow.status)
   if (transition.idempotent) {
     return {
@@ -405,6 +380,7 @@ export async function cancelPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'cancel')
   assertPolicyTransactionState('cancel', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
@@ -682,6 +658,7 @@ export async function reinstatePolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'reinstate')
   assertPolicyTransactionState('reinstate', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
@@ -903,6 +880,7 @@ export async function renewPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'renew')
   assertPolicyTransactionState('renew', policyRow.status)
   const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const nextEff = overrideEffectiveDate || policyTermExpiration(policyRow)
@@ -1199,6 +1177,7 @@ export async function rewritePolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'rewrite')
   assertPolicyTransactionState('rewrite', policyRow.status)
 
   const baseTermMonths =
@@ -1502,6 +1481,7 @@ export async function previewRenewal(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'renew')
   const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const nextEff = policyTermExpiration(policyRow)
   const nextExp = addMonths(nextEff, termMonths)
@@ -1537,6 +1517,7 @@ export async function nonRenewPolicy(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'nonRenew')
   assertPolicyTransactionState('nonRenew', policyRow.status)
   if (policyField(policyRow, 'nonRenewedAt', 'non_renewed_at')) {
     throw new ConflictError('ALREADY_NON_RENEWED', 'Policy is already marked as non-renewed.')

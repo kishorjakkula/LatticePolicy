@@ -1,5 +1,27 @@
 product: commercial-auto
 version: 1.0.0
+capabilities:
+  label: Commercial Auto
+  riskLabel: Fleet & Drivers
+  ratingAdapter: commercial-auto
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    commercialAutoFleet: CA.Fleet
+    commercialAutoVehicle: CA.Vehicle
+    driverSchedule: CA.DriverSchedule
+  defaultRisk:
+    type: commercialAutoFleet
+    vehicleCount: 1
+    driverCount: 1
+    useClass: service
+    radiusClass: local
+    vehicleType: light-truck
+    gvwClass: light
+    annualMileage: 12000
+    yearsInBusiness: 1
+    priorLossesCount: 0
+  ui: {}
 availability:
   country: US
   states:

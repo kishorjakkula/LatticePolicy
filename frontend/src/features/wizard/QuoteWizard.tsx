@@ -28,8 +28,9 @@ import {
   type CountryCode
 } from '../../shared/usStates'
 import { formatDisplayDate } from '../../shared/dateDisplay'
+import type { ProductCapabilityDescriptor } from '@lattice-policy/types'
 
-type ProductCode = 'personal-auto' | 'commercial-auto' | 'homeowners' | 'cyber' | 'professional-liability'
+type ProductCode = string
 type QuoteProductCode = ProductCode | ''
 type WizardMode = 'quote' | 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
 type UnderwritingCompanyConfig = {
@@ -338,6 +339,13 @@ const PRODUCT_LABELS: Record<ProductCode, string> = {
   'professional-liability': 'Professional Liability'
 }
 
+const runtimeProductRegistry = new Map<string, ProductCapabilityDescriptor>()
+
+function installProductRegistry(items: ProductCapabilityDescriptor[]) {
+  runtimeProductRegistry.clear()
+  for (const item of items) runtimeProductRegistry.set(item.code, item)
+}
+
 const ENDORSEMENT_REASONS: Record<ProductCode, string[]> = {
   'personal-auto': [
     'Address Change',
@@ -575,11 +583,15 @@ function transactionLabel(mode: WizardMode): string {
 }
 
 function isSupportedProductCode(value: any): value is ProductCode {
-  return value === 'personal-auto' || value === 'commercial-auto' || value === 'homeowners' || value === 'cyber' || value === 'professional-liability'
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 function productLabel(code: ProductCode): string {
-  return PRODUCT_LABELS[code] || code
+  return runtimeProductRegistry.get(code)?.label || PRODUCT_LABELS[code] || code
+}
+
+function productRiskLabel(code: QuoteProductCode): string {
+  return code ? runtimeProductRegistry.get(code)?.riskLabel || 'Risk' : 'Risk'
 }
 
 function formatSelectionLabel(value: any): string {
@@ -593,6 +605,10 @@ function formatSelectionLabel(value: any): string {
 }
 
 function defaultRisksForProduct(code: QuoteProductCode): any[] {
+  const configuredRisk = code ? runtimeProductRegistry.get(code)?.defaultRisk : null
+  if (configuredRisk && Object.keys(configuredRisk).length) {
+    return [JSON.parse(JSON.stringify(configuredRisk))]
+  }
   if (code === 'personal-auto') return [defaultAutoRisk()]
   if (code === 'commercial-auto') return [defaultCommercialAutoRisk()]
   if (code === 'homeowners') return [defaultDwellingRisk()]
@@ -814,6 +830,7 @@ function normalizeInsuredState(raw: any, applicant?: QuoteState['applicant']): I
 }
 
 export function QuoteWizard() {
+  const [, setProductRegistryRevision] = useState(0)
   const [step, setStep] = useState(1)
   const [cfg, setCfg] = useState<any | null>(null)
   const [riskFields, setRiskFields] = useState<Field[]>([])
@@ -861,6 +878,20 @@ export function QuoteWizard() {
   const [contactDetailError, setContactDetailError] = useState<string | null>(null)
   const [contactDetailRecord, setContactDetailRecord] = useState<any | null>(null)
   const [contactDetailLookup, setContactDetailLookup] = useState('')
+
+  useEffect(() => {
+    let active = true
+    api.listProducts()
+      .then((response) => {
+        if (!active) return
+        installProductRegistry(Array.isArray(response?.items) ? response.items : [])
+        setProductRegistryRevision((revision) => revision + 1)
+      })
+      .catch(() => {
+        // Product-specific requests remain available if registry discovery fails.
+      })
+    return () => { active = false }
+  }, [])
   const [contactDetailTitle, setContactDetailTitle] = useState('')
   const [contactDetailPopupOpen, setContactDetailPopupOpen] = useState(false)
   const [formsTab, setFormsTab] = useState<WizardFormsTab>('forms')
@@ -1105,15 +1136,7 @@ export function QuoteWizard() {
     if (readOnlyVersion) setReadOnlyVersion(null)
   }, [isReadOnlyView, readOnlyVersion])
 
-  const riskStepTitle = q.productCode === 'personal-auto'
-    ? 'Vehicles'
-    : q.productCode === 'commercial-auto'
-      ? 'Commercial Auto Risk'
-    : q.productCode === 'cyber'
-      ? 'Cyber Risk'
-      : q.productCode === 'professional-liability'
-        ? 'Professional Risk'
-        : 'Risk'
+  const riskStepTitle = productRiskLabel(q.productCode)
   const steps = useMemo(() => [
     { id: 1, title: 'Product' },
     { id: 2, title: 'Qualification Questions' },

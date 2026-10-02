@@ -1,8 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
+import { getProductCapabilities } from './product-registry.js'
 
-export type ProductCode = 'personal-auto' | 'commercial-auto' | 'homeowners' | 'cyber' | 'professional-liability'
+export type ProductCode = string
 
 export type Rates = {
   fees?: { policy?: number }
@@ -252,6 +253,18 @@ export function buildRiskFields(productCode: ProductCode, cfg: any): FormField[]
     }
     if (keys.includes('retroactiveYears')) add({ key: 'retroactiveYears', label: 'Years of Prior Acts / Retroactive Coverage', type: 'number', path: 'risks.0.retroactiveYears', required: true })
   }
+  if (!out.length) {
+    const defaults = getProductCapabilities(productCode)?.defaultRisk || {}
+    for (const key of keys) {
+      const defaultValue = defaults[key]
+      const label = key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())
+      if (typeof defaultValue === 'boolean') {
+        add({ key, label, type: 'select', path: `risks.0.${key}`, options: ['true', 'false'] })
+      } else {
+        add({ key, label, type: typeof defaultValue === 'number' ? 'number' : 'text', path: `risks.0.${key}` })
+      }
+    }
+  }
   return out
 }
 
@@ -320,5 +333,12 @@ export function loadFieldMeta(productCode: ProductCode, tenantId: string): any[]
       { path: 'risks.0.priorLossesCount', type: 'int', required: true, ui: { group: 'History', order: 520 } }
     ]
   }
-  return []
+  const cfg = loadProductConfig(productCode)
+  const defaults = getProductCapabilities(productCode)?.defaultRisk || {}
+  return (Array.isArray(cfg?.ratingKeys) ? cfg.ratingKeys : []).map((key: string, index: number) => ({
+    path: `risks.0.${key}`,
+    type: typeof defaults[key] === 'number' ? 'number' : typeof defaults[key] === 'boolean' ? 'bool' : 'string',
+    required: false,
+    ui: { group: 'Risk', order: (index + 1) * 10 },
+  }))
 }

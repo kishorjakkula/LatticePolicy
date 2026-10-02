@@ -1,4 +1,5 @@
 import { request, requestBlob } from './request'
+import type { ProductCapabilityDescriptor } from '@lattice-policy/types'
 
 export const listUnderwritingCompanies = (opts?: { productCode?: string; country?: string; state?: string }) => {
   const params = new URLSearchParams()
@@ -31,6 +32,8 @@ export const listReferenceInsuranceCarriers = (opts?: { q?: string; limit?: numb
 }
 
 export const getProductConfig = (code: string) => request<any>('GET', `/v1/products/${code}/config`)
+
+export const listProducts = () => request<{ items: ProductCapabilityDescriptor[] }>('GET', '/v1/products')
 
 export const getProductForm = (code: string) => request<any>('GET', `/v1/products/${code}/form`)
 

@@ -19,6 +19,9 @@ Architecture Style
 
 Modules
 - Core Policy: policy lifecycle, effective-dated versions, transactions, premium breakdown.
+- Product capability registry: product packs are discovered from
+  `products/*/coverage.yaml`; one shared descriptor drives API discovery,
+  transaction support, rating dispatch, risk mapping, and frontend defaults.
 - Product Packs: coverage model + rating inputs for Personal Auto and Homeowners.
 - Customer Domain + Identity Links: customer master records, policy/customer relationships, user/customer linking, and portal-safe views.
 - Authentication + Security: JWT auth, tenant isolation, RBAC, and optional tenant-level TOTP MFA.
