@@ -765,6 +765,45 @@ export const ratingModelVersions = pgTable('rating_model_versions', {
 })
 
 // ---------------------------------------------------------------------------
+// Product Governance (migration 051)
+// ---------------------------------------------------------------------------
+export const productGovernanceReleases = pgTable('product_governance_releases', {
+  releaseId: uuid('release_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  productCode: text('product_code').notNull(),
+  jurisdictionCode: text('jurisdiction_code'),
+  versionLabel: text('version_label').notNull(),
+  status: text('status').notNull().default('DRAFT'),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  artifacts: jsonb('artifacts').notNull(),
+  contentSha256: text('content_sha256').notNull(),
+  createdBy: text('created_by').notNull(),
+  submittedBy: text('submitted_by'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  activatedBy: text('activated_by'),
+  activatedAt: timestamp('activated_at', { withTimezone: true }),
+  retiredBy: text('retired_by'),
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const productGovernanceAudit = pgTable('product_governance_audit', {
+  auditId: uuid('audit_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  releaseId: uuid('release_id').notNull().references(() => productGovernanceReleases.releaseId, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  actor: text('actor').notNull(),
+  reason: text('reason'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
 // Policy Timeline (migration 028)
 // ---------------------------------------------------------------------------
 export const policyTimelineSegments = pgTable('policy_timeline_segments', {

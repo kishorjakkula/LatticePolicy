@@ -13,6 +13,7 @@ import { adminRoutes } from './admin.routes.js'
 import { ratingRoutes } from './rating-workbench.routes.js'
 import { customerPortalRoutes } from './customer-portal.routes.js'
 import { interestsRoutes } from './interests.routes.js'
+import { productGovernanceRoutes } from './product-governance.routes.js'
 import { mountRouter } from '../route-registry.js'
 
 export const routes = Router()
@@ -27,6 +28,7 @@ mountRouter(routes, '/', transactionRoutes)
 mountRouter(routes, '/', uwRoutes)
 mountRouter(routes, '/', placementRoutes)
 mountRouter(routes, '/', productsRoutes)
+mountRouter(routes, '/', productGovernanceRoutes)
 mountRouter(routes, '/admin', adminRoutes)
 mountRouter(routes, '/rating', ratingRoutes)
 mountRouter(routes, '/customer-portal', customerPortalRoutes)

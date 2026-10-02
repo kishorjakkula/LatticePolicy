@@ -148,7 +148,10 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'admin.bordereaux.manage', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'manage', label: 'Admin API: Bordereaux Manage', description: 'Generate risk/premium/transaction/cancellation/correction bordereaux batches', sortOrder: 640 },
   { permissionCode: 'placement.read', scope: 'api', resourceKey: 'placements', actionKey: 'read', label: 'Placement API: Read', description: 'Read large commercial placement workflow records', sortOrder: 650 },
   { permissionCode: 'placement.manage', scope: 'api', resourceKey: 'placements', actionKey: 'manage', label: 'Placement API: Manage', description: 'Create placements, manage market participants/subjectivities, and transition placement status', sortOrder: 660 },
-  { permissionCode: 'admin.exposure.read', scope: 'api', resourceKey: 'admin.exposure', actionKey: 'read', label: 'Admin API: Exposure Read', description: 'Read aggregated policy exposure summaries and export exposure datasets', sortOrder: 670 }
+  { permissionCode: 'admin.exposure.read', scope: 'api', resourceKey: 'admin.exposure', actionKey: 'read', label: 'Admin API: Exposure Read', description: 'Read aggregated policy exposure summaries and export exposure datasets', sortOrder: 670 },
+  { permissionCode: 'product.governance.read', scope: 'api', resourceKey: 'product.governance', actionKey: 'read', label: 'Product Governance API: Read', description: 'Read governed product releases and approval history', sortOrder: 680 },
+  { permissionCode: 'product.governance.manage', scope: 'api', resourceKey: 'product.governance', actionKey: 'manage', label: 'Product Governance API: Manage', description: 'Create and submit governed product releases', sortOrder: 690 },
+  { permissionCode: 'product.governance.approve', scope: 'api', resourceKey: 'product.governance', actionKey: 'approve', label: 'Product Governance API: Approve', description: 'Approve, schedule, activate, and retire governed product releases', sortOrder: 700 },
 ]
 
 type RoleSeed = {
