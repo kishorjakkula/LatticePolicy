@@ -8,6 +8,7 @@ COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
 RUN npm ci --workspace=server
 
+COPY packages/types/src ./packages/types/src
 COPY server/tsconfig.json ./server/tsconfig.json
 COPY server/src ./server/src
 WORKDIR /app/server
