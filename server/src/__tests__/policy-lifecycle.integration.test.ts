@@ -212,6 +212,81 @@ describe('policy transaction lifecycle persistence', () => {
     })
   })
 
+  it('rejects one of two concurrent writes based on the same timeline version', async () => {
+    await initDb()
+    await ensureTenant()
+    const db = getDb()!
+    const bound = await createBoundPolicy()
+    await tx((innerDb) => issuePolicy(innerDb, tenantId, bound.policyId, {}, actor))
+
+    const current = await db.query(
+      `SELECT payload FROM policy_versions
+        WHERE tenant_id=$1 AND policy_id=$2
+        ORDER BY processed_at DESC LIMIT 1`,
+      [tenantId, bound.policyId],
+    )
+    const firstPayload = JSON.parse(JSON.stringify(current.rows[0].payload))
+    const secondPayload = JSON.parse(JSON.stringify(current.rows[0].payload))
+    firstPayload.coverages[0].limit = 250000
+    secondPayload.coverages[0].limit = 500000
+
+    const writes = await Promise.allSettled([
+      tx((innerDb) => executeEndorsement(
+        innerDb,
+        tenantId,
+        bound.policyId,
+        {
+          effectiveDate: '2026-09-01',
+          payload: firstPayload,
+          transactionNumber: 'EN-CONCURRENT-A',
+          expectedTimelineVersion: 0,
+        },
+        actor,
+      )),
+      tx((innerDb) => executeEndorsement(
+        innerDb,
+        tenantId,
+        bound.policyId,
+        {
+          effectiveDate: '2026-09-01',
+          payload: secondPayload,
+          transactionNumber: 'EN-CONCURRENT-B',
+          expectedTimelineVersion: 0,
+        },
+        actor,
+      )),
+    ])
+
+    expect(writes.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    const rejected = writes.find((result) => result.status === 'rejected') as PromiseRejectedResult
+    expect(rejected.reason).toMatchObject({
+      code: 'STALE_POLICY_VERSION',
+      details: { expectedTimelineVersion: 0, currentTimelineVersion: 1 },
+    })
+
+    const persisted = await db.query(
+      `SELECT count(*)::int AS transaction_count,
+              count(DISTINCT sequence_no)::int AS sequence_count,
+              count(DISTINCT timeline_version)::int AS timeline_count
+         FROM policy_transactions
+        WHERE tenant_id=$1 AND policy_id=$2 AND timeline_version IS NOT NULL`,
+      [tenantId, bound.policyId],
+    )
+    expect(persisted.rows[0]).toEqual({
+      transaction_count: 1,
+      sequence_count: 1,
+      timeline_count: 1,
+    })
+
+    await expect(
+      db.query(
+        `UPDATE policy_versions SET payload = '{}'::jsonb
+          WHERE tenant_id=$1 AND policy_id=$2 AND timeline_version=1`,
+        [tenantId, bound.policyId],
+      ),
+    ).rejects.toThrow(/immutable/)
+  })
+
   it('issues, cancels, rejects duplicate cancel, and reinstates an issued policy', async () => {
     await initDb()
     await ensureTenant()

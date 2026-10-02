@@ -94,6 +94,11 @@ Canonical Policy Lifecycle
   duplicate transaction, document, event, or notification.
 - `nonRenew` records the decision and future term disposition; the current policy
   remains `Issued` until its term expires.
+- Policy-changing requests may include `expectedTimelineVersion`. The mutation
+  fails with `STALE_POLICY_VERSION` when that value is no longer current.
+- Policy changes lock the tenant-scoped policy row for the transaction. Sequence
+  and timeline versions are unique per policy, and persisted policy-version rows
+  cannot be updated; corrections are represented by a new effective-dated row.
 
 | Action | Allowed current state | Resulting state |
 | --- | --- | --- |

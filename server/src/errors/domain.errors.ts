@@ -24,7 +24,7 @@ export class ForbiddenError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(code: string, message: string) { super(409, code, message) }
+  constructor(code: string, message: string, details?: unknown) { super(409, code, message, details) }
 }
 
 export class BadRequestError extends AppError {
