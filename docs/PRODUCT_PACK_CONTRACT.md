@@ -1,113 +1,72 @@
 # Product Pack Extension Contract
 
-This document is the single reference for adding a new insurance product pack
-to LatticePolicy. It describes the required files, the framework code paths
-that currently need a matching edit, and the test coverage a new product must
-ship with.
+This is the reference for adding an insurance product pack to LatticePolicy.
+Product packs are discovered from disk; adding a pack does not require editing
+a framework allowlist.
 
-Use `docs/tasks/TEMPLATE-product-pack.md` as a starting checklist when you add
-a product.
-
-## Current Product Packs (examples)
-
-`products/personal-auto`, `products/commercial-auto`, `products/homeowners`,
-`products/cyber`, `products/professional-liability`. Use these as reference
-implementations — each one follows every rule in this document.
+Use `docs/tasks/TEMPLATE-product-pack.md` as the implementation checklist.
 
 ## Required Files
 
-### 1. `products/<product-code>/coverage.yaml`
+### `products/<product-code>/coverage.yaml`
 
-Defines selectable coverages, limits, deductibles, and `ratingKeys` (the risk
-inputs the rater and the quote wizard need). See any existing product's
-`coverage.yaml` for the shape. `product:` and `version:` are required
-top-level fields.
+Defines coverages, limits, deductibles, `ratingKeys`, and the product's
+capability descriptor. `product`, `version`, and `capabilities` are required.
 
-### 2. `products/<product-code>/rates.yaml`
+The `capabilities` object contains:
 
-Defines base rates, rating factor tables (one map per `ratingKey`), fees, and
-taxes. Loaded and merged with tenant overrides by `loadProductRates()` in
-`server/src/lib/products.ts`. `product:` and `version:` are required
-top-level fields.
+- `label` and `riskLabel` for user-facing metadata;
+- `ratingAdapter`, naming an executable adapter or `unsupported`;
+- `formsMode`, either `catalog` or `none`;
+- `supportedTransactions`, using canonical lifecycle action names;
+- `riskKinds`, mapping payload risk types to persisted risk-unit kinds;
+- `defaultRisk`, used by frontend and generic field generation;
+- `ui`, reserved for product presentation metadata.
 
-### 3. Tenant field metadata (optional): `tenants/<tenant>/field_meta.<product-code>.json`
+### `products/<product-code>/rates.yaml`
 
-UI labels, validation, enum options, and display grouping for a tenant. If
-absent, `loadFieldMeta()` in `server/src/lib/products.ts` falls back to a
-built-in catalog for known product codes (see "Framework Code Paths" below —
-this fallback is one of the places that needs a code change for a brand-new
-product code unless every tenant that sells it ships its own
-`field_meta.<product-code>.json`).
+Defines base rates, factor tables, fees, and taxes. `product` and `version` are
+required. Tenant overrides are merged by `loadProductRates()`.
 
-### 4. State eligibility data (no code change)
+### Tenant Field Metadata (Optional)
 
-Rows in the `policy_eligibility` table (see `server/src/lib/policy-compliance.ts`),
-keyed by `tenant_id`, `product_code` (a plain string), and `state_code`. The
-eligibility check is already product-agnostic — add rows through the admin
-workflow or a seed script, no code change required.
+`tenants/<tenant>/field_meta.<product-code>.json` supplies labels, validation,
+enum options, and grouping. When absent, established packs use their built-in
+catalog and new packs receive generic fields derived from `ratingKeys` and
+`capabilities.defaultRisk`.
 
-### 5. Forms (no code change)
+### Eligibility, Forms, And Samples
 
-Rows in `forms_catalog` (see `server/migrations/001_init.sql`), with
-`applicability` (jsonb) used to match product/state/transaction type. The
-schema is already product-agnostic — add catalog rows, no code change
-required.
+- Add state eligibility through `policy_eligibility`; no framework edit is needed.
+- Add document forms through the forms catalog; no framework edit is needed.
+- Add realistic sample quote and risk payloads under `contracts/`.
 
-### 6. Sample/seed data
+## Registry Contract
 
-Add a realistic sample quote/risk payload for the product under the
-project's existing seed/contract sample location (see `contracts/` for
-existing sample seed data) so contributors and tests have a working example.
+`GET /v1/products` returns the shared registry contract. The server uses it
+for product routing, rating dispatch, transaction checks, and risk mapping.
+The frontend uses it for selectors, labels, risk labels, and defaults.
 
-## Framework Code Paths That Currently Need A Matching Edit
+Unknown products return `PRODUCT_NOT_FOUND`. A known product that lacks a
+requested transaction or executable rater returns a specific capability error
+instead of falling through to another product's implementation.
 
-Adding a new product code is **not** purely data-driven yet. These are the
-specific places, verified against the current code, that hard-code the set of
-known product codes and need a new branch/entry when a product is added:
+## Required Tests
 
-| File | What to add |
-| --- | --- |
-| `server/src/lib/products.ts` | Add the new code to the `ProductCode` union; add an `else if` branch in `buildRiskFields()` for the quote-wizard field list; add a fallback branch in `loadFieldMeta()` unless every deploying tenant supplies its own `field_meta.<product-code>.json`. |
-| `server/src/routes/products.routes.ts` | Add the new code to `SupportedProductCode` and the `SUPPORTED_PRODUCTS` array, or `/products/:code/config`, `/form`, and `/field-meta` will 404 it. |
-| `server/src/services/rating.service.ts` | Add a branch in `rate()` dispatching to a new `rateX()` function implementing the product's rating algorithm (unless the product is fully covered by the rating workbench published-model path — see `getPublishedRatingModelForProduct`). |
-| `frontend/src/features/wizard/QuoteWizard.tsx` | Add the new code to the local `ProductCode` type, the product label map, and the default-risk factory dispatch (`defaultXRisk()` functions) so the wizard renders a sensible blank form. Check for any other `productCode === '<existing-product>'` special case near your product's domain (for example, a homeowners-only step) and decide whether your product needs an equivalent branch. |
+- Rating tests cover the configured adapter, factors, fees, and taxes.
+- Quote and bind tests prove supported lifecycle capabilities end to end.
+- Product API tests cover discovery, config, generated form, and field metadata.
+- Frontend tests prove registry labels and defaults render in quote workflows.
+- Unsupported capabilities have explicit negative tests.
 
-These are documented here as known extension points rather than converted to
-a single registry in this change, to keep this an additive, low-risk
-documentation pass. A future refactor could replace these five hard-coded
-call sites with a `products/<code>/pack.ts` registry entry — track that as a
-follow-up if it becomes a recurring pain point, rather than doing it
-speculatively.
+## Adding A Product Pack
 
-## Required Automated Tests For A New Product
-
-Per `docs/TEST_PLAN.md` and `CONTRIBUTING.md`'s automation requirement, a new
-product pack PR should include, at minimum:
-
-- **Rating unit tests**: `server/src/services/__tests__/rating.service.test.ts`
-  — cover the new `rateX()` function's base premium, at least one rating
-  factor, fees, and taxes, following the pattern used for existing products
-  in that file.
-- **Quote/bind API tests**: exercise `POST` quote creation and bind for the
-  new product end-to-end through the existing quote/bind test suites (see
-  `server/src/__tests__/quote-to-bind.integration.test.ts`), confirming the
-  product is accepted, rated, and produces a policy.
-- **Product config API tests**: confirm `/products/:code/config`,
-  `/products/:code/form`, and `/products/:code/field-meta` return the new
-  product's data (404 before the routes change is a useful regression check).
-- **Frontend wizard test**: a component test confirming the wizard renders a
-  usable form for the new product code, following patterns in
-  `frontend/src/features/wizard/__tests__/`.
-
-## Adding A Product Pack: Checklist
-
-1. Add `products/<code>/coverage.yaml` and `rates.yaml`.
-2. Add the code to the four framework locations in the table above.
-3. Add tenant field metadata or extend `loadFieldMeta()`'s fallback.
-4. Add state eligibility rows for at least one tenant/state combination.
-5. Add form catalog rows if the product requires generated documents.
-6. Add rating, quote/bind, product-config, and wizard tests.
+1. Add `coverage.yaml` and `rates.yaml` under `products/<code>/`.
+2. Add complete `capabilities` metadata to `coverage.yaml`.
+3. Add tenant field metadata when the generated fallback is insufficient.
+4. Add eligibility rows for at least one tenant and jurisdiction.
+5. Add catalog forms when the product requires generated documents.
+6. Add rating, quote/bind, product API, and frontend tests.
 7. Add a sample quote/risk payload.
-8. Update this document's "Current Product Packs" list.
-9. Add a `docs/tasks/issue-<n>-<product>-pack.md` task note if the change is
-   non-trivial, per `docs/AI_CONTRIBUTOR_PROCESS.md`.
+8. Confirm the pack appears in `GET /v1/products` without framework edits.
+9. Add an AI-readable task note under `docs/tasks/` for non-trivial work.

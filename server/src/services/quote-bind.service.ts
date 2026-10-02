@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from '../uuid.js'
+import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import { withTenantTx, toRawQuery, type DrizzleDB } from '../db.js'
 import {
   NotFoundError,
@@ -60,34 +61,7 @@ function generateTransactionNumber(prefix = 'NB-'): string {
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
+  return mapProductRiskKind(productCode, risk)
 }
 
 function summarizeRisk(risk: any): string {
@@ -192,6 +166,7 @@ export async function bindQuote(
 
   const row = r.rows[0]
   const quote = { payload: row.payload, uw: row.underwriting, premium: row.premium }
+  requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
   const existingStatusHistory = normalizeQuoteAuditHistory(row.status_history)
   const existingStepHistory = normalizeQuoteAuditHistory(row.step_history)
 

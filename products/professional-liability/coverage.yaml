@@ -1,5 +1,26 @@
 product: professional-liability
 version: 1.0.0
+capabilities:
+  label: Professional Liability
+  riskLabel: Professional Exposure
+  ratingAdapter: professional-liability
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    professionalLiabilityProfile: PL.Profile
+  defaultRisk:
+    type: professionalLiabilityProfile
+    industry: consulting
+    annualRevenue: 1000000
+    employeeCount: 10
+    yearsInBusiness: 5
+    priorClaimsCount: 0
+    largestContractValue: 100000
+    subcontractorPct: 0
+    writtenContracts: true
+    qualityControl: standard
+    retroactiveYears: 5
+  ui: {}
 availability:
   country: US
   states:

@@ -1,6 +1,8 @@
 import { mergeRates, loadProductRates, loadTenantOverrides, Rates } from '../products.js'
 import { getPublishedRatingModelForProduct } from '../ratingModelRegistry.js'
 import { round2 } from '../lib/date.utils.js'
+import { requireProductCapability } from '../lib/product-registry.js'
+import { BadRequestError } from '../errors/domain.errors.js'
 
 export type QuoteInput = any
 
@@ -13,25 +15,31 @@ export type PremiumResult = {
 }
 
 export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
-  const product = payload?.productCode as 'personal-auto' | 'commercial-auto' | 'homeowners' | 'cyber' | 'professional-liability'
+  const product = String(payload?.productCode || '').trim().toLowerCase()
   if (!product) throw new Error('productCode is required')
+  const descriptor = requireProductCapability(product, 'quote')
   const pack = loadProductRates(product)
   const tenant = loadTenantOverrides(tenantId)
   const rates = mergeRates(pack.rates, tenant)
 
-  if (product === 'personal-auto') {
+  if (descriptor.ratingAdapter === 'personal-auto') {
     return rateAuto(payload, rates, tenantId)
   }
-  if (product === 'commercial-auto') {
+  if (descriptor.ratingAdapter === 'commercial-auto') {
     return rateCommercialAuto(payload, rates)
   }
-  if (product === 'cyber') {
+  if (descriptor.ratingAdapter === 'cyber') {
     return rateCyber(payload, rates)
   }
-  if (product === 'professional-liability') {
+  if (descriptor.ratingAdapter === 'professional-liability') {
     return rateProfessionalLiability(payload, rates)
   }
-  return rateHO(payload, rates)
+  if (descriptor.ratingAdapter === 'homeowners') return rateHO(payload, rates)
+  throw new BadRequestError(
+    'PRODUCT_RATING_ADAPTER_UNSUPPORTED',
+    `Product '${product}' does not have an executable rating adapter.`,
+    { productCode: product, ratingAdapter: descriptor.ratingAdapter },
+  )
 }
 
 function rateAuto(payload: any, rates: Rates, tenantId?: string) {

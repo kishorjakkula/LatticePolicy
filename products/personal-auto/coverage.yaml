@@ -1,5 +1,22 @@
 product: personal-auto
 version: 1.0.0
+capabilities:
+  label: Personal Auto
+  riskLabel: Vehicles & Drivers
+  ratingAdapter: personal-auto
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    autoVehicle: PA.Vehicle
+    driver: PA.Driver
+  defaultRisk:
+    type: autoVehicle
+    year: 2024
+    make: ''
+    model: ''
+    usage: commute
+    annualMiles: 12000
+  ui: {}
 coverages:
   - code: BI
     name: Bodily Injury Liability
@@ -21,4 +38,3 @@ ratingKeys:
   - garagingZip
   - driverAge
   - vehicleSymbol
-

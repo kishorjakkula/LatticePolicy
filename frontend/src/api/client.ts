@@ -24,7 +24,7 @@ import {
 import {
   listUnderwritingCompanies, listReferenceAgencies, listAgencyContacts,
   listUnderwriters, listReferenceInsuranceCarriers,
-  getProductConfig, getProductForm, previewForms, getFormDocument,
+  listProducts, getProductConfig, getProductForm, previewForms, getFormDocument,
   getTenantPreferences, getAiSettings, getDashboardAiInsights
 } from './references.api'
 
@@ -56,7 +56,7 @@ export const api = {
   // References
   listUnderwritingCompanies, listReferenceAgencies, listAgencyContacts,
   listUnderwriters, listReferenceInsuranceCarriers,
-  getProductConfig, getProductForm, previewForms, getFormDocument,
+  listProducts, getProductConfig, getProductForm, previewForms, getFormDocument,
   getTenantPreferences, getAiSettings, getDashboardAiInsights,
   // Portal
   getCustomerPortalSummary, getCustomerPortalPolicy

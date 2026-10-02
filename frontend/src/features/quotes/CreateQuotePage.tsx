@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useCreateQuoteMutation, useBindQuoteMutation } from '../../api/hooks'
 import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../../api/client'
+import type { ProductCapabilityDescriptor } from '@lattice-policy/types'
 import {
   defaultRegionForCountry,
   isRegionInCountry,
@@ -11,7 +13,26 @@ import {
   type CountryCode
 } from '../../shared/usStates'
 
-type ProductCode = 'personal-auto' | 'commercial-auto' | 'homeowners' | 'cyber' | 'professional-liability'
+type ProductCode = string
+
+const fallbackProducts: ProductCapabilityDescriptor[] = [
+  ['personal-auto', 'Personal Auto'],
+  ['commercial-auto', 'Commercial Auto'],
+  ['homeowners', 'Homeowners'],
+  ['cyber', 'Cyber'],
+  ['professional-liability', 'Professional Liability'],
+].map(([code, label]) => ({
+  code,
+  label,
+  version: '1.0.0',
+  riskLabel: 'Risk',
+  ratingAdapter: code,
+  formsMode: 'catalog',
+  supportedTransactions: ['quote'],
+  riskKinds: {},
+  defaultRisk: {},
+  ui: {},
+})) as ProductCapabilityDescriptor[]
 
 type FormValues = {
   productCode: ProductCode
@@ -115,7 +136,16 @@ export function CreateQuotePage() {
 
   const [error, setError] = useState<string | null>(null)
   const [quote, setQuote] = useState<any | null>(null)
+  const [products, setProducts] = useState<ProductCapabilityDescriptor[]>(fallbackProducts)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    api.listProducts()
+      .then((response) => setProducts((response.items || []).filter((product) =>
+        product.supportedTransactions.includes('quote') && product.ratingAdapter !== 'unsupported'
+      )))
+      .catch(() => {})
+  }, [])
 
   const createQuoteMutation = useCreateQuoteMutation()
   const bindQuoteMutation = useBindQuoteMutation()
@@ -232,11 +262,9 @@ export function CreateQuotePage() {
           <div className="col">
             <label>Product</label>
             <select {...register('productCode')}>
-              <option value="personal-auto">Personal Auto</option>
-              <option value="commercial-auto">Commercial Auto</option>
-              <option value="homeowners">Homeowners</option>
-              <option value="cyber">Cyber</option>
-              <option value="professional-liability">Professional Liability</option>
+              {products.map((product) => (
+                <option key={product.code} value={product.code}>{product.label}</option>
+              ))}
             </select>
           </div>
         </div>

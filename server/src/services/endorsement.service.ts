@@ -28,6 +28,7 @@ import { validatePolicyTransactionState, type PolicyTransactionAction } from '..
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 import {
   buildEndorsementChangeSet,
@@ -152,34 +153,7 @@ function reserveTransactionNumber(mode: TransactionNumberMode): string {
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
+  return mapProductRiskKind(productCode, risk)
 }
 
 function summarizeRisk(risk: any): string {
@@ -648,6 +622,7 @@ export async function previewEndorsement(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(String(policyField(policyRow, 'productCode', 'product_code') || ''), 'endorse')
   assertPolicyTransactionState('endorse', policyRow.status)
   const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
   const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
@@ -732,6 +707,7 @@ export async function executeEndorsement(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(String(policyField(policyRow, 'productCode', 'product_code') || ''), 'endorse')
   const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
   const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
   const eff = asDateOnly(body.effectiveDate) || termEffective

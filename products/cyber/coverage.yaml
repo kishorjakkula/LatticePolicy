@@ -1,5 +1,28 @@
 product: cyber
 version: 1.0.0
+capabilities:
+  label: Cyber
+  riskLabel: Cyber Exposure
+  ratingAdapter: cyber
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    cyberProfile: CYBER.Profile
+    thirdParty: CYBER.ThirdParty
+    firstParty: CYBER.FirstParty
+  defaultRisk:
+    type: cyberProfile
+    industry: technology
+    annualRevenue: 1000000
+    employeeCount: 10
+    recordsCount: 1000
+    mfaEnabled: true
+    endpointProtection: true
+    backups: daily
+    priorIncidents: 0
+    publicFacingApps: 1
+    domain: ''
+  ui: {}
 coverages:
   - code: CYB_LIAB
     name: Cyber Liability / Privacy
