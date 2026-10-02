@@ -288,24 +288,33 @@ const componentSchemas: Record<string, any> = {
   },
   PortalPolicySummary: {
     type: 'object',
-    required: ['policyId', 'policyNumber', 'productCode', 'status', 'term', 'premium'],
+    required: ['policyId', 'policyNumber', 'productCode', 'status', 'term', 'premium', 'createdAt', 'updatedAt'],
     properties: {
       policyId: { type: 'string' }, policyNumber: { type: 'string' },
       productCode: { type: 'string' }, status: { type: 'string' },
-      term: { type: 'object', additionalProperties: false, properties: {
-        effectiveDate: { type: 'string', nullable: true }, expirationDate: { type: 'string', nullable: true },
-      } },
-      premium: { type: 'object', additionalProperties: true },
+      term: { $ref: '#/components/schemas/PortalTerm' },
+      premium: { allOf: [{ $ref: '#/components/schemas/PortalMoney' }], nullable: true },
       createdAt: { type: 'string', nullable: true }, updatedAt: { type: 'string', nullable: true },
     },
     additionalProperties: false,
   },
+  PortalTerm: {
+    type: 'object', required: ['effectiveDate', 'expirationDate'], additionalProperties: false,
+    properties: {
+      effectiveDate: { type: 'string', nullable: true },
+      expirationDate: { type: 'string', nullable: true },
+    },
+  },
+  PortalMoney: {
+    type: 'object', required: ['amount', 'currency'], additionalProperties: false,
+    properties: { amount: { type: 'number' }, currency: { type: 'string' } },
+  },
   PortalSummaryResponse: {
     type: 'object', required: ['customer', 'policies'], additionalProperties: false,
     properties: {
-      customer: { type: 'object', additionalProperties: false, properties: {
-        customerId: { type: 'string' }, customerKey: { type: 'string' },
-        customerName: { type: 'string' }, entityType: { type: 'string' },
+      customer: { type: 'object', required: ['customerId', 'customerKey', 'customerName', 'entityType'], additionalProperties: false, properties: {
+        customerId: { type: 'string' }, customerKey: { type: 'string', nullable: true },
+        customerName: { type: 'string', nullable: true }, entityType: { type: 'string', nullable: true },
       } },
       policies: { type: 'array', items: { $ref: '#/components/schemas/PortalPolicySummary' } },
     },
@@ -314,16 +323,74 @@ const componentSchemas: Record<string, any> = {
     type: 'object', required: ['policy', 'declarations', 'idCard'], additionalProperties: false,
     properties: {
       policy: { $ref: '#/components/schemas/PortalPolicySummary' },
-      declarations: { type: 'object', additionalProperties: true },
-      idCard: { type: 'object', additionalProperties: true },
+      declarations: {
+        type: 'object', additionalProperties: false,
+        required: ['policyNumber', 'productCode', 'status', 'namedInsured', 'customerKey', 'term', 'premium', 'transaction', 'coverages'],
+        properties: {
+          policyNumber: { type: 'string' }, productCode: { type: 'string' }, status: { type: 'string' },
+          namedInsured: { type: 'string' }, customerKey: { type: 'string', nullable: true },
+          term: { $ref: '#/components/schemas/PortalTerm' },
+          premium: { allOf: [{ $ref: '#/components/schemas/PortalMoney' }], nullable: true },
+          transaction: { type: 'object', nullable: true, additionalProperties: false,
+            required: ['versionId', 'transactionNumber', 'transactionType', 'transactionEffectiveDate', 'processedAt'],
+            properties: {
+              versionId: { type: 'string' }, transactionNumber: { type: 'string' }, transactionType: { type: 'string' },
+              transactionEffectiveDate: { type: 'string', nullable: true }, processedAt: { type: 'string', nullable: true },
+            },
+          },
+          coverages: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['code', 'label', 'selected', 'limit', 'deductible', 'percent'],
+            properties: {
+              code: { type: 'string' }, label: { type: 'string' }, selected: { type: 'boolean' },
+              limit: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              deductible: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              percent: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+            },
+          } },
+        },
+      },
+      idCard: {
+        type: 'object', additionalProperties: false,
+        required: ['available', 'policyNumber', 'namedInsured', 'term', 'vehicles', 'state'],
+        properties: {
+          available: { type: 'boolean' }, policyNumber: { type: 'string' }, namedInsured: { type: 'string' },
+          term: { $ref: '#/components/schemas/PortalTerm' },
+          vehicles: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['index', 'year', 'make', 'model', 'vin'],
+            properties: {
+              index: { type: 'integer', minimum: 1 },
+              year: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              make: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              model: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              vin: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+            },
+          } },
+          state: { type: 'string', nullable: true },
+        },
+      },
     },
   },
   PortalDocumentsResponse: {
     type: 'object', required: ['documents'], additionalProperties: false,
-    properties: { documents: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
+    properties: { documents: { type: 'array', items: { type: 'object',
+      required: ['documentId', 'displayName', 'type', 'generatedAt', 'transaction', 'forms', 'contentId'],
+      additionalProperties: false, properties: {
       documentId: { type: 'string' }, displayName: { type: 'string' }, type: { type: 'string' },
-      generatedAt: { type: 'string', nullable: true }, transaction: { type: 'object', additionalProperties: true },
-      forms: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      generatedAt: { type: 'string', nullable: true },
+      transaction: { type: 'object', additionalProperties: false,
+        required: ['transactionId', 'transactionType', 'transactionNumber'],
+        properties: {
+          transactionId: { type: 'string', nullable: true }, transactionType: { type: 'string', nullable: true },
+          transactionNumber: { type: 'string', nullable: true },
+        },
+      },
+      forms: { type: 'array', items: { type: 'object', additionalProperties: false,
+        required: ['code', 'title', 'edition'],
+        properties: {
+          code: { type: 'string', nullable: true }, title: { type: 'string', nullable: true },
+          edition: { type: 'string', nullable: true },
+        },
+      } },
       contentId: { type: 'string', nullable: true },
     } } } },
   },
