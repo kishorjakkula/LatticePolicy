@@ -296,6 +296,18 @@ Actuarial Rating Workbench and Published Rater Integration
   - includes policy context, premium summary, coverage-level formula details, and structured calc trace table
   - persisted for issued policy transactions as `RATING_WORKSHEET` metadata
 
+Product Governance Releases
+- Product, rating, underwriting-rule, coverage, and form references are grouped
+  into one effective-dated release snapshot with a canonical SHA-256 digest.
+- Releases use a maker-checker lifecycle: Draft, Review, Approved, Scheduled,
+  Active, and Retired. Submitted artifacts are immutable and transitions are
+  retained in a tenant-scoped audit log.
+- Activating a release rejects overlapping active dates for the same product
+  and jurisdiction. Quote creation selects the most specific active release by
+  product, state, and effective date.
+- The selected release lineage is pinned to the quote and carried into the
+  policy projection and append-only policy-version metadata at bind.
+
 OpenAPI / Swagger Access Model
 - Swagger UI (`/api-docs`) and OpenAPI spec (`/openapi.json`) are admin-only.
 - UI "API Docs" navigation link is shown only for admin users.

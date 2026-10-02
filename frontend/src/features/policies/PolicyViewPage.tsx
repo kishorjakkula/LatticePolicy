@@ -645,6 +645,20 @@ function Tt() {
                     }),
                   ],
                 }),
+                r.productVersion &&
+                  e.jsxs("div", {
+                    className: "policy-summary-item",
+                    children: [
+                      e.jsx("div", {
+                        className: "policy-summary-label",
+                        children: "Governed Product Version",
+                      }),
+                      e.jsx("div", {
+                        className: "policy-summary-value",
+                        children: r.productVersion,
+                      }),
+                    ],
+                  }),
                 e.jsxs("div", {
                   className: "policy-summary-item",
                   children: [

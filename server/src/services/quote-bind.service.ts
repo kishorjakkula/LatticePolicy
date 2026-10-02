@@ -307,6 +307,9 @@ export async function bindQuote(
   const transactionMetadata: any = {
     sourceQuoteId: quoteId,
     transactionNumber,
+    ...(quote.payload?.governanceLineage
+      ? { governanceLineage: quote.payload.governanceLineage }
+      : {}),
     ...(referralId ? { uwReferralId: referralId } : {}),
     ...(primaryCustomerLink?.customerId
       ? { customerId: primaryCustomerLink.customerId }

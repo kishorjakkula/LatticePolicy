@@ -88,6 +88,19 @@ describe('quote-to-bind persistence', () => {
        DO UPDATE SET visibility = ARRAY['internal','customer']::text[], active = true`,
       [tenantId, formId],
     )
+    const governanceReleaseId = '11111111-1111-1111-1111-111111111148'
+    await db!.query(
+      `INSERT INTO product_governance_releases (
+         release_id, tenant_id, product_code, jurisdiction_code, version_label,
+         status, effective_date, artifacts, content_sha256, created_by,
+         submitted_by, approved_by, activated_by
+       ) VALUES ($1,$2,'personal-auto','CA','2026.1','ACTIVE','2026-01-01',$3::jsonb,$4,'maker','maker','checker','checker')
+       ON CONFLICT (release_id) DO NOTHING`,
+      [governanceReleaseId, tenantId, JSON.stringify({
+        product: { edition: '2026.1' }, rating: { version: 'r1' },
+        underwritingRules: ['uw-1'], coverages: ['BI', 'PD'], forms: ['PA-DEC'],
+      }), 'test-digest'],
+    )
 
     const quote = await createOrRateQuote(
       {} as any,
@@ -123,6 +136,10 @@ describe('quote-to-bind persistence', () => {
           (SELECT converted_policy_id::text FROM quotes WHERE tenant_id=$1 AND quote_id=$2) AS converted_policy_id,
           (SELECT status FROM policies WHERE tenant_id=$1 AND policy_id=$3) AS policy_status,
           (SELECT product_code FROM policies WHERE tenant_id=$1 AND policy_id=$3) AS product_code,
+          (SELECT product_version FROM policies WHERE tenant_id=$1 AND policy_id=$3) AS product_version,
+          (SELECT payload->'governanceLineage'->>'releaseId' FROM quotes WHERE tenant_id=$1 AND quote_id=$2) AS quote_release_id,
+          (SELECT metadata->'governanceLineage'->>'releaseId' FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$3 AND type='NB' LIMIT 1) AS transaction_release_id,
+          (SELECT payload->'governanceLineage'->>'releaseId' FROM policy_versions WHERE tenant_id=$1 AND policy_id=$3 LIMIT 1) AS version_release_id,
           (SELECT count(*)::int FROM policy_versions WHERE tenant_id=$1 AND policy_id=$3) AS version_count,
           (SELECT count(*)::int FROM policy_transactions WHERE tenant_id=$1 AND policy_id=$3 AND type='NB' AND status='Bound') AS transaction_count,
           (SELECT count(*)::int FROM ratings WHERE tenant_id=$1 AND policy_id=$3) AS rating_count,
@@ -141,6 +158,10 @@ describe('quote-to-bind persistence', () => {
     expect(row.converted_policy_id).toBe(bound.policyId)
     expect(row.policy_status).toBe('Bound')
     expect(row.product_code).toBe('personal-auto')
+    expect(row.product_version).toBe('2026.1')
+    expect(row.quote_release_id).toBe(governanceReleaseId)
+    expect(row.transaction_release_id).toBe(governanceReleaseId)
+    expect(row.version_release_id).toBe(governanceReleaseId)
     expect(row.version_count).toBe(1)
     expect(row.transaction_count).toBe(1)
     expect(row.rating_count).toBe(1)

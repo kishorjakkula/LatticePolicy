@@ -9,6 +9,7 @@ import { validateQuoteDetailed } from '../contracts.js'
 import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
+import { resolveGovernanceRelease } from './product-governance.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,22 @@ export async function createOrRateQuote(
       // Re-throw domain errors; swallow eligibility-table-not-found errors
       if (err?.code && typeof err.statusCode === 'number') throw err
     }
+  }
+
+  // Pin the exact approved release at quote time. Tenants without a governed
+  // release continue on the legacy product pack until governance is adopted.
+  try {
+    const governanceRelease = await withTenantTx(tenantId, innerDb =>
+      resolveGovernanceRelease(
+        toRawQuery(innerDb), tenantId, productCode, stateCode,
+        coerceDateOnly(body.effectiveDate, today())
+      ))
+    if (governanceRelease) {
+      body.productVersion = governanceRelease.versionLabel
+      body.governanceLineage = governanceRelease
+    }
+  } catch (error: any) {
+    if (error?.code !== '42P01') throw error
   }
 
   const premium = rate(tenantId, body)
