@@ -223,6 +223,19 @@ describe('policy transaction lifecycle persistence', () => {
     const issued = await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
     expect(issued.status).toBe('Issued')
 
+    const repeatedIssue = await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
+    expect(repeatedIssue).toMatchObject({ status: 'Issued', idempotent: true })
+
+    const issueIntents = await db!.query(
+      `SELECT count(*)::int AS count
+         FROM notification_intents
+        WHERE tenant_id = $1
+          AND policy_id = $2
+          AND event_type = 'POLICY_ISSUED'`,
+      [tenantId, bound.policyId],
+    )
+    expect(issueIntents.rows[0].count).toBe(1)
+
     const cancelled = await tx((db) =>
       cancelPolicy(
         db,

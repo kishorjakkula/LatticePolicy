@@ -50,10 +50,10 @@ function reserveTransactionNumber(mode: TransactionNumberMode): string {
 function validateTransactionNumberReservation(
   mode: TransactionNumberMode,
   rawStatus: any
-): { code: string; message: string } | null {
+) {
   const action: PolicyTransactionAction = mode === 'renew' ? 'renew' : mode
   const result = validatePolicyTransactionState(action, rawStatus)
-  return result.ok ? null : { code: result.code, message: result.message }
+  return result.ok ? null : result
 }
 
 function parseTransactionNumberMode(value: any): TransactionNumberMode | null {
@@ -83,8 +83,8 @@ function policyNotFound(): never {
   throw new NotFoundError('POLICY_NOT_FOUND', 'Policy not found')
 }
 
-function invalidTransactionState(error: { code: string; message: string }): never {
-  throw new BadRequestError(error.code, error.message)
+function invalidTransactionState(error: { code: string; message: string; [key: string]: unknown }): never {
+  throw new BadRequestError(error.code, error.message, error)
 }
 
 export const transactionRoutes = Router()

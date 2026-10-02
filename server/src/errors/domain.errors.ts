@@ -28,5 +28,5 @@ export class ConflictError extends AppError {
 }
 
 export class BadRequestError extends AppError {
-  constructor(code: string, message: string) { super(400, code, message) }
+  constructor(code: string, message: string, details?: unknown) { super(400, code, message, details) }
 }

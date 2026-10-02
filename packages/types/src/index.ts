@@ -29,14 +29,12 @@ export type TenantPreferences = {
 // ─── Policy ──────────────────────────────────────────────────────────────────
 
 export type PolicyStatus =
+  | 'Quote'
   | 'Draft'
-  | 'Quoted'
   | 'Bound'
-  | 'Active'
+  | 'Issued'
   | 'Cancelled'
   | 'Expired'
-  | 'NonRenewed'
-  | 'PendingCancellation'
 
 export type TransactionType =
   | 'Issue'

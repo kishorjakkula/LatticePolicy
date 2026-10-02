@@ -1,52 +1,83 @@
 import { describe, expect, it } from 'vitest'
-import { validatePolicyTransactionState } from '../transaction-state.js'
+import {
+  POLICY_LIFECYCLE_STATES,
+  POLICY_TRANSITIONS,
+  parsePolicyLifecycleState,
+  resolvePolicyTransition,
+  validatePolicyTransactionState,
+  type PolicyTransactionAction,
+} from '../transaction-state.js'
 
-describe('policy transaction state validation', () => {
-  it('allows issuing bound or already issued policies only', () => {
-    expect(validatePolicyTransactionState('issue', 'Bound')).toEqual({ ok: true })
-    expect(validatePolicyTransactionState('issue', 'Issued')).toEqual({ ok: true })
-    expect(validatePolicyTransactionState('issue', 'Cancelled')).toMatchObject({
-      ok: false,
-      code: 'INVALID_STATE',
-      message: 'Policy is cancelled',
-    })
-    expect(validatePolicyTransactionState('issue', 'Draft')).toMatchObject({
-      ok: false,
-      code: 'INVALID_STATE',
-      message: 'Cannot issue policy from status Draft',
-    })
+describe('canonical policy lifecycle state machine', () => {
+  it('uses the persisted policy status vocabulary', () => {
+    expect(POLICY_LIFECYCLE_STATES).toEqual([
+      'Quote', 'Draft', 'Bound', 'Issued', 'Cancelled', 'Expired',
+    ])
+    expect(parsePolicyLifecycleState('issued')).toBe('Issued')
+    expect(parsePolicyLifecycleState('Active')).toBeNull()
+    expect(parsePolicyLifecycleState('')).toBeNull()
   })
 
-  it('keeps cancellation, reinstatement, and rewrite mutually consistent', () => {
-    expect(validatePolicyTransactionState('cancel', 'Issued')).toEqual({ ok: true })
-    expect(validatePolicyTransactionState('cancel', 'Cancelled')).toMatchObject({
-      ok: false,
-      message: 'Policy already cancelled',
-    })
-    expect(validatePolicyTransactionState('reinstate', 'Cancelled')).toEqual({ ok: true })
-    expect(validatePolicyTransactionState('reinstate', 'Issued')).toMatchObject({
-      ok: false,
-      message: 'Policy is not cancelled',
-    })
-    expect(validatePolicyTransactionState('rewrite', 'Cancelled')).toEqual({ ok: true })
-    expect(validatePolicyTransactionState('rewrite', 'Issued')).toMatchObject({
-      ok: false,
-      message: 'Policy must be cancelled to rewrite',
-    })
+  it('defines the expected production transition matrix', () => {
+    const allowed: Array<[PolicyTransactionAction, string, string]> = [
+      ['bind', 'Quote', 'Bound'],
+      ['bind', 'Draft', 'Bound'],
+      ['issue', 'Bound', 'Issued'],
+      ['endorse', 'Issued', 'Issued'],
+      ['cancel', 'Bound', 'Cancelled'],
+      ['cancel', 'Issued', 'Cancelled'],
+      ['reinstate', 'Cancelled', 'Issued'],
+      ['rewrite', 'Cancelled', 'Issued'],
+      ['renew', 'Issued', 'Issued'],
+      ['nonRenew', 'Issued', 'Issued'],
+      ['expire', 'Issued', 'Expired'],
+    ]
+    for (const [action, fromState, toState] of allowed) {
+      expect(resolvePolicyTransition(action, fromState)).toMatchObject({
+        action, fromState, toState, idempotent: false,
+      })
+    }
   })
 
-  it('blocks forward transactions once a policy is cancelled', () => {
-    expect(validatePolicyTransactionState('endorse', 'Cancelled')).toMatchObject({
-      ok: false,
-      message: 'Policy is cancelled',
-    })
+  it('marks only explicitly repeatable terminal operations as idempotent', () => {
+    expect(resolvePolicyTransition('bind', 'Bound')).toMatchObject({ idempotent: true })
+    expect(resolvePolicyTransition('issue', 'Issued')).toMatchObject({ idempotent: true })
+    expect(resolvePolicyTransition('expire', 'Expired')).toMatchObject({ idempotent: true })
+    expect(resolvePolicyTransition('cancel', 'Cancelled')).toBeNull()
+    expect(resolvePolicyTransition('endorse', 'Issued')).toMatchObject({ idempotent: false })
+  })
+
+  it('rejects every action outside its declared source states', () => {
+    for (const action of Object.keys(POLICY_TRANSITIONS) as PolicyTransactionAction[]) {
+      for (const state of POLICY_LIFECYCLE_STATES) {
+        const definition = POLICY_TRANSITIONS[action]
+        const expected = definition.allowedFrom.includes(state) || definition.idempotentFrom?.includes(state)
+        expect(validatePolicyTransactionState(action, state).ok, `${action} from ${state}`).toBe(Boolean(expected))
+      }
+    }
+  })
+
+  it('returns structured transition context for invalid requests', () => {
     expect(validatePolicyTransactionState('renew', 'Cancelled')).toMatchObject({
       ok: false,
+      code: 'INVALID_STATE',
+      action: 'renew',
+      currentState: 'Cancelled',
+      allowedFrom: ['Issued'],
+      targetState: 'Issued',
       message: 'Policy is cancelled',
     })
-    expect(validatePolicyTransactionState('nonRenew', 'Cancelled')).toMatchObject({
+    expect(validatePolicyTransactionState('cancel', 'Draft')).toMatchObject({
       ok: false,
-      message: 'Cannot non-renew a cancelled policy.',
+      action: 'cancel',
+      currentState: 'Draft',
+      allowedFrom: ['Bound', 'Issued'],
+      targetState: 'Cancelled',
+    })
+    expect(validatePolicyTransactionState('issue', undefined)).toMatchObject({
+      ok: false,
+      currentState: '',
+      message: 'Cannot issue policy without a lifecycle status',
     })
   })
 })
