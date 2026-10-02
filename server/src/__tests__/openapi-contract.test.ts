@@ -63,7 +63,12 @@ describe('OpenAPI contract drift checks', () => {
     expect(spec.paths['/v1/customer-portal/summary'].get.responses['200'].content['application/json'].schema.$ref)
       .toBe('#/components/schemas/PortalSummaryResponse')
     expect(spec.components.schemas.PortalPolicySummary.additionalProperties).toBe(false)
+    expect(spec.components.schemas.PortalPolicySummary.properties.premium.nullable).toBe(true)
+    expect(spec.components.schemas.PortalPolicyDetailResponse.properties.declarations.additionalProperties).toBe(false)
+    expect(spec.components.schemas.PortalPolicyDetailResponse.properties.idCard.additionalProperties).toBe(false)
     expect(spec.components.schemas.PortalDocumentsResponse.additionalProperties).toBe(false)
+    expect(spec.components.schemas.PortalDocumentsResponse.properties.documents.items.properties.transaction.additionalProperties)
+      .toBe(false)
   })
 
   it('documents standard traceable error responses', () => {

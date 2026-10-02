@@ -166,6 +166,12 @@ which returns `{ "policy": {...}, "declarations": {...}, "idCard": {...} }`
 and `404 POLICY_NOT_FOUND` for a policy not linked to the caller's customer
 record.
 
+Successful portal summary, policy detail, and document-list responses are
+validated with strict runtime schemas before serialization. Unknown fields or
+malformed nested values fail closed with `PORTAL_RESPONSE_CONTRACT_ERROR`;
+validation paths are logged server-side without returning internal contract
+details to the customer.
+
 Errors
 - JSON error envelope with machine-readable fields:
   - `code`: stable error code such as `VALIDATION_ERROR`,
