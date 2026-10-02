@@ -82,6 +82,9 @@ export interface InsertPolicyVersionArgs {
   baseTimelineVersion?: number | null
   timelineVersion?: number | null
   claimReference?: string | null
+  cancellationReasonCode?: string | null
+  cancellationType?: string | null
+  returnPremiumAmount?: number | null
 }
 
 export interface InsertRatingArgs {
@@ -357,7 +360,10 @@ export async function insertPolicyVersion(q: DrizzleDB, args: InsertPolicyVersio
     transactionNumber = null,
     baseTimelineVersion = null,
     timelineVersion = null,
-    claimReference = null
+    claimReference = null,
+    cancellationReasonCode = null,
+    cancellationType = null,
+    returnPremiumAmount = null
   } = args
 
   const dbTransactionType = normalizeTxnType(transactionType) || transactionType
@@ -381,7 +387,10 @@ export async function insertPolicyVersion(q: DrizzleDB, args: InsertPolicyVersio
     transactionNumber,
     baseTimelineVersion,
     timelineVersion,
-    claimReference
+    claimReference,
+    cancellationReasonCode,
+    cancellationType,
+    returnPremiumAmount: returnPremiumAmount === null ? null : String(returnPremiumAmount) as any
   })
 }
 

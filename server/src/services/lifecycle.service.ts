@@ -34,6 +34,7 @@ import {
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import {
   deriveTimelineSegments,
   findTimelineStateAtDate,
@@ -290,6 +291,7 @@ export async function issuePolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const policyRes: any = await q(
     `SELECT policy_id, policy_number, product_code, status, term_effective_date,
             term_expiration_date, currency_code, premium_summary, lifecycle, metadata
@@ -399,6 +401,7 @@ export async function cancelPolicy(
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
@@ -564,18 +567,12 @@ export async function cancelPolicy(
     baseTimelineVersion,
     timelineVersion,
     claimReference: claimReference || null,
+    cancellationReasonCode: cancellationReasonCode || null,
+    cancellationType: resolvedCancellationType,
+    returnPremiumAmount: refund,
   })
 
   await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)
-
-  if (cancellationReasonCode || resolvedCancellationType) {
-    await q(
-      `UPDATE policy_versions
-          SET cancellation_reason_code = $1, cancellation_type = $2, return_premium_amount = $3
-        WHERE tenant_id = $4 AND version_id = $5`,
-      [cancellationReasonCode || null, resolvedCancellationType, refund, tenantId, versionId]
-    ).catch(() => { /* non-fatal if columns not yet migrated */ })
-  }
 
   await insertRating(db, {
     tenantId,
@@ -681,6 +678,7 @@ export async function reinstatePolicy(
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
@@ -901,6 +899,7 @@ export async function renewPolicy(
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
   const overrideEffectiveDate = asDateOnly(body?.effectiveDate)
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
@@ -1196,6 +1195,7 @@ export async function rewritePolicy(
     typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
   const overrideEffectiveDate = asDateOnly(body?.effectiveDate)
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
@@ -1533,6 +1533,7 @@ export async function nonRenewPolicy(
   const reasonDescription = typeof body?.reasonDescription === 'string' ? body.reasonDescription.trim() : ''
   const noticeDate = asDateOnly(body?.noticeDate) || today()
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy

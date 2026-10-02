@@ -27,6 +27,7 @@ import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../li
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 import {
   buildEndorsementChangeSet,
@@ -727,6 +728,7 @@ export async function executeEndorsement(
   const endorsementNotes = typeof body.notes === 'string' ? body.notes.trim() : ''
   const requestedTransactionNumber = typeof body.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
