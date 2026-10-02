@@ -83,6 +83,30 @@ Document Architecture (Operational + Customer-Facing)
   - contains rating input/premium/calc-trace snapshot for actuarial/UW auditability
 - Customer portal consumes minimal policy detail and renders customer-safe PDF views; it does not expose raw internal calc traces.
 
+Canonical Policy Lifecycle
+- Persisted policy status uses one vocabulary: `Quote`, `Draft`, `Bound`,
+  `Issued`, `Cancelled`, and `Expired`. Display concepts such as "in force" are
+  derived from status and effective dates rather than persisted as another status.
+- Every policy-changing service validates its action through the shared state
+  machine before writing a transaction or lifecycle side effect.
+- Repeating `bind`, `issue`, or `expire` after the policy has reached that action's
+  target state is idempotent. It returns the existing state without creating a
+  duplicate transaction, document, event, or notification.
+- `nonRenew` records the decision and future term disposition; the current policy
+  remains `Issued` until its term expires.
+
+| Action | Allowed current state | Resulting state |
+| --- | --- | --- |
+| Bind | `Quote`, `Draft` | `Bound` |
+| Issue | `Bound` | `Issued` |
+| Endorse | `Issued` | `Issued` |
+| Cancel | `Bound`, `Issued` | `Cancelled` |
+| Reinstate | `Cancelled` | `Issued` |
+| Rewrite | `Cancelled` | `Issued` |
+| Renew | `Issued` | `Issued` |
+| Non-renew | `Issued` | `Issued` |
+| Expire | `Issued` | `Expired` |
+
 Effective-Dated Transaction Architecture (Out-of-Sequence Safe)
 - Every policy transaction is immutable and must store:
   - `transaction_id`, `policy_id`, `transaction_type`, `status`

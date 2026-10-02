@@ -136,7 +136,7 @@ function validateTransactionNumberReservation(
 
 function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
   const result = validatePolicyTransactionState(action, status)
-  if (!result.ok) throw new BadRequestError(result.code, result.message)
+  if (!result.ok) throw new BadRequestError(result.code, result.message, result)
 }
 
 function generateTransactionNumber(prefix = 'EN-'): string {

@@ -389,6 +389,28 @@ describe('quote and policy fallback API', () => {
   it('reserves transaction numbers and validates reservation modes', async () => {
     const policy = await createBoundPolicy()
 
+    const prematureEndorsement = await request(app)
+      .post(`/api/v1/policies/${policy.policyId}/endorse/reserve-number`)
+      .set('X-Tenant', tenantId)
+      .send({})
+
+    expect(prematureEndorsement.status).toBe(400)
+    expect(prematureEndorsement.body).toMatchObject({
+      code: 'INVALID_STATE',
+      details: {
+        action: 'endorse',
+        currentState: 'Bound',
+        allowedFrom: ['Issued'],
+        targetState: 'Issued',
+      },
+    })
+
+    await request(app)
+      .post(`/api/v1/policies/${policy.policyId}/issue`)
+      .set('X-Tenant', tenantId)
+      .send({})
+      .expect(200)
+
     const endorseRes = await request(app)
       .post(`/api/v1/policies/${policy.policyId}/endorse/reserve-number`)
       .set('X-Tenant', tenantId)

@@ -20,7 +20,12 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
-import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
+import {
+  resolvePolicyTransition,
+  validatePolicyTransactionState,
+  type PolicyTransactionAction,
+  type PolicyTransition,
+} from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
@@ -186,9 +191,10 @@ function reserveTransactionNumber(mode: TransactionNumberMode): string {
   return generateTransactionNumber(transactionNumberPrefix(mode))
 }
 
-function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
+function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): PolicyTransition {
   const result = validatePolicyTransactionState(action, status)
-  if (!result.ok) throw new BadRequestError(result.code, result.message)
+  if (!result.ok) throw new BadRequestError(result.code, result.message, result)
+  return resolvePolicyTransition(action, status)!
 }
 
 async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string): Promise<any> {
@@ -293,7 +299,16 @@ export async function issuePolicy(
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = policyRes.rows[0]
-  assertPolicyTransactionState('issue', policyRow.status)
+  const transition = assertPolicyTransactionState('issue', policyRow.status)
+  if (transition.idempotent) {
+    return {
+      policyId,
+      policyNumber: policyRow.policy_number,
+      status: transition.toState,
+      issuedAt: policyRow.lifecycle?.issuedAt || null,
+      idempotent: true,
+    }
+  }
   const issuedAt = new Date().toISOString()
   const lifecycle = {
     ...(policyRow.lifecycle || {}),
@@ -1665,7 +1680,7 @@ export async function nonRenewPolicy(
       policyId,
       'NON_RENEWAL_ISSUED',
       policyRow.status,
-      'NonRenewed',
+      'Issued',
       JSON.stringify({ noticeDate, reasonCode, termExpiration, transactionNumber }),
       actor?.id || null,
     ]
