@@ -9,6 +9,7 @@ import {
   computePlacementForTransaction,
   validateParticipantShares
 } from '../services/reinsurance.service.js'
+import { validateContractBody } from '../contracts.js'
 
 export const reinsuranceAdminRoutes = Router()
 
@@ -68,7 +69,7 @@ reinsuranceAdminRoutes.get('/treaties', requirePermission('admin.reinsurance.rea
   }
 })
 
-reinsuranceAdminRoutes.post('/treaties', requirePermission('admin.reinsurance.manage'), async (req, res, next) => {
+reinsuranceAdminRoutes.post('/treaties', requirePermission('admin.reinsurance.manage'), validateContractBody('reinsurance-treaty.request'), async (req, res, next) => {
   const tenantId = req.tenant!.tenantId
   const body = req.body || {}
   try {

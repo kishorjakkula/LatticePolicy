@@ -14,6 +14,7 @@ import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
 import { getAllowedOrigins, isManagedDeployment, isTruthyEnv } from './config.js'
+import { validateMutationEnvelope } from './contracts.js'
 
 export function createApp() {
   const app = express()
@@ -128,7 +129,7 @@ export function createApp() {
   app.post('/auth/mfa/setup/confirm', authLimiter, handleMfaSetupConfirm)
   app.use('/auth/sso', loginLimiter, ssoRoutes)
 
-  app.use('/api/v1', requireTenant, idempotencyMiddleware, routes)
+  app.use('/api/v1', requireTenant, validateMutationEnvelope, idempotencyMiddleware, routes)
 
   // Global error handler — must be last middleware
   app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
