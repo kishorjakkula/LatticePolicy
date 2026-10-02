@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildOpenApiSpec, routeDefs } from '../openapi.js'
+import { buildOpenApiSpec, getCompleteRouteDefs, routeDefs } from '../openapi.js'
+import { collectRegisteredRoutes, countUnregisteredMountedRouters } from '../route-registry.js'
+import { routes } from '../routes/index.js'
 
 describe('OpenAPI contract drift checks', () => {
   const spec = buildOpenApiSpec('http://localhost:3300') as any
@@ -11,6 +13,57 @@ describe('OpenAPI contract drift checks', () => {
       Object.values(path).map((operation: any) => operation.operationId),
     )
     expect(new Set(operationIds).size).toBe(operationIds.length)
+  })
+
+  it('documents every registered Express API route', () => {
+    const documented = new Set(Object.entries(spec.paths).flatMap(([path, operations]: [string, any]) =>
+      Object.keys(operations).map((method) => `${method.toUpperCase()} ${path}`),
+    ))
+    const registered = collectRegisteredRoutes(routes, '/v1')
+    for (const route of registered) {
+      expect(documented.has(`${route.method.toUpperCase()} ${route.path}`), `${route.method} ${route.path}`).toBe(true)
+    }
+    expect(getCompleteRouteDefs().length).toBeGreaterThan(routeDefs.length)
+  })
+
+  it('requires nested routers to participate in the route registry', () => {
+    expect(countUnregisteredMountedRouters(routes)).toBe(0)
+  })
+
+  it('rejects stale manually documented API operations', () => {
+    const registered = new Set(collectRegisteredRoutes(routes, '/v1').map((route) =>
+      `${route.method.toUpperCase()} ${route.path}`,
+    ))
+    const stale = routeDefs
+      .filter((route) => route.path.startsWith('/v1'))
+      .map((route) => `${route.method.toUpperCase()} ${route.path}`)
+      .filter((key) => !registered.has(key))
+    expect(stale).toEqual([])
+  })
+
+  it('publishes a request contract for every JSON mutation', () => {
+    for (const [path, operations] of Object.entries(spec.paths) as [string, any][]) {
+      for (const method of ['post', 'patch', 'put']) {
+        const operation = operations[method]
+        if (!operation) continue
+        expect(operation.requestBody, `${method.toUpperCase()} ${path}`).toBeTruthy()
+        expect(operation.requestBody.content['application/json'].schema).toBeTruthy()
+      }
+    }
+  })
+
+  it('uses detailed contracts for import and reinsurance mutations', () => {
+    expect(spec.paths['/v1/admin/import/batches'].post.requestBody.content['application/json'].schema.$ref)
+      .toBe('#/components/schemas/DataImportBatchRequest')
+    expect(spec.paths['/v1/admin/reinsurance/treaties'].post.requestBody.content['application/json'].schema.$ref)
+      .toBe('#/components/schemas/ReinsuranceTreatyRequest')
+  })
+
+  it('documents strict customer-safe portal projections', () => {
+    expect(spec.paths['/v1/customer-portal/summary'].get.responses['200'].content['application/json'].schema.$ref)
+      .toBe('#/components/schemas/PortalSummaryResponse')
+    expect(spec.components.schemas.PortalPolicySummary.additionalProperties).toBe(false)
+    expect(spec.components.schemas.PortalDocumentsResponse.additionalProperties).toBe(false)
   })
 
   it('documents standard traceable error responses', () => {
@@ -77,7 +130,7 @@ describe('OpenAPI contract drift checks', () => {
       '/v1/quotes/{id}/bind',
       '/v1/policies/{id}',
       '/v1/policies/{id}/versions',
-      '/v1/customer-portal/policies',
+      '/v1/customer-portal/summary',
       '/v1/admin/exposure/summary',
       '/v1/admin/exposure/export.csv',
     ]) {

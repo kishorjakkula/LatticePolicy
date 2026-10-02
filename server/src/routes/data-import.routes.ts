@@ -14,6 +14,7 @@ import {
   commitImportBatch,
   retryImportRow
 } from '../services/data-import.service.js'
+import { validateContractBody } from '../contracts.js'
 
 export const dataImportRoutes = Router()
 
@@ -49,8 +50,10 @@ dataImportRoutes.get('/batches', async (req, res) => {
   }
 })
 
-dataImportRoutes.post('/batches', async (req, res) => {
+dataImportRoutes.post('/batches', (req, res, next) => {
   if (!canManage(req)) return res.status(403).json({ code: 'FORBIDDEN' })
+  next()
+}, validateContractBody('data-import-batch.request'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
   const entityType = sanitizeText(req.body?.entityType)
   const sourceSystem = sanitizeText(req.body?.sourceSystem)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateQuote, validateQuoteDetailed } from '../contracts.js'
+import { validateContract, validateQuote, validateQuoteDetailed } from '../contracts.js'
 
 const validQuote = {
   productCode: 'personal-auto',
@@ -54,5 +54,30 @@ describe('contract validation', () => {
     const result = validateQuoteDetailed(validQuote)
 
     expect(result.valid).toBe(true)
+  })
+
+  it('validates data import batches before staging', () => {
+    expect(validateContract('data-import-batch.request', {
+      entityType: 'customer', sourceSystem: 'agency-feed', rows: [{}],
+    }).valid).toBe(true)
+    const invalid = validateContract('data-import-batch.request', {
+      entityType: 'customer', sourceSystem: 'agency-feed', rows: [], unexpected: true,
+    })
+    expect(invalid.valid).toBe(false)
+    expect(invalid.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '/rows', keyword: 'minItems' }),
+      expect.objectContaining({ keyword: 'additionalProperties' }),
+    ]))
+  })
+
+  it('validates required reinsurance treaty structure', () => {
+    const invalid = validateContract('reinsurance-treaty.request', {
+      treatyName: '2027 Cat XOL', treatyType: 'XOL', layers: [],
+    })
+    expect(invalid.valid).toBe(false)
+    expect(invalid.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ keyword: 'required' }),
+      expect.objectContaining({ path: '/layers', keyword: 'minItems' }),
+    ]))
   })
 })

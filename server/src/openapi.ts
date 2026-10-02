@@ -1,3 +1,6 @@
+import { collectRegisteredRoutes } from './route-registry.js'
+import { routes } from './routes/index.js'
+
 export type RouteDef = {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete'
   path: string
@@ -159,7 +162,7 @@ export const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/quotes', tag: 'Admin - Customers', summary: 'List customer quotes' },
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/ai-insights', tag: 'Admin - Customers', summary: 'Get customer AI/ML insights' },
 
-  { method: 'get', path: '/v1/customer-portal/policies', tag: 'Customer Portal', summary: 'List portal-safe customer policies' },
+  { method: 'get', path: '/v1/customer-portal/summary', tag: 'Customer Portal', summary: 'Get portal-safe customer and policy summary' },
   { method: 'get', path: '/v1/customer-portal/policies/{policyId}', tag: 'Customer Portal', summary: 'Get portal-safe policy detail' },
 
   { method: 'get', path: '/v1/admin/onboarding/settings', tag: 'Admin - Onboarding', summary: 'Get onboarding settings' },
@@ -189,6 +192,22 @@ export const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/admin/exposure/summary', tag: 'Admin - Exposure', summary: 'Get aggregated exposure summary' },
   { method: 'get', path: '/v1/admin/exposure/export.csv', tag: 'Admin - Exposure', summary: 'Export exposure dataset as CSV' }
 ]
+
+export function getCompleteRouteDefs(): RouteDef[] {
+  const complete = [...routeDefs]
+  const known = new Set(complete.map((route) => `${route.method.toUpperCase()} ${route.path}`))
+  for (const route of collectRegisteredRoutes(routes, '/v1')) {
+    const key = `${route.method.toUpperCase()} ${route.path}`
+    if (known.has(key)) continue
+    complete.push({
+      ...route,
+      tag: 'API',
+      summary: `${route.method.toUpperCase()} ${route.path}`,
+    })
+    known.add(key)
+  }
+  return complete
+}
 
 function pathToParameters(path: string) {
   const matches = Array.from(path.matchAll(/\{([^}]+)\}/g))
@@ -239,6 +258,75 @@ const standardErrorResponses = {
 }
 
 const componentSchemas: Record<string, any> = {
+  GenericJsonObject: {
+    type: 'object',
+    additionalProperties: true,
+    description: 'Baseline JSON object contract. Domain-specific mutation schemas override this where available.',
+  },
+  DataImportBatchRequest: {
+    type: 'object',
+    required: ['entityType', 'sourceSystem', 'rows'],
+    properties: {
+      entityType: { type: 'string', minLength: 1, maxLength: 80 },
+      sourceSystem: { type: 'string', minLength: 1, maxLength: 120 },
+      rows: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'object' } },
+      notes: { type: 'string', maxLength: 2000 },
+    },
+    additionalProperties: false,
+  },
+  ReinsuranceTreatyRequest: {
+    type: 'object',
+    required: ['treatyName', 'treatyType', 'effectiveDate', 'expirationDate', 'layers'],
+    properties: {
+      treatyName: { type: 'string', minLength: 1, maxLength: 200 },
+      treatyType: { type: 'string', minLength: 1, maxLength: 80 },
+      effectiveDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      expirationDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      layers: { type: 'array', minItems: 1, items: { type: 'object' } },
+    },
+    additionalProperties: true,
+  },
+  PortalPolicySummary: {
+    type: 'object',
+    required: ['policyId', 'policyNumber', 'productCode', 'status', 'term', 'premium'],
+    properties: {
+      policyId: { type: 'string' }, policyNumber: { type: 'string' },
+      productCode: { type: 'string' }, status: { type: 'string' },
+      term: { type: 'object', additionalProperties: false, properties: {
+        effectiveDate: { type: 'string', nullable: true }, expirationDate: { type: 'string', nullable: true },
+      } },
+      premium: { type: 'object', additionalProperties: true },
+      createdAt: { type: 'string', nullable: true }, updatedAt: { type: 'string', nullable: true },
+    },
+    additionalProperties: false,
+  },
+  PortalSummaryResponse: {
+    type: 'object', required: ['customer', 'policies'], additionalProperties: false,
+    properties: {
+      customer: { type: 'object', additionalProperties: false, properties: {
+        customerId: { type: 'string' }, customerKey: { type: 'string' },
+        customerName: { type: 'string' }, entityType: { type: 'string' },
+      } },
+      policies: { type: 'array', items: { $ref: '#/components/schemas/PortalPolicySummary' } },
+    },
+  },
+  PortalPolicyDetailResponse: {
+    type: 'object', required: ['policy', 'declarations', 'idCard'], additionalProperties: false,
+    properties: {
+      policy: { $ref: '#/components/schemas/PortalPolicySummary' },
+      declarations: { type: 'object', additionalProperties: true },
+      idCard: { type: 'object', additionalProperties: true },
+    },
+  },
+  PortalDocumentsResponse: {
+    type: 'object', required: ['documents'], additionalProperties: false,
+    properties: { documents: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
+      documentId: { type: 'string' }, displayName: { type: 'string' }, type: { type: 'string' },
+      generatedAt: { type: 'string', nullable: true }, transaction: { type: 'object', additionalProperties: true },
+      forms: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      contentId: { type: 'string', nullable: true },
+    } } } },
+  },
   ErrorResponse: {
     type: 'object',
     required: ['code', 'message', 'traceId'],
@@ -704,6 +792,29 @@ const operationOverrides: Record<string, any> = {
     },
     responses: { '200': jsonResponse({ type: 'object', additionalProperties: true }) }
   },
+  'POST /v1/admin/import/batches': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/DataImportBatchRequest' } } }
+    },
+    responses: { '201': jsonResponse({ type: 'object', additionalProperties: true }) }
+  },
+  'POST /v1/admin/reinsurance/treaties': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/ReinsuranceTreatyRequest' } } }
+    },
+    responses: { '201': jsonResponse({ type: 'object', additionalProperties: true }) }
+  },
+  'GET /v1/customer-portal/summary': {
+    responses: { '200': jsonResponse('PortalSummaryResponse') }
+  },
+  'GET /v1/customer-portal/policies/{policyId}': {
+    responses: { '200': jsonResponse('PortalPolicyDetailResponse') }
+  },
+  'GET /v1/customer-portal/policies/{policyId}/documents': {
+    responses: { '200': jsonResponse('PortalDocumentsResponse') }
+  },
   'GET /v1/rating/published': {
     parameters: [
       { name: 'productCode', in: 'query', schema: { type: 'string' }, required: false },
@@ -716,13 +827,14 @@ const operationOverrides: Record<string, any> = {
 }
 
 export function buildOpenApiSpec(serverUrl: string) {
-  const routeKeys = routeDefs.map((route) => `${route.method.toUpperCase()} ${route.path}`)
+  const completeRouteDefs = getCompleteRouteDefs()
+  const routeKeys = completeRouteDefs.map((route) => `${route.method.toUpperCase()} ${route.path}`)
   const duplicates = routeKeys.filter((key, index) => routeKeys.indexOf(key) !== index)
   if (duplicates.length) throw new Error(`Duplicate OpenAPI routes: ${Array.from(new Set(duplicates)).join(', ')}`)
   const staleOverrides = Object.keys(operationOverrides).filter((key) => !routeKeys.includes(key))
   if (staleOverrides.length) throw new Error(`OpenAPI overrides reference missing routes: ${staleOverrides.join(', ')}`)
   const paths: Record<string, any> = {}
-  for (const route of routeDefs) {
+  for (const route of completeRouteDefs) {
     const path = route.path
     const method = route.method
     if (!paths[path]) paths[path] = {}
@@ -740,6 +852,12 @@ export function buildOpenApiSpec(serverUrl: string) {
       responses: {
         '200': { description: 'Success' },
         ...standardErrorResponses
+      }
+    }
+    if (['post', 'patch', 'put'].includes(method)) {
+      ;(baseOp as any).requestBody = {
+        required: false,
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/GenericJsonObject' } } },
       }
     }
     const mergedOp = {
@@ -760,10 +878,10 @@ export function buildOpenApiSpec(serverUrl: string) {
       title: 'LatticePolicy API',
       version: '1.0.0',
       description:
-        'Operational API inventory for LatticePolicy. This is a route-level catalog (schemas are intentionally minimal and can be expanded into a full OpenAPI contract).'
+        'Runtime-derived API inventory for LatticePolicy with baseline mutation contracts and detailed schemas for high-risk operations.'
     },
     servers: [{ url: serverUrl }],
-    tags: Array.from(new Set(routeDefs.map((r) => r.tag))).sort().map((name) => ({ name })),
+    tags: Array.from(new Set(completeRouteDefs.map((r) => r.tag))).sort().map((name) => ({ name })),
     components: {
       securitySchemes: {
         BearerAuth: {

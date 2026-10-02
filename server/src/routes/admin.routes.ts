@@ -78,6 +78,7 @@ import {
 import { generatePolicyNumber } from '../policyNumbers.js'
 import { buildCacheKey, cacheDeleteKey, cacheDeletePrefix } from '../cache.js'
 import { routeParam } from '../lib/utils.js'
+import { mountRouter } from '../route-registry.js'
 
 export const adminRoutes = Router()
 const DUPLICATE_UW_COMPANY_MESSAGE =
@@ -85,17 +86,17 @@ const DUPLICATE_UW_COMPANY_MESSAGE =
 const memoryTenantNames = new Map<string, string>()
 
 adminRoutes.use(requirePermission('menu.admin.view'))
-adminRoutes.use('/forms', requirePermission('admin.forms.read'), formsAdminRoutes)
-adminRoutes.use('/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
-adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
-adminRoutes.use('/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
-adminRoutes.use('/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
-adminRoutes.use('/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
-adminRoutes.use('/import', requirePermission('admin.import.read'), dataImportRoutes)
-adminRoutes.use('/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
-adminRoutes.use('/exposure', requirePermission('admin.exposure.read'), exposureRoutes)
-adminRoutes.use('/reinsurance', reinsuranceAdminRoutes)
-adminRoutes.use('/bordereaux', bordereauxRoutes)
+mountRouter(adminRoutes, '/forms', requirePermission('admin.forms.read'), formsAdminRoutes)
+mountRouter(adminRoutes, '/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
+mountRouter(adminRoutes, '/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
+mountRouter(adminRoutes, '/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
+mountRouter(adminRoutes, '/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
+mountRouter(adminRoutes, '/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
+mountRouter(adminRoutes, '/import', requirePermission('admin.import.read'), dataImportRoutes)
+mountRouter(adminRoutes, '/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
+mountRouter(adminRoutes, '/exposure', requirePermission('admin.exposure.read'), exposureRoutes)
+mountRouter(adminRoutes, '/reinsurance', reinsuranceAdminRoutes)
+mountRouter(adminRoutes, '/bordereaux', bordereauxRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId

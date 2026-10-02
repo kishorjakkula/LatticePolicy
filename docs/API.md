@@ -177,6 +177,14 @@ Errors
   - `details`: optional structured details. Contract validation details include
     JSON path, JSON Schema keyword, message, schema source, and keyword params.
 
+Contract inventory
+
+The OpenAPI document is generated from the mounted Express route registry, so
+new endpoints cannot remain invisible to API clients. Every JSON mutation has
+a baseline object request contract; high-risk quote, lifecycle, import, rating,
+and reinsurance operations replace it with a named domain schema. CI rejects
+both undocumented Express routes and stale manually documented operations.
+
 Example validation response:
 
 ```json

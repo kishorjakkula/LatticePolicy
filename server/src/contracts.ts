@@ -2,8 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js'
+import type { RequestHandler } from 'express'
+import { ValidationError } from './errors/domain.errors.js'
 
-type ContractName = 'quote.request'
+export type ContractName = 'quote.request' | 'data-import-batch.request' | 'reinsurance-treaty.request'
 
 export type ContractValidationError = {
   path: string
@@ -20,6 +22,8 @@ export type ContractValidationResult = {
 
 const CONTRACT_FILES: Record<ContractName, string> = {
   'quote.request': 'quote.request.schema.json',
+  'data-import-batch.request': 'data-import-batch.request.schema.json',
+  'reinsurance-treaty.request': 'reinsurance-treaty.request.schema.json',
 }
 
 const ajv = new Ajv2020({
@@ -85,4 +89,23 @@ export function validateQuoteDetailed(obj: unknown): ContractValidationResult {
 
 export function validateQuote(obj: unknown): boolean {
   return validateQuoteDetailed(obj).valid
+}
+
+export function validateContractBody(name: ContractName): RequestHandler {
+  return (req, _res, next) => {
+    const result = validateContract(name, req.body)
+    if (!result.valid) return next(new ValidationError('CONTRACT_VALIDATION_FAILED', result.errors))
+    next()
+  }
+}
+
+export const validateMutationEnvelope: RequestHandler = (req, _res, next) => {
+  if (!['POST', 'PATCH', 'PUT'].includes(req.method) || req.body === undefined) return next()
+  if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return next(new ValidationError('CONTRACT_VALIDATION_FAILED', [{
+      path: '/', keyword: 'type', message: 'Request body must be a JSON object',
+      schema: 'generic-json-object', params: { type: 'object' },
+    }]))
+  }
+  next()
 }
