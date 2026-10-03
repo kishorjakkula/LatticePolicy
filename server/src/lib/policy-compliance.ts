@@ -233,6 +233,59 @@ export interface CancellationReasonRow {
   return_premium: string
 }
 
+export type ServicingComplianceRule = {
+  ruleId: string
+  allowedReasonCodes: string[]
+  minimumNoticeDays: number
+  maximumNoticeDays: number | null
+  returnPremiumMethod: 'PRO_RATA' | 'SHORT_RATE' | 'FLAT' | 'NONE' | null
+  requiredFormCodes: string[]
+  requiredDeliveryMethods: string[]
+}
+
+export async function loadServicingComplianceRule(
+  q: QueryFn, tenantId: string, productCode: string, stateCode: string,
+  transactionType: 'CANCEL' | 'NON_RENEWAL', effectiveDate: string
+): Promise<ServicingComplianceRule | null> {
+  const result = await q(
+    `SELECT rule_id, allowed_reason_codes, minimum_notice_days, maximum_notice_days,
+            return_premium_method, required_form_codes, required_delivery_methods
+       FROM servicing_compliance_rules
+      WHERE tenant_id=$1 AND LOWER(product_code)=LOWER($2) AND UPPER(state_code)=UPPER($3)
+        AND transaction_type=$4 AND active=true AND effective_date <= $5::date
+        AND (expiration_date IS NULL OR expiration_date >= $5::date)
+      ORDER BY effective_date DESC LIMIT 1`,
+    [tenantId, productCode, stateCode, transactionType, effectiveDate]
+  )
+  if (!result.rowCount) return null
+  const row = result.rows[0]
+  return {
+    ruleId: row.rule_id, allowedReasonCodes: row.allowed_reason_codes || [],
+    minimumNoticeDays: Number(row.minimum_notice_days || 0),
+    maximumNoticeDays: row.maximum_notice_days == null ? null : Number(row.maximum_notice_days),
+    returnPremiumMethod: row.return_premium_method || null,
+    requiredFormCodes: row.required_form_codes || [], requiredDeliveryMethods: row.required_delivery_methods || [],
+  }
+}
+
+export function validateServicingCompliance(input: {
+  rule: ServicingComplianceRule
+  reasonCode: string
+  noticeDate: string
+  effectiveDate: string
+}) {
+  if (!input.reasonCode || !input.rule.allowedReasonCodes.includes(input.reasonCode)) {
+    throw new Error('SERVICING_REASON_NOT_ALLOWED')
+  }
+  const day = 86_400_000
+  const noticeDays = Math.round((Date.parse(`${input.effectiveDate}T00:00:00Z`) - Date.parse(`${input.noticeDate}T00:00:00Z`)) / day)
+  if (!Number.isFinite(noticeDays) || noticeDays < input.rule.minimumNoticeDays ||
+      (input.rule.maximumNoticeDays != null && noticeDays > input.rule.maximumNoticeDays)) {
+    throw new Error('SERVICING_NOTICE_PERIOD_INVALID')
+  }
+  return { noticeDays, ruleId: input.rule.ruleId }
+}
+
 /**
  * Fetch cancellation reason code details from the DB.
  */

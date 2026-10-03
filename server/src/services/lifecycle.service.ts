@@ -16,6 +16,8 @@ import {
   getCancellationReasonCode,
   loadShortRateTable,
   computeReturnPremium,
+  loadServicingComplianceRule,
+  validateServicingCompliance,
 } from '../policyCompliance.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
@@ -385,6 +387,7 @@ export async function cancelPolicy(
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
   const termExpiration = policyTermExpiration(policyRow)
+  const noticeDate = asDateOnly(body?.noticeDate) || today()
   const txPayload = overridePayload
     ? JSON.parse(JSON.stringify(overridePayload))
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
@@ -399,6 +402,21 @@ export async function cancelPolicy(
     q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium: fullPremium,
   })
   const effectiveFullPremium = oos.effectiveFullPremium
+
+  const stateCode = txPayload?.state || txPayload?.jurisdiction?.code || ''
+  const complianceRule = stateCode
+    ? await loadServicingComplianceRule(q, tenantId, policyProductCode(policyRow), stateCode, 'CANCEL', eff)
+    : null
+  let complianceEvidence: any = null
+  if (complianceRule) {
+    try {
+      complianceEvidence = validateServicingCompliance({
+        rule: complianceRule, reasonCode: cancellationReasonCode, noticeDate, effectiveDate: eff,
+      })
+    } catch (error: any) {
+      throw new BadRequestError(String(error.message), 'Cancellation does not satisfy the applicable servicing rule.')
+    }
+  }
 
   let returnPremiumResult = { returnPremium: 0, earnedPremium: effectiveFullPremium, method: 'PRO_RATA' }
   let resolvedCancellationType = 'PRO_RATA'
@@ -416,7 +434,7 @@ export async function cancelPolicy(
       }
 
       returnPremiumResult = computeReturnPremium({
-        returnPremiumMethod: reasonRow.return_premium as any,
+        returnPremiumMethod: (complianceRule?.returnPremiumMethod || reasonRow.return_premium) as any,
         fullPremium: effectiveFullPremium,
         cancelDate: eff,
         termEffectiveDate: termEffective,
@@ -506,6 +524,11 @@ export async function cancelPolicy(
       claimReference: claimReference || null,
       cancellationType: resolvedCancellationType,
       returnPremiumMethod: returnPremiumResult.method,
+      noticeDate,
+      complianceRuleId: complianceEvidence?.ruleId || null,
+      noticeDays: complianceEvidence?.noticeDays ?? null,
+      requiredFormCodes: complianceRule?.requiredFormCodes || [],
+      requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
       transactionNumber,
       outOfSequence: oos.isOutOfSequence,
       rebasedTransactions: oos.rebasedTransactions,
@@ -1524,6 +1547,20 @@ export async function nonRenewPolicy(
   }
 
   const termExpiration = policyTermExpiration(policyRow)
+  const stateCode = ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || ''
+  const complianceRule = stateCode
+    ? await loadServicingComplianceRule(q, tenantId, policyProductCode(policyRow), stateCode, 'NON_RENEWAL', termExpiration)
+    : null
+  let complianceEvidence: any = null
+  if (complianceRule) {
+    try {
+      complianceEvidence = validateServicingCompliance({
+        rule: complianceRule, reasonCode, noticeDate, effectiveDate: termExpiration,
+      })
+    } catch (error: any) {
+      throw new BadRequestError(String(error.message), 'Non-renewal does not satisfy the applicable servicing rule.')
+    }
+  }
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -1567,6 +1604,10 @@ export async function nonRenewPolicy(
       noticeDate,
       nonRenewedAt: termExpiration,
       transactionNumber,
+      complianceRuleId: complianceEvidence?.ruleId || null,
+      noticeDays: complianceEvidence?.noticeDays ?? null,
+      requiredFormCodes: complianceRule?.requiredFormCodes || [],
+      requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     },
   })
 
