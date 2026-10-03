@@ -318,6 +318,18 @@ Underwriting Authority
   policy transaction and immutable policy version.
 - Grant creation and changes are retained in a tenant-scoped audit log.
 
+Reproducible Policy Packets
+- Bind, issue, endorsement, cancellation, reinstatement, renewal, rewrite, and
+  non-renewal generate transaction-scoped packets from exact form editions.
+- Packet records pin the policy version, canonical input snapshot hash, form-set
+  hash, rendered-content hash, and the complete source snapshots needed for
+  deterministic regeneration.
+- Required forms are validated before transaction completion. Stored bytes are
+  verified immediately after generation and again before download; integrity
+  failures are exposed as a visible document exception state.
+- Required delivery methods begin with pending evidence and can be updated with
+  delivery status, evidence reference, actor, and timestamp.
+
 OpenAPI / Swagger Access Model
 - Swagger UI (`/api-docs`) and OpenAPI spec (`/openapi.json`) are admin-only.
 - UI "API Docs" navigation link is shown only for admin users.

@@ -9,6 +9,8 @@ import {
   renderAndStoreDocument,
   renderPolicyPacketHtml,
   retrieveStoredDocument,
+  retrieveAndVerifyStoredDocument,
+  regenerateAndVerifyDocument,
   setDocumentStorageAdapter,
 } from '../document-storage.service.js'
 
@@ -78,6 +80,29 @@ describe('document storage service', () => {
     expect(missing).toBeNull()
     const wrongScheme = await retrieveStoredDocument('s3://bucket/key')
     expect(wrongScheme).toBeNull()
+  })
+
+  it('rejects stored bytes when the expected content hash does not match', async () => {
+    const artifact = await renderAndStoreDocument({
+      tenantId: 'sample-carrier', documentId: 'doc-integrity', metadata: baseMetadata,
+    })
+    expect(await retrieveAndVerifyStoredDocument(artifact.storageUri, artifact.contentHash)).not.toBeNull()
+    expect(await retrieveAndVerifyStoredDocument(artifact.storageUri, '0'.repeat(64))).toBeNull()
+  })
+
+  it('regenerates deterministic content with the original hash', async () => {
+    const first = await renderAndStoreDocument({
+      tenantId: 'sample-carrier', documentId: 'doc-regenerate', metadata: baseMetadata,
+    })
+    const regenerated = await regenerateAndVerifyDocument({
+      tenantId: 'sample-carrier', documentId: 'doc-regenerate', metadata: baseMetadata,
+      expectedHash: first.contentHash,
+    })
+    expect(regenerated?.contentHash).toBe(first.contentHash)
+    expect(await regenerateAndVerifyDocument({
+      tenantId: 'sample-carrier', documentId: 'doc-regenerate', metadata: baseMetadata,
+      expectedHash: '0'.repeat(64),
+    })).toBeNull()
   })
 
   it('isolates artifacts per tenant', async () => {

@@ -307,16 +307,39 @@ export async function issuePolicy(
     ['Issued', tenantId, policyId, 'NB']
   )
   const txnRes = await q(
-    `SELECT transaction_id, metadata
-       FROM policy_transactions
-      WHERE tenant_id = $1 AND policy_id = $2 AND type = 'NB'
-      ORDER BY created_at DESC
+    `SELECT pt.transaction_id, pt.metadata,
+            (SELECT pv.version_id FROM policy_versions pv
+              WHERE pv.tenant_id=pt.tenant_id AND pv.transaction_id=pt.transaction_id
+              ORDER BY pv.processed_at DESC LIMIT 1) AS version_id
+       FROM policy_transactions pt
+      WHERE pt.tenant_id = $1 AND pt.policy_id = $2 AND pt.type = 'NB'
+      ORDER BY pt.created_at DESC
       LIMIT 1`,
     [tenantId, policyId]
   )
   const issueTransactionId = txnRes.rowCount ? txnRes.rows[0].transaction_id : null
   const transactionNumber = txnRes.rowCount ? txnRes.rows[0].metadata?.transactionNumber || null : null
   const payload = await loadLatestPolicyPayload(q, tenantId, policyId)
+  if (issueTransactionId) {
+    const issueDocumentContext = {
+      tenantId,
+      policyId,
+      policyNumber: policyRow.policy_number,
+      transactionId: issueTransactionId,
+      transactionType: 'Issue' as const,
+      transactionNumber,
+      productCode: policyRow.product_code,
+      state: payload?.state || payload?.jurisdiction?.code || null,
+      effectiveDate: coerceDateOnly(policyRow.term_effective_date),
+      versionId: txnRes.rows[0].version_id || null,
+      generatedAt: issuedAt,
+      inputSnapshot: payload,
+      generatedBy: actor?.id || null,
+      correlationId: transactionNumber || issueTransactionId,
+    }
+    const issuePacket = await buildPolicyDocumentPacket(q, issueDocumentContext)
+    await persistPolicyDocumentPacket(db, issueDocumentContext, issuePacket)
+  }
   await createPolicyNotificationIntent(db, {
     tenantId,
     policyId,
@@ -493,6 +516,11 @@ export async function cancelPolicy(
     productCode: policyProductCode(policyRow),
     state: txPayload?.state || txPayload?.jurisdiction?.code || null,
     effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
+    requiredFormCodes: complianceRule?.requiredFormCodes || [],
+    requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -547,6 +575,9 @@ export async function cancelPolicy(
     productCode: policyProductCode(policyRow),
     state: txPayload?.state || txPayload?.jurisdiction?.code || null,
     effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   }, documentPacket)
@@ -743,6 +774,9 @@ export async function reinstatePolicy(
     productCode: policyProductCode(policyRow),
     state: txPayload?.state || txPayload?.jurisdiction?.code || null,
     effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -1021,6 +1055,9 @@ export async function renewPolicy(
     productCode: policyProductCode(policyRow),
     state: payload?.state || payload?.jurisdiction?.code || null,
     effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -1060,6 +1097,9 @@ export async function renewPolicy(
     productCode: policyProductCode(policyRow),
     state: payload?.state || payload?.jurisdiction?.code || null,
     effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   }, documentPacket)
@@ -1348,6 +1388,9 @@ export async function rewritePolicy(
     productCode: policyProductCode(policyRow),
     state: payload?.state || payload?.jurisdiction?.code || null,
     effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -1601,6 +1644,11 @@ export async function nonRenewPolicy(
     productCode: policyProductCode(policyRow),
     state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
     effectiveDate: termExpiration,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: ctx.latestPayload,
+    requiredFormCodes: complianceRule?.requiredFormCodes || [],
+    requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })

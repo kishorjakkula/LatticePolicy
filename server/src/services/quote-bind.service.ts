@@ -405,6 +405,9 @@ export async function bindQuote(
       productCode,
       state: quote.payload?.state || jurisdiction?.code || null,
       effectiveDate,
+      versionId,
+      generatedAt: nowIso,
+      inputSnapshot: quote.payload,
       generatedBy: normalizedActorId,
       correlationId: transactionNumber,
     })
