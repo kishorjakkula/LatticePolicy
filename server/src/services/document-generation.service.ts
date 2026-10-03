@@ -1,7 +1,8 @@
 import crypto from 'crypto'
 import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
-import { renderAndStoreDocument } from './document-storage.service.js'
+import { BadRequestError } from '../errors/domain.errors.js'
+import { renderAndStoreDocument, retrieveAndVerifyStoredDocument } from './document-storage.service.js'
 
 export type PolicyDocumentTransactionType =
   | 'NB'
@@ -26,6 +27,11 @@ export type PolicyDocumentContext = {
   generatedBy?: string | null
   correlationId?: string | null
   endorsementChanges?: EndorsementChangeSet | null
+  versionId?: string | null
+  generatedAt?: string | null
+  inputSnapshot?: unknown
+  requiredFormCodes?: string[]
+  requiredDeliveryMethods?: string[]
 }
 
 export type EndorsementChangeType = 'added' | 'removed' | 'modified'
@@ -196,10 +202,27 @@ export function matchesEndorsementChanges(
 
 function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPolicyForm[]): GeneratedPolicyDocument[] {
   if (!forms.length) return []
-  const generatedAt = new Date().toISOString()
+  const generatedAt = context.generatedAt || `${context.effectiveDate}T00:00:00.000Z`
   const visibility = forms.every((form) => form.customerSafe) ? ['internal', 'customer'] : ['internal']
+  const inputSnapshot = context.inputSnapshot ?? null
+  const formSnapshot = forms.map((form) => ({
+    formId: form.formId,
+    sourceFormId: form.metadata.sourceFormId || null,
+    code: form.code,
+    title: form.title,
+    edition: form.edition,
+    source: form.source,
+    customerSafe: form.customerSafe,
+    metadata: form.metadata,
+  }))
+  const requiredDeliveryMethods = [...new Set([
+    ...(context.requiredDeliveryMethods || []),
+    ...forms.flatMap((form) => Array.isArray(form.metadata.deliveryMethods) ? form.metadata.deliveryMethods as string[] : []),
+  ].map(normalizeText).filter(Boolean))].sort()
   const metadata = {
+    packetSchemaVersion: 'policy-packet.v2',
     policyId: context.policyId,
+    versionId: context.versionId || null,
     policyNumber: context.policyNumber || null,
     transactionId: context.transactionId,
     transactionType: context.transactionType,
@@ -211,16 +234,15 @@ function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPoli
     generatedBy: context.generatedBy || null,
     correlationId: context.correlationId || null,
     endorsementChanges: context.endorsementChanges || null,
+    inputSnapshot,
+    inputHash: sha256(inputSnapshot),
+    formSetHash: sha256(formSnapshot),
+    requiredFormCodes: (context.requiredFormCodes || []).map(normalizeText).filter(Boolean).sort(),
+    requiredDeliveryMethods,
+    deliveryEvidence: requiredDeliveryMethods.map((method) => ({ method, status: 'Pending', recordedAt: null })),
     visibility,
     customerSafe: visibility.includes('customer'),
-    forms: forms.map((form) => ({
-      formId: form.formId,
-      code: form.code,
-      title: form.title,
-      edition: form.edition,
-      source: form.source,
-      customerSafe: form.customerSafe,
-    })),
+    forms: formSnapshot,
   }
   return [
     {
@@ -260,6 +282,13 @@ async function attachRenderedArtifact(
       })),
     },
   })
+  const verified = await retrieveAndVerifyStoredDocument(artifact.storageUri, artifact.contentHash)
+  if (!verified) {
+    throw new BadRequestError(
+      'DOCUMENT_ARTIFACT_VERIFICATION_FAILED',
+      'The generated policy packet could not be verified after storage.'
+    )
+  }
   return {
     ...document,
     hash: artifact.contentHash,
@@ -287,7 +316,7 @@ export async function selectPolicyForms(
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
             a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
-            d.visibility, j.state_code, j.regulatory_status, f.metadata
+            d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata
        FROM forms_admin_forms f
        JOIN forms_admin_applicability a
          ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id AND a.active = true
@@ -336,6 +365,7 @@ export async function selectPolicyForms(
         sourceFormId: row.form_id || null,
         packetPlacement: row.packet_placement || 'End',
         outputFormat: row.output_format || 'PDF',
+        deliveryMethods: Array.isArray(row.delivery_methods) ? row.delivery_methods.map(String) : [],
         formMetadata: row.metadata || {},
         endorsementChangeCriteria: row.endorsement_change_criteria || null,
       },
@@ -392,6 +422,16 @@ export async function buildPolicyDocumentPacket(
   context: PolicyDocumentContext
 ): Promise<PolicyDocumentPacket> {
   const forms = await selectPolicyForms(q, context)
+  const selectedCodes = new Set(forms.map((form) => form.code.toUpperCase()))
+  const missingRequiredForms = (context.requiredFormCodes || [])
+    .map(normalizeText).filter(Boolean)
+    .filter((code) => !selectedCodes.has(code.toUpperCase()))
+  if (missingRequiredForms.length) {
+    throw new BadRequestError(
+      'DOCUMENT_PACKET_INCOMPLETE',
+      `Missing required forms: ${missingRequiredForms.join(', ')}`
+    )
+  }
   const documents = await Promise.all(
     buildPacketDocument(context, forms).map((document) => attachRenderedArtifact(context, forms, document))
   )
@@ -407,10 +447,18 @@ export async function persistPolicyDocumentPacket(
   const q = toRawQuery(db)
 
   for (const form of packet.forms) {
+    const formSnapshot = {
+      title: form.title,
+      edition: form.edition,
+      formType: form.formType,
+      visibility: form.visibility,
+      customerSafe: form.customerSafe,
+      metadata: form.metadata,
+    }
     await q(
       `INSERT INTO policy_forms
-        (policy_form_id, tenant_id, policy_id, transaction_id, form_id, code, data, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)`,
+        (policy_form_id, tenant_id, policy_id, transaction_id, form_id, code, edition, snapshot_hash, data, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb)`,
       [
         form.policyFormId,
         context.tenantId,
@@ -418,13 +466,9 @@ export async function persistPolicyDocumentPacket(
         context.transactionId,
         form.formId,
         form.code,
-        JSON.stringify({
-          title: form.title,
-          edition: form.edition,
-          formType: form.formType,
-          visibility: form.visibility,
-          customerSafe: form.customerSafe,
-        }),
+        form.edition,
+        sha256(formSnapshot),
+        JSON.stringify(formSnapshot),
         JSON.stringify(form.metadata),
       ]
     )
@@ -433,16 +477,21 @@ export async function persistPolicyDocumentPacket(
   for (const doc of packet.documents) {
     await q(
       `INSERT INTO documents
-        (document_id, tenant_id, policy_id, transaction_id, type, uri, hash, metadata, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)`,
+        (document_id, tenant_id, policy_id, transaction_id, version_id, type, uri, hash,
+         input_hash, form_set_hash, integrity_status, delivery_evidence, metadata, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'VERIFIED', $11::jsonb, $12::jsonb, $13)`,
       [
         doc.documentId,
         context.tenantId,
         context.policyId,
         context.transactionId,
+        (doc.metadata as any).versionId || context.versionId || null,
         doc.type,
         doc.uri,
         doc.hash,
+        (doc.metadata as any).inputHash || null,
+        (doc.metadata as any).formSetHash || null,
+        JSON.stringify((doc.metadata as any).deliveryEvidence || []),
         JSON.stringify(doc.metadata),
         context.generatedBy || null,
       ]

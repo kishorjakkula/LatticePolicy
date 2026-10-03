@@ -50,6 +50,10 @@ export const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/policies/{id}/full', tag: 'Policies', summary: 'Get reconstructed policy payload' },
   { method: 'get', path: '/v1/policies/{id}/state', tag: 'Policies', summary: 'Get policy state snapshot' },
   { method: 'get', path: '/v1/policies/{id}/timeline', tag: 'Policies', summary: 'Get policy history timeline' },
+  { method: 'get', path: '/v1/policies/{id}/documents', tag: 'Documents', summary: 'List version-pinned policy documents and evidence' },
+  { method: 'get', path: '/v1/policies/{id}/documents/{documentId}/content', tag: 'Documents', summary: 'Retrieve and verify policy document content' },
+  { method: 'patch', path: '/v1/policies/{id}/documents/{documentId}/delivery', tag: 'Documents', summary: 'Record policy document delivery evidence' },
+  { method: 'post', path: '/v1/policies/{id}/documents/{documentId}/regenerate', tag: 'Documents', summary: 'Deterministically regenerate and verify a policy document' },
 
   { method: 'post', path: '/v1/policies/{id}/endorse/reserve-number', tag: 'Transactions', summary: 'Reserve endorsement number' },
   { method: 'post', path: '/v1/policies/{id}/transactions/reserve-number', tag: 'Transactions', summary: 'Reserve transaction number' },

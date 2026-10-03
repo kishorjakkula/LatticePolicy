@@ -25,6 +25,9 @@ const context = {
   effectiveDate: '2026-08-01',
   generatedBy: 'user-1',
   correlationId: 'trace-1',
+  versionId: 'version-1',
+  generatedAt: '2026-08-01T12:00:00.000Z',
+  inputSnapshot: { applicant: { firstName: 'Ada' }, coverages: [{ code: 'BI', limit: 100000 }] },
 }
 
 describe('document generation service', () => {
@@ -81,9 +84,33 @@ describe('document generation service', () => {
     })
     expect(packet.documents[0].metadata).toMatchObject({
       transactionType: 'NB',
+      versionId: 'version-1',
+      packetSchemaVersion: 'policy-packet.v2',
       customerSafe: true,
       visibility: ['internal', 'customer'],
     })
+    expect(packet.documents[0].metadata.inputHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(packet.documents[0].metadata.formSetHash).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('renders identical bytes and hashes from the same pinned snapshot', async () => {
+    const rows = { forms_admin_forms: [{
+      form_id: '11111111-1111-1111-1111-111111111111', form_number: 'PA-DEC',
+      form_title: 'Declarations', edition_date: '2026-01-01', transaction_types: ['NB'],
+      visibility: ['internal', 'customer'], state_code: 'CA', regulatory_status: 'Approved',
+    }] }
+    const first = await buildPolicyDocumentPacket(createQuery(rows), context)
+    const second = await buildPolicyDocumentPacket(createQuery(rows), context)
+    expect(second.documents[0].hash).toBe(first.documents[0].hash)
+    expect(second.documents[0].metadata.inputHash).toBe(first.documents[0].metadata.inputHash)
+    expect(second.documents[0].metadata.formSetHash).toBe(first.documents[0].metadata.formSetHash)
+  })
+
+  it('blocks completion when a required form is missing', async () => {
+    await expect(buildPolicyDocumentPacket(createQuery({}), {
+      ...context,
+      requiredFormCodes: ['CA-CANCEL-NOTICE'],
+    })).rejects.toMatchObject({ code: 'DOCUMENT_PACKET_INCOMPLETE' })
   })
 
   it('includes catalog forms and keeps mixed packets internal only', async () => {

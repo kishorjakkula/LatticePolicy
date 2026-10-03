@@ -161,12 +161,22 @@ function authGet(path: string, token: string, tenantId: string) {
   return request(app).get(path).set('Authorization', `Bearer ${token}`).set('X-Tenant', tenantId)
 }
 
+function authPost(path: string, token: string, tenantId: string) {
+  return request(app).post(path).set('Authorization', `Bearer ${token}`).set('X-Tenant', tenantId)
+}
+
+function authPatch(path: string, token: string, tenantId: string) {
+  return request(app).patch(path).set('Authorization', `Bearer ${token}`).set('X-Tenant', tenantId)
+}
+
 async function fetchOnlyDocumentId(tenantId: string, policyId: string): Promise<{ documentId: string; hash: string }> {
   const rows = await getDb()!.query(
-    `SELECT document_id, hash FROM documents WHERE tenant_id = $1 AND policy_id = $2::uuid AND type = 'POLICY_PACKET'`,
+    `SELECT document_id, hash FROM documents
+      WHERE tenant_id = $1 AND policy_id = $2::uuid AND type = 'POLICY_PACKET'
+      ORDER BY created_at DESC LIMIT 1`,
     [tenantId, policyId],
   )
-  expect(rows.rowCount).toBe(1)
+  expect(rows.rowCount).toBeGreaterThanOrEqual(1)
   return { documentId: String(rows.rows[0].document_id), hash: String(rows.rows[0].hash) }
 }
 
@@ -204,7 +214,14 @@ describe('policy document artifact storage and retrieval', () => {
 
     const listRes = await authGet(`/api/v1/policies/${policy.policyId}/documents`, agentToken, tenantId).expect(200)
     const packetEntry = listRes.body.data.documents.find((doc: any) => doc.documentId === documentId)
-    expect(packetEntry).toMatchObject({ customerSafe: true, contentType: 'text/html; charset=utf-8' })
+    expect(packetEntry).toMatchObject({
+      customerSafe: true,
+      contentType: 'text/html; charset=utf-8',
+      integrityStatus: 'VERIFIED',
+      versionId: expect.any(String),
+      inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      formSetHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
     expect(packetEntry.byteSize).toBeGreaterThan(0)
 
     const contentRes = await authGet(
@@ -216,6 +233,23 @@ describe('policy document artifact storage and retrieval', () => {
     const actualHash = crypto.createHash('sha256').update(contentRes.text).digest('hex')
     expect(actualHash).toBe(hash)
     expect(contentRes.text).toContain(policy.policyNumber)
+
+    await authPost(
+      `/api/v1/policies/${policy.policyId}/documents/${documentId}/regenerate`,
+      agentToken,
+      tenantId,
+    ).expect(200).expect(({ body }) => {
+      expect(body).toMatchObject({ integrityStatus: 'VERIFIED', contentHash: hash })
+    })
+
+    await authPatch(
+      `/api/v1/policies/${policy.policyId}/documents/${documentId}/delivery`,
+      agentToken,
+      tenantId,
+    ).send({ method: 'Portal', status: 'Delivered', evidenceRef: 'portal-event-1' }).expect(200)
+    const delivered = await authGet(`/api/v1/policies/${policy.policyId}/documents`, agentToken, tenantId).expect(200)
+    expect(delivered.body.data.documents.find((doc: any) => doc.documentId === documentId).deliveryEvidence)
+      .toContainEqual(expect.objectContaining({ method: 'Portal', status: 'Delivered', evidenceRef: 'portal-event-1' }))
   })
 
   it('denies customer retrieval of an internal-only document but allows a customer-safe one', async () => {

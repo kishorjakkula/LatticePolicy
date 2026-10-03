@@ -178,3 +178,22 @@ export async function renderAndStoreDocument(params: {
 export async function retrieveStoredDocument(storageUri: string): Promise<Buffer | null> {
   return getDocumentStorageAdapter().retrieve(storageUri)
 }
+
+export async function retrieveAndVerifyStoredDocument(
+  storageUri: string,
+  expectedHash: string
+): Promise<Buffer | null> {
+  const content = await retrieveStoredDocument(storageUri)
+  if (!content) return null
+  return sha256Bytes(content) === expectedHash ? content : null
+}
+
+export async function regenerateAndVerifyDocument(params: {
+  tenantId: string
+  documentId: string
+  metadata: RenderablePacketMetadata
+  expectedHash: string
+}): Promise<StoredDocumentDescriptor | null> {
+  const artifact = await renderAndStoreDocument(params)
+  return artifact.contentHash === params.expectedHash ? artifact : null
+}

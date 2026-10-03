@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { getDb, type DrizzleDB, withTenantTx, toRawQuery } from '../db.js'
 import { ok } from '../lib/respond.js'
 import { store } from '../store.js'
@@ -12,7 +13,7 @@ import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
 import { csvEscape, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 import { requirePermission, hasPermission } from '../auth.js'
-import { retrieveStoredDocument } from '../services/document-storage.service.js'
+import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument } from '../services/document-storage.service.js'
 
 // ── local helpers (in-memory fallback only) ──────────────────────────────────
 
@@ -38,6 +39,12 @@ function derivePolicyTermCountFromPolicy(policy: any): number {
 }
 
 export const policyRoutes = Router()
+const policyDocumentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
 
 // ── GET /policies — list ──────────────────────────────────────────────────────
 policyRoutes.get('/policies', async (req, res, next) => {
@@ -425,7 +432,8 @@ policyRoutes.get(
       const result = await withTenantTx(tenantId, async (txDb) => {
         const q = toRawQuery(txDb)
         return q(
-          `SELECT document_id, type, hash, metadata, created_at
+          `SELECT document_id, version_id, type, hash, input_hash, form_set_hash,
+                  integrity_status, delivery_evidence, metadata, created_at
              FROM documents
             WHERE tenant_id = $1 AND policy_id = $2::uuid
             ORDER BY created_at DESC`,
@@ -439,12 +447,17 @@ policyRoutes.get(
         .filter(({ metadata }) => access.isInternal || metadata.customerSafe === true)
         .map(({ row, metadata }) => ({
           documentId: String(row.document_id),
+          versionId: row.version_id || null,
           type: String(row.type),
           displayName: `${String(row.type)} ${metadata.transactionNumber || ''}`.trim(),
           transactionType: metadata.transactionType || null,
           transactionNumber: metadata.transactionNumber || null,
           forms: Array.isArray(metadata.forms) ? metadata.forms : [],
           contentHash: row.hash || null,
+          inputHash: row.input_hash || null,
+          formSetHash: row.form_set_hash || null,
+          integrityStatus: row.integrity_status || 'UNVERIFIED',
+          deliveryEvidence: Array.isArray(row.delivery_evidence) ? row.delivery_evidence : [],
           contentType: metadata.artifact?.contentType || null,
           byteSize: metadata.artifact?.byteSize ?? null,
           customerSafe: metadata.customerSafe === true,
@@ -457,12 +470,105 @@ policyRoutes.get(
   }
 )
 
+policyRoutes.patch(
+  '/policies/:id/documents/:documentId/delivery',
+  policyDocumentLimiter,
+  requirePermission('page.policy.view'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      const method = String(req.body?.method || '').trim()
+      const status = String(req.body?.status || '').trim()
+      if (!method || !['Pending', 'Delivered', 'Failed'].includes(status)) {
+        return res.status(400).json({ code: 'INVALID_DELIVERY_EVIDENCE' })
+      }
+      if (!getDb()) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+      const evidence = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        const current = await q(
+          `SELECT delivery_evidence FROM documents
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid FOR UPDATE`,
+          [tenantId, policyId, documentId]
+        )
+        if (!current.rowCount) return null
+        const entries = Array.isArray(current.rows[0].delivery_evidence)
+          ? current.rows[0].delivery_evidence.filter((entry: any) => String(entry?.method) !== method)
+          : []
+        entries.push({
+          method,
+          status,
+          evidenceRef: req.body?.evidenceRef || null,
+          detail: req.body?.detail || null,
+          recordedAt: new Date().toISOString(),
+          recordedBy: req.user?.id || req.user?.username || null,
+        })
+        await q(
+          `UPDATE documents SET delivery_evidence=$4::jsonb
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+          [tenantId, policyId, documentId, JSON.stringify(entries)]
+        )
+        return entries
+      })
+      return evidence
+        ? res.json({ documentId, deliveryEvidence: evidence })
+        : res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+policyRoutes.post(
+  '/policies/:id/documents/:documentId/regenerate',
+  policyDocumentLimiter,
+  requirePermission('page.policy.view'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      if (!getDb()) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+      const result = await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+        `SELECT hash,metadata FROM documents
+          WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid LIMIT 1`,
+        [tenantId, policyId, documentId]
+      ))
+      if (!(result as any).rowCount) return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+      const row = (result as any).rows[0]
+      const metadata = toMetadataObject(row.metadata)
+      const artifact = row.hash
+        ? await regenerateAndVerifyDocument({ tenantId, documentId, metadata: metadata as any, expectedHash: String(row.hash) })
+        : null
+      const integrityStatus = artifact ? 'VERIFIED' : 'FAILED'
+      await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+        `UPDATE documents SET integrity_status=$4
+          WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+        [tenantId, policyId, documentId, integrityStatus]
+      ))
+      return artifact
+        ? res.json({ documentId, integrityStatus, contentHash: artifact.contentHash })
+        : res.status(409).json({ code: 'DOCUMENT_REGENERATION_MISMATCH' })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
 // ── GET /policies/:id/documents/:documentId/content ───────────────────────────
 // Retrieves the rendered artifact bytes for a generated policy document,
 // enforcing the same tenant/customer scope as the listing endpoint plus a
 // customer-safe check for non-internal callers.
 policyRoutes.get(
   '/policies/:id/documents/:documentId/content',
+  policyDocumentLimiter,
   requirePermission(['page.policy.view', 'customer.portal.read']),
   async (req, res, next) => {
     try {
@@ -481,7 +587,7 @@ policyRoutes.get(
       const result = await withTenantTx(tenantId, async (txDb) => {
         const q = toRawQuery(txDb)
         return q(
-          `SELECT document_id, type, metadata
+          `SELECT document_id, type, hash, metadata
              FROM documents
             WHERE tenant_id = $1 AND policy_id = $2::uuid AND document_id = $3::uuid
             LIMIT 1`,
@@ -499,8 +605,17 @@ policyRoutes.get(
       const artifact = toMetadataObject(metadata.artifact)
       const storageUri = artifact.storageUri
       if (!storageUri) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
-      const content = await retrieveStoredDocument(String(storageUri))
-      if (!content) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
+      const content = row.hash
+        ? await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash))
+        : null
+      if (!content) {
+        await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+          `UPDATE documents SET integrity_status='FAILED'
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+          [tenantId, policyId, documentId]
+        ))
+        return res.status(409).json({ code: 'ARTIFACT_INTEGRITY_FAILED' })
+      }
 
       res.setHeader('Content-Type', String(artifact.contentType || 'application/octet-stream'))
       res.setHeader(
