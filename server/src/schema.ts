@@ -603,6 +603,7 @@ export const notificationIntents = pgTable('notification_intents', {
   lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   lastError: text('last_error'),
+  deliveryEvidence: jsonb('delivery_evidence').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid('created_by'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -801,6 +802,25 @@ export const productGovernanceAudit = pgTable('product_governance_audit', {
   actor: text('actor').notNull(),
   reason: text('reason'),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const servicingComplianceRules = pgTable('servicing_compliance_rules', {
+  ruleId: uuid('rule_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  productCode: text('product_code').notNull(),
+  stateCode: char('state_code', { length: 2 }).notNull(),
+  transactionType: text('transaction_type').notNull(),
+  allowedReasonCodes: text('allowed_reason_codes').array().notNull(),
+  minimumNoticeDays: integer('minimum_notice_days').notNull().default(0),
+  maximumNoticeDays: integer('maximum_notice_days'),
+  returnPremiumMethod: text('return_premium_method'),
+  requiredFormCodes: text('required_form_codes').array().notNull().default(sql`ARRAY[]::text[]`),
+  requiredDeliveryMethods: text('required_delivery_methods').array().notNull().default(sql`ARRAY['EMAIL']::text[]`),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by'),
 })
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ export const complianceAdminRoutes = Router()
 
 const ELIGIBILITY_STATUSES = ['ACTIVE', 'SUSPENDED', 'CLOSED', 'FILING_PENDING'] as const
 const OFAC_DISPOSITIONS = ['PENDING', 'CLEARED', 'ESCALATED', 'BLOCKED'] as const
+const SERVICING_TYPES = ['CANCEL', 'NON_RENEWAL'] as const
 
 function currentActorId(req: Request): string | null {
   return req.user?.id || null
@@ -24,6 +25,38 @@ complianceAdminRoutes.use((_req, _res, next) => {
     throw new BadRequestError('NO_DB', 'Compliance administration requires database mode')
   }
   next()
+})
+
+complianceAdminRoutes.get('/servicing-rules', async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const result = await withTenantTx(tenantId, db => toRawQuery(db)(
+    `SELECT * FROM servicing_compliance_rules WHERE tenant_id=$1
+      ORDER BY product_code,state_code,transaction_type,effective_date DESC`, [tenantId]))
+  res.json({ items: result.rows })
+})
+
+complianceAdminRoutes.post('/servicing-rules', async (req, res) => {
+  if (!canManage(req)) throw new ForbiddenError('FORBIDDEN')
+  const tenantId = req.tenant!.tenantId
+  const body = req.body || {}
+  const productCode = String(body.productCode || '').trim().toLowerCase()
+  const stateCode = String(body.stateCode || '').trim().toUpperCase()
+  const transactionType = String(body.transactionType || '').trim().toUpperCase()
+  const reasons = Array.isArray(body.allowedReasonCodes) ? body.allowedReasonCodes.map(String).filter(Boolean) : []
+  if (!productCode || stateCode.length !== 2 || !SERVICING_TYPES.includes(transactionType as any) || !reasons.length) {
+    throw new BadRequestError('INVALID_INPUT', 'productCode, stateCode, transactionType, and allowedReasonCodes are required')
+  }
+  const result = await withTenantTx(tenantId, db => toRawQuery(db)(
+    `INSERT INTO servicing_compliance_rules
+      (tenant_id,product_code,state_code,transaction_type,allowed_reason_codes,minimum_notice_days,
+       maximum_notice_days,return_premium_method,required_form_codes,required_delivery_methods,
+       effective_date,expiration_date,created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [tenantId, productCode, stateCode, transactionType, reasons, Number(body.minimumNoticeDays || 0),
+     body.maximumNoticeDays == null ? null : Number(body.maximumNoticeDays), body.returnPremiumMethod || null,
+     body.requiredFormCodes || [], body.requiredDeliveryMethods || ['EMAIL'], body.effectiveDate,
+     body.expirationDate || null, currentActorId(req)]))
+  res.status(201).json(result.rows[0])
 })
 
 // ── Product/state eligibility ────────────────────────────────────────────────

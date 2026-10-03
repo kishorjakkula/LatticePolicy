@@ -6,6 +6,7 @@ import {
   computeShortRateEarnedPct,
   normalizeOfacName,
   screenOfac,
+  validateServicingCompliance,
 } from '../policy-compliance.js'
 
 function createQuery(
@@ -31,6 +32,29 @@ describe('normalizeOfacName', () => {
 
   it('handles empty input', () => {
     expect(normalizeOfacName('')).toBe('')
+  })
+})
+
+describe('servicing compliance', () => {
+  const rule = {
+    ruleId: 'ca-pa-nonrenew', allowedReasonCodes: ['RISK_CHANGE'],
+    minimumNoticeDays: 30, maximumNoticeDays: 120, returnPremiumMethod: null,
+    requiredFormCodes: ['PA-NR-CA'], requiredDeliveryMethods: ['CERTIFIED_MAIL'],
+  } as const
+
+  it('accepts an allowed California non-renewal with timely notice', () => {
+    expect(validateServicingCompliance({
+      rule: { ...rule, allowedReasonCodes: [...rule.allowedReasonCodes], requiredFormCodes: [...rule.requiredFormCodes], requiredDeliveryMethods: [...rule.requiredDeliveryMethods] },
+      reasonCode: 'RISK_CHANGE', noticeDate: '2027-05-01', effectiveDate: '2027-07-01',
+    })).toEqual({ noticeDays: 61, ruleId: 'ca-pa-nonrenew' })
+  })
+
+  it('rejects prohibited reasons and insufficient notice', () => {
+    const mutableRule = { ...rule, allowedReasonCodes: [...rule.allowedReasonCodes], requiredFormCodes: [...rule.requiredFormCodes], requiredDeliveryMethods: [...rule.requiredDeliveryMethods] }
+    expect(() => validateServicingCompliance({ rule: mutableRule, reasonCode: 'OTHER', noticeDate: '2027-05-01', effectiveDate: '2027-07-01' }))
+      .toThrow('SERVICING_REASON_NOT_ALLOWED')
+    expect(() => validateServicingCompliance({ rule: mutableRule, reasonCode: 'RISK_CHANGE', noticeDate: '2027-06-15', effectiveDate: '2027-07-01' }))
+      .toThrow('SERVICING_NOTICE_PERIOD_INVALID')
   })
 })
 
