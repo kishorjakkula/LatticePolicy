@@ -165,6 +165,76 @@ describe('underwriting referral workflow', () => {
     expect(referralRow.rows[0].decision_reason).toBe('Underwriter reviewed and approved inline')
   })
 
+  it('enforces configured authority and requires explicit override permission and reason', async () => {
+    await initDb()
+    const db = getDb()
+    const tenantId = 'sample-carrier'
+
+    await db!.query(
+      `INSERT INTO underwriting_authority_grants
+         (tenant_id,subject_type,subject_id,product_code,state_code,transaction_types,max_limit,effective_date,expiration_date)
+       VALUES ($1,'ROLE','agent','personal-auto','CA',ARRAY['NewBusiness'],50000,'2028-01-01','2028-12-31')`,
+      [tenantId]
+    )
+    const quote = await createOrRateQuote(
+      {} as any,
+      tenantId,
+      referQuotePayload({
+        effectiveDate: '2028-06-01',
+        applicant: { firstName: 'Avery', lastName: 'Authority', email: 'avery@example.com' },
+        uwAnswers: { driverAge: 35 },
+        risks: [{
+          type: 'autoVehicle', year: 2024, make: 'Toyota', model: 'Camry',
+          garagingZip: '94105', symbol: 'A', usage: 'commute', driverAge: 35,
+        }],
+      }),
+      null,
+      'integration-test'
+    )
+    expect(quote.underwriting?.decision).toBe('Eligible')
+
+    await expect(
+      bindQuote({} as any, tenantId, quote.quoteId, {}, 'agent-authority', null, {
+        roles: ['agent'], permissions: [],
+      })
+    ).rejects.toMatchObject({ code: 'UW_REFERRAL_REQUIRED' })
+
+    const opened = await db!.query(
+      `SELECT referral_id,reasons FROM underwriting_referrals WHERE tenant_id=$1 AND quote_id=$2`,
+      [tenantId, quote.quoteId]
+    )
+    expect(opened.rows[0].reasons).toContain('AUTHORITY_LIMIT_AUTHORITY_EXCEEDED')
+
+    await expect(
+      bindQuote(
+        {} as any, tenantId, quote.quoteId, { overrideReason: 'Reviewed' },
+        'uw-without-authority-override', UW_USER_ID,
+        { roles: ['underwriter'], permissions: ['uw.referrals.decide'] }
+      )
+    ).rejects.toMatchObject({ code: 'UW_REFERRAL_REQUIRED' })
+
+    const bound = await bindQuote(
+      {} as any, tenantId, quote.quoteId,
+      { overrideReason: 'Senior underwriting review approved the requested limit' },
+      'uw-authority-override', UW_USER_ID,
+      { roles: ['underwriter'], permissions: ['uw.referrals.decide', 'uw.authority.override'] }
+    )
+    expect(bound.status).toBe('Bound')
+
+    const linked = await db!.query(
+      `SELECT status,decision_reason,policy_id,transaction_id,version_id
+         FROM underwriting_referrals WHERE tenant_id=$1 AND referral_id=$2`,
+      [tenantId, opened.rows[0].referral_id]
+    )
+    expect(linked.rows[0]).toMatchObject({
+      status: 'Approved',
+      decision_reason: 'Senior underwriting review approved the requested limit',
+      policy_id: bound.policyId,
+      transaction_id: bound.transactionId,
+      version_id: bound.versionId,
+    })
+  })
+
   it('reports the full filtered referral total across pages', async () => {
     await initDb()
     const db = getDb()

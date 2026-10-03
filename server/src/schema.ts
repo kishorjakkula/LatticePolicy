@@ -442,6 +442,35 @@ export const underwritingReferrals = pgTable('underwriting_referrals', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const underwritingAuthorityGrants = pgTable('underwriting_authority_grants', {
+  grantId: uuid('grant_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  productCode: text('product_code'),
+  stateCode: char('state_code', { length: 2 }),
+  transactionTypes: text('transaction_types').array().notNull(),
+  maxPremium: numeric('max_premium', { precision: 14, scale: 2 }),
+  maxLimit: numeric('max_limit', { precision: 14, scale: 2 }),
+  mayOverride: boolean('may_override').notNull().default(false),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  active: boolean('active').notNull().default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const underwritingAuthorityAudit = pgTable('underwriting_authority_audit', {
+  auditId: uuid('audit_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  grantId: uuid('grant_id').references(() => underwritingAuthorityGrants.grantId, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  actor: text('actor').notNull(),
+  beforeValue: jsonb('before_value'),
+  afterValue: jsonb('after_value'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const uwDecisions = pgTable('uw_decisions', {
   decisionId: uuid('decision_id').primaryKey().default(sql`uuid_generate_v4()`),
   tenantId: text('tenant_id').notNull(),

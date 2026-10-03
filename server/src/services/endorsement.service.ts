@@ -28,6 +28,7 @@ import { validatePolicyTransactionState, type PolicyTransactionAction } from '..
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 import {
@@ -757,11 +758,20 @@ export async function executeEndorsement(
   const fullNew = endorsementPremium.fullNew
   const delta = endorsementPremium.totalDelta
   const uw = evaluateUW(tenantId, newPayload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: newPayload?.producer?.producerId || newPayload?.producer?.producerKey || null,
+    productCode: String(policyField(policyRow, 'productCode', 'product_code') || ''),
+    stateCode: newPayload?.state || newPayload?.jurisdiction?.code || '', effectiveDate: eff,
+    transactionType: 'Endorse', premium: Number(newPrem?.total?.amount || fullNew),
+    requestedLimit: maximumRequestedLimit(newPayload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
   let referralId: string | null = null
-  if (uw.decision === 'Refer') {
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
     const gate = await resolveReferralGateForActor(
       db,
       tenantId,
@@ -773,7 +783,8 @@ export async function executeEndorsement(
           ? `${newPayload.insureds.primary.firstName || ''} ${newPayload.insureds.primary.lastName || ''}`.trim()
           : null,
         effectiveDate: eff,
-        reasons: uw.reasons || [],
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
         createdBy: actor?.id || null,
       },
       actor,
@@ -787,8 +798,8 @@ export async function executeEndorsement(
     }
     referralId = gate.referral.referralId
   }
-  const uwOverride = uw.decision === 'Refer' && !!referralId
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const baseTimelineVersion = await loadCurrentTimelineVersion(q, tenantId, policyId)
   const timelineVersion = baseTimelineVersion + 1
   const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
@@ -810,6 +821,7 @@ export async function executeEndorsement(
       notes: endorsementNotes || undefined,
       submittedBy: submittedBy || undefined,
       transactionNumber,
+      authority,
       coveragePremiumDelta: endorsementPremium.byCoverage,
       proRataFactor: factor,
       baseTimelineVersion,
@@ -906,6 +918,7 @@ export async function executeEndorsement(
       taxesDelta: endorsementPremium.taxesDelta,
       coveragePremiumDelta: endorsementPremium.byCoverage,
       transactionNumber,
+      authority,
       baseTimelineVersion,
       timelineVersion,
       outOfSequence: computation.rebasedTransactions.length > 0,

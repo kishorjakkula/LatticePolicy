@@ -69,6 +69,9 @@ export const routeDefs: RouteDef[] = [
   { method: 'patch', path: '/v1/uw/referrals/{referralId}/decide', tag: 'UW Queue', summary: 'Approve, decline, or request info on a referral' },
   { method: 'patch', path: '/v1/uw/referrals/{referralId}/approve', tag: 'UW Queue', summary: 'Approve referral (alias for decide)' },
   { method: 'patch', path: '/v1/uw/referrals/{referralId}/decline', tag: 'UW Queue', summary: 'Decline referral (alias for decide)' },
+  { method: 'get', path: '/v1/uw/authority-grants', tag: 'UW Authority', summary: 'List effective-dated underwriting authority grants' },
+  { method: 'post', path: '/v1/uw/authority-grants', tag: 'UW Authority', summary: 'Create an underwriting authority grant' },
+  { method: 'patch', path: '/v1/uw/authority-grants/{grantId}', tag: 'UW Authority', summary: 'Expire or deactivate an underwriting authority grant' },
 
   { method: 'get', path: '/v1/products/{code}/config', tag: 'Products', summary: 'Get product config' },
   { method: 'get', path: '/v1/products/{code}/form', tag: 'Products', summary: 'Get product form schema' },
