@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { getDb, type DrizzleDB, withTenantTx, toRawQuery } from '../db.js'
 import { ok } from '../lib/respond.js'
 import { store } from '../store.js'
@@ -38,6 +39,12 @@ function derivePolicyTermCountFromPolicy(policy: any): number {
 }
 
 export const policyRoutes = Router()
+const policyDocumentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
 
 // ── GET /policies — list ──────────────────────────────────────────────────────
 policyRoutes.get('/policies', async (req, res, next) => {
@@ -465,6 +472,7 @@ policyRoutes.get(
 
 policyRoutes.patch(
   '/policies/:id/documents/:documentId/delivery',
+  policyDocumentLimiter,
   requirePermission('page.policy.view'),
   async (req, res, next) => {
     try {
@@ -517,6 +525,7 @@ policyRoutes.patch(
 
 policyRoutes.post(
   '/policies/:id/documents/:documentId/regenerate',
+  policyDocumentLimiter,
   requirePermission('page.policy.view'),
   async (req, res, next) => {
     try {
@@ -559,6 +568,7 @@ policyRoutes.post(
 // customer-safe check for non-internal callers.
 policyRoutes.get(
   '/policies/:id/documents/:documentId/content',
+  policyDocumentLimiter,
   requirePermission(['page.policy.view', 'customer.portal.read']),
   async (req, res, next) => {
     try {
