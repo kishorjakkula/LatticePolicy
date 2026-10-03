@@ -37,6 +37,7 @@ import {
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import {
   deriveTimelineSegments,
@@ -917,11 +918,19 @@ export async function renewPolicy(
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
+    productCode: policyProductCode(policyRow), stateCode: payload?.state || payload?.jurisdiction?.code || '',
+    effectiveDate: nextEff, transactionType: 'Renew', premium: Number((prem as any)?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(payload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
   let referralId: string | null = null
-  if (uw.decision === 'Refer') {
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
     const gate = await resolveReferralGateForActor(
       db,
       tenantId,
@@ -933,7 +942,8 @@ export async function renewPolicy(
           ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
           : null,
         effectiveDate: nextEff,
-        reasons: uw.reasons || [],
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
         createdBy: actor?.id || null,
       },
       actor,
@@ -947,8 +957,8 @@ export async function renewPolicy(
     }
     referralId = gate.referral.referralId
   }
-  const uwOverride = uw.decision === 'Refer' && !!referralId
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -968,6 +978,7 @@ export async function renewPolicy(
       uwReferralId: referralId || undefined,
       submittedBy: submittedBy || undefined,
       transactionNumber,
+      authority,
     },
   }
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
@@ -1035,6 +1046,7 @@ export async function renewPolicy(
       uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
+      authority,
     },
   })
 
@@ -1219,6 +1231,13 @@ export async function rewritePolicy(
 
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
+    productCode: policyProductCode(policyRow), stateCode: payload?.state || payload?.jurisdiction?.code || '',
+    effectiveDate: nextEff, transactionType: 'Rewrite', premium: Number((prem as any)?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(payload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError(
       'UW_DECLINED',
@@ -1226,7 +1245,8 @@ export async function rewritePolicy(
     )
   }
   let referralId: string | null = null
-  if (uw.decision === 'Refer') {
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
     const gate = await resolveReferralGateForActor(
       db,
       tenantId,
@@ -1238,7 +1258,8 @@ export async function rewritePolicy(
           ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
           : null,
         effectiveDate: nextEff,
-        reasons: uw.reasons || [],
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
         createdBy: actor?.id || null,
       },
       actor,
@@ -1252,8 +1273,8 @@ export async function rewritePolicy(
     }
     referralId = gate.referral.referralId
   }
-  const uwOverride = uw.decision === 'Refer' && !!referralId
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -1274,6 +1295,7 @@ export async function rewritePolicy(
       submittedBy: submittedBy || undefined,
       rewrite: true,
       transactionNumber,
+      authority,
     },
   }
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
@@ -1351,6 +1373,7 @@ export async function rewritePolicy(
       uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
+      authority,
     },
   })
 

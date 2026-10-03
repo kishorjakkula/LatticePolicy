@@ -308,6 +308,16 @@ Product Governance Releases
 - The selected release lineage is pinned to the quote and carried into the
   policy projection and append-only policy-version metadata at bind.
 
+Underwriting Authority
+- Tenant-scoped authority grants are effective-dated by user, role, or producer
+  and can constrain transaction type, premium, and requested coverage limit.
+- Bind, endorsement, renewal, and rewrite evaluate authority before committing
+  the policy transaction. Exceeded authority creates an underwriting referral.
+- Authority exceptions require the dedicated `uw.authority.override` permission
+  and a recorded reason. The resulting referral is linked to the committed
+  policy transaction and immutable policy version.
+- Grant creation and changes are retained in a tenant-scoped audit log.
+
 OpenAPI / Swagger Access Model
 - Swagger UI (`/api-docs`) and OpenAPI spec (`/openapi.json`) are admin-only.
 - UI "API Docs" navigation link is shown only for admin users.

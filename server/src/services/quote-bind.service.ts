@@ -34,6 +34,7 @@ import {
 } from './document-generation.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -189,6 +190,18 @@ export async function bindQuote(
   ).trim()
 
   let referralId: string | null = null
+  const authority = await withTenantTx(tenantId, innerDb => resolveAuthorityDecision(toRawQuery(innerDb), {
+    tenantId,
+    actorId: normalizedActorId,
+    roles: actor?.roles || [],
+    producerId: quote.payload?.producer?.producerId || quote.payload?.producer?.producerKey || null,
+    productCode: quote.payload?.productCode || '',
+    stateCode: quote.payload?.state || quote.payload?.jurisdiction?.code || '',
+    effectiveDate: quote.payload?.effectiveDate || new Date().toISOString().slice(0, 10),
+    transactionType: 'NewBusiness',
+    premium: Number(quote.premium?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(quote.payload),
+  }))
   if (quote.uw) {
     if (quote.uw.decision === 'Decline') {
       throw new BadRequestError(
@@ -196,7 +209,8 @@ export async function bindQuote(
         `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
       )
     }
-    if (quote.uw.decision === 'Refer') {
+    if (quote.uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+      const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
       const gate = await withTenantTx(tenantId, (innerDb) =>
         resolveReferralGateForActor(
           innerDb,
@@ -207,7 +221,8 @@ export async function bindQuote(
             productCode: quote.payload?.productCode || null,
             insuredName: insuredDisplayName || null,
             effectiveDate: quote.payload?.effectiveDate || null,
-            reasons: quote.uw.reasons || [],
+            reasons: [...(quote.uw.reasons || []), ...authorityReasons],
+            authorityOverrideRequired: authorityReasons.length > 0,
             createdBy: normalizedActorId,
           },
           { id: normalizedActorId, username: updatedBy, roles: actor?.roles, permissions: actor?.permissions },
@@ -311,6 +326,12 @@ export async function bindQuote(
       ? { governanceLineage: quote.payload.governanceLineage }
       : {}),
     ...(referralId ? { uwReferralId: referralId } : {}),
+    authority: {
+      configured: authority.configured,
+      grantId: authority.grantId,
+      authorized: authority.authorized,
+      reasons: authority.reasons,
+    },
     ...(primaryCustomerLink?.customerId
       ? { customerId: primaryCustomerLink.customerId }
       : {}),
@@ -329,7 +350,7 @@ export async function bindQuote(
     quote.payload?.jurisdiction ||
     (quote.payload?.state ? { code: quote.payload.state } : null)
   const uwDecision = quote.uw?.decision || null
-  const uwOverride = quote.uw?.decision === 'Refer' && !!referralId
+  const uwOverride = (quote.uw?.decision === 'Refer' || !authority.authorized) && !!referralId
   const termDetails: any = { effectiveDate, expirationDate, termMonths: months }
   let documentPacket: PolicyDocumentPacket = { forms: [], documents: [] }
 

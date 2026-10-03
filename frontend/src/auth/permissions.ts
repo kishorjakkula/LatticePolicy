@@ -87,6 +87,9 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.jobs.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
+    'uw.authority.read',
+    'uw.authority.manage',
+    'uw.authority.override',
     'rating.models.read',
     'rating.models.manage',
     'rating.models.publish'
@@ -103,6 +106,8 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.uw_queue.view',
     'uw.referrals.read',
     'uw.referrals.decide',
+    'uw.authority.read',
+    'uw.authority.override',
     'menu.placements.view',
     'page.placements.view',
     'placement.read',

@@ -152,6 +152,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'product.governance.read', scope: 'api', resourceKey: 'product.governance', actionKey: 'read', label: 'Product Governance API: Read', description: 'Read governed product releases and approval history', sortOrder: 680 },
   { permissionCode: 'product.governance.manage', scope: 'api', resourceKey: 'product.governance', actionKey: 'manage', label: 'Product Governance API: Manage', description: 'Create and submit governed product releases', sortOrder: 690 },
   { permissionCode: 'product.governance.approve', scope: 'api', resourceKey: 'product.governance', actionKey: 'approve', label: 'Product Governance API: Approve', description: 'Approve, schedule, activate, and retire governed product releases', sortOrder: 700 },
+  { permissionCode: 'uw.authority.read', scope: 'api', resourceKey: 'uw.authority', actionKey: 'read', label: 'UW Authority API: Read', description: 'Read effective-dated underwriting authority grants', sortOrder: 710 },
+  { permissionCode: 'uw.authority.manage', scope: 'api', resourceKey: 'uw.authority', actionKey: 'manage', label: 'UW Authority API: Manage', description: 'Create, expire, and deactivate underwriting authority grants', sortOrder: 720 },
+  { permissionCode: 'uw.authority.override', scope: 'api', resourceKey: 'uw.authority', actionKey: 'approve', label: 'UW Authority API: Override', description: 'Approve an authority exception with a recorded reason', sortOrder: 730 },
 ]
 
 type RoleSeed = {
@@ -193,6 +196,8 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.uw_queue.view',
       'uw.referrals.read',
       'uw.referrals.decide',
+      'uw.authority.read',
+      'uw.authority.override',
       'menu.placements.view',
       'page.placements.view',
       'placement.read',

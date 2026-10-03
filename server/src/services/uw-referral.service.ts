@@ -17,6 +17,7 @@ export interface ReferralGateContext {
   effectiveDate?: string | null
   transactionType: string
   reasons: string[]
+  authorityOverrideRequired?: boolean
   createdBy?: string | null
 }
 
@@ -151,6 +152,10 @@ function isUnderwriterActor(actor?: ReferralActor | null): boolean {
   return roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
 }
 
+function canOverrideAuthority(actor?: ReferralActor | null): boolean {
+  return (actor?.permissions || []).includes('uw.authority.override')
+}
+
 /**
  * Resolves the referral gate for a transaction attempt, allowing an
  * underwriter-permission actor to self-decide (Approve) inline when they
@@ -169,13 +174,17 @@ export async function resolveReferralGateForActor(
   const gate = await resolveReferralGate(db, tenantId, ctx)
   const isUw = isUnderwriterActor(actor)
   const reason = (overrideReason || '').trim()
-  if (gate.blocked && isUw && reason) {
+  const authorityReferral = ctx.authorityOverrideRequired
+    || (gate.referral?.reasons || []).some((value: unknown) => String(value).startsWith('AUTHORITY_'))
+  const canInlineApprove = authorityReferral ? canOverrideAuthority(actor) : isUw
+  if (gate.blocked && canInlineApprove && reason) {
     const decidedBy = actor?.id && isUuidLike(actor.id) ? actor.id : null
     const decided = await decideReferral(db, tenantId, gate.referral.referralId, {
       decision: 'Approved',
       reason,
       decidedBy,
       isUnderwriter: true,
+      canOverrideAuthority: canOverrideAuthority(actor),
     })
     return { blocked: false, referral: decided }
   }
@@ -268,7 +277,7 @@ export async function decideReferral(
   db: DrizzleDB,
   tenantId: string,
   referralId: string,
-  input: { decision: ReferralDecision; reason?: string; decidedBy: string | null; isUnderwriter: boolean }
+  input: { decision: ReferralDecision; reason?: string; decidedBy: string | null; isUnderwriter: boolean; canOverrideAuthority?: boolean }
 ) {
   if (!input.isUnderwriter) {
     throw new ForbiddenError('REFERRAL_DECISION_FORBIDDEN')
@@ -279,7 +288,7 @@ export async function decideReferral(
     [tenantId, referralId]
   )
   if (!existing.rowCount) throw new NotFoundError('REFERRAL_NOT_FOUND')
-  const current = existing.rows[0] as { status: ReferralStatus }
+  const current = existing.rows[0] as { status: ReferralStatus; reasons?: string[] }
   if (!DECIDABLE_STATUSES.includes(current.status)) {
     throw new BadRequestError(
       'REFERRAL_NOT_DECIDABLE',
@@ -288,6 +297,10 @@ export async function decideReferral(
   }
   const nextStatus: ReferralStatus = input.decision
   const reason = (input.reason || '').trim()
+  const authorityReferral = (current.reasons || []).some(value => String(value).startsWith('AUTHORITY_'))
+  if (input.decision === 'Approved' && authorityReferral && (!input.canOverrideAuthority || !reason)) {
+    throw new ForbiddenError('AUTHORITY_OVERRIDE_REQUIRED')
+  }
   const commentEntry = reason
     ? [{ by: input.decidedBy, text: reason, at: new Date().toISOString(), decision: input.decision }]
     : []

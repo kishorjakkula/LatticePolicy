@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { getDb, withTenantTx } from '../db.js'
-import { requirePermission } from '../auth.js'
+import { getDb, toRawQuery, withTenantTx } from '../db.js'
+import { hasPermission, requirePermission } from '../auth.js'
 import {
   listReferrals,
   getReferral,
@@ -10,6 +10,63 @@ import {
 } from '../services/uw-referral.service.js'
 
 export const uwRoutes = Router()
+
+uwRoutes.get('/uw/authority-grants', requirePermission('uw.authority.read'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  if (!getDb()) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const result = await withTenantTx(tenantId, db => toRawQuery(db)(
+    `SELECT * FROM underwriting_authority_grants WHERE tenant_id=$1
+      ORDER BY subject_type,subject_id,effective_date DESC`, [tenantId]))
+  return res.json({ items: result.rows })
+})
+
+uwRoutes.post('/uw/authority-grants', requirePermission('uw.authority.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const body = req.body || {}
+  const subjectType = String(body.subjectType || '').toUpperCase()
+  const subjectId = String(body.subjectId || '').trim()
+  const transactionTypes = Array.isArray(body.transactionTypes) ? body.transactionTypes.map(String).filter(Boolean) : []
+  if (!['USER', 'ROLE', 'PRODUCER'].includes(subjectType) || !subjectId || !transactionTypes.length || !body.effectiveDate) {
+    return res.status(400).json({ code: 'INVALID_INPUT', message: 'subjectType, subjectId, transactionTypes, and effectiveDate are required' })
+  }
+  if (!getDb()) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const actor = req.user?.username || req.user?.id || 'system'
+  const row = await withTenantTx(tenantId, async db => {
+    const q = toRawQuery(db)
+    const inserted = await q(
+      `INSERT INTO underwriting_authority_grants
+       (tenant_id,subject_type,subject_id,product_code,state_code,transaction_types,max_premium,max_limit,
+        may_override,effective_date,expiration_date,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [tenantId, subjectType, subjectId, body.productCode || null, body.stateCode || null, transactionTypes,
+       body.maxPremium ?? null, body.maxLimit ?? null, body.mayOverride === true, body.effectiveDate,
+       body.expirationDate || null, actor])
+    await q(`INSERT INTO underwriting_authority_audit (tenant_id,grant_id,action,actor,after_value)
+             VALUES ($1,$2,'CREATE',$3,$4::jsonb)`, [tenantId, inserted.rows[0].grant_id, actor, JSON.stringify(inserted.rows[0])])
+    return inserted.rows[0]
+  })
+  return res.status(201).json(row)
+})
+
+uwRoutes.patch('/uw/authority-grants/:grantId', requirePermission('uw.authority.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  if (!getDb()) return res.status(400).json({ code: 'NO_DB', message: 'Requires database mode' })
+  const actor = req.user?.username || req.user?.id || 'system'
+  const row = await withTenantTx(tenantId, async db => {
+    const q = toRawQuery(db)
+    const before = await q(`SELECT * FROM underwriting_authority_grants WHERE tenant_id=$1 AND grant_id=$2::uuid FOR UPDATE`, [tenantId, req.params.grantId])
+    if (!before.rowCount) return null
+    const updated = await q(
+      `UPDATE underwriting_authority_grants SET active=COALESCE($3,active), expiration_date=COALESCE($4::date,expiration_date)
+        WHERE tenant_id=$1 AND grant_id=$2::uuid RETURNING *`,
+      [tenantId, req.params.grantId, req.body?.active, req.body?.expirationDate || null])
+    await q(`INSERT INTO underwriting_authority_audit (tenant_id,grant_id,action,actor,before_value,after_value)
+             VALUES ($1,$2::uuid,'UPDATE',$3,$4::jsonb,$5::jsonb)`,
+      [tenantId, req.params.grantId, actor, JSON.stringify(before.rows[0]), JSON.stringify(updated.rows[0])])
+    return updated.rows[0]
+  })
+  return row ? res.json(row) : res.status(404).json({ code: 'NOT_FOUND', message: 'Authority grant not found' })
+})
 
 function isUnderwriter(req: any): boolean {
   const roles: string[] = req.user?.roles || []
@@ -93,6 +150,7 @@ uwRoutes.patch('/uw/referrals/:referralId/decide', requirePermission('uw.referra
       reason: req.body?.reason,
       decidedBy,
       isUnderwriter: isUnderwriter(req),
+      canOverrideAuthority: hasPermission(req, 'uw.authority.override'),
     })
   )
     .then((referral) => res.json(referral))
@@ -111,6 +169,7 @@ uwRoutes.patch('/uw/referrals/:referralId/approve', requirePermission('uw.referr
       reason: req.body?.reason,
       decidedBy,
       isUnderwriter: isUnderwriter(req),
+      canOverrideAuthority: hasPermission(req, 'uw.authority.override'),
     })
   )
     .then((referral) => res.json(referral))
@@ -128,6 +187,7 @@ uwRoutes.patch('/uw/referrals/:referralId/decline', requirePermission('uw.referr
       reason: req.body?.reason,
       decidedBy,
       isUnderwriter: isUnderwriter(req),
+      canOverrideAuthority: hasPermission(req, 'uw.authority.override'),
     })
   )
     .then((referral) => res.json(referral))
