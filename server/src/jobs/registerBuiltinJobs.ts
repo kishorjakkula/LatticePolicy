@@ -3,6 +3,7 @@ import { registerJob } from './registry.js'
 import { asyncOutboxDeliveryRetryHandler } from './handlers/asyncOutboxDeliveryRetry.js'
 import { renewalCandidateScanHandler } from './handlers/renewalCandidateScan.js'
 import { staleQuoteCleanupHandler } from './handlers/staleQuoteCleanup.js'
+import { policyIntegrityReconciliationHandler } from './handlers/policyIntegrityReconciliation.js'
 
 const asyncOutboxDeliveryRetryPayloadSchema = z.object({}).passthrough()
 const renewalCandidateScanPayloadSchema = z.object({ windowDays: z.number().int().positive().optional() }).passthrough()
@@ -10,6 +11,7 @@ const staleQuoteCleanupPayloadSchema = z.object({
   staleAfterDays: z.number().int().positive().optional(),
   dryRun: z.boolean().optional(),
 }).passthrough()
+const policyIntegrityPayloadSchema = z.object({ policyId: z.string().uuid().optional() }).passthrough()
 
 let registered = false
 
@@ -45,6 +47,15 @@ export function registerBuiltinJobs(): void {
     description: 'Expires inactive draft and rated quotes after a configurable age.',
     handler: staleQuoteCleanupHandler,
     payloadSchema: staleQuoteCleanupPayloadSchema,
+    defaultMaxAttempts: 3,
+    backoff: { baseSeconds: 60, maxSeconds: 3600 },
+  })
+
+  registerJob({
+    jobCode: 'policy_integrity_reconciliation',
+    description: 'Detects incomplete policy records and side effects for operational repair.',
+    handler: policyIntegrityReconciliationHandler,
+    payloadSchema: policyIntegrityPayloadSchema,
     defaultMaxAttempts: 3,
     backoff: { baseSeconds: 60, maxSeconds: 3600 },
   })

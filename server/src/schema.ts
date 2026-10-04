@@ -1089,3 +1089,30 @@ export const jobRunEvents = pgTable('job_run_events', {
 }, (t) => [
   index('idx_job_run_events_run').on(t.runId, t.createdAt),
 ])
+
+export const policyIntegrityExceptions = pgTable('policy_integrity_exceptions', {
+  exceptionId: uuid('exception_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  policyId: uuid('policy_id').notNull().references(() => policies.policyId, { onDelete: 'cascade' }),
+  transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'cascade' }),
+  exceptionClass: text('exception_class').notNull(),
+  severity: text('severity').notNull().default('Error'),
+  status: text('status').notNull().default('Open'),
+  summary: text('summary').notNull(),
+  details: jsonb('details').notNull().default(sql`'{}'::jsonb`),
+  suggestedAction: text('suggested_action').notNull().default('Investigate'),
+  correlationId: text('correlation_id').notNull(),
+  firstDetectedAt: timestamp('first_detected_at', { withTimezone: true }).notNull().defaultNow(),
+  lastDetectedAt: timestamp('last_detected_at', { withTimezone: true }).notNull().defaultNow(),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+  acknowledgedBy: uuid('acknowledged_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolvedBy: uuid('resolved_by'),
+  resolutionNote: text('resolution_note'),
+  retryCount: integer('retry_count').notNull().default(0),
+  lastRetryAt: timestamp('last_retry_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_policy_integrity_queue').on(t.tenantId, t.status, t.severity, t.lastDetectedAt),
+])

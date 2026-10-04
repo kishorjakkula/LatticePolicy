@@ -10,6 +10,9 @@ const useDashboardOutboxMock = vi.fn()
 const useDashboardNotificationsMock = vi.fn()
 const useOfacScreensMock = vi.fn()
 const useUwReferralsMock = vi.fn()
+const usePolicyIntegrityExceptionsMock = vi.fn()
+const updateIntegrityMutateMock = vi.fn()
+const retryIntegrityMutateMock = vi.fn()
 
 vi.mock('../../../api/hooks', () => ({
   useDashboardSummary: (...args: any[]) => useDashboardSummaryMock(...args),
@@ -17,6 +20,9 @@ vi.mock('../../../api/hooks', () => ({
   useDashboardNotifications: (...args: any[]) => useDashboardNotificationsMock(...args),
   useOfacScreens: (...args: any[]) => useOfacScreensMock(...args),
   useUwReferrals: (...args: any[]) => useUwReferralsMock(...args),
+  usePolicyIntegrityExceptions: (...args: any[]) => usePolicyIntegrityExceptionsMock(...args),
+  useUpdatePolicyIntegrityExceptionMutation: () => ({ mutate: updateIntegrityMutateMock, isPending: false }),
+  useRetryPolicyIntegrityExceptionMutation: () => ({ mutate: retryIntegrityMutateMock, isPending: false }),
 }))
 
 function renderPage() {
@@ -31,7 +37,7 @@ describe('OperationsDashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useDashboardSummaryMock.mockReturnValue({
-      data: { outbox: { Failed: 2, Pending: 1 }, ofac: { PENDING: 1 }, referrals: { Open: 3 }, notifications: { Failed: 1, Suppressed: 0 } },
+      data: { outbox: { Failed: 2, Pending: 1 }, ofac: { PENDING: 1 }, referrals: { Open: 3 }, notifications: { Failed: 1, Suppressed: 0 }, integrity: { Open: 1 } },
       isLoading: false,
       error: null,
     })
@@ -39,6 +45,7 @@ describe('OperationsDashboardPage', () => {
     useDashboardNotificationsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
     useOfacScreensMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
     useUwReferralsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
+    usePolicyIntegrityExceptionsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
   })
 
   it('renders summary counts from aggregated data', () => {
@@ -55,6 +62,7 @@ describe('OperationsDashboardPage', () => {
     expect(screen.getByText('No failed or suppressed notifications.')).toBeInTheDocument()
     expect(screen.getByText('No pending OFAC reviews.')).toBeInTheDocument()
     expect(screen.getByText('No open underwriting referrals.')).toBeInTheDocument()
+    expect(screen.getByText('No unresolved policy integrity exceptions.')).toBeInTheDocument()
   })
 
   it('renders an outbox failure row with a link to the source policy when a notification has one', () => {
