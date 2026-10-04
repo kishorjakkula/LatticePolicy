@@ -296,6 +296,35 @@ export function useDashboardNotifications(status?: string) {
   })
 }
 
+export function usePolicyIntegrityExceptions(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.policyIntegrity(status),
+    queryFn: () => adminApi.listPolicyIntegrityExceptions(status),
+  })
+}
+
+export function useUpdatePolicyIntegrityExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, note }: { id: string; status: 'Acknowledged' | 'Resolved'; note?: string }) =>
+      adminApi.updatePolicyIntegrityException(id, status, note),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useRetryPolicyIntegrityExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.retryPolicyIntegrityException(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dashboard', 'policy-integrity'] })
+      void qc.invalidateQueries({ queryKey: ['jobs', 'runs'] })
+    },
+  })
+}
+
 export function useImportOfacSdnListMutation() {
   return useMutation({
     mutationFn: (entries: any[]) => adminApi.importOfacSdnList(entries),

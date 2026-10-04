@@ -6,7 +6,11 @@ import {
   useDashboardNotifications,
   useOfacScreens,
   useUwReferrals,
+  usePolicyIntegrityExceptions,
+  useUpdatePolicyIntegrityExceptionMutation,
+  useRetryPolicyIntegrityExceptionMutation,
 } from '../../api/hooks'
+import { adminApi } from '../../api/admin.api'
 
 type OutboxRow = {
   message_id: string
@@ -40,7 +44,7 @@ const SEVERITY_COLORS: Record<'danger' | 'warning' | 'neutral', string> = {
 }
 
 function severityFor(status: string): 'danger' | 'warning' | 'neutral' {
-  if (status === 'Failed' || status === 'DeadLettered' || status === 'BLOCKED' || status === 'Urgent') return 'danger'
+  if (status === 'Failed' || status === 'DeadLettered' || status === 'BLOCKED' || status === 'Urgent' || status === 'Critical' || status === 'Error') return 'danger'
   if (status === 'Retry' || status === 'ESCALATED' || status === 'Suppressed' || status === 'High') return 'warning'
   return 'neutral'
 }
@@ -68,14 +72,62 @@ export function OperationsDashboardPage() {
           <SummaryCard label="UW Referrals Open" value={summary.referrals?.Open || 0} />
           <SummaryCard label="Notifications Failed" value={summary.notifications?.Failed || 0} danger />
           <SummaryCard label="Notifications Suppressed" value={summary.notifications?.Suppressed || 0} />
+          <SummaryCard label="Policy Integrity Open" value={(summary.integrity?.Open || 0) + (summary.integrity?.Acknowledged || 0)} danger={!!summary.integrity?.Open} />
         </div>
       )}
 
+      <PolicyIntegrityPanel />
       <OutboxPanel />
       <NotificationsPanel />
       <OfacPanel />
       <ReferralsPanel />
     </div>
+  )
+}
+
+function PolicyIntegrityPanel() {
+  const { data, isLoading, error } = usePolicyIntegrityExceptions()
+  const update = useUpdatePolicyIntegrityExceptionMutation()
+  const retry = useRetryPolicyIntegrityExceptionMutation()
+  const rows = data?.items ?? []
+
+  const exportCsv = async () => {
+    const blob = await adminApi.exportPolicyIntegrityExceptions()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'policy-integrity-exceptions.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <PanelShell title="Policy Integrity Exceptions" isLoading={isLoading} error={error} empty={rows.length === 0} emptyMessage="No unresolved policy integrity exceptions.">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button className="button secondary" type="button" onClick={() => void exportCsv()}>Export CSV</button>
+      </div>
+      <div className="ps-table-card">
+        <table className="table">
+          <thead><tr><th>Policy</th><th>Exception</th><th>Severity</th><th>Status</th><th>Detected</th><th>Actions</th></tr></thead>
+          <tbody>{rows.map((row: any) => (
+            <tr key={row.exception_id}>
+              <td><Link to={`/policies/${row.policy_id}`}>{row.policy_number || row.policy_id.slice(0, 8)}</Link></td>
+              <td><strong>{String(row.exception_class).replace(/_/g, ' ')}</strong><div className="muted">{row.summary}</div></td>
+              <td><Severity status={row.severity} /></td>
+              <td><Severity status={row.status} /></td>
+              <td>{new Date(row.last_detected_at).toLocaleString()}</td>
+              <td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="button secondary" type="button" disabled={retry.isPending} onClick={() => retry.mutate(row.exception_id)}>Retry</button>
+                  {row.status === 'Open' && <button className="button secondary" type="button" disabled={update.isPending} onClick={() => update.mutate({ id: row.exception_id, status: 'Acknowledged' })}>Acknowledge</button>}
+                  <button className="button secondary" type="button" disabled={update.isPending} onClick={() => update.mutate({ id: row.exception_id, status: 'Resolved', note: 'Resolved by operator' })}>Resolve</button>
+                </div>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </PanelShell>
   )
 }
 

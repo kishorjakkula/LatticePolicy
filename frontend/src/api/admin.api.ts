@@ -56,6 +56,13 @@ export const adminApi = {
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
   listDashboardNotifications: (status?: string) =>
     request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
+  listPolicyIntegrityExceptions: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/policy-integrity${status ? `?status=${status}` : ''}`),
+  updatePolicyIntegrityException: (id: string, status: 'Acknowledged' | 'Resolved', note?: string) =>
+    request<any>('PATCH', `/v1/admin/dashboard/policy-integrity/${id}`, { status, note }),
+  retryPolicyIntegrityException: (id: string) =>
+    request<any>('POST', `/v1/admin/dashboard/policy-integrity/${id}/retry`, {}),
+  exportPolicyIntegrityExceptions: () => requestBlob('/v1/admin/dashboard/policy-integrity?format=csv'),
   // Job queue administration
   listJobDefinitions: () => request<{ items: any[] }>('GET', '/v1/admin/jobs/definitions'),
   listJobRuns: (opts?: { jobCode?: string; status?: string; limit?: number }) => {

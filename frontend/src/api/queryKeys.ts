@@ -48,6 +48,7 @@ export const queryKeys = {
     summary: () => ['dashboard', 'summary'] as const,
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
     notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
+    policyIntegrity: (status?: string) => ['dashboard', 'policy-integrity', status ?? null] as const,
   },
   jobs: {
     definitions: () => ['jobs', 'definitions'] as const,
