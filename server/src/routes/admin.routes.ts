@@ -5,7 +5,7 @@ import { withTenantTx, getDb, toRawQuery } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
-import { formsAdminRoutes } from '../formsAdmin.js'
+import { formsAdminRoutes, ensureDefaultFormRows } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
 import { complianceAdminRoutes } from './compliance-admin.routes.js'
 import { adminJobsRoutes } from './admin-jobs.routes.js'
@@ -14,8 +14,9 @@ import { adminDashboardRoutes } from './admin-dashboard.routes.js'
 import { exposureRoutes } from './exposure.routes.js'
 import { reinsuranceAdminRoutes } from './reinsurance-admin.routes.js'
 import { bordereauxRoutes } from './bordereaux.routes.js'
-import { onboardingAdminRoutes } from '../agencyOnboarding.js'
+import { onboardingAdminRoutes, loadOnboardingConfig, upsertAgencyEntity } from '../agencyOnboarding.js'
 import { notificationTemplatesRoutes } from '../notificationTemplates.js'
+import { createNotificationTemplate } from '../services/notification-template-admin.service.js'
 import {
   createMemoryUnderwritingCompany,
   deleteMemoryUnderwritingCompany,
@@ -959,6 +960,169 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
     })
     return res.json({ ok: true })
   } catch (e:any) {
+    return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
+  }
+})
+
+// Seed baseline reference/admin data (underwriting companies, an agency + contact, a forms catalog
+// entry, and notification templates) for every product line the tenant has enabled in
+// tenants/<id>/config.yaml. Idempotent: safe to re-run — each section checks for an existing row
+// on its natural key before creating anything, so it only fills gaps.
+const SEED_PRODUCT_LINES: Array<{ code: string; uwCompanyName: string; formNumber: string; formTitle: string }> = [
+  { code: 'personal-auto', uwCompanyName: 'Sample Carrier Personal Lines', formNumber: 'PA-DEC', formTitle: 'Personal Auto Declarations' },
+  { code: 'homeowners', uwCompanyName: 'Sample Carrier Property', formNumber: 'HO-DEC', formTitle: 'Homeowners Declarations' },
+  { code: 'commercial-auto', uwCompanyName: 'Sample Carrier Commercial Lines', formNumber: 'CA-DEC', formTitle: 'Commercial Auto Declarations' },
+  { code: 'professional-liability', uwCompanyName: 'Sample Carrier Professional Lines', formNumber: 'PL-DEC', formTitle: 'Professional Liability Declarations' },
+  { code: 'cyber', uwCompanyName: 'Sample Carrier Specialty Cyber', formNumber: 'CYB-DEC', formTitle: 'Cyber Liability Declarations' }
+]
+const SEED_FORM_EDITION_DATE = '2024-01-01'
+
+const SEED_NOTIFICATION_TEMPLATES: Array<{ templateCode: string; eventType: string; subjectTemplate: string; bodyTemplate: string }> = [
+  {
+    templateCode: 'policy-issued-default',
+    eventType: 'POLICY_ISSUED',
+    subjectTemplate: 'Policy {{policyNumber}} issued',
+    bodyTemplate: 'Policy {{policyNumber}} was issued effective {{effectiveDate}}. Thank you for choosing us.'
+  },
+  {
+    templateCode: 'policy-cancelled-default',
+    eventType: 'POLICY_CANCELLED',
+    subjectTemplate: 'Policy {{policyNumber}} cancelled',
+    bodyTemplate: 'Policy {{policyNumber}} has been cancelled effective {{effectiveDate}}. Reason: {{reason}}.'
+  },
+  {
+    templateCode: 'policy-renewed-default',
+    eventType: 'POLICY_RENEWED',
+    subjectTemplate: 'Policy {{policyNumber}} renewed',
+    bodyTemplate: 'Policy {{policyNumber}} has been renewed for a new term effective {{effectiveDate}}.'
+  }
+]
+
+adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const actor = req.user?.username || req.user?.id || 'system'
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Seeding requires DB' })
+
+  const summary = {
+    underwritingCompanies: { created: [] as string[], skipped: [] as string[] },
+    forms: { created: [] as string[], skipped: [] as string[] },
+    notificationTemplates: { created: [] as string[], skipped: [] as string[] },
+    agency: { created: false, skipped: false }
+  }
+
+  let seedStep = 'start'
+  try {
+    await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+
+      // Product enablement lives in tenants/<id>/config.yaml (file-based), not a DB column, so this
+      // seeds every product line the app ships with; disable a line by removing it from
+      // SEED_PRODUCT_LINES if a tenant shouldn't get reference data for it.
+      for (const line of SEED_PRODUCT_LINES) {
+        seedStep = `underwriting company: ${line.code}`
+        const existingUw = await q(
+          `SELECT 1 FROM underwriting_companies WHERE tenant_id=$1 AND product_code=$2 AND country_code=$3 AND state_code=$4 LIMIT 1`,
+          [tenantId, line.code, 'US', 'ALL']
+        )
+        if ((existingUw as any).rowCount > 0) {
+          summary.underwritingCompanies.skipped.push(line.code)
+        } else {
+          await q(
+            `INSERT INTO underwriting_companies (tenant_id, name, product_code, country_code, state_code, active, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,now())`,
+            [tenantId, line.uwCompanyName, line.code, 'US', 'ALL', true]
+          )
+          summary.underwritingCompanies.created.push(line.code)
+        }
+
+        seedStep = `form: ${line.formNumber}`
+        const existingForm = await q(
+          `SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND carrier_code=$2 AND authority=$3 AND form_number=$4 AND edition_date=$5 LIMIT 1`,
+          [tenantId, 'SAMPLE', 'ISO', line.formNumber, SEED_FORM_EDITION_DATE]
+        )
+        if ((existingForm as any).rowCount > 0) {
+          summary.forms.skipped.push(line.formNumber)
+        } else {
+          const inserted = await q(
+            `INSERT INTO forms_admin_forms (
+                tenant_id, carrier_code, authority, form_number, form_title, edition_date,
+                form_type, line_of_business, workflow_status, active, edit_lock, require_approved_jurisdiction,
+                metadata, created_by, updated_by, updated_at
+             ) VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,now())
+             RETURNING form_id`,
+            [
+              tenantId, 'SAMPLE', 'ISO', line.formNumber, line.formTitle, SEED_FORM_EDITION_DATE,
+              'Policy', line.code, 'Draft', false, true, false,
+              JSON.stringify({ seedCode: 'seed-reference-data' }), actor, actor
+            ]
+          )
+          const formId = (inserted as any).rows[0].form_id
+          await ensureDefaultFormRows(q, tenantId, formId, actor)
+          summary.forms.created.push(line.formNumber)
+        }
+      }
+
+      for (const tmpl of SEED_NOTIFICATION_TEMPLATES) {
+        seedStep = `notification template: ${tmpl.templateCode}`
+        const existingTemplate = await q(
+          `SELECT 1 FROM notification_templates WHERE tenant_id=$1 AND template_code=$2 LIMIT 1`,
+          [tenantId, tmpl.templateCode]
+        )
+        if ((existingTemplate as any).rowCount > 0) {
+          summary.notificationTemplates.skipped.push(tmpl.templateCode)
+        } else {
+          await createNotificationTemplate(db, tenantId, {
+            templateCode: tmpl.templateCode,
+            eventType: tmpl.eventType,
+            channel: 'EMAIL',
+            locale: 'en-US',
+            subjectTemplate: tmpl.subjectTemplate,
+            bodyTemplate: tmpl.bodyTemplate,
+            visibility: ['customer'],
+            active: true,
+            metadata: { seedCode: 'seed-reference-data' }
+          }, actor)
+          summary.notificationTemplates.created.push(tmpl.templateCode)
+        }
+      }
+
+      seedStep = 'agency'
+      const existingAgency = await q(
+        `SELECT agency_id FROM agencies WHERE tenant_id=$1 AND agency_np_number=$2 LIMIT 1`,
+        [tenantId, '8675309']
+      )
+      if ((existingAgency as any).rowCount > 0) {
+        summary.agency.skipped = true
+      } else {
+        const config = await loadOnboardingConfig(q, tenantId)
+        await upsertAgencyEntity(q, tenantId, {
+          legalName: 'Sample Carrier Agency',
+          npn: '8675309',
+          feinLast4: '4242',
+          agencyType: 'INDEPENDENT',
+          status: 'ACTIVE',
+          commissionRate: 10,
+          contacts: [{
+            firstName: 'Jordan',
+            lastName: 'Casey',
+            email: 'jordan.casey@samplecarrieragency.example',
+            phoneNumber: '+1 555 123 4567',
+            preferred: true
+          }]
+        }, {
+          actor,
+          strategy: 'ALWAYS_CREATE',
+          conflictBehavior: 'SKIP',
+          canApprove: true,
+          config,
+          reason: 'SEED_REFERENCE_DATA'
+        })
+        summary.agency.created = true
+      }
+    })
+    return res.json({ ok: true, summary })
+  } catch (e: any) {
     return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
   }
 })

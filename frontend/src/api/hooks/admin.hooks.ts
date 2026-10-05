@@ -469,6 +469,17 @@ export function useSeedMutation() {
   })
 }
 
+export function useSeedReferenceDataMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => adminApi.seedReferenceData(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-uw-companies'] })
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Admin - UW Companies
 // ---------------------------------------------------------------------------

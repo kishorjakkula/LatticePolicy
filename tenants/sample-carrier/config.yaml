@@ -2,6 +2,9 @@ tenantId: sample-carrier
 enabledProducts:
   - personal-auto
   - homeowners
+  - commercial-auto
+  - professional-liability
+  - cyber
 overrides:
   rating:
     driverAgeFactors:

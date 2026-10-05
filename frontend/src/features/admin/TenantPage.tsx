@@ -6,7 +6,7 @@ import {
   type DateFormatValue
 } from '../../shared/dateDisplay'
 import { COUNTRIES } from '../../shared/usStates'
-import { useTenant, useUpdateTenantMutation, useSeedMutation } from '../../api/hooks'
+import { useTenant, useUpdateTenantMutation, useSeedMutation, useSeedReferenceDataMutation } from '../../api/hooks'
 
 type DateFormatRow = {
   id: string
@@ -169,6 +169,7 @@ export function TenantPage() {
   const { data: tenantData, isLoading, error: loadError } = useTenant()
   const updateMutation = useUpdateTenantMutation()
   const seedMutation = useSeedMutation()
+  const seedReferenceDataMutation = useSeedReferenceDataMutation()
 
   const stateSetters = { setTenant, setName, setDefaultCountry, setMfaRequired, setAiMlConfig, setDateFormatRows, setPolicyNumberRows }
 
@@ -245,6 +246,22 @@ export function TenantPage() {
     try { await seedMutation.mutateAsync(); setSeedMsg('Seeded demo policies for this tenant.') } catch (e:any) { setFormError(e.message || String(e)) }
   }
 
+  const onSeedReferenceData = async () => {
+    setSeedMsg(null); setFormError(null)
+    try {
+      const result: any = await seedReferenceDataMutation.mutateAsync()
+      const s = result?.summary
+      const createdCount = s
+        ? s.underwritingCompanies.created.length + s.forms.created.length + s.notificationTemplates.created.length + (s.agency.created ? 1 : 0)
+        : 0
+      setSeedMsg(
+        createdCount > 0
+          ? `Seeded reference data: ${createdCount} new record(s) created (underwriting companies, forms, notification templates, agency). Already-present records were left untouched.`
+          : 'Reference data already seeded — nothing new to create.'
+      )
+    } catch (e:any) { setFormError(e.message || String(e)) }
+  }
+
   const defaultCountryOptions = useMemo(() => {
     const codes = new Set<string>(COUNTRIES.map((entry) => entry.code))
     for (const row of dateFormatRows) {
@@ -283,6 +300,7 @@ export function TenantPage() {
 
   const loading = isLoading || updateMutation.isPending
   const seeding = seedMutation.isPending
+  const seedingReferenceData = seedReferenceDataMutation.isPending
   const error = formError || (loadError ? String(loadError) : null)
 
   return (
@@ -292,7 +310,10 @@ export function TenantPage() {
       </div>
       {error && <p className="error">{error}</p>}
       {seedMsg && <p className="muted">{seedMsg}</p>}
-      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom: 8 }}>
+      <div style={{ display:'flex', justifyContent:'flex-end', gap: 8, marginBottom: 8 }}>
+        <button onClick={onSeedReferenceData} disabled={seedingReferenceData} className="btn-secondary">
+          Seed Reference Data
+        </button>
         <button onClick={onSeed} disabled={seeding}>Seed Demo Policies</button>
       </div>
       <div className="row">
