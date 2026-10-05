@@ -11,6 +11,14 @@ import {
 } from '../../api/hooks'
 import carrierLogo from '../../assets/sample-carrier-logo.svg'
 import { normalizePayloadCoverages } from './coverageUtils'
+import {
+  defaultAutoRisk,
+  defaultCommercialAutoRisk,
+  defaultCyberRisk,
+  defaultDwellingRisk,
+  defaultProfessionalLiabilityRisk,
+  validatePersonalAutoVehicles,
+} from './riskDefaults'
 import { clearPendingTransaction, savePendingTransaction, type PendingTransactionMode } from './pendingEndorsement'
 import { validateInsureds } from './insuredValidation'
 import { deriveWizardTransactionStatus } from '../policies/statusModel'
@@ -5834,141 +5842,6 @@ function coverageSummary(sel: any): string {
     parts.push('Wind/Hail: ' + sel.windHailPercent + '%')
   }
   return parts.length ? parts.join(' | ') : 'Selected'
-}
-
-function validatePersonalAutoVehicles(risks: any): Record<string, string> {
-  const errs: Record<string, string> = {}
-  const vehicles = Array.isArray(risks) ? risks : []
-  if (!vehicles.length) {
-    errs['risks.0.vehicle'] = 'Add at least one vehicle'
-    return errs
-  }
-  vehicles.forEach((risk: any, index: number) => {
-    const vin = String(risk?.vin || '').trim()
-    const garagingZip = String(risk?.garagingZip || '').trim()
-    const registrationState = String(risk?.registrationState || '').trim()
-    const requiredStringFields: Array<{ key: string; value: any; message: string }> = [
-      { key: 'make', value: risk?.make, message: 'Make is required' },
-      { key: 'model', value: risk?.model, message: 'Model is required' },
-      { key: 'bodyStyle', value: risk?.bodyStyle, message: 'Body style is required' },
-      { key: 'garagingZip', value: garagingZip, message: 'Garaging ZIP is required' },
-      { key: 'registrationState', value: registrationState, message: 'Registration state is required' },
-      { key: 'usage', value: risk?.usage, message: 'Usage is required' },
-      { key: 'ownershipType', value: risk?.ownershipType, message: 'Ownership is required' },
-      { key: 'principalDriver', value: risk?.principalDriver, message: 'Principal driver is required' }
-    ]
-    for (const field of requiredStringFields) {
-      if (!String(field.value || '').trim()) {
-        errs[`risks.${index}.${field.key}`] = field.message
-      }
-    }
-    const year = Number(risk?.year)
-    if (!Number.isFinite(year) || year < 1900 || year > new Date().getFullYear() + 1) {
-      errs[`risks.${index}.year`] = 'Enter a valid vehicle year'
-    }
-    const annualMiles = Number(risk?.annualMiles)
-    if (!Number.isFinite(annualMiles) || annualMiles <= 0) {
-      errs[`risks.${index}.annualMiles`] = 'Enter annual miles'
-    }
-    const driverAge = Number(risk?.driverAge)
-    if (!Number.isFinite(driverAge) || driverAge < 16 || driverAge > 100) {
-      errs[`risks.${index}.driverAge`] = 'Enter a valid driver age'
-    }
-    if (!vin) {
-      errs[`risks.${index}.vin`] = 'VIN is required'
-    } else if (vin.length !== 17) {
-      errs[`risks.${index}.vin`] = 'VIN must be 17 characters'
-    }
-    if (garagingZip && !/^\d{5}$/.test(garagingZip)) {
-      errs[`risks.${index}.garagingZip`] = 'Enter a 5-digit ZIP'
-    }
-    if (registrationState && registrationState.length !== 2) {
-      errs[`risks.${index}.registrationState`] = 'Use a 2-letter state code'
-    }
-    if (risk?.usage === 'commute') {
-      const commuteMiles = Number(risk?.commuteMiles)
-      if (!Number.isFinite(commuteMiles) || commuteMiles <= 0) {
-        errs[`risks.${index}.commuteMiles`] = 'Enter commute miles'
-      }
-    }
-  })
-  return errs
-}
-
-function defaultAutoRisk() {
-  return {
-    type: 'autoVehicle',
-    year: 2018,
-    make: 'Toyota',
-    model: 'Camry',
-    trim: 'LE',
-    bodyStyle: 'sedan',
-    vin: '',
-    garagingZip: '10001',
-    registrationState: 'NY',
-    usage: 'commute',
-    annualMiles: 12000,
-    commuteMiles: 12,
-    driverAge: 30,
-    principalDriver: 'Named insured',
-    ownershipType: 'owned',
-    purchaseDate: '',
-    antiTheft: 'passive-alarm',
-    rideshareUse: 'no',
-    existingDamage: 'no'
-  }
-}
-function defaultDwellingRisk() {
-  return { type: 'dwelling', address: '1 Main St', construction: 'frame', yearBuilt: 2000, roofAgeYears: 10, squareFeet: 1800 }
-}
-
-function defaultCyberRisk() {
-  return {
-    type: 'cyberProfile',
-    industry: 'technology',
-    annualRevenue: 1000000,
-    employeeCount: 50,
-    recordsCount: 50000,
-    mfaEnabled: 'true',
-    endpointProtection: 'true',
-    backups: 'daily',
-    priorIncidents: 0,
-    publicFacingApps: 2,
-    domain: 'example.com'
-  }
-}
-
-function defaultCommercialAutoRisk() {
-  return {
-    type: 'commercialAutoFleet',
-    businessName: 'Acme Services LLC',
-    garagingZip: '10001',
-    vehicleCount: 3,
-    driverCount: 4,
-    useClass: 'artisan-contractor',
-    radiusClass: 'local',
-    vehicleType: 'service-van',
-    gvwClass: 'light',
-    annualMileage: 18000,
-    yearsInBusiness: 5,
-    priorLossesCount: 0
-  }
-}
-
-function defaultProfessionalLiabilityRisk() {
-  return {
-    type: 'professionalLiabilityProfile',
-    industry: 'consulting',
-    annualRevenue: 1000000,
-    employeeCount: 10,
-    yearsInBusiness: 5,
-    priorClaimsCount: 0,
-    largestContractValue: 150000,
-    subcontractorPct: 10,
-    writtenContracts: 'true',
-    qualityControl: 'standard',
-    retroactiveYears: 3
-  }
 }
 
 function deriveUwAnswers(q: QuoteState): any {
