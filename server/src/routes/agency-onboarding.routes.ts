@@ -11,6 +11,27 @@ import {
 } from '../customerCrypto.js'
 import { today } from '../lib/date.utils.js'
 import { csvEscape, sanitizeText } from '../lib/utils.js'
+import {
+  clampInt,
+  isFiniteNumber,
+  isUuid,
+  isValidEmail,
+  normalizeAgencyCodePrefix,
+  normalizeAgencyStatus,
+  normalizeAgencyType,
+  normalizeDate,
+  normalizeLast4,
+  normalizeObject,
+  normalizeProducerStatus,
+  normalizeStringArray,
+  normalizeTextForMatch,
+  normalizeTimestamp,
+  toBoolean,
+  toNullable,
+  toNumber,
+  toOptionalNumber,
+  toTimestampOrDefault,
+} from '../services/onboarding/onboarding-normalization.js'
 
 type QueryFn = (text: string, params?: any[]) => Promise<any>
 
@@ -3027,31 +3048,6 @@ function normalizeServiceName(value: any): (typeof SERVICE_NAMES)[number] | null
   return match || null
 }
 
-function normalizeAgencyStatus(value: any): string {
-  const allowed = ['PROSPECT', 'PENDING_COMPLIANCE', 'PENDING_CONTRACT', 'PENDING_APPOINTMENT', 'ACTIVE', 'SUSPENDED', 'TERMINATED']
-  const raw = sanitizeText(value).toUpperCase()
-  return allowed.includes(raw) ? raw : 'PROSPECT'
-}
-
-function normalizeProducerStatus(value: any): string {
-  const allowed = ['INVITED', 'PENDING_LICENSE', 'PENDING_APPOINTMENT', 'ACTIVE', 'RESTRICTED', 'SUSPENDED']
-  const raw = sanitizeText(value).toUpperCase()
-  return allowed.includes(raw) ? raw : 'INVITED'
-}
-
-function normalizeAgencyType(value: any): string {
-  const allowed = ['INDEPENDENT', 'CAPTIVE', 'MGA', 'WHOLESALER']
-  const raw = sanitizeText(value).toUpperCase()
-  return allowed.includes(raw) ? raw : 'INDEPENDENT'
-}
-
-function normalizeAgencyCodePrefix(value: any): string {
-  const raw = sanitizeText(value).toUpperCase().replace(/[^A-Z]/g, '')
-  if (!raw) return 'AG'
-  if (raw.length === 1) return `${raw}A`
-  return raw.slice(0, 6)
-}
-
 function normalizeLicenseStatus(value: any): string | null {
   const raw = sanitizeText(value).toUpperCase()
   return LIC_STATUS_VALUES.includes(raw) ? raw : null
@@ -3070,98 +3066,6 @@ function normalizeRootEntityType(value: any): RootEntityType | null {
 function normalizeRowAction(value: any): RowAction | null {
   const raw = sanitizeText(value).toUpperCase()
   return ROW_ACTION_VALUES.includes(raw as RowAction) ? (raw as RowAction) : null
-}
-
-function normalizeStringArray(value: any): string[] {
-  if (!Array.isArray(value)) return []
-  return value.map((item) => sanitizeText(item)).filter(Boolean)
-}
-
-function normalizeObject(value: any): Record<string, any> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-}
-
-
-
-function toNullable(value: any): string | null {
-  const next = sanitizeText(value)
-  return next || null
-}
-
-function normalizeTextForMatch(value: any): string {
-  return sanitizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, '')
-}
-
-function normalizeLast4(value: any): string {
-  const digits = sanitizeText(value).replace(/\D+/g, '')
-  return digits.length >= 4 ? digits.slice(-4) : ''
-}
-
-function isUuid(value: any): boolean {
-  const text = sanitizeText(value)
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
-}
-
-function isFiniteNumber(value: any): boolean {
-  const n = Number(value)
-  return Number.isFinite(n)
-}
-
-function toNumber(value: any, fallback = 0): number {
-  const n = Number(value)
-  return Number.isFinite(n) ? n : fallback
-}
-
-function toOptionalNumber(value: any): number | null {
-  const raw = sanitizeText(value)
-  if (!raw) return null
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : null
-}
-
-function clampInt(value: any, fallback: number, min: number, max: number): number {
-  const n = Number.parseInt(String(value ?? ''), 10)
-  if (!Number.isFinite(n)) return fallback
-  return Math.max(min, Math.min(max, n))
-}
-
-function toBoolean(value: any, fallback = false): boolean {
-  if (typeof value === 'boolean') return value
-  const raw = sanitizeText(value).toLowerCase()
-  if (!raw) return fallback
-  if (['1', 'true', 'yes', 'y', 'on'].includes(raw)) return true
-  if (['0', 'false', 'no', 'n', 'off'].includes(raw)) return false
-  return fallback
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-}
-
-function normalizeDate(value: any): string | null {
-  const raw = sanitizeText(value)
-  if (!raw) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
-  if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(raw)) {
-    const parts = raw.replace(/\//g, '-').split('-')
-    const dt = new Date(`${parts[2]}-${parts[0]}-${parts[1]}T00:00:00Z`)
-    if (!Number.isNaN(dt.getTime())) return dt.toISOString().slice(0, 10)
-  }
-  const dt = new Date(raw)
-  if (Number.isNaN(dt.getTime())) return null
-  return dt.toISOString().slice(0, 10)
-}
-
-function normalizeTimestamp(value: any): string | null {
-  const raw = sanitizeText(value)
-  if (!raw) return null
-  const dt = new Date(raw)
-  if (Number.isNaN(dt.getTime())) return null
-  return dt.toISOString()
-}
-
-function toTimestampOrDefault(value: any, fallbackIso: string): string {
-  return normalizeTimestamp(value) || fallbackIso
 }
 
 const todayDate = today

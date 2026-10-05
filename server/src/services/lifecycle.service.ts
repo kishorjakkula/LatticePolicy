@@ -22,12 +22,6 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
-import {
-  resolvePolicyTransition,
-  validatePolicyTransactionState,
-  type PolicyTransactionAction,
-  type PolicyTransition,
-} from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
@@ -38,7 +32,23 @@ import {
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
-import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
+import { requireProductCapability } from '../lib/product-registry.js'
+import {
+  assertPolicyTransactionState,
+  mapRiskKind,
+  policyField,
+  policyCurrencyCode,
+  policyPremiumSummary,
+  policyProductCode,
+  policyRiskSummary,
+  policyTermEffective,
+  policyTermExpiration,
+  policyTermType,
+  reserveTransactionNumber,
+  simplePremium,
+  summarizeRisk,
+  toArray,
+} from './lifecycle/lifecycle-support.js'
 import {
   deriveTimelineSegments,
   findTimelineStateAtDate,
@@ -129,79 +139,6 @@ function computeNewSegmentsAndRetro(params: {
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
-function simplePremium(amount: number) {
-  return {
-    byCoverage: [],
-    fees: { amount: 0, currency: 'USD' },
-    taxes: { amount: 0, currency: 'USD' },
-    total: { amount: round2(amount), currency: 'USD' },
-  }
-}
-
-function toArray(value: any): any[] {
-  if (value == null) return []
-  return Array.isArray(value) ? value : [value]
-}
-
-function policyField(row: any, camelKey: string, snakeKey: string): any {
-  return row?.[camelKey] ?? row?.[snakeKey]
-}
-
-function policyTermEffective(row: any): string {
-  return coerceDateOnly(policyField(row, 'termEffectiveDate', 'term_effective_date'))
-}
-
-function policyTermExpiration(row: any): string {
-  return coerceDateOnly(policyField(row, 'termExpirationDate', 'term_expiration_date'))
-}
-
-function policyProductCode(row: any): string {
-  return String(policyField(row, 'productCode', 'product_code') || '')
-}
-
-function policyCurrencyCode(row: any): string {
-  return String(policyField(row, 'currencyCode', 'currency_code') || 'USD')
-}
-
-function policyPremiumSummary(row: any): any {
-  return policyField(row, 'premiumSummary', 'premium_summary')
-}
-
-function policyRiskSummary(row: any): any {
-  return policyField(row, 'riskSummary', 'risk_summary')
-}
-
-function policyTermType(row: any): string | null {
-  return policyField(row, 'termType', 'term_type') || null
-}
-
-type TransactionNumberMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
-
-function transactionNumberPrefix(mode: TransactionNumberMode): string {
-  if (mode === 'cancel') return 'CN-'
-  if (mode === 'reinstate') return 'RI-'
-  if (mode === 'rewrite') return 'RW-'
-  if (mode === 'renew') return 'RN-'
-  return 'EN-'
-}
-
-function generateTransactionNumber(prefix = 'EN-'): string {
-  const now = new Date()
-  const stamp = now.toISOString().slice(0, 10).replace(/-/g, '')
-  const rand = Math.random().toString(36).toUpperCase().slice(2, 6)
-  return `${prefix}${stamp}-${rand}`
-}
-
-function reserveTransactionNumber(mode: TransactionNumberMode): string {
-  return generateTransactionNumber(transactionNumberPrefix(mode))
-}
-
-function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): PolicyTransition {
-  const result = validatePolicyTransactionState(action, status)
-  if (!result.ok) throw new BadRequestError(result.code, result.message, result)
-  return resolvePolicyTransition(action, status)!
-}
-
 async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string): Promise<any> {
   const res = await q(
     `SELECT payload
@@ -212,44 +149,6 @@ async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantI
     [tenantId, policyId]
   )
   return res.rowCount ? res.rows[0].payload || null : null
-}
-
-function mapRiskKind(productCode: string | undefined, risk: any): string {
-  return mapProductRiskKind(productCode, risk)
-}
-
-function summarizeRisk(risk: any): string {
-  if (!risk || typeof risk !== 'object') return ''
-  if (risk.type === 'autoVehicle') {
-    const parts = [risk.year, risk.make, risk.model].filter(Boolean)
-    return parts.join(' ').trim()
-  }
-  if (risk.type === 'commercialAutoFleet') {
-    const parts = [
-      risk.businessName,
-      risk.vehicleCount ? `${risk.vehicleCount} vehicles` : '',
-      risk.useClass,
-      risk.radiusClass,
-    ].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'dwelling') {
-    const parts = [risk.address, risk.construction, risk.yearBuilt].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'cyberProfile') {
-    const parts = [risk.industry, risk.domain, risk.employeeCount ? `${risk.employeeCount} employees` : ''].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'professionalLiabilityProfile') {
-    const parts = [
-      risk.industry,
-      risk.yearsInBusiness ? `${risk.yearsInBusiness} yrs in business` : '',
-      risk.employeeCount ? `${risk.employeeCount} employees` : '',
-    ].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  return risk.type || 'risk'
 }
 
 // ── Service functions ─────────────────────────────────────────────────────────
