@@ -284,3 +284,87 @@ customerPortalRoutes.get('/policies/:policyId', async (req, res) => {
     return res.status(500).json({ code: 'DB_ERROR', message: String(err?.message || err) })
   }
 })
+
+const DOCUMENT_TYPE_DISPLAY_NAMES: Record<string, string> = {
+  POLICY_PACKET: 'Policy Document Packet'
+}
+
+function displayNameForDocumentType(type: string): string {
+  return DOCUMENT_TYPE_DISPLAY_NAMES[type] || titleize(type)
+}
+
+customerPortalRoutes.get('/policies/:policyId/documents', async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Customer portal requires DB mode' })
+  try {
+    const portalCustomer = await resolvePortalCustomer(req)
+    if (!portalCustomer?.customerId) {
+      return res.status(403).json({ code: 'CUSTOMER_LINK_REQUIRED', message: 'Login user is not linked to a customer record' })
+    }
+    const policyId = String(req.params.policyId || '').trim()
+    if (!isUuidLike(policyId)) return res.status(400).json({ code: 'INVALID_POLICY_ID' })
+
+    const linkRes = await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      return q(
+        `SELECT 1
+           FROM policies p
+           JOIN policy_customer_links pcl
+             ON pcl.tenant_id = p.tenant_id AND pcl.policy_id = p.policy_id
+          WHERE p.tenant_id = $1
+            AND p.policy_id = $2::uuid
+            AND p.status = ANY($3)
+            AND pcl.customer_id = $4::uuid
+          LIMIT 1`,
+        [tenantId, policyId, PORTAL_VISIBLE_POLICY_STATUSES, portalCustomer.customerId]
+      )
+    })
+    if (!((linkRes as any).rowCount > 0)) {
+      return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+    }
+
+    const documentsRes = await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      return q(
+        `SELECT document_id, type, hash, metadata, created_at
+           FROM documents
+          WHERE tenant_id = $1
+            AND policy_id = $2::uuid
+            AND COALESCE((metadata->>'customerSafe')::boolean, false) = true
+          ORDER BY created_at DESC`,
+        [tenantId, policyId]
+      )
+    })
+
+    const documents = ((documentsRes as any).rows || []).map((row: any) => {
+      const metadata = (row.metadata && typeof row.metadata === 'object') ? row.metadata : {}
+      const forms = Array.isArray(metadata.forms)
+        ? metadata.forms
+            .filter((form: any) => form?.customerSafe !== false)
+            .map((form: any) => ({
+              code: form?.code || null,
+              title: form?.title || null,
+              edition: form?.edition || null
+            }))
+        : []
+      return {
+        documentId: String(row.document_id),
+        displayName: displayNameForDocumentType(String(row.type || '')),
+        type: String(row.type || ''),
+        generatedAt: metadata.generatedAt || row.created_at || null,
+        transaction: {
+          transactionId: metadata.transactionId || null,
+          transactionType: metadata.transactionType || null,
+          transactionNumber: metadata.transactionNumber || null
+        },
+        forms,
+        contentId: row.hash ? String(row.hash) : null
+      }
+    })
+
+    return res.json({ documents })
+  } catch (err: any) {
+    return res.status(500).json({ code: 'DB_ERROR', message: String(err?.message || err) })
+  }
+})

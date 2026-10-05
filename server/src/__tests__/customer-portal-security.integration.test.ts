@@ -206,6 +206,71 @@ describe('customer portal, RBAC, and cache integration', () => {
     await authGet(`/api/v1/customer-portal/policies/${gracePolicy.policyId}`, token).expect(404)
   })
 
+  it('lists only customer-safe policy documents scoped to the linked customer', async () => {
+    await initDb()
+    await ensureTenant()
+
+    const run = suffix()
+    const ada = await createCustomer(`CUST-DOC-ADA-${run}`, 'Ada Lovelace')
+    const grace = await createCustomer(`CUST-DOC-GRACE-${run}`, 'Grace Hopper')
+    const adaPolicy = await createIssuedPolicy(ada, `VINDOCA${run}`)
+    const gracePolicy = await createIssuedPolicy(grace, `VINDOCG${run}`)
+
+    const safeDocumentId = crypto.randomUUID()
+    const internalDocumentId = crypto.randomUUID()
+    const graceDocumentId = crypto.randomUUID()
+
+    await getDb()!.query(
+      `INSERT INTO documents (document_id, tenant_id, policy_id, type, uri, hash, metadata)
+       VALUES
+         ($1::uuid, $4, $5::uuid, 'POLICY_PACKET', 'generated://policy-packet/safe', 'hash-safe', $2::jsonb),
+         ($3::uuid, $4, $5::uuid, 'POLICY_PACKET', 'generated://policy-packet/internal', 'hash-internal', $6::jsonb)`,
+      [
+        safeDocumentId,
+        JSON.stringify({
+          customerSafe: true,
+          generatedAt: '2026-07-05T00:00:00.000Z',
+          transactionId: crypto.randomUUID(),
+          transactionType: 'NB',
+          transactionNumber: 'TX-1',
+          forms: [{ code: 'PA-DEC', title: 'Declarations', edition: '2024-01', customerSafe: true }],
+        }),
+        internalDocumentId,
+        tenantId,
+        adaPolicy.policyId,
+        JSON.stringify({ customerSafe: false, generatedAt: '2026-07-05T00:00:00.000Z' }),
+      ],
+    )
+    await getDb()!.query(
+      `INSERT INTO documents (document_id, tenant_id, policy_id, type, uri, hash, metadata)
+       VALUES ($1::uuid, $2, $3::uuid, 'POLICY_PACKET', 'generated://policy-packet/grace', 'hash-grace', $4::jsonb)`,
+      [graceDocumentId, tenantId, gracePolicy.policyId, JSON.stringify({ customerSafe: true })],
+    )
+
+    await createUser({
+      username: `portal-doc-ada-${run}`,
+      password,
+      tenantId,
+      roles: ['customer'],
+      customerRef: ada.customerKey,
+    })
+    const token = await login(`portal-doc-ada-${run}`)
+
+    const res = await authGet(`/api/v1/customer-portal/policies/${adaPolicy.policyId}/documents`, token).expect(200)
+    expect(res.body.documents).toHaveLength(1)
+    expect(res.body.documents[0]).toMatchObject({
+      documentId: safeDocumentId,
+      displayName: 'Policy Document Packet',
+      type: 'POLICY_PACKET',
+      contentId: 'hash-safe',
+    })
+    expect(res.body.documents[0].forms).toEqual([{ code: 'PA-DEC', title: 'Declarations', edition: '2024-01' }])
+    expect(JSON.stringify(res.body)).not.toContain(internalDocumentId)
+    expect(JSON.stringify(res.body)).not.toContain('generated://')
+
+    await authGet(`/api/v1/customer-portal/policies/${gracePolicy.policyId}/documents`, token).expect(404)
+  })
+
   it('hydrates persisted RBAC permissions for allowed and denied route access', async () => {
     await initDb()
     await ensureTenant()

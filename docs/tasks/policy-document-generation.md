@@ -58,7 +58,10 @@ PATH="/Users/srividyajakkula/.cache/codex-runtimes/codex-primary-runtime/depende
 
 - `npm run test:integration` requires `DATABASE_URL`; this local shell did not
   have it set.
-- Add servicing transaction document hooks after the bind packet path merges.
+- Add servicing transaction document hooks after the bind packet path merges
+  (tracked in issue #89).
 - Add a customer portal document listing endpoint that filters on
-  `metadata.customerSafe = true`.
-- Add real artifact rendering/storage behind the generated URI scheme.
+  `metadata.customerSafe = true`. Done: see
+  `docs/tasks/issue-86-portal-document-listing.md` (issue #86).
+- Add real artifact rendering/storage behind the generated URI scheme
+  (tracked in issue #88).
