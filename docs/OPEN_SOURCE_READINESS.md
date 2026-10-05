@@ -26,8 +26,9 @@ maintainers should repeat before releases or major public announcements.
   CodeQL, and container scanning.
 - Added DB integration and Playwright E2E smoke jobs to CI.
 - Added Dependabot configuration for npm and GitHub Actions.
-- Normalized the Apache-2.0 license appendix so GitHub can recognize the
-  repository license.
+- Reviewed the Apache-2.0 license text and package metadata for consistency.
+  GitHub currently still reports the repository license as `Other`; keep #104
+  open until GitHub recognizes it as Apache-2.0 or the reason is documented.
 - Added a release-tag GHCR publishing workflow for API and frontend container
   images.
 
@@ -39,7 +40,7 @@ maintainers should repeat before releases or major public announcements.
   containers after release validation. Do not publish npm packages or mutable
   `latest` container tags until maintainers explicitly define those release
   policies.
-- License: keep the standard Apache-2.0 `LICENSE` text. There is no `LatticePolicy contributors` placeholder in the current license file to replace.
+- License: keep the standard Apache-2.0 `LICENSE` text. There is no `LatticePolicy contributors` placeholder in the current license file to replace. GitHub API verification currently reports `NOASSERTION`/`Other`, so license recognition remains an open follow-up.
 - Sample data: product YAML files, tenant config, and contract seed SQL files are intended to be synthetic examples. Re-review them before major public announcements or when adding new samples.
 - Demo credentials: `admin`, `uw1`, and `agent1` with password `password` remain local/demo-only credentials documented in developer setup. Production credentials must come from external secrets.
 - AWS deployment workflow: safe to keep in the public repository as an opt-in template. It depends on repository variables, a protected `production` environment, GitHub OIDC, and external AWS secrets before it can deploy.
