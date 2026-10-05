@@ -3,7 +3,7 @@
 ## Links
 
 - Issues: #85, #91, #105
-- Pull request: none yet
+- Pull request: #333
 
 ## Summary
 
@@ -20,8 +20,9 @@ the generated OpenAPI spec is tested for trace-aware common error contracts.
 - `server/src/openapi.ts`: documents reusable `ErrorResponse`,
   `ValidationErrorResponse`, `IdempotencyConflictErrorResponse`, and
   `ContractValidationError` schemas.
-- `server/src/__tests__/contracts.openapi.test.ts`: verifies JSON Schema
-  behavior and guards important OpenAPI route/error-contract coverage.
+- `server/src/__tests__/contracts.test.ts` and
+  `server/src/__tests__/openapi-contract.test.ts`: verify JSON Schema behavior
+  and guard complete OpenAPI route/error-contract coverage.
 - `package.json` and `server/package.json`: add `test:contracts` for a fast
   contract-only check.
 
@@ -32,14 +33,15 @@ the generated OpenAPI spec is tested for trace-aware common error contracts.
 - Runtime quote API validation remains compatible with `X-Tenant` based
   requests by validating an augmented copy in `validateQuote`.
 - Contract validation errors must include `path`, `keyword`, `message`, and
-  `schemaSource`.
+  `schema`.
 - OpenAPI operations should keep reusable JSON error responses for standard
   error statuses, including validation and idempotency conflict responses with
   trace metadata.
 
 ## Automated Tests
 
-- Tests added or updated: `server/src/__tests__/contracts.openapi.test.ts`
+- Tests added or updated: `server/src/__tests__/contracts.test.ts` and
+  `server/src/__tests__/openapi-contract.test.ts`
 - Test layer used: server unit tests
 - Why this layer is enough: the change is pure contract/OpenAPI generation
   logic and does not require a database, tenant store, or browser.

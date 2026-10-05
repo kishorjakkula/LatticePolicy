@@ -5,6 +5,7 @@ export type NotificationEventType =
   | 'POLICY_ISSUED'
   | 'POLICY_CANCELLED'
   | 'POLICY_NON_RENEWAL'
+  | 'POLICY_RENEWAL_REMINDER'
 
 export type NotificationRecipient = {
   type: 'customer' | 'internal'
@@ -70,6 +71,13 @@ const DEFAULT_TEMPLATES: Record<NotificationEventType, TemplateDefinition> = {
     subjectTemplate: 'Policy {{policyNumber}} non-renewal notice',
     bodyTemplate:
       'Policy {{policyNumber}} will not renew at expiration on {{expirationDate}}. Notice date: {{noticeDate}}. Reason: {{reason}}.',
+    visibility: ['customer'],
+  },
+  POLICY_RENEWAL_REMINDER: {
+    templateCode: 'policy-renewal-reminder-default',
+    subjectTemplate: 'Policy {{policyNumber}} renewal reminder',
+    bodyTemplate:
+      'Policy {{policyNumber}} is approaching its expiration date on {{expirationDate}}. Contact us to review your renewal options.',
     visibility: ['customer'],
   },
 }

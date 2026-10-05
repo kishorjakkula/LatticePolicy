@@ -8,11 +8,12 @@ const REQUIRED_PRODUCTION_ENV = [
   'DATABASE_URL',
   'JWT_SECRET',
   'CUSTOMER_DATA_KEY',
+  'PII_LOOKUP_KEY',
   'MFA_TOKEN_SECRET',
   'ALLOWED_ORIGINS'
 ] as const
 
-const REQUIRED_SECRET_ENV = ['JWT_SECRET', 'CUSTOMER_DATA_KEY', 'MFA_TOKEN_SECRET'] as const
+const REQUIRED_SECRET_ENV = ['JWT_SECRET', 'CUSTOMER_DATA_KEY', 'PII_LOOKUP_KEY', 'MFA_TOKEN_SECRET'] as const
 const UNSAFE_SECRET_VALUES = new Set([
   'change-me',
   'change-me-please-use-a-long-random-string',
@@ -23,7 +24,7 @@ const UNSAFE_SECRET_VALUES = new Set([
   'mfa-token-secret',
   'password',
   'secret',
-  'test',
+  'test'
 ])
 
 const MANAGED_DEPLOYMENT_ENVS = ['test', 'validation', 'staging', 'production'] as const
@@ -34,6 +35,7 @@ export function getDeploymentEnv(): string {
 
 export function isManagedDeployment(): boolean {
   const deploymentEnv = getDeploymentEnv()
+  if (deploymentEnv === 'local') return false
   return process.env.NODE_ENV === 'production' || MANAGED_DEPLOYMENT_ENVS.some((value) => value === deploymentEnv)
 }
 
@@ -49,6 +51,11 @@ export function getJwtSecret(): string {
 export function getMfaTokenSecret(): string {
   assertDeploymentConfig()
   return process.env.MFA_TOKEN_SECRET || `${getJwtSecret()}-mfa`
+}
+
+export function getSsoStateSecret(): string {
+  assertDeploymentConfig()
+  return process.env.SSO_STATE_SECRET || `${getJwtSecret()}-sso-state`
 }
 
 export function getAllowedOrigins(): string[] {
@@ -142,7 +149,7 @@ export function assertDeploymentConfig() {
       validation.missing.length
         ? `Missing required deployment environment variables: ${validation.missing.join(', ')}`
         : '',
-      ...validation.invalid,
+      ...validation.invalid
     ].filter(Boolean)
     throw new Error(messages.join('; '))
   }

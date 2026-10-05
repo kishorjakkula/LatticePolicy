@@ -1,0 +1,14 @@
+product: example-identity-protection
+version: 1.0.0
+base:
+  state: '*'
+  termMonths:
+    12: 1.00
+monitoringLimitFactors:
+  '10000': 1.00
+  '25000': 1.35
+  '50000': 1.75
+fees:
+  policy: 10.00
+taxes:
+  rate: 0.02

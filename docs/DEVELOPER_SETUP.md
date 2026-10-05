@@ -71,6 +71,20 @@ Local defaults:
 
 Do not commit `.env` or real secrets.
 
+These values are local defaults. For managed builds, frontend `VITE_*` values
+are public build-time inputs rather than container runtime configuration. See
+[Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md) for
+the API URL shape, mock-mode guardrail, CORS pairing, and deployment examples.
+
+Local mode may use HTTP origins, demo credentials, and an in-memory API fallback
+when PostgreSQL is unavailable. Managed test, validation, staging, and
+production deployments instead fail fast on missing or unsafe configuration,
+require PostgreSQL, and do not allow database-free demo login. Do not copy the
+local `.env` values into a shared environment. See
+[Production runtime configuration](PRODUCTION_RUNTIME_CONFIGURATION.md) for the
+managed-environment boundary, required secrets, CORS rules, invite-only access,
+and deployment checks.
+
 ## Option 1: Full Docker Stack
 
 This is the fastest path for first-time contributors because it runs the database, cache, API, and UI together.
@@ -200,6 +214,38 @@ curl -X POST http://localhost:3300/auth/login \
   -d "{\"tenantId\":\"sample-carrier\",\"username\":\"agent1\",\"password\":\"password\"}"
 ```
 
+## Demo Data
+
+Local development and the Docker Compose stack are pre-configured around one
+demo tenant so contributors have consistent data to explore without any
+manual setup.
+
+- **Tenant**: `sample-carrier`. Its configuration lives under
+  [`tenants/sample-carrier/`](../tenants/sample-carrier/), including
+  `config.yaml` and per-product field metadata overrides.
+- **Demo users**: `admin`, `uw1`, and `agent1`, all with password `password`.
+  See [Local Login](#local-login) above for the full role table and login
+  request shape. These are local/demo-only credentials and must never be
+  reused for a production or shared environment.
+- **Sample seed data**: example policy/quote fixtures live under
+  [`contracts/sample-data/`](../contracts/sample-data/) (for example
+  `ho_policy_seed.sql` and `pas_mvp_seed.sql`). Product coverage/rate
+  configuration used by the demo tenant lives under
+  [`products/`](../products/).
+- **Reference/admin data** (underwriting companies, an agency, a forms
+  catalog entry, and notification templates — one set per product line in
+  `tenants/sample-carrier/config.yaml`): click **Seed Reference Data** on the
+  Tenant admin page (`/admin/tenant`), or call
+  `POST /api/v1/admin/seed-reference-data` directly (requires
+  `admin.security.manage`). The endpoint is idempotent — it only creates
+  rows that don't already exist, so it's safe to run again after adding a
+  new product line or on a fresh environment. Without this, new quotes have
+  nothing to populate the Underwriting Company/Agency/Country/State/Product
+  dropdowns with.
+- **Local URLs**: see the [Full Docker Stack](#option-1-full-docker-stack)
+  service table above for the UI, API, PostgreSQL, and Redis addresses used
+  by the demo stack.
+
 ## Common Commands
 
 | Command | Purpose |
@@ -246,6 +292,12 @@ The Docker E2E runner starts from clean PostgreSQL and Redis volumes so stale lo
 
 For UI changes, include screenshots in the pull request when the visual behavior changes.
 
+## Local Health Checks
+
+After starting the stack, use the [local health-check checklist](LOCAL_HEALTH_CHECKS.md)
+to verify the UI, API, PostgreSQL, and Redis and to troubleshoot common startup
+symptoms.
+
 ## Development Workflow
 
 1. Create a branch from the latest `main`.
@@ -262,6 +314,49 @@ For UI changes, include screenshots in the pull request when the visual behavior
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full branching, pull request, review, and merge process.
 
 ## Troubleshooting
+
+### Docker is not running, or a build fails partway through
+
+Confirm Docker Desktop is running and the daemon is reachable:
+
+```bash
+docker info
+```
+
+If `docker info` fails or hangs, start Docker Desktop and wait for it to
+report "running" before retrying `docker compose up -d --build`.
+
+If a build or image pull fails with an error mentioning `containerd`,
+`blob`, or `input/output error`, Docker Desktop's local image storage is
+corrupted rather than anything in this repository. Restarting Docker
+Desktop is usually enough; if the error persists, use Docker Desktop's
+"Troubleshoot > Clean / Purge data" option (this removes locally cached
+images and containers, so only do this if you are comfortable
+re-downloading them).
+
+### Node version does not match the pinned version
+
+This project pins Node 20 in `.node-version` and `.nvmrc`. Using an
+older or much newer Node can cause `npm install` or `npm run build`
+failures that are easy to mistake for a code problem.
+
+```bash
+node --version
+```
+
+If the version is not `20.x`, install and use Node 20, for example with
+`nvm`:
+
+```bash
+nvm install 20
+nvm use 20
+```
+
+Then reinstall dependencies:
+
+```bash
+npm install
+```
 
 ### Docker says a port is already in use
 
@@ -286,6 +381,22 @@ docker compose logs db
 ```
 
 Also confirm `DATABASE_URL`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` match the Docker Compose configuration.
+
+### API cannot connect to Redis
+
+Check that the cache container is running and responding:
+
+```bash
+docker compose ps cache
+docker compose exec cache redis-cli ping
+docker compose logs cache
+```
+
+A healthy Redis instance replies `PONG`. Also confirm `REDIS_URL` and
+`CACHE_ENABLED` match the Docker Compose configuration. The API can
+still run without a working cache, but responses that rely on cached
+lookups may be slower or show cache-miss errors in the server logs
+until Redis is reachable again.
 
 ### Login returns tenant required
 

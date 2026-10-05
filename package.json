@@ -1,6 +1,6 @@
 {
   "name": "lattice-policy",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "Open-source framework for access-based insurance policy administration systems.",
   "private": true,
   "license": "Apache-2.0",
@@ -36,6 +36,7 @@
     "test:frontend": "npm run test --workspace=frontend",
     "test:server": "npm run test --workspace=server",
     "test:contracts": "npm run test:contracts --workspace=server",
+    "test:coverage": "npm run test:coverage --workspace=frontend && npm run test:coverage --workspace=server",
     "test:local": "npm run test:frontend && npm run test:server",
     "test": "sh scripts/test.sh",
     "test:docker": "sh scripts/test-docker.sh",
@@ -44,12 +45,14 @@
     "test:e2e:docker": "sh scripts/test-e2e-docker.sh",
     "security:audit": "node scripts/check-npm-audit.mjs",
     "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
+    "check:import-templates": "node scripts/check-import-templates.mjs",
+    "check:architecture": "node --test scripts/check-module-boundaries.test.mjs && node scripts/check-module-boundaries.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
-    "@rollup/rollup-darwin-arm64": "4.62.4",
-    "@rollup/rollup-linux-arm64-musl": "4.62.4",
-    "@rollup/rollup-linux-x64-gnu": "4.62.4"
+    "@rollup/rollup-darwin-arm64": "4.63.5",
+    "@rollup/rollup-linux-arm64-musl": "4.63.5",
+    "@rollup/rollup-linux-x64-gnu": "4.63.5"
   },
   "overrides": {
     "exceljs@4.4.0": {
@@ -57,6 +60,7 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1"
+    "@playwright/test": "^1.63.0",
+    "jsdom": "^29.1.1"
   }
 }

@@ -16,86 +16,128 @@ import {
   getCancellationReasonCode,
   loadShortRateTable,
   computeReturnPremium,
+  loadServicingComplianceRule,
+  validateServicingCompliance,
 } from '../policyCompliance.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
-import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createPolicyNotificationIntent } from './notification.service.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
+import {
+  buildPolicyDocumentPacket,
+  persistPolicyDocumentPacket,
+} from './document-generation.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
+import { requireProductCapability } from '../lib/product-registry.js'
+import {
+  assertPolicyTransactionState,
+  mapRiskKind,
+  policyField,
+  policyCurrencyCode,
+  policyPremiumSummary,
+  policyProductCode,
+  policyRiskSummary,
+  policyTermEffective,
+  policyTermExpiration,
+  policyTermType,
+  reserveTransactionNumber,
+  simplePremium,
+  summarizeRisk,
+  toArray,
+} from './lifecycle/lifecycle-support.js'
+import {
+  deriveTimelineSegments,
+  findTimelineStateAtDate,
+  findRebasedTransactions,
+  computeRetroResult,
+  type TimelineVersionInput,
+} from '../policyTimeline.js'
+import {
+  loadPolicyTimelineVersions,
+  loadCurrentTimelineVersion,
+  nextPolicyTransactionSequence,
+  persistPolicyTimelineSegments,
+} from './endorsement.service.js'
+
+// ── Out-of-sequence helpers (shared by cancel/reinstate) ───────────────────────
+
+/**
+ * Detect whether an effective date lands before an already-processed later
+ * transaction, and if so, compute the corrected historical premium basis and
+ * the segment set that must be persisted so `getPolicyState` (asOf) stays
+ * correct. Mirrors the same rebase detection endorsement.service.ts performs,
+ * so cancellation/reinstatement interact correctly with existing/later
+ * transactions the same way endorsements do (issue #52).
+ */
+async function computeOutOfSequenceContext(params: {
+  q: ReturnType<typeof toRawQuery>
+  tenantId: string
+  policyId: string
+  termEffective: string
+  termExpiration: string
+  eff: string
+  currentFullPremium: number
+}) {
+  const { q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium } = params
+  const timelineVersionsBefore = await loadPolicyTimelineVersions(q, tenantId, policyId)
+  const rebasedTransactions = findRebasedTransactions(timelineVersionsBefore, eff)
+  const isOutOfSequence = rebasedTransactions.length > 0
+  const oldSegments = deriveTimelineSegments({
+    tenantId,
+    versions: timelineVersionsBefore,
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  let effectiveFullPremium = currentFullPremium
+  if (isOutOfSequence) {
+    const stateAtEffective = findTimelineStateAtDate(oldSegments, eff)
+    if (stateAtEffective) effectiveFullPremium = stateAtEffective.premiumTotal
+  }
+  return { timelineVersionsBefore, rebasedTransactions, isOutOfSequence, oldSegments, effectiveFullPremium }
+}
+
+async function nextTimelineVersion(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string) {
+  const baseTimelineVersion = await loadCurrentTimelineVersion(q, tenantId, policyId)
+  return { baseTimelineVersion, timelineVersion: baseTimelineVersion + 1 }
+}
+
+/**
+ * Pure computation only — does not write to the database. The caller must
+ * persist `newSegments` via `persistPolicyTimelineSegments` AFTER the new
+ * transaction's `policy_versions` row has been inserted, since segment rows
+ * carry a foreign key to `policy_versions.version_id`.
+ */
+function computeNewSegmentsAndRetro(params: {
+  tenantId: string
+  termEffective: string
+  termExpiration: string
+  timelineVersionsBefore: TimelineVersionInput[]
+  oldSegments: ReturnType<typeof deriveTimelineSegments>
+  newTimelineVersion: TimelineVersionInput
+  eff: string
+}) {
+  const { tenantId, termEffective, termExpiration, timelineVersionsBefore, oldSegments, newTimelineVersion, eff } = params
+  const newSegments = deriveTimelineSegments({
+    tenantId,
+    versions: [...timelineVersionsBefore, newTimelineVersion],
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  const retroAdjustment = computeRetroResult({
+    oldSegments,
+    newSegments,
+    fromDate: eff,
+    termEffectiveDate: termEffective,
+    termExpirationDate: termExpiration,
+  })
+  return { newSegments, retroAdjustment }
+}
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
-
-function simplePremium(amount: number) {
-  return {
-    byCoverage: [],
-    fees: { amount: 0, currency: 'USD' },
-    taxes: { amount: 0, currency: 'USD' },
-    total: { amount: round2(amount), currency: 'USD' },
-  }
-}
-
-function toArray(value: any): any[] {
-  if (value == null) return []
-  return Array.isArray(value) ? value : [value]
-}
-
-function policyField(row: any, camelKey: string, snakeKey: string): any {
-  return row?.[camelKey] ?? row?.[snakeKey]
-}
-
-function policyTermEffective(row: any): string {
-  return coerceDateOnly(policyField(row, 'termEffectiveDate', 'term_effective_date'))
-}
-
-function policyTermExpiration(row: any): string {
-  return coerceDateOnly(policyField(row, 'termExpirationDate', 'term_expiration_date'))
-}
-
-function policyProductCode(row: any): string {
-  return String(policyField(row, 'productCode', 'product_code') || '')
-}
-
-function policyCurrencyCode(row: any): string {
-  return String(policyField(row, 'currencyCode', 'currency_code') || 'USD')
-}
-
-function policyPremiumSummary(row: any): any {
-  return policyField(row, 'premiumSummary', 'premium_summary')
-}
-
-function policyRiskSummary(row: any): any {
-  return policyField(row, 'riskSummary', 'risk_summary')
-}
-
-function policyTermType(row: any): string | null {
-  return policyField(row, 'termType', 'term_type') || null
-}
-
-type TransactionNumberMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
-
-function transactionNumberPrefix(mode: TransactionNumberMode): string {
-  if (mode === 'cancel') return 'CN-'
-  if (mode === 'reinstate') return 'RI-'
-  if (mode === 'rewrite') return 'RW-'
-  if (mode === 'renew') return 'RN-'
-  return 'EN-'
-}
-
-function generateTransactionNumber(prefix = 'EN-'): string {
-  const now = new Date()
-  const stamp = now.toISOString().slice(0, 10).replace(/-/g, '')
-  const rand = Math.random().toString(36).toUpperCase().slice(2, 6)
-  return `${prefix}${stamp}-${rand}`
-}
-
-function reserveTransactionNumber(mode: TransactionNumberMode): string {
-  return generateTransactionNumber(transactionNumberPrefix(mode))
-}
-
-function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
-  const result = validatePolicyTransactionState(action, status)
-  if (!result.ok) throw new BadRequestError(result.code, result.message)
-}
 
 async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantId: string, policyId: string): Promise<any> {
   const res = await q(
@@ -107,71 +149,6 @@ async function loadLatestPolicyPayload(q: ReturnType<typeof toRawQuery>, tenantI
     [tenantId, policyId]
   )
   return res.rowCount ? res.rows[0].payload || null : null
-}
-
-function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
-}
-
-function summarizeRisk(risk: any): string {
-  if (!risk || typeof risk !== 'object') return ''
-  if (risk.type === 'autoVehicle') {
-    const parts = [risk.year, risk.make, risk.model].filter(Boolean)
-    return parts.join(' ').trim()
-  }
-  if (risk.type === 'commercialAutoFleet') {
-    const parts = [
-      risk.businessName,
-      risk.vehicleCount ? `${risk.vehicleCount} vehicles` : '',
-      risk.useClass,
-      risk.radiusClass,
-    ].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'dwelling') {
-    const parts = [risk.address, risk.construction, risk.yearBuilt].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'cyberProfile') {
-    const parts = [risk.industry, risk.domain, risk.employeeCount ? `${risk.employeeCount} employees` : ''].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  if (risk.type === 'professionalLiabilityProfile') {
-    const parts = [
-      risk.industry,
-      risk.yearsInBusiness ? `${risk.yearsInBusiness} yrs in business` : '',
-      risk.employeeCount ? `${risk.employeeCount} employees` : '',
-    ].filter(Boolean)
-    return parts.join(', ').trim()
-  }
-  return risk.type || 'risk'
 }
 
 // ── Service functions ─────────────────────────────────────────────────────────
@@ -190,13 +167,27 @@ export async function issuePolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const policyRes: any = await q(
-    'SELECT policy_id, policy_number, product_code, status, term_effective_date, term_expiration_date, lifecycle FROM policies WHERE tenant_id=$1 AND policy_id=$2',
+    `SELECT policy_id, policy_number, product_code, status, term_effective_date,
+            term_expiration_date, currency_code, premium_summary, lifecycle, metadata
+       FROM policies
+      WHERE tenant_id=$1 AND policy_id=$2`,
     [tenantId, policyId]
   )
   if (!policyRes.rowCount) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = policyRes.rows[0]
-  assertPolicyTransactionState('issue', policyRow.status)
+  requireProductCapability(String(policyRow.product_code || ''), 'issue')
+  const transition = assertPolicyTransactionState('issue', policyRow.status)
+  if (transition.idempotent) {
+    return {
+      policyId,
+      policyNumber: policyRow.policy_number,
+      status: transition.toState,
+      issuedAt: policyRow.lifecycle?.issuedAt || null,
+      idempotent: true,
+    }
+  }
   const issuedAt = new Date().toISOString()
   const lifecycle = {
     ...(policyRow.lifecycle || {}),
@@ -215,16 +206,39 @@ export async function issuePolicy(
     ['Issued', tenantId, policyId, 'NB']
   )
   const txnRes = await q(
-    `SELECT transaction_id, metadata
-       FROM policy_transactions
-      WHERE tenant_id = $1 AND policy_id = $2 AND type = 'NB'
-      ORDER BY created_at DESC
+    `SELECT pt.transaction_id, pt.metadata,
+            (SELECT pv.version_id FROM policy_versions pv
+              WHERE pv.tenant_id=pt.tenant_id AND pv.transaction_id=pt.transaction_id
+              ORDER BY pv.processed_at DESC LIMIT 1) AS version_id
+       FROM policy_transactions pt
+      WHERE pt.tenant_id = $1 AND pt.policy_id = $2 AND pt.type = 'NB'
+      ORDER BY pt.created_at DESC
       LIMIT 1`,
     [tenantId, policyId]
   )
   const issueTransactionId = txnRes.rowCount ? txnRes.rows[0].transaction_id : null
   const transactionNumber = txnRes.rowCount ? txnRes.rows[0].metadata?.transactionNumber || null : null
   const payload = await loadLatestPolicyPayload(q, tenantId, policyId)
+  if (issueTransactionId) {
+    const issueDocumentContext = {
+      tenantId,
+      policyId,
+      policyNumber: policyRow.policy_number,
+      transactionId: issueTransactionId,
+      transactionType: 'Issue' as const,
+      transactionNumber,
+      productCode: policyRow.product_code,
+      state: payload?.state || payload?.jurisdiction?.code || null,
+      effectiveDate: coerceDateOnly(policyRow.term_effective_date),
+      versionId: txnRes.rows[0].version_id || null,
+      generatedAt: issuedAt,
+      inputSnapshot: payload,
+      generatedBy: actor?.id || null,
+      correlationId: transactionNumber || issueTransactionId,
+    }
+    const issuePacket = await buildPolicyDocumentPacket(q, issueDocumentContext)
+    await persistPolicyDocumentPacket(db, issueDocumentContext, issuePacket)
+  }
   await createPolicyNotificationIntent(db, {
     tenantId,
     policyId,
@@ -244,6 +258,26 @@ export async function issuePolicy(
     'INSERT INTO ledger_events (tenant_id, entity_type, entity_id, event, from_state, to_state, payload, actor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
     [tenantId, 'Policy', policyId, 'STATUS_CHANGE', policyRow.status, 'Issued', { issuedAt }, actor?.id || null]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyRow.policy_number,
+    transactionId: issueTransactionId,
+    transactionNumber,
+    transactionType: 'Issue',
+    sourceEvent: 'POLICY_ISSUED',
+    effectiveDate: coerceDateOnly(policyRow.term_effective_date),
+    expirationDate: coerceDateOnly(policyRow.term_expiration_date),
+    processedAt: issuedAt,
+    productCode: policyRow.product_code,
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney(policyRow.premium_summary?.total?.amount),
+    currency: policyRow.currency_code || policyRow.premium_summary?.total?.currency || 'USD',
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber || issueTransactionId,
+  })
   return { policyId, policyNumber: policyRow.policy_number, status: 'Issued', issuedAt }
 }
 
@@ -263,16 +297,20 @@ export async function cancelPolicy(
   const q = toRawQuery(db)
   const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
   const cancellationReasonCode = typeof body?.cancellationReasonCode === 'string' ? body.cancellationReasonCode.trim() : ''
+  const claimReference = typeof body?.claimReference === 'string' ? body.claimReference.trim() : ''
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'cancel')
   assertPolicyTransactionState('cancel', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
   const termExpiration = policyTermExpiration(policyRow)
+  const noticeDate = asDateOnly(body?.noticeDate) || today()
   const txPayload = overridePayload
     ? JSON.parse(JSON.stringify(overridePayload))
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
@@ -280,7 +318,30 @@ export async function cancelPolicy(
         : null)
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
-  let returnPremiumResult = { returnPremium: 0, earnedPremium: fullPremium, method: 'PRO_RATA' }
+  // Detect whether this cancellation lands before an already-processed later
+  // transaction and, if so, correct the refund/earned-premium basis using the
+  // premium that was actually in effect on `eff` (issue #52).
+  const oos = await computeOutOfSequenceContext({
+    q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium: fullPremium,
+  })
+  const effectiveFullPremium = oos.effectiveFullPremium
+
+  const stateCode = txPayload?.state || txPayload?.jurisdiction?.code || ''
+  const complianceRule = stateCode
+    ? await loadServicingComplianceRule(q, tenantId, policyProductCode(policyRow), stateCode, 'CANCEL', eff)
+    : null
+  let complianceEvidence: any = null
+  if (complianceRule) {
+    try {
+      complianceEvidence = validateServicingCompliance({
+        rule: complianceRule, reasonCode: cancellationReasonCode, noticeDate, effectiveDate: eff,
+      })
+    } catch (error: any) {
+      throw new BadRequestError(String(error.message), 'Cancellation does not satisfy the applicable servicing rule.')
+    }
+  }
+
+  let returnPremiumResult = { returnPremium: 0, earnedPremium: effectiveFullPremium, method: 'PRO_RATA' }
   let resolvedCancellationType = 'PRO_RATA'
   let resolvedReasonDescription = reason || ''
 
@@ -296,8 +357,8 @@ export async function cancelPolicy(
       }
 
       returnPremiumResult = computeReturnPremium({
-        returnPremiumMethod: reasonRow.return_premium as any,
-        fullPremium,
+        returnPremiumMethod: (complianceRule?.returnPremiumMethod || reasonRow.return_premium) as any,
+        fullPremium: effectiveFullPremium,
         cancelDate: eff,
         termEffectiveDate: termEffective,
         termExpirationDate: termExpiration,
@@ -308,9 +369,9 @@ export async function cancelPolicy(
 
   if (!cancellationReasonCode || returnPremiumResult.returnPremium === 0) {
     const factor = proRataFactor(eff, termEffective, termExpiration)
-    const proRataRefund = round2(fullPremium * factor)
+    const proRataRefund = round2(effectiveFullPremium * factor)
     if (returnPremiumResult.returnPremium === 0 && proRataRefund > 0) {
-      returnPremiumResult = { returnPremium: proRataRefund, earnedPremium: round2(fullPremium - proRataRefund), method: 'PRO_RATA' }
+      returnPremiumResult = { returnPremium: proRataRefund, earnedPremium: round2(effectiveFullPremium - proRataRefund), method: 'PRO_RATA' }
     }
   }
 
@@ -330,6 +391,39 @@ export async function cancelPolicy(
     premium: simplePremium(-refund),
   }
 
+  const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
+  const { baseTimelineVersion, timelineVersion } = await nextTimelineVersion(q, tenantId, policyId)
+  const newCancelTimelineVersion: TimelineVersionInput = {
+    versionId, transactionId, transactionType: 'Cancel', transactionNumber,
+    effectiveDate: eff, processedAt, payload: txPayload,
+  }
+  const { newSegments, retroAdjustment } = computeNewSegmentsAndRetro({
+    tenantId, termEffective, termExpiration,
+    timelineVersionsBefore: oos.timelineVersionsBefore,
+    oldSegments: oos.oldSegments,
+    newTimelineVersion: newCancelTimelineVersion,
+    eff,
+  })
+
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Cancel',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
+    requiredFormCodes: complianceRule?.requiredFormCodes || [],
+    requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -343,18 +437,49 @@ export async function cancelPolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
+    effectiveDate: eff,
+    processedAt,
+    sequenceNo,
+    baseTimelineVersion,
+    timelineVersion,
     metadata: {
       reason: resolvedReasonDescription || reason || null,
       refund,
       cancellationReasonCode: cancellationReasonCode || null,
+      claimReference: claimReference || null,
       cancellationType: resolvedCancellationType,
       returnPremiumMethod: returnPremiumResult.method,
+      noticeDate,
+      complianceRuleId: complianceEvidence?.ruleId || null,
+      noticeDays: complianceEvidence?.noticeDays ?? null,
+      requiredFormCodes: complianceRule?.requiredFormCodes || [],
+      requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
       transactionNumber,
+      outOfSequence: oos.isOutOfSequence,
+      rebasedTransactions: oos.rebasedTransactions,
+      retroAdjustment,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Cancel',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -369,16 +494,15 @@ export async function cancelPolicy(
     currency,
     payload: txPayload || null,
     transactionNumber,
+    baseTimelineVersion,
+    timelineVersion,
+    claimReference: claimReference || null,
+    cancellationReasonCode: cancellationReasonCode || null,
+    cancellationType: resolvedCancellationType,
+    returnPremiumAmount: refund,
   })
 
-  if (cancellationReasonCode || resolvedCancellationType) {
-    await q(
-      `UPDATE policy_versions
-          SET cancellation_reason_code = $1, cancellation_type = $2, return_premium_amount = $3
-        WHERE tenant_id = $4 AND version_id = $5`,
-      [cancellationReasonCode || null, resolvedCancellationType, refund, tenantId, versionId]
-    ).catch(() => { /* non-fatal if columns not yet migrated */ })
-  }
+  await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)
 
   await insertRating(db, {
     tenantId,
@@ -443,6 +567,26 @@ export async function cancelPolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Cancel',
+    sourceEvent: 'POLICY_CANCELLED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    premiumImpact: -refund,
+    currency,
+    payload: txPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -464,9 +608,11 @@ export async function reinstatePolicy(
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'reinstate')
   assertPolicyTransactionState('reinstate', policyRow.status)
   const eff = asDateOnly(body?.effectiveDate) || today()
   const termEffective = policyTermEffective(policyRow)
@@ -477,8 +623,17 @@ export async function reinstatePolicy(
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
+
+  // Detect whether this reinstatement lands before an already-processed later
+  // transaction and, if so, correct the reinstatement charge basis using the
+  // premium that was actually in effect on `eff` (issue #52).
+  const oos = await computeOutOfSequenceContext({
+    q, tenantId, policyId, termEffective, termExpiration, eff, currentFullPremium: fullPremium,
+  })
+  const effectiveFullPremium = oos.effectiveFullPremium
+
   const factor = proRataFactor(eff, termEffective, termExpiration)
-  const reinstatementCharge = round2(fullPremium * factor)
+  const reinstatementCharge = round2(effectiveFullPremium * factor)
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -494,6 +649,37 @@ export async function reinstatePolicy(
     premium: simplePremium(reinstatementCharge),
   }
 
+  const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
+  const { baseTimelineVersion, timelineVersion } = await nextTimelineVersion(q, tenantId, policyId)
+  const newReinstateTimelineVersion: TimelineVersionInput = {
+    versionId, transactionId, transactionType: 'Reinstate', transactionNumber,
+    effectiveDate: eff, processedAt, payload: txPayload,
+  }
+  const { newSegments, retroAdjustment } = computeNewSegmentsAndRetro({
+    tenantId, termEffective, termExpiration,
+    timelineVersionsBefore: oos.timelineVersionsBefore,
+    oldSegments: oos.oldSegments,
+    newTimelineVersion: newReinstateTimelineVersion,
+    eff,
+  })
+
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Reinstate',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: txPayload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -507,11 +693,37 @@ export async function reinstatePolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
-    metadata: { reinstateDate: eff, transactionNumber, reinstatementCharge },
+    effectiveDate: eff,
+    processedAt,
+    sequenceNo,
+    baseTimelineVersion,
+    timelineVersion,
+    metadata: {
+      reinstateDate: eff,
+      transactionNumber,
+      reinstatementCharge,
+      outOfSequence: oos.isOutOfSequence,
+      rebasedTransactions: oos.rebasedTransactions,
+      retroAdjustment,
+    },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Reinstate',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -526,7 +738,11 @@ export async function reinstatePolicy(
     currency,
     payload: txPayload || null,
     transactionNumber,
+    baseTimelineVersion,
+    timelineVersion,
   })
+
+  await persistPolicyTimelineSegments(q, tenantId, policyId, timelineVersion, newSegments)
 
   await insertRating(db, {
     tenantId,
@@ -574,6 +790,26 @@ export async function reinstatePolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Reinstate',
+    sourceEvent: 'POLICY_REINSTATED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: txPayload?.state || txPayload?.jurisdiction?.code || null,
+    premiumImpact: reinstatementCharge,
+    currency,
+    payload: txPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return version
 }
@@ -592,17 +828,16 @@ export async function renewPolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw = roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
   const overrideReason = body && typeof body.overrideReason === 'string' ? body.overrideReason.trim() : ''
   const overridePayload = body?.payload && typeof body.payload === 'object' ? body.payload : null
   const requestedTransactionNumber = typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
   const overrideEffectiveDate = asDateOnly(body?.effectiveDate)
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'renew')
   assertPolicyTransactionState('renew', policyRow.status)
   const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const nextEff = overrideEffectiveDate || policyTermExpiration(policyRow)
@@ -616,11 +851,47 @@ export async function renewPolicy(
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
+    productCode: policyProductCode(policyRow), stateCode: payload?.state || payload?.jurisdiction?.code || '',
+    effectiveDate: nextEff, transactionType: 'Renew', premium: Number((prem as any)?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(payload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  let referralId: string | null = null
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Renew',
+        productCode: policyProductCode(policyRow),
+        insuredName: payload?.insureds?.primary
+          ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: nextEff,
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -637,9 +908,10 @@ export async function renewPolicy(
     meta: {
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       submittedBy: submittedBy || undefined,
       transactionNumber,
+      authority,
     },
   }
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
@@ -672,6 +944,23 @@ export async function renewPolicy(
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Renew',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -685,16 +974,34 @@ export async function renewPolicy(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       renewal: true,
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
+      authority,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Renew',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -709,11 +1016,18 @@ export async function renewPolicy(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload,
     transactionNumber,
   })
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   await insertRating(db, {
     tenantId,
@@ -785,6 +1099,28 @@ export async function renewPolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Renew',
+    sourceEvent: 'POLICY_RENEWED',
+    effectiveDate: nextEff,
+    expirationDate: nextExp,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney((prem as any)?.total?.amount),
+    currency,
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
 
   return version
 }
@@ -803,12 +1139,6 @@ export async function rewritePolicy(
   actor: any
 ): Promise<any> {
   const q = toRawQuery(db)
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw =
-    roles.includes('underwriter') ||
-    roles.includes('admin') ||
-    permissions.includes('uw.referrals.decide')
   const overrideReason =
     body && typeof body.overrideReason === 'string' ? body.overrideReason.trim() : ''
   const overridePayload =
@@ -817,9 +1147,11 @@ export async function rewritePolicy(
     typeof body?.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
   const overrideEffectiveDate = asDateOnly(body?.effectiveDate)
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'rewrite')
   assertPolicyTransactionState('rewrite', policyRow.status)
 
   const baseTermMonths =
@@ -838,14 +1170,50 @@ export async function rewritePolicy(
 
   const prem = rate(tenantId, payload)
   const uw = evaluateUW(tenantId, payload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
+    productCode: policyProductCode(policyRow), stateCode: payload?.state || payload?.jurisdiction?.code || '',
+    effectiveDate: nextEff, transactionType: 'Rewrite', premium: Number((prem as any)?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(payload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError(
       'UW_DECLINED',
       `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`
     )
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  let referralId: string | null = null
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Rewrite',
+        productCode: policyProductCode(policyRow),
+        insuredName: payload?.insureds?.primary
+          ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: nextEff,
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
@@ -862,10 +1230,11 @@ export async function rewritePolicy(
     meta: {
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       submittedBy: submittedBy || undefined,
       rewrite: true,
       transactionNumber,
+      authority,
     },
   }
   const riskList = Array.isArray(payload?.risks) ? payload.risks : []
@@ -908,6 +1277,23 @@ export async function rewritePolicy(
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
 
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Rewrite',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: payload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
   await insertPolicyTransaction(db, {
     tenantId,
     transactionId,
@@ -921,16 +1307,31 @@ export async function rewritePolicy(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       rewrite: true,
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       transactionNumber,
+      authority,
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Rewrite',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    effectiveDate: nextEff,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -945,11 +1346,18 @@ export async function rewritePolicy(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload,
     transactionNumber,
   })
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   await insertRating(db, {
     tenantId,
@@ -1022,6 +1430,28 @@ export async function rewritePolicy(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'Rewrite',
+    sourceEvent: 'POLICY_REWRITTEN',
+    effectiveDate: nextEff,
+    expirationDate: nextExp,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: payload?.state || payload?.jurisdiction?.code || null,
+    premiumImpact: safeMoney((prem as any)?.total?.amount),
+    currency,
+    payload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
 
   return version
 }
@@ -1039,6 +1469,7 @@ export async function previewRenewal(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'renew')
   const termMonths = diffMonths(policyTermEffective(policyRow), policyTermExpiration(policyRow)) || 12
   const nextEff = policyTermExpiration(policyRow)
   const nextExp = addMonths(nextEff, termMonths)
@@ -1070,21 +1501,56 @@ export async function nonRenewPolicy(
   const reasonDescription = typeof body?.reasonDescription === 'string' ? body.reasonDescription.trim() : ''
   const noticeDate = asDateOnly(body?.noticeDate) || today()
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(policyProductCode(policyRow), 'nonRenew')
   assertPolicyTransactionState('nonRenew', policyRow.status)
   if (policyField(policyRow, 'nonRenewedAt', 'non_renewed_at')) {
     throw new ConflictError('ALREADY_NON_RENEWED', 'Policy is already marked as non-renewed.')
   }
 
   const termExpiration = policyTermExpiration(policyRow)
+  const stateCode = ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || ''
+  const complianceRule = stateCode
+    ? await loadServicingComplianceRule(q, tenantId, policyProductCode(policyRow), stateCode, 'NON_RENEWAL', termExpiration)
+    : null
+  let complianceEvidence: any = null
+  if (complianceRule) {
+    try {
+      complianceEvidence = validateServicingCompliance({
+        rule: complianceRule, reasonCode, noticeDate, effectiveDate: termExpiration,
+      })
+    } catch (error: any) {
+      throw new BadRequestError(String(error.message), 'Non-renewal does not satisfy the applicable servicing rule.')
+    }
+  }
   const versionId = uuidv4()
   const transactionId = uuidv4()
   const ratingId = uuidv4()
   const currency = policyCurrencyCode(policyRow)
   const processedAt = new Date().toISOString()
   const transactionNumber = reserveTransactionNumber('renew').replace('RN-', 'NR-')
+
+  const documentPacket = await buildPolicyDocumentPacket(q, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'NonRenewal',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    effectiveDate: termExpiration,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: ctx.latestPayload,
+    requiredFormCodes: complianceRule?.requiredFormCodes || [],
+    requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   await insertPolicyTransaction(db, {
     tenantId,
@@ -1099,8 +1565,8 @@ export async function nonRenewPolicy(
     ratingId,
     uw: null,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     metadata: {
       reasonCode: reasonCode || null,
@@ -1108,8 +1574,26 @@ export async function nonRenewPolicy(
       noticeDate,
       nonRenewedAt: termExpiration,
       transactionNumber,
+      complianceRuleId: complianceEvidence?.ruleId || null,
+      noticeDays: complianceEvidence?.noticeDays ?? null,
+      requiredFormCodes: complianceRule?.requiredFormCodes || [],
+      requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     },
   })
+
+  await persistPolicyDocumentPacket(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'NonRenewal',
+    transactionNumber,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    effectiveDate: termExpiration,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+  }, documentPacket)
 
   await insertPolicyVersion(db, {
     tenantId,
@@ -1189,11 +1673,31 @@ export async function nonRenewPolicy(
       policyId,
       'NON_RENEWAL_ISSUED',
       policyRow.status,
-      'NonRenewed',
+      'Issued',
       JSON.stringify({ noticeDate, reasonCode, termExpiration, transactionNumber }),
       actor?.id || null,
     ]
   ).catch(() => {})
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionNumber,
+    transactionType: 'NonRenewal',
+    sourceEvent: 'POLICY_NON_RENEWAL',
+    effectiveDate: termExpiration,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyProductCode(policyRow),
+    state: ctx.latestPayload?.state || ctx.latestPayload?.jurisdiction?.code || null,
+    premiumImpact: 0,
+    currency,
+    payload: ctx.latestPayload || null,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
 
   return {
     ok: true,

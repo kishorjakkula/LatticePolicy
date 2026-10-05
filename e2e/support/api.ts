@@ -1,9 +1,11 @@
 import type { APIRequestContext, Page } from '@playwright/test'
 import { expect } from '@playwright/test'
+import { randomBytes } from 'node:crypto'
 
 export const tenantId = process.env.E2E_TENANT_ID || 'sample-carrier'
 export const apiBaseUrl = process.env.E2E_API_BASE_URL || 'http://localhost:3300'
 export const defaultPassword = process.env.E2E_PASSWORD || 'password'
+export const createdUserPassword = process.env.E2E_CREATED_USER_PASSWORD || 'PortalUser!2026'
 
 export type AuthSession = {
   token: string
@@ -27,7 +29,7 @@ type ApiOptions = {
 }
 
 function e2eSuffix() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`
 }
 
 export function uniqueName(prefix: string) {
@@ -237,12 +239,12 @@ export async function createPortalUserForPolicy(request: APIRequestContext, admi
     expectedStatus: 201,
     data: {
       username,
-      password: defaultPassword,
+      password: createdUserPassword,
       roles: ['customer'],
       customerRef: customer.customerKey,
     },
   })
-  return { customer, policy, username, user }
+  return { customer, policy, username, password: createdUserPassword, user }
 }
 
 export async function seedDemoPolicies(request: APIRequestContext, adminToken: string) {

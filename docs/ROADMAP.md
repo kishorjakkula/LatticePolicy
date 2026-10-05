@@ -5,7 +5,9 @@ open-source policy administration starter framework toward an insurance and
 reinsurance platform kernel that can support carriers, MGAs/MGUs, reinsurers,
 delegated authority models, and large commercial operations.
 
-The executable GitHub roadmap starts at issue
+The executable roadmap is available in the public
+[LatticePolicy Carrier & Reinsurance Roadmap](https://github.com/users/kishorjakkula/projects/1)
+project. The master roadmap epic starts at issue
 [#69](https://github.com/kishorjakkula/LatticePolicy/issues/69).
 
 ## Vision
@@ -209,7 +211,7 @@ Use GitHub issue [#69](https://github.com/kishorjakkula/LatticePolicy/issues/69)
 as the master roadmap epic. Each phase has its own epic issue with task-list
 links to implementable issues.
 
-Recommended GitHub Project fields:
+The public GitHub Project is configured with these fields:
 
 - Status: Inbox, Needs Analysis, Ready, In Progress, In Review, Blocked, Done.
 - Priority: P0, P1, P2.
@@ -217,10 +219,15 @@ Recommended GitHub Project fields:
 - Domain: Policy, Underwriting, Documents, Compliance, Reinsurance, Exposure,
   Integration, Security, Operations, Product.
 - Size: S, M, L, XL.
-- Owner.
+- Owner: free-text ownership when an issue assignee is not sufficient.
 
 For the full GitHub setup process, label taxonomy, milestone list, triage rules,
 and Wiki synchronization guidance, see `docs/GITHUB_ROADMAP_SETUP.md`.
+
+For how an epic moves after it's created — child-issue completion
+conventions, the audit procedure for reconciling epic status against real
+issue state, who is authorized to close an epic, and audit cadence — see
+`docs/EPIC_WORKFLOW.md`.
 
 ## Phase Definition Of Done
 

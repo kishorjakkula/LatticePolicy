@@ -1,0 +1,48 @@
+{
+  "entityType": "policy",
+  "status": "framework-only",
+  "note": "No commit handler exists yet, and this file does not change that (see #219 for the design and #67 for the implementation issue). This proposes the FIELD SHAPE a legacy policy row needs, not an insert path - the future commit handler must drive these fields through the real bind/issue transaction services (server/src/services/quote-bind.service.ts) or an explicit, reviewed legacy-issuance path, never a raw INSERT INTO policies. A staged row here therefore represents 'the policy as it existed at cutover', which the commit handler is responsible for replaying through the real lifecycle safely.",
+  "mapsTo": {
+    "policy": "policies",
+    "insured": "policy_parties (roleCode='INSURED') -> parties, resolved via a customer import row's externalIdentifiers"
+  },
+  "fields": [
+    { "name": "policyNumber", "required": true, "mapsTo": "policies.policy_number" },
+    { "name": "productCode", "required": true, "mapsTo": "policies.product_code" },
+    { "name": "status", "required": true, "description": "Legacy status at cutover, e.g. Issued/Cancelled/Expired - drives which lifecycle replay path the commit handler must use.", "mapsTo": "policies.status" },
+    { "name": "jurisdictionCode", "required": true, "mapsTo": "policies.jurisdiction_code" },
+    { "name": "termEffectiveDate", "required": true, "mapsTo": "policies.term_effective_date" },
+    { "name": "termExpirationDate", "required": true, "mapsTo": "policies.term_expiration_date" },
+    { "name": "insuredExternalId", "required": true, "description": "External identifier matching a customer row imported via customer.json; resolved to a party through import_external_refs, not a direct customer_id.", "mapsTo": "policy_parties.party_id (resolved)" },
+    { "name": "producerExternalId", "required": false, "description": "External identifier matching a producer row imported via producer.json.", "mapsTo": "policy_parties.party_id (resolved, roleCode='PRODUCER')" },
+    { "name": "externalIdentifiers[].sourceSystem", "required": true, "mapsTo": "import_external_refs.source_system" },
+    { "name": "externalIdentifiers[].externalId", "required": true, "mapsTo": "import_external_refs.external_id" }
+  ],
+  "sampleRows": [
+    {
+      "policyNumber": "LEGACY-PA-100234",
+      "productCode": "personal-auto",
+      "status": "Issued",
+      "jurisdictionCode": "TX",
+      "termEffectiveDate": "2026-01-01",
+      "termExpirationDate": "2027-01-01",
+      "insuredExternalId": "CUST-000123",
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "POL-100234" }
+      ]
+    },
+    {
+      "policyNumber": "LEGACY-HO-200098",
+      "productCode": "homeowners",
+      "status": "Issued",
+      "jurisdictionCode": "FL",
+      "termEffectiveDate": "2026-03-15",
+      "termExpirationDate": "2027-03-15",
+      "insuredExternalId": "CUST-000456",
+      "producerExternalId": "PROD-001002",
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "POL-200098" }
+      ]
+    }
+  ]
+}

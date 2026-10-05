@@ -26,6 +26,8 @@ export const tenants = pgTable('tenants', {
   defaultLocale: text('default_locale'),
   defaultCurrency: char('default_currency', { length: 3 }),
   mfaRequired: boolean('mfa_required').notNull().default(false),
+  localAuthEnabled: boolean('local_auth_enabled').notNull().default(true),
+  ssoConfig: jsonb('sso_config').notNull().default(sql`'{}'::jsonb`),
   customerKeyPattern: text('customer_key_pattern').notNull().default('CUST-{YYYY}-{SEQ6}'),
   customerValidationConfig: jsonb('customer_validation_config').notNull().default(sql`'{}'::jsonb`),
   customerWorkflowConfig: jsonb('customer_workflow_config').notNull().default(sql`'{}'::jsonb`),
@@ -45,6 +47,11 @@ export const users = pgTable('users', {
   mfaEnabled: boolean('mfa_enabled').notNull().default(false),
   mfaSecret: text('mfa_secret'),
   customerId: uuid('customer_id'),
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  passwordUpdatedAt: timestamp('password_updated_at', { withTimezone: true }).notNull().defaultNow(),
+  authProvider: text('auth_provider').notNull().default('local'),
+  externalSubject: text('external_subject'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -209,6 +216,7 @@ export const policyVersions = pgTable('policy_versions', {
   cancellationReasonCode: text('cancellation_reason_code'),
   cancellationType: text('cancellation_type'),
   returnPremiumAmount: numeric('return_premium_amount', { precision: 14, scale: 2 }),
+  claimReference: text('claim_reference'),
 })
 
 export const policyVersionChanges = pgTable('policy_version_changes', {
@@ -357,9 +365,14 @@ export const documents = pgTable('documents', {
   tenantId: text('tenant_id').notNull(),
   policyId: uuid('policy_id').references(() => policies.policyId, { onDelete: 'cascade' }),
   transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'set null' }),
+  versionId: uuid('version_id'),
   type: text('type').notNull(),
   uri: text('uri').notNull(),
   hash: text('hash'),
+  inputHash: text('input_hash'),
+  formSetHash: text('form_set_hash'),
+  integrityStatus: text('integrity_status').notNull().default('UNVERIFIED'),
+  deliveryEvidence: jsonb('delivery_evidence').notNull().default(sql`'[]'::jsonb`),
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid('created_by'),
@@ -388,6 +401,8 @@ export const policyForms = pgTable('policy_forms', {
   transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'set null' }),
   formId: uuid('form_id').references(() => formsCatalog.formId),
   code: text('code'),
+  edition: text('edition'),
+  snapshotHash: text('snapshot_hash'),
   data: jsonb('data'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   metadata: jsonb('metadata'),
@@ -408,6 +423,61 @@ export const notes = pgTable('notes', {
   metadata: jsonb('metadata'),
 })
 
+export const underwritingReferrals = pgTable('underwriting_referrals', {
+  referralId: uuid('referral_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  quoteId: uuid('quote_id').references(() => quotes.quoteId, { onDelete: 'set null' }),
+  policyId: uuid('policy_id').references(() => policies.policyId, { onDelete: 'cascade' }),
+  transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'set null' }),
+  versionId: uuid('version_id').references(() => policyVersions.versionId, { onDelete: 'set null' }),
+  productCode: text('product_code'),
+  agencyId: uuid('agency_id'),
+  insuredName: text('insured_name'),
+  effectiveDate: date('effective_date'),
+  transactionType: text('transaction_type').notNull(),
+  status: text('status').notNull().default('Open'),
+  priority: text('priority').notNull().default('Normal'),
+  reasons: text('reasons').array(),
+  assignedTo: uuid('assigned_to'),
+  comments: jsonb('comments').notNull().default(sql`'[]'::jsonb`),
+  decision: text('decision'),
+  decidedBy: uuid('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  decisionReason: text('decision_reason'),
+  createdBy: uuid('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const underwritingAuthorityGrants = pgTable('underwriting_authority_grants', {
+  grantId: uuid('grant_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  productCode: text('product_code'),
+  stateCode: char('state_code', { length: 2 }),
+  transactionTypes: text('transaction_types').array().notNull(),
+  maxPremium: numeric('max_premium', { precision: 14, scale: 2 }),
+  maxLimit: numeric('max_limit', { precision: 14, scale: 2 }),
+  mayOverride: boolean('may_override').notNull().default(false),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  active: boolean('active').notNull().default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const underwritingAuthorityAudit = pgTable('underwriting_authority_audit', {
+  auditId: uuid('audit_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  grantId: uuid('grant_id').references(() => underwritingAuthorityGrants.grantId, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  actor: text('actor').notNull(),
+  beforeValue: jsonb('before_value'),
+  afterValue: jsonb('after_value'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const uwDecisions = pgTable('uw_decisions', {
   decisionId: uuid('decision_id').primaryKey().default(sql`uuid_generate_v4()`),
   tenantId: text('tenant_id').notNull(),
@@ -418,6 +488,53 @@ export const uwDecisions = pgTable('uw_decisions', {
   decidedBy: uuid('decided_by'),
   decidedAt: timestamp('decided_at', { withTimezone: true }),
   metadata: jsonb('metadata'),
+})
+
+// ---------------------------------------------------------------------------
+// Large Commercial Placements (migration 043)
+// ---------------------------------------------------------------------------
+export const commercialPlacements = pgTable('commercial_placements', {
+  placementId: uuid('placement_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  quoteId: uuid('quote_id'),
+  policyId: uuid('policy_id'),
+  productCode: text('product_code'),
+  insuredName: text('insured_name').notNull(),
+  effectiveDate: date('effective_date'),
+  facilityReference: text('facility_reference'),
+  status: text('status').notNull().default('Submission'),
+  terms: jsonb('terms').notNull().default(sql`'[]'::jsonb`),
+  documents: jsonb('documents').notNull().default(sql`'[]'::jsonb`),
+  statusHistory: jsonb('status_history').notNull().default(sql`'[]'::jsonb`),
+  createdBy: uuid('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const placementMarketParticipants = pgTable('placement_market_participants', {
+  participantId: uuid('participant_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  placementId: uuid('placement_id').notNull().references(() => commercialPlacements.placementId, { onDelete: 'cascade' }),
+  marketName: text('market_name').notNull(),
+  role: text('role').notNull().default('Following'),
+  subscriptionPercent: numeric('subscription_percent', { precision: 5, scale: 2 }).notNull(),
+  securityStatus: text('security_status').notNull().default('Provisional'),
+  brokerIntermediary: text('broker_intermediary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const placementSubjectivities = pgTable('placement_subjectivities', {
+  subjectivityId: uuid('subjectivity_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull(),
+  placementId: uuid('placement_id').notNull().references(() => commercialPlacements.placementId, { onDelete: 'cascade' }),
+  description: text('description').notNull(),
+  status: text('status').notNull().default('Open'),
+  dueDate: date('due_date'),
+  resolvedBy: uuid('resolved_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 // ---------------------------------------------------------------------------
@@ -522,6 +639,7 @@ export const notificationIntents = pgTable('notification_intents', {
   lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   lastError: text('last_error'),
+  deliveryEvidence: jsonb('delivery_evidence').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid('created_by'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -681,6 +799,64 @@ export const ratingModelVersions = pgTable('rating_model_versions', {
   updatedBy: text('updated_by'),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   publishedBy: text('published_by'),
+})
+
+// ---------------------------------------------------------------------------
+// Product Governance (migration 051)
+// ---------------------------------------------------------------------------
+export const productGovernanceReleases = pgTable('product_governance_releases', {
+  releaseId: uuid('release_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  productCode: text('product_code').notNull(),
+  jurisdictionCode: text('jurisdiction_code'),
+  versionLabel: text('version_label').notNull(),
+  status: text('status').notNull().default('DRAFT'),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  artifacts: jsonb('artifacts').notNull(),
+  contentSha256: text('content_sha256').notNull(),
+  createdBy: text('created_by').notNull(),
+  submittedBy: text('submitted_by'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  activatedBy: text('activated_by'),
+  activatedAt: timestamp('activated_at', { withTimezone: true }),
+  retiredBy: text('retired_by'),
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const productGovernanceAudit = pgTable('product_governance_audit', {
+  auditId: uuid('audit_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  releaseId: uuid('release_id').notNull().references(() => productGovernanceReleases.releaseId, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  actor: text('actor').notNull(),
+  reason: text('reason'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const servicingComplianceRules = pgTable('servicing_compliance_rules', {
+  ruleId: uuid('rule_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  productCode: text('product_code').notNull(),
+  stateCode: char('state_code', { length: 2 }).notNull(),
+  transactionType: text('transaction_type').notNull(),
+  allowedReasonCodes: text('allowed_reason_codes').array().notNull(),
+  minimumNoticeDays: integer('minimum_notice_days').notNull().default(0),
+  maximumNoticeDays: integer('maximum_notice_days'),
+  returnPremiumMethod: text('return_premium_method'),
+  requiredFormCodes: text('required_form_codes').array().notNull().default(sql`ARRAY[]::text[]`),
+  requiredDeliveryMethods: text('required_delivery_methods').array().notNull().default(sql`ARRAY['EMAIL']::text[]`),
+  effectiveDate: date('effective_date').notNull(),
+  expirationDate: date('expiration_date'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by'),
 })
 
 // ---------------------------------------------------------------------------
@@ -844,3 +1020,99 @@ export const fieldMeta = pgTable('field_meta', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Batch Job Queue (migration 040)
+// ---------------------------------------------------------------------------
+export const jobDefinitions = pgTable('job_definitions', {
+  jobCode: text('job_code').primaryKey(),
+  description: text('description').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  defaultSchedule: text('default_schedule'),
+  defaultMaxAttempts: integer('default_max_attempts').notNull().default(5),
+  defaultTimeoutSeconds: integer('default_timeout_seconds').notNull().default(300),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const jobSchedules = pgTable('job_schedules', {
+  scheduleId: uuid('schedule_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  jobCode: text('job_code').notNull().references(() => jobDefinitions.jobCode, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(true),
+  scheduleExpression: text('schedule_expression'),
+  concurrencyKey: text('concurrency_key'),
+  requestPayload: jsonb('request_payload').notNull().default(sql`'{}'::jsonb`),
+  nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ux_job_schedules_tenant_job').on(t.tenantId, t.jobCode),
+  index('idx_job_schedules_due').on(t.enabled, t.nextRunAt),
+])
+
+export const jobRuns = pgTable('job_runs', {
+  runId: uuid('run_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  jobCode: text('job_code').notNull().references(() => jobDefinitions.jobCode, { onDelete: 'cascade' }),
+  scheduleId: uuid('schedule_id').references(() => jobSchedules.scheduleId, { onDelete: 'set null' }),
+  idempotencyKey: text('idempotency_key').notNull(),
+  status: text('status').notNull().default('Queued'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  checkpoint: jsonb('checkpoint').notNull().default(sql`'{}'::jsonb`),
+  requestPayload: jsonb('request_payload').notNull().default(sql`'{}'::jsonb`),
+  resultPayload: jsonb('result_payload').notNull().default(sql`'{}'::jsonb`),
+  lastError: text('last_error'),
+  lockedBy: text('locked_by'),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ux_job_runs_idempotency').on(t.tenantId, t.idempotencyKey),
+  index('idx_job_runs_dispatch').on(t.status, t.nextAttemptAt, t.createdAt),
+  index('idx_job_runs_tenant_history').on(t.tenantId, t.jobCode, t.createdAt),
+])
+
+export const jobRunEvents = pgTable('job_run_events', {
+  eventId: uuid('event_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  runId: uuid('run_id').notNull().references(() => jobRuns.runId, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  message: text('message'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_job_run_events_run').on(t.runId, t.createdAt),
+])
+
+export const policyIntegrityExceptions = pgTable('policy_integrity_exceptions', {
+  exceptionId: uuid('exception_id').primaryKey().default(sql`uuid_generate_v4()`),
+  tenantId: text('tenant_id').notNull().references(() => tenants.tenantId, { onDelete: 'cascade' }),
+  policyId: uuid('policy_id').notNull().references(() => policies.policyId, { onDelete: 'cascade' }),
+  transactionId: uuid('transaction_id').references(() => policyTransactions.transactionId, { onDelete: 'cascade' }),
+  exceptionClass: text('exception_class').notNull(),
+  severity: text('severity').notNull().default('Error'),
+  status: text('status').notNull().default('Open'),
+  summary: text('summary').notNull(),
+  details: jsonb('details').notNull().default(sql`'{}'::jsonb`),
+  suggestedAction: text('suggested_action').notNull().default('Investigate'),
+  correlationId: text('correlation_id').notNull(),
+  firstDetectedAt: timestamp('first_detected_at', { withTimezone: true }).notNull().defaultNow(),
+  lastDetectedAt: timestamp('last_detected_at', { withTimezone: true }).notNull().defaultNow(),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+  acknowledgedBy: uuid('acknowledged_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolvedBy: uuid('resolved_by'),
+  resolutionNote: text('resolution_note'),
+  retryCount: integer('retry_count').notNull().default(0),
+  lastRetryAt: timestamp('last_retry_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_policy_integrity_queue').on(t.tenantId, t.status, t.severity, t.lastDetectedAt),
+])

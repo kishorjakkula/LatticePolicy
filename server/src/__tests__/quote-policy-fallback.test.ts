@@ -252,7 +252,11 @@ describe('quote and policy fallback API', () => {
       .send({})
 
     expect(issueRes.status).toBe(404)
-    expect(issueRes.body.code).toBe('POLICY_NOT_FOUND')
+    expect(issueRes.body).toMatchObject({
+      code: 'POLICY_NOT_FOUND',
+      message: 'Policy not found',
+      traceId: expect.any(String),
+    })
 
     const listRes = await request(app)
       .get('/api/v1/policies')
@@ -323,6 +327,22 @@ describe('quote and policy fallback API', () => {
     })
   })
 
+  it('returns structured transaction validation errors', async () => {
+    const traceId = `trace-${crypto.randomUUID()}`
+    const res = await request(app)
+      .post('/api/v1/policies/policy-1/transactions/reserve-number')
+      .set('X-Tenant', tenantId)
+      .set('x-request-id', traceId)
+      .send({ mode: 'invalid' })
+
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual({
+      code: 'INVALID_MODE',
+      message: 'mode must be endorse, cancel, reinstate, rewrite, or renew',
+      traceId,
+    })
+  })
+
   it('issues bound policies and exposes fallback policy state and versions', async () => {
     const policy = await createBoundPolicy()
 
@@ -368,6 +388,28 @@ describe('quote and policy fallback API', () => {
 
   it('reserves transaction numbers and validates reservation modes', async () => {
     const policy = await createBoundPolicy()
+
+    const prematureEndorsement = await request(app)
+      .post(`/api/v1/policies/${policy.policyId}/endorse/reserve-number`)
+      .set('X-Tenant', tenantId)
+      .send({})
+
+    expect(prematureEndorsement.status).toBe(400)
+    expect(prematureEndorsement.body).toMatchObject({
+      code: 'INVALID_STATE',
+      details: {
+        action: 'endorse',
+        currentState: 'Bound',
+        allowedFrom: ['Issued'],
+        targetState: 'Issued',
+      },
+    })
+
+    await request(app)
+      .post(`/api/v1/policies/${policy.policyId}/issue`)
+      .set('X-Tenant', tenantId)
+      .send({})
+      .expect(200)
 
     const endorseRes = await request(app)
       .post(`/api/v1/policies/${policy.policyId}/endorse/reserve-number`)

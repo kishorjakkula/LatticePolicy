@@ -9,6 +9,7 @@ export const queryKeys = {
     timeline: (id: string) => ['policies', id, 'timeline'] as const,
     interests: (id: string) => ['policies', id, 'interests'] as const,
     aiInsights: (id: string) => ['policies', id, 'ai-insights'] as const,
+    documents: (id: string) => ['policies', id, 'documents'] as const,
   },
   quotes: {
     all: () => ['quotes'] as const,
@@ -19,6 +20,41 @@ export const queryKeys = {
   users: {
     all: () => ['users'] as const,
     list: () => ['users', 'list'] as const,
+  },
+  compliance: {
+    eligibility: (opts: Record<string, any> = {}) => ['compliance', 'eligibility', opts] as const,
+    ofacScreens: (disposition?: string) => ['compliance', 'ofac-screens', disposition ?? null] as const,
+  },
+  bordereaux: {
+    batches: (bordereauType?: string) => ['bordereaux', 'batches', bordereauType ?? null] as const,
+    batch: (batchId: string) => ['bordereaux', 'batch', batchId] as const,
+    rows: (batchId: string) => ['bordereaux', 'rows', batchId] as const,
+  },
+  reinsurance: {
+    treaties: (status?: string) => ['reinsurance', 'treaties', status ?? null] as const,
+    facultative: (policyId?: string) => ['reinsurance', 'facultative', policyId ?? null] as const,
+    placements: (policyId: string) => ['reinsurance', 'placements', policyId] as const,
+  },
+  dataImport: {
+    batches: () => ['data-import', 'batches'] as const,
+    batch: (batchId: string) => ['data-import', 'batches', batchId] as const,
+    rows: (batchId: string, status?: string) => ['data-import', 'batches', batchId, 'rows', status ?? null] as const,
+  },
+  exposure: {
+    summary: (filters?: { productCode?: string; state?: string; asOf?: string }) =>
+      ['exposure', 'summary', filters?.productCode ?? null, filters?.state ?? null, filters?.asOf ?? null] as const,
+  },
+  dashboard: {
+    summary: () => ['dashboard', 'summary'] as const,
+    outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
+    notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
+    policyIntegrity: (status?: string) => ['dashboard', 'policy-integrity', status ?? null] as const,
+  },
+  jobs: {
+    definitions: () => ['jobs', 'definitions'] as const,
+    runs: (opts?: { jobCode?: string; status?: string; limit?: number }) =>
+      ['jobs', 'runs', opts?.jobCode ?? null, opts?.status ?? null, opts?.limit ?? null] as const,
+    run: (runId: string) => ['jobs', 'runs', runId] as const,
   },
   customers: {
     all: () => ['customers'] as const,
@@ -41,7 +77,13 @@ export const queryKeys = {
   },
   uwReferrals: {
     all: () => ['uw-referrals'] as const,
-    list: (page: number, pageSize: number) => ['uw-referrals', 'list', page, pageSize] as const,
+    list: (page: number, pageSize: number, status?: string) => ['uw-referrals', 'list', page, pageSize, status ?? null] as const,
+    detail: (referralId: string) => ['uw-referrals', 'detail', referralId] as const,
+  },
+  placements: {
+    all: () => ['placements'] as const,
+    list: (page: number, pageSize: number, status?: string) => ['placements', 'list', page, pageSize, status ?? null] as const,
+    detail: (placementId: string) => ['placements', 'detail', placementId] as const,
   },
   reference: {
     agencies: (opts: Record<string, any>) => ['reference', 'agencies', opts] as const,
@@ -77,5 +119,9 @@ export const queryKeys = {
   },
   adminUwCompanies: {
     list: (opts: Record<string, any>) => ['admin-uw-companies', opts] as const,
+  },
+  notificationTemplates: {
+    list: (opts: Record<string, any>) => ['notification-templates', opts] as const,
+    detail: (id: string) => ['notification-templates', id] as const,
   },
 }

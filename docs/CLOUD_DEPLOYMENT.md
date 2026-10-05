@@ -29,12 +29,10 @@ API container environment variables:
 | `MFA_TOKEN_SECRET` | Yes | Separate secret for MFA challenge tokens. |
 | `MFA_ISSUER=LatticePolicy` | Recommended | Authenticator app issuer name. |
 | `ALLOWED_ORIGINS` | Yes | Comma-separated browser origins allowed to call the API. |
-| `REGISTRATION_ENABLED=false` | Recommended for demos | Disables public account creation for invite-only demos. |
 | `DEMO_ACCESS_MODE=invite_only` | Recommended for demos | Restricts demo access to explicitly allowed users. |
 | `DEMO_ALLOWED_EMAILS` | Required for invite-only demos | Comma-separated list of usernames/email addresses allowed to log in. |
-| `DEMO_ALLOWED_EMAIL_DOMAINS` | Optional | Optional domain allowlist for invited organizations. |
-| `REDIS_URL` | Optional | Redis connection string. |
-| `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache when `REDIS_URL` is present. |
+| `REDIS_URL` | Required when cache is enabled | Redis connection string. |
+| `CACHE_ENABLED=1` | Optional | Enables Redis-backed cache and requires `REDIS_URL`. |
 | `SENTRY_DSN` | Optional | Server-side error tracking DSN. |
 | `ASYNC_PUSH_ENABLED` | Optional | Enables/disables async outbox worker. |
 | `ASYNC_PUSH_WEBHOOK_URL` | Optional | Downstream webhook target for async events. |
@@ -46,9 +44,28 @@ Frontend build variables:
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Yes | Public API base URL used by the browser app. |
+| `VITE_USE_MOCK=0` | Expected | Explicitly disables the frontend mock API. It may be omitted by the standard Docker build when `VITE_API_BASE_URL` is present, because that also resolves mock mode to off. |
 | `VITE_SENTRY_DSN` | Optional | Browser-side error tracking DSN. |
 
 Important: Vite variables are compiled into the frontend image at build time. If the API URL changes, rebuild and redeploy the frontend image.
+See [Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md)
+for the full variable contract, URL shape, public-value warning, CORS pairing,
+and release verification checklist.
+
+The API fails fast in managed environments when required variables are missing
+or unsafe. Managed environments include `NODE_ENV=production` and
+`DEPLOYMENT_ENV` values of `test`, `validation`, `staging`, or `production`;
+`DEPLOYMENT_ENV=local` is reserved for local Docker/demo smoke tests. Secrets
+must be unique, non-placeholder values of at least 32 characters.
+`ALLOWED_ORIGINS` must list explicit HTTPS browser origins in managed
+deployments; wildcard, HTTP, and localhost origins are rejected. Production
+frontend builds also fail when mock mode is enabled or `VITE_API_BASE_URL` is
+missing/non-HTTPS, except for localhost/127.0.0.1 URLs used by local smoke
+tests.
+
+See [Production runtime configuration](PRODUCTION_RUNTIME_CONFIGURATION.md) for
+the authoritative API guardrail contract, safe configuration pattern,
+verification checklist, and troubleshooting guidance.
 
 ## Private Validation Access
 
@@ -63,7 +80,8 @@ keep the application private by policy:
 - Set `ALLOWED_ORIGINS` to the deployed frontend origin only.
 - Keep demo users in a demo tenant and assign the least-privileged role needed
   for the walkthrough.
-- Do not enable public self-registration for validation environments.
+- Provision validation users through controlled administration; the API does
+  not expose public self-registration.
 - Add a cloud WAF, IP allowlist, or identity-aware proxy if the demo audience
   is small and known.
 
@@ -71,9 +89,8 @@ The same environment variables are used on AWS and Azure. The cloud provider
 should inject them from Secrets Manager, SSM Parameter Store, Key Vault, or the
 platform equivalent.
 
-Runtime enforcement of `REGISTRATION_ENABLED`, `DEMO_ACCESS_MODE`, and allowlist
-variables must be verified before using the deployment with sensitive carrier or
-customer data.
+Runtime enforcement of `DEMO_ACCESS_MODE` and the exact-user allowlist must be
+verified before using the deployment with sensitive carrier or customer data.
 
 ## Container Images
 
@@ -177,7 +194,7 @@ API task:
 
 - Image: ECR API image
 - Container port: `3000`
-- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `REGISTRATION_ENABLED=false`, `DEMO_ACCESS_MODE=invite_only`
+- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `DEMO_ACCESS_MODE=invite_only`
 - Secrets: `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `REDIS_URL`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`
 - Health check path: `/health`
 
@@ -346,7 +363,7 @@ az containerapp create \
   --target-port 3000 \
   --ingress external \
   --registry-server $ACR_LOGIN_SERVER \
-  --env-vars NODE_ENV=production DEPLOYMENT_ENV=test PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info REGISTRATION_ENABLED=false DEMO_ACCESS_MODE=invite_only
+  --env-vars NODE_ENV=production DEPLOYMENT_ENV=test PORT=3000 CACHE_ENABLED=1 LOG_LEVEL=info DEMO_ACCESS_MODE=invite_only
 ```
 
 After creating the app, add secrets and secret-backed environment variables for `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`, and `REDIS_URL`.

@@ -1,13 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 
-const allowedAdvisories = new Set([
-  // React Router RSC Mode CSRF advisory. LatticePolicy uses React Router as a
-  // Vite client-side SPA router and does not enable React Router RSC/framework
-  // server actions. Track this in docs/OPEN_SOURCE_READINESS.md until a patched
-  // non-regressing react-router-dom release is available.
-  'GHSA-qwww-vcr4-c8h2',
-])
+const allowedAdvisories = new Set()
 
 const result = spawnSync('npm', ['audit', '--json'], {
   encoding: 'utf8',

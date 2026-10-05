@@ -34,6 +34,30 @@ export function AdminShell() {
           {hasPermission(user, 'menu.admin.onboarding.view') && (
             <NavLink to="/admin/onboarding" className={adminMenuClass}>Agency Onboarding</NavLink>
           )}
+          {hasPermission(user, 'menu.admin.notifications.view') && (
+            <NavLink to="/admin/notification-templates" className={adminMenuClass}>Notifications</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.compliance.view') && (
+            <NavLink to="/admin/compliance" className={adminMenuClass}>Compliance</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.import.view') && (
+            <NavLink to="/admin/import" className={adminMenuClass}>Data Import</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.dashboard.view') && (
+            <NavLink to="/admin/dashboard" className={adminMenuClass}>Operations Dashboard</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.exposure.view') && (
+            <NavLink to="/admin/exposure" className={adminMenuClass}>Exposure</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.reinsurance.view') && (
+            <NavLink to="/admin/reinsurance" className={adminMenuClass}>Reinsurance</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.bordereaux.view') && (
+            <NavLink to="/admin/bordereaux" className={adminMenuClass}>Bordereaux</NavLink>
+          )}
+          {hasPermission(user, 'menu.admin.jobs.view') && (
+            <NavLink to="/admin/jobs" className={adminMenuClass}>Jobs</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">

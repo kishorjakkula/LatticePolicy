@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { getDb, type DrizzleDB } from '../db.js'
+import rateLimit from 'express-rate-limit'
+import { getDb, type DrizzleDB, withTenantTx, toRawQuery } from '../db.js'
 import { ok } from '../lib/respond.js'
 import { store } from '../store.js'
 import {
@@ -10,7 +11,9 @@ import {
 import * as policyService from '../services/policy.service.js'
 import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
-import { csvEscape } from '../lib/utils.js'
+import { csvEscape, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
+import { requirePermission, hasPermission } from '../auth.js'
+import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument } from '../services/document-storage.service.js'
 
 // ── local helpers (in-memory fallback only) ──────────────────────────────────
 
@@ -36,6 +39,12 @@ function derivePolicyTermCountFromPolicy(policy: any): number {
 }
 
 export const policyRoutes = Router()
+const policyDocumentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
 
 // ── GET /policies — list ──────────────────────────────────────────────────────
 policyRoutes.get('/policies', async (req, res, next) => {
@@ -375,3 +384,248 @@ policyRoutes.get('/policies/:id/versions/:vid/rating-worksheet', async (req, res
     next(err)
   }
 })
+
+function toMetadataObject(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' ? (value as Record<string, any>) : {}
+}
+
+async function resolveDocumentAccessContext(
+  req: any,
+  tenantId: string,
+  policyId: string
+): Promise<{ isInternal: boolean; customerId: string } | null> {
+  const isInternal = hasPermission(req, 'page.policy.view')
+  const customerId = String(req.user?.customerId || '').trim()
+  if (isInternal) return { isInternal, customerId }
+  if (!customerId) return null
+  const linked = await withTenantTx(tenantId, async (txDb) => {
+    const q = toRawQuery(txDb)
+    return q(
+      `SELECT 1 FROM policy_customer_links
+        WHERE tenant_id = $1 AND policy_id = $2::uuid AND customer_id = $3::uuid
+        LIMIT 1`,
+      [tenantId, policyId, customerId]
+    )
+  })
+  if (!((linked as any).rowCount > 0)) return null
+  return { isInternal, customerId }
+}
+
+// ── GET /policies/:id/documents ───────────────────────────────────────────────
+// Lists generated policy documents. Internal callers (page.policy.view) see
+// every document for the policy; customer-portal callers see only documents
+// linked to their own customer record and flagged metadata.customerSafe.
+policyRoutes.get(
+  '/policies/:id/documents',
+  requirePermission(['page.policy.view', 'customer.portal.read']),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      if (!isUuidLike(policyId)) return res.status(400).json({ code: 'INVALID_POLICY_ID' })
+      const db = getDb()
+      if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+
+      const access = await resolveDocumentAccessContext(req, tenantId, policyId)
+      if (!access) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+
+      const result = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        return q(
+          `SELECT document_id, version_id, type, hash, input_hash, form_set_hash,
+                  integrity_status, delivery_evidence, metadata, created_at
+             FROM documents
+            WHERE tenant_id = $1 AND policy_id = $2::uuid
+            ORDER BY created_at DESC`,
+          [tenantId, policyId]
+        )
+      })
+
+      const rows = ((result as any).rows || []) as any[]
+      const documents = rows
+        .map((row) => ({ row, metadata: toMetadataObject(row.metadata) }))
+        .filter(({ metadata }) => access.isInternal || metadata.customerSafe === true)
+        .map(({ row, metadata }) => ({
+          documentId: String(row.document_id),
+          versionId: row.version_id || null,
+          type: String(row.type),
+          displayName: `${String(row.type)} ${metadata.transactionNumber || ''}`.trim(),
+          transactionType: metadata.transactionType || null,
+          transactionNumber: metadata.transactionNumber || null,
+          forms: Array.isArray(metadata.forms) ? metadata.forms : [],
+          contentHash: row.hash || null,
+          inputHash: row.input_hash || null,
+          formSetHash: row.form_set_hash || null,
+          integrityStatus: row.integrity_status || 'UNVERIFIED',
+          deliveryEvidence: Array.isArray(row.delivery_evidence) ? row.delivery_evidence : [],
+          contentType: metadata.artifact?.contentType || null,
+          byteSize: metadata.artifact?.byteSize ?? null,
+          customerSafe: metadata.customerSafe === true,
+          generatedAt: metadata.generatedAt || row.created_at,
+        }))
+      return ok(res, { documents })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+policyRoutes.patch(
+  '/policies/:id/documents/:documentId/delivery',
+  policyDocumentLimiter,
+  requirePermission('page.policy.view'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      const method = String(req.body?.method || '').trim()
+      const status = String(req.body?.status || '').trim()
+      if (!method || !['Pending', 'Delivered', 'Failed'].includes(status)) {
+        return res.status(400).json({ code: 'INVALID_DELIVERY_EVIDENCE' })
+      }
+      if (!getDb()) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+      const evidence = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        const current = await q(
+          `SELECT delivery_evidence FROM documents
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid FOR UPDATE`,
+          [tenantId, policyId, documentId]
+        )
+        if (!current.rowCount) return null
+        const entries = Array.isArray(current.rows[0].delivery_evidence)
+          ? current.rows[0].delivery_evidence.filter((entry: any) => String(entry?.method) !== method)
+          : []
+        entries.push({
+          method,
+          status,
+          evidenceRef: req.body?.evidenceRef || null,
+          detail: req.body?.detail || null,
+          recordedAt: new Date().toISOString(),
+          recordedBy: req.user?.id || req.user?.username || null,
+        })
+        await q(
+          `UPDATE documents SET delivery_evidence=$4::jsonb
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+          [tenantId, policyId, documentId, JSON.stringify(entries)]
+        )
+        return entries
+      })
+      return evidence
+        ? res.json({ documentId, deliveryEvidence: evidence })
+        : res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+policyRoutes.post(
+  '/policies/:id/documents/:documentId/regenerate',
+  policyDocumentLimiter,
+  requirePermission('page.policy.view'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      if (!getDb()) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+      const result = await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+        `SELECT hash,metadata FROM documents
+          WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid LIMIT 1`,
+        [tenantId, policyId, documentId]
+      ))
+      if (!(result as any).rowCount) return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+      const row = (result as any).rows[0]
+      const metadata = toMetadataObject(row.metadata)
+      const artifact = row.hash
+        ? await regenerateAndVerifyDocument({ tenantId, documentId, metadata: metadata as any, expectedHash: String(row.hash) })
+        : null
+      const integrityStatus = artifact ? 'VERIFIED' : 'FAILED'
+      await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+        `UPDATE documents SET integrity_status=$4
+          WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+        [tenantId, policyId, documentId, integrityStatus]
+      ))
+      return artifact
+        ? res.json({ documentId, integrityStatus, contentHash: artifact.contentHash })
+        : res.status(409).json({ code: 'DOCUMENT_REGENERATION_MISMATCH' })
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+// ── GET /policies/:id/documents/:documentId/content ───────────────────────────
+// Retrieves the rendered artifact bytes for a generated policy document,
+// enforcing the same tenant/customer scope as the listing endpoint plus a
+// customer-safe check for non-internal callers.
+policyRoutes.get(
+  '/policies/:id/documents/:documentId/content',
+  policyDocumentLimiter,
+  requirePermission(['page.policy.view', 'customer.portal.read']),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.tenantId
+      const policyId = routeParam(req.params.id)
+      const documentId = routeParam(req.params.documentId)
+      if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
+        return res.status(400).json({ code: 'INVALID_ID' })
+      }
+      const db = getDb()
+      if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Documents require DB' })
+
+      const access = await resolveDocumentAccessContext(req, tenantId, policyId)
+      if (!access) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
+
+      const result = await withTenantTx(tenantId, async (txDb) => {
+        const q = toRawQuery(txDb)
+        return q(
+          `SELECT document_id, type, hash, metadata
+             FROM documents
+            WHERE tenant_id = $1 AND policy_id = $2::uuid AND document_id = $3::uuid
+            LIMIT 1`,
+          [tenantId, policyId, documentId]
+        )
+      })
+      if (!((result as any).rowCount > 0)) {
+        return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' })
+      }
+      const row = (result as any).rows[0]
+      const metadata = toMetadataObject(row.metadata)
+      if (!access.isInternal && metadata.customerSafe !== true) {
+        return res.status(403).json({ code: 'FORBIDDEN', message: 'Document is not customer-safe' })
+      }
+      const artifact = toMetadataObject(metadata.artifact)
+      const storageUri = artifact.storageUri
+      if (!storageUri) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
+      const content = row.hash
+        ? await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash))
+        : null
+      if (!content) {
+        await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+          `UPDATE documents SET integrity_status='FAILED'
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+          [tenantId, policyId, documentId]
+        ))
+        return res.status(409).json({ code: 'ARTIFACT_INTEGRITY_FAILED' })
+      }
+
+      res.setHeader('Content-Type', String(artifact.contentType || 'application/octet-stream'))
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.html`)}"`
+      )
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).send(content)
+    } catch (err) {
+      next(err)
+    }
+  }
+)

@@ -14,18 +14,82 @@ treated as adoption checkpoints rather than a promise of production readiness.
 - Until `1.0.0`, breaking changes are allowed, but release notes must call them
   out clearly.
 
+## Release Cadence and Eligibility
+
+Do not cut a GitHub release for every merged pull request. Ordinary feature,
+bug fix, documentation, test, dependency, and refactor PRs should merge into
+`main` and wait for the next planned release.
+
+Use this default cadence:
+
+- **Minor release:** batch completed work into a planned adoption checkpoint
+  when there is a meaningful user-facing, contributor-facing, or operational
+  milestone.
+- **Patch release:** cut only for a narrow fix to an already-published release,
+  such as a failed release artifact, serious regression, security fix, broken
+  setup path, or migration/documentation correction that materially affects
+  adopters.
+- **No release:** skip releases for routine PRs, internal cleanup, issue
+  triage, docs polish, isolated tests, and dependency updates that do not need
+  adopters to move immediately.
+
+A release candidate must have a maintainer-owned release issue or milestone
+before version metadata is changed. The release issue should name the intended
+version, summarize included PRs, list deferred work, and record validation.
+
+## Branching Model
+
+Use a lightweight release-branch model:
+
+- `main` is the integration branch for completed development and should stay
+  releasable.
+- Release branches use `release/vX.Y.Z`, for example `release/v0.3.0`.
+- Create the release branch from current `origin/main` when maintainers decide
+  the next release scope is ready for stabilization.
+- Feature PRs normally target `main`, not the release branch.
+- During release stabilization, only release-approved bug fixes, validation
+  fixes, dependency/security fixes, documentation corrections, and release
+  metadata updates should target the release branch.
+- Changes made directly on a release branch must also be merged or
+  cherry-picked back to `main` unless the final release branch merge already
+  carries them back.
+- Work that misses the release branch remains on `main` for the next planned
+  release.
+
+This keeps normal development moving while giving each release a controlled
+stabilization window.
+
+## Pull Request Release Impact
+
+Every PR should state its release impact in the pull request description:
+
+- **Included in next planned release:** default for product, API, workflow, and
+  contributor improvements.
+- **Patch release candidate:** only when the PR fixes a released artifact or
+  urgent adopter-impacting problem.
+- **No release impact:** docs-only, tests-only, chores, or internal refactors.
+
+Do not bump package versions, update top-level release notes, create release
+tags, or publish GHCR images from a normal feature or fix PR. Those actions
+belong only in a dedicated release PR.
+
 ## Release Branch
 
 Create a focused release branch from current `origin/main`:
 
 ```bash
 git fetch origin --prune
-git switch -c codex/v0.2.0-release-readiness origin/main
+git switch -c release/v0.3.0 origin/main
+git push -u origin release/v0.3.0
 ```
 
-Keep release branches limited to release readiness work: dependency/security
-updates, CI gates, docs, version metadata, release notes, and final bug fixes
-approved for the release.
+Keep release branches limited to release readiness work: version metadata,
+release notes, validation fixes, dependency/security updates needed for the
+release, and final bug fixes explicitly approved in the release issue.
+
+Open release stabilization PRs against the release branch only when they are
+approved for the release. Otherwise, merge normal PRs to `main` and leave them
+for the next planned release.
 
 ## Quality Gate
 
@@ -58,6 +122,11 @@ release task note, and the GitHub release notes.
 - Confirm no secrets, generated build output, local logs, or `node_modules`
   were committed.
 
+The release PR should reference the release issue and should not include
+unrelated feature work. If a late fix is required, merge it as its own PR first
+when practical, then include it in the release branch by rebasing or recreating
+the release branch from updated `main`.
+
 ## Migration Compatibility
 
 Production deployments should treat SQL migrations as deliberate release steps.
@@ -72,25 +141,30 @@ For each release:
 
 ## GitHub Release
 
-After the PR merges:
+When the release branch is ready:
 
-1. Confirm `main` CI, security, integration, and E2E checks are green.
-2. Create a signed or maintainer-owned tag:
+1. Open a release PR from `release/vX.Y.Z` into `main`.
+2. Confirm release-branch CI, security, integration, E2E, and CodeQL checks are
+   green.
+3. Merge the release branch PR into `main`.
+4. Confirm `main` still points to the intended released state and that post-merge
+   checks are green.
+5. Create a signed or maintainer-owned tag from the released `main` commit:
 
    ```bash
    git checkout main
    git pull --ff-only
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag v0.3.0
+   git push origin v0.3.0
    ```
 
-3. Create a GitHub release titled:
+6. Create a GitHub release titled:
 
    ```text
-   v0.2.0 - Contributor and Pilot Readiness Foundation
+   v0.3.0 - Contributor and Pilot Readiness Foundation
    ```
 
-4. Include:
+7. Include:
 
    - summary,
    - validation performed,

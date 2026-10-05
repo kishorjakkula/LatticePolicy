@@ -12,6 +12,11 @@ area you are changing.
 - Use `docs/AI_CONTRIBUTOR_PROCESS.md` for the required AI-readable handoff
   and documentation process.
 - For local setup, use `docs/DEVELOPER_SETUP.md`.
+- If you are working an issue linked from a roadmap epic (#69-#76 or any
+  later epic), or asked to audit/close one, use `docs/EPIC_WORKFLOW.md`.
+  Closing an issue or epic is a shared-state action a maintainer should
+  perform or explicitly authorize; propose the close with evidence rather
+  than assuming you're allowed to do it.
 
 ## Repository Shape
 

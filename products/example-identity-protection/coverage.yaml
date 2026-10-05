@@ -1,0 +1,22 @@
+product: example-identity-protection
+version: 1.0.0
+capabilities:
+  label: Identity Protection Example
+  riskLabel: Identity Exposure
+  ratingAdapter: unsupported
+  formsMode: none
+  supportedTransactions: [quote]
+  riskKinds:
+    identityProfile: ID.Profile
+  defaultRisk:
+    type: identityProfile
+    monitoringLimit: 10000
+  ui:
+    example: true
+coverages:
+  - code: MONITOR
+    name: Identity Monitoring
+    selectable: true
+    limits: [10000, 25000, 50000]
+ratingKeys:
+  - monitoringLimit

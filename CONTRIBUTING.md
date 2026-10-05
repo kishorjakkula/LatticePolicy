@@ -7,6 +7,8 @@ Contributions should protect the framework qualities that matter most: tenant is
 ## Development Setup
 
 For the complete local setup workflow, see [Developer Local Setup](docs/DEVELOPER_SETUP.md).
+If this is your first contribution, start with the [Contributor On-Ramp](docs/CONTRIBUTOR_ONRAMP.md)
+and [First Good Tasks](docs/FIRST_GOOD_TASKS.md).
 
 Prerequisites:
 
@@ -117,6 +119,32 @@ but the PR should explain why no future contributor context changed.
    - Behavior changes should include automated tests at the right layer.
    - Non-trivial changes should include AI-readable Markdown context.
 
+## Finding Work
+
+Good starter contributions are intentionally small and well bounded. Look for:
+
+- `good first issue`: a task a new contributor can complete with limited project context.
+- `help wanted`: a task maintainers would like external contributors to pick up.
+- `type:docs`: documentation, examples, or contributor guidance.
+- `type:test`: focused test coverage or test fixture improvements.
+- `readiness:demo`: local setup, seed data, screenshots, or demo experience improvements.
+
+Before claiming an issue, leave a short comment describing the approach you plan
+to take. For larger issues, ask maintainers to confirm scope before writing code.
+If an issue is missing acceptance criteria, ask for clarification or propose a
+small first slice.
+
+Good first PRs usually touch one of these areas:
+
+- Improve docs or sample configuration.
+- Add a missing test around existing behavior.
+- Improve an error message, empty state, or setup note.
+- Add a small product-pack example.
+- Tighten a task note so future contributors can reproduce work.
+
+Avoid starting with tenant isolation, authentication, policy lifecycle,
+migrations, or customer portal authorization unless the issue is very explicit.
+
 ## Branching Process
 
 The default branch is `main`. Contributors should not commit directly to `main`.
@@ -211,6 +239,25 @@ For Docker or deployment changes, also run:
 docker compose up -d --build
 docker compose ps
 ```
+
+## CI Troubleshooting
+
+GitHub Actions runs these checks for pull requests. Start with the failed job
+log, reproduce the closest command locally, and keep the follow-up focused on
+the reported failure.
+
+| Check | What it covers | Local command or next step |
+| --- | --- | --- |
+| Build, Test, Typecheck | Frontend/server builds, unit tests, and TypeScript | Run `npm run build`, `npm run test`, and `npm run typecheck`. |
+| DB Integration Tests | Database-backed migrations and persistence | Run `npm run test:integration`; confirm Docker is running if the test needs services. |
+| Playwright E2E Smoke | Browser workflow smoke tests against the stack | Run `npx playwright install chromium` once, then `npm run test:e2e:docker`. Review the uploaded Playwright report for screenshots and traces. |
+| CodeQL | JavaScript/TypeScript static security analysis | Review the finding and affected source path. Run the related build/typecheck command locally; CodeQL findings may require a security-focused code change rather than a test-only update. |
+| Dependency Audit | Dependency vulnerability policy | Run `npm run security:audit` and inspect the reported package chain before updating a dependency. |
+| Dependency Review | Risk introduced by dependency changes | Review the dependency diff and package metadata; remove an unnecessary dependency or document why the dependency is required. |
+| Container Scan | API and frontend image vulnerabilities | Rebuild the relevant image with `docker compose build server` or `docker compose build frontend`, then review the reported image package. |
+
+For local setup, ports, and service logs, see
+[Developer Local Setup](docs/DEVELOPER_SETUP.md).
 
 ## Review Process
 

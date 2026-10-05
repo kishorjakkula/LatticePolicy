@@ -117,8 +117,36 @@ Important lifecycle flows:
 
 - Quote -> rate -> underwriting decision -> bind -> policy projection and initial version.
 - Issue, endorse, cancel, reinstate, rewrite, renew, and non-renew transactions.
-- Effective-dated timelines support out-of-sequence endorsements and retro adjustment concepts.
+- Effective-dated timelines support out-of-sequence endorsements, cancellations,
+  and reinstatements, with retro adjustment and rebase metadata recorded on the
+  transaction. Renewal and rewrite start a new term window and are not part of
+  this mid-term rebase model (see `docs/tasks/issue-52-out-of-sequence-handling.md`).
 - Customer portal APIs must return customer-safe projections only and enforce linked-customer scope.
+
+### Standard Quote Flow Versus Large Commercial Placement
+
+Most business uses the standard single-carrier quote/rate/bind flow above.
+Large commercial and reinsurance-style business — where multiple markets
+subscribe shares of one risk, subject to broker-negotiated subjectivities
+before a bind order is placed — uses a separate, additive placement workflow
+instead of being forced into the single-carrier quote shape:
+
+- Entities: `commercial_placements`, `placement_market_participants`,
+  `placement_subjectivities` (migration `045_large_commercial_placement.sql`).
+- Service: `server/src/services/placement.service.ts`; API under
+  `POST/GET /v1/placements` (see `server/src/routes/placement.routes.ts`),
+  gated by `placement.read` / `placement.manage`.
+- Status progression: `Submission -> Indication -> Quoted -> BindOrder ->
+  Bound -> Issued`, with `Declined`/`Withdrawn` as early exits from any
+  non-terminal state. Subscription shares across a placement's market
+  participants may not exceed 100%.
+- A placement optionally references a `quote_id` pre-bind and is linked to
+  the resulting `policy_id` once transitioned to `Bound`, but it does not
+  replace or gate the standard quote/bind path — use the standard flow for
+  ordinary personal/commercial business, and the placement workflow only
+  when a submission genuinely has multiple subscribing markets, subjectivities,
+  or a facility/line-slip reference to track. See
+  `docs/tasks/issue-64-large-commercial-placement-workflow.md` for details.
 
 ## Security And Tenancy
 
@@ -137,6 +165,7 @@ Important lifecycle flows:
 - Tenant overrides are loaded from `tenants/<tenant>/overrides`.
 - Rating checks tenant/product/state published workbook models first, then falls back to legacy/product YAML rating logic.
 - Rating calc traces are important for explainability and audit.
+- See `docs/PRODUCT_PACK_CONTRACT.md` for the full contract and framework code paths to update when adding a new product pack.
 
 ## Working Guidance
 
@@ -160,6 +189,7 @@ Important lifecycle flows:
 - `docs/AI_CONTRIBUTOR_PROCESS.md`: process for AI-assisted contributors and task notes.
 - `docs/ROADMAP.md`: carrier and reinsurance platform roadmap linked to GitHub epics.
 - `docs/API.md`: MVP endpoint conventions.
+- `docs/PRODUCT_PACK_CONTRACT.md`: contract and checklist for adding a new product pack.
 - `docs/DOMAIN.md`: core domain summary.
 - `docs/MULTITENANCY.md`: tenant strategy.
 - `docs/DATA_MODEL_ERD.md`: relational PAS data model.

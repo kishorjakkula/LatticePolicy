@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributor on-ramp
+    url: https://github.com/kishorjakkula/LatticePolicy/blob/main/docs/CONTRIBUTOR_ONRAMP.md
+    about: Start here if you are new to the project.
+  - name: Security reports
+    url: https://github.com/kishorjakkula/LatticePolicy/security/advisories/new
+    about: Please report vulnerabilities privately rather than opening a public issue.

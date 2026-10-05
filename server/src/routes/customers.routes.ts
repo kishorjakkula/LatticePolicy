@@ -12,14 +12,23 @@ import {
 } from '../customerCrypto.js'
 import { today, asDateOnly as _asDateOnly } from '../lib/date.utils.js'
 import { routeParam, sanitizeText } from '../lib/utils.js'
+import {
+  computeSearchMatchScore,
+  normalizeContactIdentity,
+  normalizeEmail,
+  normalizeLast4,
+  normalizePhone,
+  normalizeTextForMatch,
+  textSimilarity,
+} from '../services/customers/customer-matching.js'
 
-type QueryFn = (text: string, params?: any[]) => Promise<any>
+export type QueryFn = (text: string, params?: any[]) => Promise<any>
 
 type CustomerEntityType = 'INDIVIDUAL' | 'COMPANY' | 'BOTH'
 type CustomerStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'MERGED' | 'PENDING_APPROVAL' | 'ARCHIVED'
 type CustomerContactType = 'PHONE' | 'EMAIL'
 
-type CustomerValidationConfig = {
+export type CustomerValidationConfig = {
   individual: {
     requireFirstAndLast: boolean
     requireDobOrSsnLast4: boolean
@@ -60,7 +69,7 @@ type PotentialMatch = {
   reasons: string[]
 }
 
-type NormalizedCustomerInput = {
+export type NormalizedCustomerInput = {
   entityType: CustomerEntityType
   status: CustomerStatus
   identity: {
@@ -1187,7 +1196,7 @@ customerAdminRoutes.delete('/:idOrKey', requirePermission('admin.customers.manag
   }
 })
 
-async function createCustomerRecord(
+export async function createCustomerRecord(
   q: QueryFn,
   input: {
     tenantId: string
@@ -1242,7 +1251,7 @@ async function createCustomerRecord(
   return { customer, potentialMatches }
 }
 
-async function updateCustomerRecord(
+export async function updateCustomerRecord(
   q: QueryFn,
   input: {
     tenantId: string
@@ -1844,7 +1853,7 @@ async function syncAttachments(
   }
 }
 
-async function findExistingCustomerByExternalIdentifiers(
+export async function findExistingCustomerByExternalIdentifiers(
   q: QueryFn,
   tenantId: string,
   identifiers: NormalizedCustomerInput['externalIdentifiers']
@@ -2806,7 +2815,7 @@ async function loadCustomerRecordByIdOrKey(
   return loadCustomerRecordById(q, tenantId, String(row.rows[0].customer_id), includeCollections)
 }
 
-async function loadCustomerRecordById(
+export async function loadCustomerRecordById(
   q: QueryFn,
   tenantId: string,
   customerId: string,
@@ -3073,7 +3082,7 @@ async function allocateCustomerKey(q: QueryFn, tenantId: string, pattern: string
     .replace(/\{SEQ8\}/g, seqStr.padStart(8, '0'))
 }
 
-async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<CustomerSettings> {
+export async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<CustomerSettings> {
   const result = await q(
     `SELECT customer_key_pattern, customer_validation_config, customer_workflow_config
        FROM tenants
@@ -3096,7 +3105,7 @@ async function loadCustomerSettings(q: QueryFn, tenantId: string): Promise<Custo
   }
 }
 
-function validateCustomerPayload(payload: NormalizedCustomerInput, config: CustomerValidationConfig): ValidationResult {
+export function validateCustomerPayload(payload: NormalizedCustomerInput, config: CustomerValidationConfig): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const hasContacts = (payload.contactPoints || []).some((item) => Boolean(item.value))
@@ -3157,7 +3166,7 @@ function validateCustomerPayload(payload: NormalizedCustomerInput, config: Custo
   return { valid: errors.length === 0, errors, warnings }
 }
 
-function normalizeCustomerInput(input: any): NormalizedCustomerInput {
+export function normalizeCustomerInput(input: any): NormalizedCustomerInput {
   const entityType = normalizeEntityType(input.entityType)
   const status = normalizeCustomerStatus(input.status, 'DRAFT')
   const identityInput = input.identity || {}
@@ -3812,35 +3821,6 @@ function buildSampleCustomerRelationships(): Array<{
   ]
 }
 
-function normalizePhone(value: any): string {
-  const digits = String(value || '').replace(/\D/g, '')
-  if (!digits) return ''
-  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1)
-  return digits
-}
-
-function normalizeEmail(value: any): string {
-  return String(value || '').trim().toLowerCase()
-}
-
-function normalizeContactIdentity(value: any): string {
-  const text = String(value || '')
-  return text.includes('@') ? normalizeEmail(text) : normalizePhone(text)
-}
-
-function normalizeTextForMatch(value: any): string {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-}
-
-function normalizeLast4(value: any): string {
-  const normalized = normalizeSensitiveValue(value)
-  if (!normalized) return ''
-  return normalized.slice(-4)
-}
-
 function toNullableNumber(value: any): number | null {
   const num = Number(value)
   return Number.isFinite(num) ? num : null
@@ -3924,57 +3904,6 @@ function identitySectionsChanged(existing: any, incoming: NormalizedCustomerInpu
     normalizeLast4(currentCompany.feinLast4 || currentCompany.feinMasked) !==
       normalizeLast4(incoming.identity.company.fein || incoming.identity.company.feinLast4)
   return personChanged || companyChanged
-}
-
-function computeSearchMatchScore(
-  row: any,
-  input: {
-    qText: string
-    customerKey: string
-    name: string
-    phone: string
-    email: string
-    taxId: string
-    externalId: string
-    address: string
-  }
-): number {
-  let score = 0
-  const key = String(row.customer_key || '').toLowerCase()
-  const display = String(row.display_name || row.legal_name || '').toLowerCase()
-  const personName = `${String(row.first_name || '')} ${String(row.last_name || '')}`.trim().toLowerCase()
-  if (input.customerKey && key.includes(input.customerKey.toLowerCase())) score += 80
-  if (input.name && (display.includes(input.name.toLowerCase()) || personName.includes(input.name.toLowerCase()))) score += 60
-  if (input.qText && (key.includes(input.qText.toLowerCase()) || display.includes(input.qText.toLowerCase()) || personName.includes(input.qText.toLowerCase()))) score += 45
-  if (input.phone) score += 25
-  if (input.email) score += 25
-  if (input.taxId) score += 20
-  if (input.externalId) score += 20
-  if (input.address) score += 20
-  if (score === 0) score = 10
-  return Math.min(100, score)
-}
-
-function textSimilarity(a: string, b: string): number {
-  if (!a || !b) return 0
-  if (a === b) return 1
-  const pairsA = bigrams(a)
-  const pairsB = bigrams(b)
-  if (!pairsA.size || !pairsB.size) return 0
-  let overlap = 0
-  for (const pair of pairsA) {
-    if (pairsB.has(pair)) overlap += 1
-  }
-  return (2 * overlap) / (pairsA.size + pairsB.size)
-}
-
-function bigrams(value: string): Set<string> {
-  const out = new Set<string>()
-  if (value.length < 2) return out
-  for (let i = 0; i < value.length - 1; i += 1) {
-    out.add(value.slice(i, i + 2))
-  }
-  return out
 }
 
 function uniqueByKey<T>(items: T[], keyFn: (item: T) => string): T[] {

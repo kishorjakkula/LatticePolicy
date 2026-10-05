@@ -22,6 +22,7 @@ export async function initCache(): Promise<void> {
   }
 
   const client = new Redis(redisUrl, {
+    protocol: 2,
     lazyConnect: true,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false

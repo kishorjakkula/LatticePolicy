@@ -4,6 +4,119 @@ All notable changes to LatticePolicy are documented here. This project is
 pre-1.0; minor versions may still include breaking internal changes, but
 release notes should call out API, migration, setup, and product-pack impact.
 
+## [Unreleased]
+
+### Security
+
+- Upgraded `react-router-dom` to `7.18.3` (resolving `react-router` `7.18.3`) in
+  the `frontend` workspace and the root workspace lockfile.
+- Retired the temporary React Router advisory exception tracked since `0.2.0`.
+  The RSC Mode CSRF advisory (`GHSA-qwww-vcr4-c8h2`) affects `react-router`
+  `>= 7.12.0, < 7.18.2` and was first patched in `7.18.2`, so it had already
+  stopped applying on the previous `7.18.2` pin; `7.18.3` stays on that patched
+  line. No downgrade was needed and no older high-severity advisories were
+  reintroduced.
+- Removed the matching `allow-ghsas: GHSA-qwww-vcr4-c8h2` entry from the
+  dependency-review step in `.github/workflows/security.yml`. The advisory
+  allowlist in `scripts/check-npm-audit.mjs` was already empty.
+
+## [0.2.3] - 2026-08-21
+
+### Changed
+
+- API container builds now upgrade Alpine `libcrypto3` and `libssl3` packages in
+  build and runtime stages so release image scans pick up the fixed OpenSSL
+  package line from the base distribution.
+- Root and workspace package metadata are aligned on the `0.2.3` release line.
+
+### Security
+
+- This release follows `v0.2.2` to clear the GHCR publish scan failure caused by
+  CVE-2026-45447 in Alpine OpenSSL packages bundled with the Node base image.
+- Application dependency audit remains clean with zero unapproved
+  vulnerabilities.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The frontend-only Vite/plugin peer range follow-up from `v0.2.1` still
+  applies.
+
+## [0.2.2] - 2026-08-21
+
+### Changed
+
+- API runtime container image now removes npm/npx after production dependency
+  installation so release image scans focus on the runtime app surface rather
+  than unused package-manager tooling bundled in the Node base image.
+- Root and workspace package metadata are aligned on the `0.2.2` release line.
+
+### Security
+
+- This release follows `v0.2.1` to unblock GHCR release image publishing after
+  Trivy flagged high/critical CVEs in npm CLI transitive packages inside the
+  API runtime base image.
+- Application dependency audit remains clean with zero unapproved
+  vulnerabilities.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The frontend-only Vite/plugin peer range follow-up from `v0.2.1` still
+  applies.
+
+## [0.2.1] - 2026-08-21
+
+### Added
+
+- Exposure management, bordereaux, reinsurance placement, ACORD/GRLC mapping,
+  operational admin, data import, job queue, enterprise identity, audit replay,
+  and carrier onboarding framework slices.
+- Customer portal policy document listing, notification template administration,
+  servicing document hooks, real document artifact rendering/storage adapters,
+  and idempotency reservation locking.
+- Contributor onboarding improvements, first-good-task guidance, local health
+  checks, and CI troubleshooting documentation.
+
+### Changed
+
+- Release container builds now use the repository root lockfile and standardized
+  Docker build context.
+- Root and workspace package metadata are aligned on the `0.2.1` release line.
+- GitHub Actions and npm dependency lines were refreshed across CI, server, and
+  frontend workspaces.
+
+### Fixed
+
+- Cleared npm audit / Dependabot vulnerabilities across root, server, and
+  frontend lockfiles.
+- Fixed server Docker runtime dependency resolution so the API starts from the
+  workspace path where production dependencies are installed.
+- Added product fixture validation for the personal auto product pack.
+- Stabilized the search error-state test.
+
+### Security
+
+- `npm run security:audit` reports zero unapproved vulnerabilities.
+- Dependency audit, dependency review, CodeQL, container scan, DB integration,
+  and Playwright E2E smoke checks are green on the release branch.
+
+### Known Limitations
+
+- LatticePolicy remains a pre-1.0 open-source framework, not a turnkey
+  production PAS.
+- The pre-existing `@vitejs/plugin-react` peer range does not yet advertise
+  Vite 8 support; the project uses the documented legacy peer dependency
+  install path for frontend-only lockfile maintenance until that upstream range
+  catches up.
+- `loadDomPurify()` is now backed by an explicit frontend dependency but remains
+  unused; either wire it into PDF flows for defense in depth or remove it in a
+  follow-up.
+- Full production SSO, complete product governance, and production document
+  artifact storage hardening remain roadmap items.
+
 ## [0.2.0] - 2026-08-03
 
 ### Added

@@ -1,0 +1,36 @@
+{
+  "entityType": "document",
+  "status": "framework-only",
+  "note": "No commit handler yet. Maps to documents. A legacy import likely needs to place the actual file content behind the storage adapter (server/src/services/document-storage.service.ts) before this row can be committed with a real uri/hash - this template documents the metadata row shape, not a file-upload mechanism, which is a separate design concern.",
+  "mapsTo": {
+    "document": "documents"
+  },
+  "fields": [
+    { "name": "policyExternalId", "required": true, "mapsTo": "documents.policy_id (resolved)" },
+    { "name": "type", "required": true, "description": "e.g. POLICY_PACKET, DECLARATION, ID_CARD.", "mapsTo": "documents.type" },
+    { "name": "sourceUri", "required": true, "description": "Location of the legacy file to be re-stored through the storage adapter at commit time; not written directly to documents.uri.", "mapsTo": "n/a (input to the storage adapter, not a column)" },
+    { "name": "createdAt", "required": false, "description": "Original generation timestamp from the legacy system, preserved for audit.", "mapsTo": "documents.created_at" },
+    { "name": "externalIdentifiers[].sourceSystem", "required": true, "mapsTo": "import_external_refs.source_system" },
+    { "name": "externalIdentifiers[].externalId", "required": true, "mapsTo": "import_external_refs.external_id" }
+  ],
+  "sampleRows": [
+    {
+      "policyExternalId": "POL-100234",
+      "type": "POLICY_PACKET",
+      "sourceUri": "legacy-archive://documents/POL-100234/packet-2026-01-01.pdf",
+      "createdAt": "2026-01-02T14:03:00Z",
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "DOC-500123" }
+      ]
+    },
+    {
+      "policyExternalId": "POL-200098",
+      "type": "DECLARATION",
+      "sourceUri": "legacy-archive://documents/POL-200098/declaration-2026-03-15.pdf",
+      "createdAt": "2026-03-16T09:12:00Z",
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "DOC-500456" }
+      ]
+    }
+  ]
+}

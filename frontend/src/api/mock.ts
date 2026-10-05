@@ -446,7 +446,7 @@ export async function mockApi<T>(method: string, path: string, body?: any): Prom
         productCode: (x: any) => x.payload?.productCode || '',
         status: (x: any) => x.status || ''
       } as Record<string, (x:any)=>string>
-      const getter = map[sortBy] || map.effectiveDate
+      const getter = Object.prototype.hasOwnProperty.call(map, sortBy) ? map[sortBy] : map.effectiveDate
       const av = getter(a)
       const bv = getter(b)
       if (av < bv) return -1 * dirMul

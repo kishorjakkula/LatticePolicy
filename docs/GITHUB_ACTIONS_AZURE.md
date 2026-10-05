@@ -38,7 +38,8 @@ API Container App:
 
 - Image: ACR API image rendered by the workflow.
 - Target port: `3000`.
-- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`, `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `REGISTRATION_ENABLED=false`, `DEMO_ACCESS_MODE=invite_only`.
+- Environment: `NODE_ENV=production`, `DEPLOYMENT_ENV=test`, `PORT=3000`,
+  `CACHE_ENABLED=1`, `LOG_LEVEL=info`, `DEMO_ACCESS_MODE=invite_only`.
 - Secret-backed env vars: `DATABASE_URL`, `JWT_SECRET`, `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, `REDIS_URL`, `ALLOWED_ORIGINS`, `DEMO_ALLOWED_EMAILS`.
 
 Frontend Container App:
@@ -47,13 +48,16 @@ Frontend Container App:
 - Target port: `80`.
 - `VITE_API_BASE_URL` must be supplied to the Docker build through the GitHub repository variable; do not rely on a runtime env var for the static frontend.
 
+For the complete frontend build contract and verification checklist, see
+[Frontend production configuration](FRONTEND_PRODUCTION_CONFIGURATION.md).
+
 ## 4) Demo-private access model
 
 For demos, use a public HTTPS URL with invite-only application access:
 
-- `REGISTRATION_ENABLED=false`
 - `DEMO_ACCESS_MODE=invite_only`
-- `DEMO_ALLOWED_EMAILS` stored as a Key Vault-backed secret
+- `DEMO_ALLOWED_EMAILS` with exact invited usernames or email addresses, stored
+  as a Key Vault-backed secret
 - `ALLOWED_ORIGINS` restricted to the frontend URL
 - Demo users assigned only to a dedicated demo tenant
 

@@ -6,13 +6,13 @@ import {
 } from './quotes.api'
 
 import {
-  issuePolicy, getPolicy, getPolicyVersions, getFullPolicy, getPolicyTimeline,
+  issuePolicy, getPolicy, getPolicyState, getPolicyVersions, getFullPolicy, getPolicyTimeline,
   searchPolicies, exportPoliciesCsv, getPolicyAiInsights,
   reserveEndorsementNumber, reserveTransactionNumber,
   endorsePolicy, endorsePreview,
   cancelPolicy, reinstatePolicy, rewritePolicy, renewPolicy, nonRenewPolicy,
   getAdditionalInterests, createAdditionalInterest, updateAdditionalInterest, deleteAdditionalInterest,
-  getCancellationReasonCodes,
+  getCancellationReasonCodes, downloadPolicyDocument, getPolicyDocuments,
   apiDetails as _apiDetails, apiPreview as _apiPreview
 } from './policies.api'
 
@@ -24,13 +24,15 @@ import {
 import {
   listUnderwritingCompanies, listReferenceAgencies, listAgencyContacts,
   listUnderwriters, listReferenceInsuranceCarriers,
-  getProductConfig, getProductForm, previewForms, getFormDocument,
+  listProducts, getProductConfig, getProductForm, previewForms, getFormDocument,
   getTenantPreferences, getAiSettings, getDashboardAiInsights
 } from './references.api'
 
 import { adminApi as _adminApi } from './admin.api'
 
 import { apiUw as _apiUw } from './uw.api'
+
+import { apiPlacements as _apiPlacements } from './placements.api'
 
 import {
   getCustomerPortalSummary, getCustomerPortalPolicy
@@ -41,20 +43,20 @@ export const api = {
   createQuote, bindQuote, copyQuote, createQuoteDraft, updateQuoteDraft,
   searchQuotes, getQuote, inferQuoteAiInsights, exportQuotesCsv,
   // Policies
-  issuePolicy, getPolicy, getPolicyVersions, getFullPolicy, getPolicyTimeline,
+  issuePolicy, getPolicy, getPolicyState, getPolicyVersions, getFullPolicy, getPolicyTimeline,
   searchPolicies, exportPoliciesCsv, getPolicyAiInsights,
   reserveEndorsementNumber, reserveTransactionNumber,
   endorsePolicy, endorsePreview,
   cancelPolicy, reinstatePolicy, rewritePolicy, renewPolicy, nonRenewPolicy,
   getAdditionalInterests, createAdditionalInterest, updateAdditionalInterest, deleteAdditionalInterest,
-  getCancellationReasonCodes,
+  getCancellationReasonCodes, downloadPolicyDocument, getPolicyDocuments,
   // Rating
   listRatingModels, importRatingWorkbook, getRatingModelVersion,
   publishRatingModelVersion, getPublishedRatingModel,
   // References
   listUnderwritingCompanies, listReferenceAgencies, listAgencyContacts,
   listUnderwriters, listReferenceInsuranceCarriers,
-  getProductConfig, getProductForm, previewForms, getFormDocument,
+  listProducts, getProductConfig, getProductForm, previewForms, getFormDocument,
   getTenantPreferences, getAiSettings, getDashboardAiInsights,
   // Portal
   getCustomerPortalSummary, getCustomerPortalPolicy
@@ -64,6 +66,7 @@ export const adminApi = _adminApi
 export const apiDetails = _apiDetails
 export const apiPreview = _apiPreview
 export const apiUw = _apiUw
+export const apiPlacements = _apiPlacements
 
 // Convenient re-exports (backward compat)
 export const apiAdmin = adminApi

@@ -45,6 +45,329 @@ export function useDeleteUserMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin - Data Import
+// ---------------------------------------------------------------------------
+
+export function useImportBatches() {
+  return useQuery({
+    queryKey: queryKeys.dataImport.batches(),
+    queryFn: () => adminApi.listImportBatches(),
+  })
+}
+
+export function useImportBatch(batchId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.dataImport.batch(batchId ?? ''),
+    queryFn: () => adminApi.getImportBatch(batchId as string),
+    enabled: !!batchId,
+  })
+}
+
+export function useImportRows(batchId: string | null, status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dataImport.rows(batchId ?? '', status),
+    queryFn: () => adminApi.listImportRows(batchId as string, status),
+    enabled: !!batchId,
+  })
+}
+
+export function useStageImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: { entityType: string; sourceSystem: string; rows: any[]; notes?: string }) =>
+      adminApi.stageImportBatch(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+    },
+  })
+}
+
+export function useValidateImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => adminApi.validateImportBatch(batchId),
+    onSuccess: (_data, batchId) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+export function useCommitImportBatchMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => adminApi.commitImportBatch(batchId),
+    onSuccess: (_data, batchId) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+export function useRetryImportRowMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ batchId, rowId }: { batchId: string; rowId: string }) => adminApi.retryImportRow(batchId, rowId),
+    onSuccess: (_data, { batchId }) => {
+      void qc.invalidateQueries({ queryKey: ['data-import', 'batches'] })
+      void qc.invalidateQueries({ queryKey: queryKeys.dataImport.rows(batchId) })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Compliance
+// ---------------------------------------------------------------------------
+
+export function useEligibility(opts: { productCode?: string; stateCode?: string; status?: string } = {}) {
+  return useQuery({
+    queryKey: queryKeys.compliance.eligibility(opts),
+    queryFn: () => adminApi.listEligibility(opts),
+  })
+}
+
+export function useCreateEligibilityMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createEligibility(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'eligibility'] })
+    },
+  })
+}
+
+export function useUpdateEligibilityMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: any }) => adminApi.updateEligibility(id, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'eligibility'] })
+    },
+  })
+}
+
+export function useOfacScreens(disposition?: string) {
+  return useQuery({
+    queryKey: queryKeys.compliance.ofacScreens(disposition),
+    queryFn: () => adminApi.listOfacScreens(disposition),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Reinsurance
+// ---------------------------------------------------------------------------
+
+export function useTreaties(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.treaties(status),
+    queryFn: () => adminApi.listTreaties(status),
+  })
+}
+
+export function useCreateTreatyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createTreaty(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] })
+    },
+  })
+}
+
+export function useUpdateTreatyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: any }) => adminApi.updateTreaty(id, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] })
+    },
+  })
+}
+
+export function useFacultativeCertificates(policyId?: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.facultative(policyId),
+    queryFn: () => adminApi.listFacultative(policyId),
+  })
+}
+
+export function useCreateFacultativeMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.createFacultative(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['reinsurance', 'facultative'] })
+    },
+  })
+}
+
+export function useComputePlacementMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ policyId, transactionId }: { policyId: string; transactionId: string }) =>
+      adminApi.computePlacement(policyId, transactionId),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.reinsurance.placements(variables.policyId) })
+    },
+  })
+}
+
+export function usePolicyPlacements(policyId: string) {
+  return useQuery({
+    queryKey: queryKeys.reinsurance.placements(policyId),
+    queryFn: () => adminApi.listPolicyPlacements(policyId),
+    enabled: Boolean(policyId),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Bordereaux
+// ---------------------------------------------------------------------------
+
+export function useBordereauxBatches(bordereauType?: string) {
+  return useQuery({
+    queryKey: queryKeys.bordereaux.batches(bordereauType),
+    queryFn: () => adminApi.listBordereauxBatches(bordereauType),
+  })
+}
+
+export function useBordereauxRows(batchId: string) {
+  return useQuery({
+    queryKey: queryKeys.bordereaux.rows(batchId),
+    queryFn: () => adminApi.listBordereauxRows(batchId),
+    enabled: Boolean(batchId),
+  })
+}
+
+export function useGenerateBordereauxMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: any) => adminApi.generateBordereauxBatch(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['bordereaux', 'batches'] })
+    },
+  })
+}
+
+export function useDispositionOfacScreenMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ screenId, disposition, reason }: { screenId: string; disposition: string; reason: string }) =>
+      adminApi.dispositionOfacScreen(screenId, { disposition, reason }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['compliance', 'ofac-screens'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Exposure Management
+// ---------------------------------------------------------------------------
+
+export function useExposureSummary(filters?: { productCode?: string; state?: string; asOf?: string }) {
+  return useQuery({
+    queryKey: queryKeys.exposure.summary(filters),
+    queryFn: () => adminApi.getExposureSummary(filters),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Operations Dashboard
+// ---------------------------------------------------------------------------
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.summary(),
+    queryFn: () => adminApi.getDashboardSummary(),
+  })
+}
+
+export function useDashboardOutbox(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.outbox(status),
+    queryFn: () => adminApi.listDashboardOutbox(status),
+  })
+}
+
+export function useDashboardNotifications(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.notifications(status),
+    queryFn: () => adminApi.listDashboardNotifications(status),
+  })
+}
+
+export function usePolicyIntegrityExceptions(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.policyIntegrity(status),
+    queryFn: () => adminApi.listPolicyIntegrityExceptions(status),
+  })
+}
+
+export function useUpdatePolicyIntegrityExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, note }: { id: string; status: 'Acknowledged' | 'Resolved'; note?: string }) =>
+      adminApi.updatePolicyIntegrityException(id, status, note),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useRetryPolicyIntegrityExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.retryPolicyIntegrityException(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['dashboard', 'policy-integrity'] })
+      void qc.invalidateQueries({ queryKey: ['jobs', 'runs'] })
+    },
+  })
+}
+
+export function useImportOfacSdnListMutation() {
+  return useMutation({
+    mutationFn: (entries: any[]) => adminApi.importOfacSdnList(entries),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Job Queue
+// ---------------------------------------------------------------------------
+
+export function useJobDefinitions() {
+  return useQuery({
+    queryKey: queryKeys.jobs.definitions(),
+    queryFn: () => adminApi.listJobDefinitions(),
+  })
+}
+
+export function useJobRuns(opts?: { jobCode?: string; status?: string; limit?: number }) {
+  return useQuery({
+    queryKey: queryKeys.jobs.runs(opts),
+    queryFn: () => adminApi.listJobRuns(opts),
+  })
+}
+
+export function useJobRun(runId?: string) {
+  return useQuery({
+    queryKey: queryKeys.jobs.run(runId ?? ''),
+    queryFn: () => adminApi.getJobRun(runId as string),
+    enabled: Boolean(runId),
+  })
+}
+
+export function useRetryJobRunMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => adminApi.retryJobRun(runId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['jobs', 'runs'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Admin - Security
 // ---------------------------------------------------------------------------
 
@@ -146,6 +469,17 @@ export function useSeedMutation() {
   })
 }
 
+export function useSeedReferenceDataMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => adminApi.seedReferenceData(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-uw-companies'] })
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Admin - UW Companies
 // ---------------------------------------------------------------------------
@@ -185,6 +519,67 @@ export function useDeleteUnderwritingCompanyMutation() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-uw-companies'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin - Notification Templates
+// ---------------------------------------------------------------------------
+
+export function useNotificationTemplates(opts: Record<string, any> = {}) {
+  return useQuery({
+    queryKey: queryKeys.notificationTemplates.list(opts),
+    queryFn: () => adminApi.listNotificationTemplates(opts),
+  })
+}
+
+export function useCreateNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof adminApi.createNotificationTemplate>[0]) =>
+      adminApi.createNotificationTemplate(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function useUpdateNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof adminApi.updateNotificationTemplate>[1] }) =>
+      adminApi.updateNotificationTemplate(id, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function useCloneNotificationTemplateMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.cloneNotificationTemplate(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function useSetNotificationTemplateActiveMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      active ? adminApi.activateNotificationTemplate(id) : adminApi.deactivateNotificationTemplate(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['notification-templates'] })
+    },
+  })
+}
+
+export function usePreviewNotificationTemplateMutation() {
+  return useMutation({
+    mutationFn: (payload: { subjectTemplate: string; bodyTemplate: string; sampleFields?: Record<string, unknown> }) =>
+      adminApi.previewNotificationTemplate(payload),
   })
 }
 

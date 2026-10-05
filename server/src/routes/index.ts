@@ -7,24 +7,29 @@ import { quoteRoutes } from './quotes.routes.js'
 import { policyRoutes } from './policies.routes.js'
 import { transactionRoutes } from './transactions.routes.js'
 import { uwRoutes } from './uw.routes.js'
+import { placementRoutes } from './placement.routes.js'
 import { productsRoutes } from './products.routes.js'
 import { adminRoutes } from './admin.routes.js'
 import { ratingRoutes } from './rating-workbench.routes.js'
 import { customerPortalRoutes } from './customer-portal.routes.js'
 import { interestsRoutes } from './interests.routes.js'
+import { productGovernanceRoutes } from './product-governance.routes.js'
+import { mountRouter } from '../route-registry.js'
 
 export const routes = Router()
 
-routes.use('/', configRoutes)
-routes.use('/', aiRoutes)
-routes.use('/', referenceRoutes)
-routes.use('/', formsRoutes)
-routes.use('/', quoteRoutes)
-routes.use('/', policyRoutes)
-routes.use('/', transactionRoutes)
-routes.use('/', uwRoutes)
-routes.use('/', productsRoutes)
-routes.use('/admin', adminRoutes)
-routes.use('/rating', ratingRoutes)
-routes.use('/customer-portal', customerPortalRoutes)
-routes.use('/policies/:id/interests', interestsRoutes)
+mountRouter(routes, '/', configRoutes)
+mountRouter(routes, '/', aiRoutes)
+mountRouter(routes, '/', referenceRoutes)
+mountRouter(routes, '/', formsRoutes)
+mountRouter(routes, '/', quoteRoutes)
+mountRouter(routes, '/', policyRoutes)
+mountRouter(routes, '/', transactionRoutes)
+mountRouter(routes, '/', uwRoutes)
+mountRouter(routes, '/', placementRoutes)
+mountRouter(routes, '/', productsRoutes)
+mountRouter(routes, '/', productGovernanceRoutes)
+mountRouter(routes, '/admin', adminRoutes)
+mountRouter(routes, '/rating', ratingRoutes)
+mountRouter(routes, '/customer-portal', customerPortalRoutes)
+mountRouter(routes, '/policies/:id/interests', interestsRoutes)

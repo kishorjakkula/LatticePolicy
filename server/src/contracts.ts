@@ -1,18 +1,18 @@
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as Ajv2020Module from 'ajv/dist/2020.js'
-import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv'
-import type { Options } from 'ajv/dist/core.js'
+import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js'
+import type { RequestHandler } from 'express'
+import { ValidationError } from './errors/domain.errors.js'
 
-export type ContractName = 'quote.request' | 'endorsement.request' | 'policy'
+export type ContractName = 'quote.request' | 'data-import-batch.request' | 'reinsurance-treaty.request'
 
 export type ContractValidationError = {
   path: string
   keyword: string
   message: string
-  schemaSource: string
-  params?: Record<string, unknown>
+  schema: string
+  params: Record<string, unknown>
 }
 
 export type ContractValidationResult = {
@@ -20,43 +20,58 @@ export type ContractValidationResult = {
   errors: ContractValidationError[]
 }
 
-const schemaFiles: Record<ContractName, string> = {
+const CONTRACT_FILES: Record<ContractName, string> = {
   'quote.request': 'quote.request.schema.json',
-  'endorsement.request': 'endorsement.request.schema.json',
-  policy: 'policy.schema.json',
+  'data-import-batch.request': 'data-import-batch.request.schema.json',
+  'reinsurance-treaty.request': 'reinsurance-treaty.request.schema.json',
 }
 
-const contractsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../contracts')
-const Ajv2020 = Ajv2020Module.default as unknown as { new(opts?: Options): Ajv2020Module.Ajv2020 }
-const ajv = new Ajv2020({ allErrors: true, strict: false })
+const ajv = new Ajv2020({
+  allErrors: true,
+  strict: false,
+  validateFormats: false,
+})
+
 const validators = new Map<ContractName, ValidateFunction>()
 
-ajv.addFormat('date', /^\d{4}-\d{2}-\d{2}$/)
-ajv.addFormat('date-time', /^\d{4}-\d{2}-\d{2}T.+$/)
-ajv.addFormat('email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+function contractRootCandidates(): string[] {
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  return [
+    path.resolve(process.cwd(), 'contracts'),
+    path.resolve(process.cwd(), '..', 'contracts'),
+    path.resolve(here, '..', '..', 'contracts'),
+    path.resolve(here, '..', '..', '..', 'contracts'),
+  ]
+}
 
-function loadSchema(name: ContractName): AnySchema {
-  const filePath = resolve(contractsDir, schemaFiles[name])
-  return JSON.parse(readFileSync(filePath, 'utf8')) as AnySchema
+function readContractSchema(fileName: string): any {
+  for (const root of contractRootCandidates()) {
+    const candidate = path.join(root, fileName)
+    if (fs.existsSync(candidate)) {
+      return JSON.parse(fs.readFileSync(candidate, 'utf8'))
+    }
+  }
+  throw new Error(`Contract schema not found: ${fileName}`)
 }
 
 function getValidator(name: ContractName): ValidateFunction {
-  const cached = validators.get(name)
-  if (cached) return cached
+  const existing = validators.get(name)
+  if (existing) return existing
 
-  const validator = ajv.compile(loadSchema(name))
+  const schema = readContractSchema(CONTRACT_FILES[name])
+  const validator = ajv.compile(schema)
   validators.set(name, validator)
   return validator
 }
 
-function formatError(schemaFile: string, error: ErrorObject): ContractValidationError {
-  return {
+function normalizeErrors(schema: string, errors: ErrorObject[] | null | undefined): ContractValidationError[] {
+  return (errors || []).map((error) => ({
     path: error.instancePath || '/',
     keyword: error.keyword,
-    message: error.message || 'Validation failed',
-    schemaSource: `${schemaFile}${error.schemaPath}`,
+    message: error.message || 'Invalid value',
+    schema,
     params: error.params as Record<string, unknown>,
-  }
+  }))
 }
 
 export function validateContract(name: ContractName, obj: unknown): ContractValidationResult {
@@ -64,18 +79,33 @@ export function validateContract(name: ContractName, obj: unknown): ContractVali
   const valid = validator(obj)
   return {
     valid,
-    errors: valid ? [] : (validator.errors || []).map((error) => formatError(schemaFiles[name], error)),
+    errors: valid ? [] : normalizeErrors(CONTRACT_FILES[name], validator.errors),
   }
 }
 
-export function validateQuoteContract(obj: unknown): ContractValidationResult {
+export function validateQuoteDetailed(obj: unknown): ContractValidationResult {
   return validateContract('quote.request', obj)
 }
 
-// API quote routes resolve tenant from X-Tenant, while the portable contract
-// keeps tenantId required for import/export payloads. Preserve route behavior by
-// validating an augmented copy when callers have already enforced tenancy.
-export function validateQuote(obj: any): boolean {
-  if (!obj || typeof obj !== 'object') return false
-  return validateQuoteContract({ tenantId: obj.tenantId || '__api_tenant__', ...obj }).valid
+export function validateQuote(obj: unknown): boolean {
+  return validateQuoteDetailed(obj).valid
+}
+
+export function validateContractBody(name: ContractName): RequestHandler {
+  return (req, _res, next) => {
+    const result = validateContract(name, req.body)
+    if (!result.valid) return next(new ValidationError('CONTRACT_VALIDATION_FAILED', result.errors))
+    next()
+  }
+}
+
+export const validateMutationEnvelope: RequestHandler = (req, _res, next) => {
+  if (!['POST', 'PATCH', 'PUT'].includes(req.method) || req.body === undefined) return next()
+  if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return next(new ValidationError('CONTRACT_VALIDATION_FAILED', [{
+      path: '/', keyword: 'type', message: 'Request body must be a JSON object',
+      schema: 'generic-json-object', params: { type: 'object' },
+    }]))
+  }
+  next()
 }

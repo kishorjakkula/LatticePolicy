@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from '../uuid.js'
+import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import { withTenantTx, toRawQuery, type DrizzleDB } from '../db.js'
 import {
   NotFoundError,
@@ -31,6 +32,10 @@ import {
   persistPolicyDocumentPacket,
   type PolicyDocumentPacket,
 } from './document-generation.service.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,34 +62,7 @@ function generateTransactionNumber(prefix = 'NB-'): string {
 }
 
 function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
+  return mapProductRiskKind(productCode, risk)
 }
 
 function summarizeRisk(risk: any): string {
@@ -165,7 +143,8 @@ export async function bindQuote(
   quoteId: string,
   body: any,
   updatedBy: string,
-  actorId?: string | null
+  actorId?: string | null,
+  actor?: { roles?: string[]; permissions?: string[] } | null
 ): Promise<BindQuoteResult> {
   const overrideReason =
     body && typeof body.overrideReason === 'string'
@@ -188,6 +167,7 @@ export async function bindQuote(
 
   const row = r.rows[0]
   const quote = { payload: row.payload, uw: row.underwriting, premium: row.premium }
+  requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
   const existingStatusHistory = normalizeQuoteAuditHistory(row.status_history)
   const existingStepHistory = normalizeQuoteAuditHistory(row.step_history)
 
@@ -201,22 +181,6 @@ export async function bindQuote(
   }
 
   // ── 3. UW validation ────────────────────────────────────────────────────────
-  if (quote.uw) {
-    if (quote.uw.decision === 'Decline') {
-      throw new BadRequestError(
-        'UW_DECLINED',
-        `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
-      )
-    }
-    if (quote.uw.decision === 'Refer' && !overrideReason) {
-      throw new BadRequestError(
-        'UW_OVERRIDE_REQUIRED',
-        'Underwriting decision is Refer. Provide overrideReason to bind.'
-      )
-    }
-  }
-
-  // ── 4. OFAC screening ───────────────────────────────────────────────────────
   const insuredDisplayName = (
     (quote.payload?.insureds?.primary?.firstName || '') +
     ' ' +
@@ -225,6 +189,58 @@ export async function bindQuote(
       '')
   ).trim()
 
+  let referralId: string | null = null
+  const authority = await withTenantTx(tenantId, innerDb => resolveAuthorityDecision(toRawQuery(innerDb), {
+    tenantId,
+    actorId: normalizedActorId,
+    roles: actor?.roles || [],
+    producerId: quote.payload?.producer?.producerId || quote.payload?.producer?.producerKey || null,
+    productCode: quote.payload?.productCode || '',
+    stateCode: quote.payload?.state || quote.payload?.jurisdiction?.code || '',
+    effectiveDate: quote.payload?.effectiveDate || new Date().toISOString().slice(0, 10),
+    transactionType: 'NewBusiness',
+    premium: Number(quote.premium?.total?.amount || 0),
+    requestedLimit: maximumRequestedLimit(quote.payload),
+  }))
+  if (quote.uw) {
+    if (quote.uw.decision === 'Decline') {
+      throw new BadRequestError(
+        'UW_DECLINED',
+        `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
+      )
+    }
+    if (quote.uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+      const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
+      const gate = await withTenantTx(tenantId, (innerDb) =>
+        resolveReferralGateForActor(
+          innerDb,
+          tenantId,
+          {
+            quoteId,
+            transactionType: 'NewBusiness',
+            productCode: quote.payload?.productCode || null,
+            insuredName: insuredDisplayName || null,
+            effectiveDate: quote.payload?.effectiveDate || null,
+            reasons: [...(quote.uw.reasons || []), ...authorityReasons],
+            authorityOverrideRequired: authorityReasons.length > 0,
+            createdBy: normalizedActorId,
+          },
+          { id: normalizedActorId, username: updatedBy, roles: actor?.roles, permissions: actor?.permissions },
+          overrideReason
+        )
+      )
+
+      if (gate.blocked) {
+        throw new BadRequestError(
+          'UW_REFERRAL_REQUIRED',
+          `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before bind.`
+        )
+      }
+      referralId = gate.referral.referralId
+    }
+  }
+
+  // ── 4. OFAC screening ───────────────────────────────────────────────────────
   if (insuredDisplayName) {
     try {
       const ofacResult = await withTenantTx(tenantId, (innerDb) =>
@@ -306,6 +322,16 @@ export async function bindQuote(
   const transactionMetadata: any = {
     sourceQuoteId: quoteId,
     transactionNumber,
+    ...(quote.payload?.governanceLineage
+      ? { governanceLineage: quote.payload.governanceLineage }
+      : {}),
+    ...(referralId ? { uwReferralId: referralId } : {}),
+    authority: {
+      configured: authority.configured,
+      grantId: authority.grantId,
+      authorized: authority.authorized,
+      reasons: authority.reasons,
+    },
     ...(primaryCustomerLink?.customerId
       ? { customerId: primaryCustomerLink.customerId }
       : {}),
@@ -324,7 +350,7 @@ export async function bindQuote(
     quote.payload?.jurisdiction ||
     (quote.payload?.state ? { code: quote.payload.state } : null)
   const uwDecision = quote.uw?.decision || null
-  const uwOverride = quote.uw?.decision === 'Refer' && !!overrideReason
+  const uwOverride = (quote.uw?.decision === 'Refer' || !authority.authorized) && !!referralId
   const termDetails: any = { effectiveDate, expirationDate, termMonths: months }
   let documentPacket: PolicyDocumentPacket = { forms: [], documents: [] }
 
@@ -379,6 +405,9 @@ export async function bindQuote(
       productCode,
       state: quote.payload?.state || jurisdiction?.code || null,
       effectiveDate,
+      versionId,
+      generatedAt: nowIso,
+      inputSnapshot: quote.payload,
       generatedBy: normalizedActorId,
       correlationId: transactionNumber,
     })
@@ -420,6 +449,13 @@ export async function bindQuote(
       payload: quote.payload,
       transactionNumber,
     })
+
+    if (referralId) {
+      await q(
+        'UPDATE underwriting_referrals SET policy_id=$1, transaction_id=$2, version_id=$3, updated_at=now() WHERE tenant_id=$4 AND referral_id=$5',
+        [policyId, transactionId, versionId, tenantId, referralId]
+      )
+    }
 
     // Rating
     await insertRating(txDb, {
@@ -495,6 +531,29 @@ export async function bindQuote(
         normalizedActorId,
       ]
     )
+
+    await createCommissionHandoffEvent(txDb, {
+      tenantId,
+      policyId,
+      policyNumber,
+      transactionId,
+      transactionNumber,
+      transactionType: 'QuoteBind',
+      sourceEvent: 'QUOTE_BOUND',
+      effectiveDate,
+      expirationDate,
+      processedAt: nowIso,
+      productCode,
+      state: quote.payload?.state || jurisdiction?.code || null,
+      premiumImpact: safeMoney(quote.premium?.total?.amount),
+      currency,
+      payload: quote.payload,
+      policyMetadata: transactionMetadata,
+      actorId: normalizedActorId,
+      correlationId: transactionNumber,
+    })
+
+    await computePlacementForTransactionSafely(txDb, tenantId, policyId, transactionId)
 
     // Update quote status to Converted
     const quoteUpdatedAt = new Date().toISOString()

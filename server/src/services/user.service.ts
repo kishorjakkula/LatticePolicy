@@ -1,8 +1,10 @@
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { eq, and, sql, inArray, getTableColumns } from 'drizzle-orm'
 import { createDrizzleDb, getDb, withTenantTx, type DrizzleDB } from '../db.js'
 import { isUuidLike } from '../lib/utils.js'
 import { tenants, users, userRoles, customers } from '../schema.js'
+import { recordFailedAttempt, clearLockoutState, validatePasswordPolicy } from '../lib/password-policy.js'
 
 export type UserRecord = {
   id: string
@@ -16,6 +18,10 @@ export type UserRecord = {
   customerId?: string | null
   customerKey?: string | null
   customerName?: string | null
+  failedLoginAttempts?: number
+  lockedUntil?: Date | null
+  authProvider?: string
+  externalSubject?: string | null
 }
 
 
@@ -98,7 +104,119 @@ export async function findByUsername(username: string): Promise<UserRecord | und
     mfaSecret: u.mfaSecret || null,
     customerId: u.customerId ? String(u.customerId) : null,
     customerKey: u.customerKey ? String(u.customerKey) : null,
-    customerName: u.displayName ? String(u.displayName) : null
+    customerName: u.displayName ? String(u.displayName) : null,
+    failedLoginAttempts: u.failedLoginAttempts ?? 0,
+    lockedUntil: u.lockedUntil ?? null,
+    authProvider: u.authProvider || 'local',
+    externalSubject: u.externalSubject ?? null
+  }
+}
+
+/** Records a failed login attempt and applies lockout once the threshold is reached. */
+export async function recordFailedLoginAttempt(tenantId: string, userId: string): Promise<void> {
+  const db = getPoolDrizzle()
+  const rows = await db
+    .select({ failedLoginAttempts: users.failedLoginAttempts, lockedUntil: users.lockedUntil })
+    .from(users)
+    .where(and(eq(users.userId, userId as any), eq(users.tenantId, tenantId)))
+    .limit(1)
+  if (!rows.length) return
+  const next = recordFailedAttempt({
+    failedLoginAttempts: rows[0].failedLoginAttempts ?? 0,
+    lockedUntil: rows[0].lockedUntil ?? null
+  })
+  await db
+    .update(users)
+    .set({ failedLoginAttempts: next.failedLoginAttempts, lockedUntil: next.lockedUntil as any })
+    .where(eq(users.userId, userId as any))
+}
+
+/** Resets lockout state after a successful login. */
+export async function resetLoginFailureState(tenantId: string, userId: string): Promise<void> {
+  const db = getPoolDrizzle()
+  const cleared = clearLockoutState()
+  await db
+    .update(users)
+    .set({ failedLoginAttempts: cleared.failedLoginAttempts, lockedUntil: cleared.lockedUntil as any })
+    .where(and(eq(users.userId, userId as any), eq(users.tenantId, tenantId)))
+}
+
+/**
+ * Finds an existing SSO-linked user by (tenantId, externalSubject), or
+ * creates one on first login with the mapped roles. Never used for local
+ * password auth — SSO users get a random unusable password hash.
+ */
+export async function findOrCreateSsoUser(params: {
+  tenantId: string
+  externalSubject: string
+  username: string
+  roles: string[]
+}): Promise<Omit<UserRecord, 'passwordHash'>> {
+  const db = getPoolDrizzle()
+
+  const existing = await db
+    .select({
+      ...getTableColumns(users),
+      customerKey: customers.customerKey,
+      displayName: customers.displayName,
+    })
+    .from(users)
+    .leftJoin(customers, and(
+      eq(customers.tenantId, users.tenantId),
+      eq(customers.customerId, users.customerId as any)
+    ))
+    .where(and(eq(users.tenantId, params.tenantId), eq(users.externalSubject, params.externalSubject)))
+    .limit(1)
+
+  if (existing.length) {
+    const u = existing[0]
+    const currentRoles = await db
+      .select({ roleCode: userRoles.roleCode })
+      .from(userRoles)
+      .where(eq(userRoles.userId, u.userId as any))
+    return {
+      id: String(u.userId),
+      username: u.username,
+      tenantId: u.tenantId,
+      roles: currentRoles.map((r) => r.roleCode),
+      disabled: u.disabled ?? false,
+      mfaEnabled: Boolean(u.mfaEnabled),
+      customerId: u.customerId ? String(u.customerId) : null,
+      customerKey: u.customerKey ? String(u.customerKey) : null,
+      customerName: u.displayName ? String(u.displayName) : null,
+      authProvider: u.authProvider || 'oidc',
+      externalSubject: u.externalSubject
+    }
+  }
+
+  const unusablePasswordHash = bcrypt.hashSync(crypto.randomUUID() + crypto.randomUUID(), 10)
+  const [rec] = await db
+    .insert(users)
+    .values({
+      tenantId: params.tenantId,
+      username: params.username,
+      passwordHash: unusablePasswordHash,
+      authProvider: 'oidc',
+      externalSubject: params.externalSubject
+    })
+    .returning()
+
+  for (const role of params.roles) {
+    await db.insert(userRoles).values({ userId: rec.userId as any, roleCode: role }).onConflictDoNothing()
+  }
+
+  return {
+    id: String(rec.userId),
+    username: params.username,
+    tenantId: params.tenantId,
+    roles: params.roles,
+    disabled: rec.disabled ?? false,
+    mfaEnabled: false,
+    customerId: null,
+    customerKey: null,
+    customerName: null,
+    authProvider: 'oidc',
+    externalSubject: params.externalSubject
   }
 }
 
@@ -146,7 +264,7 @@ export async function listByTenant(tenantId: string): Promise<Omit<UserRecord, '
   }))
 }
 
-export async function createUser(data: { username: string; password: string; tenantId: string; roles: string[]; customerRef?: string | null }): Promise<Omit<UserRecord, 'passwordHash'>> {
+export async function createUser(data: { username: string; password: string; tenantId: string; roles: string[]; customerRef?: string | null; enforcePasswordPolicy?: boolean }): Promise<Omit<UserRecord, 'passwordHash'>> {
   const db = getPoolDrizzle()
 
   const existsRows = await db
@@ -158,6 +276,11 @@ export async function createUser(data: { username: string; password: string; ten
 
   const linkedCustomer = await resolveCustomerLink(db, data.tenantId, data.customerRef)
   if ((data.roles || []).includes('customer') && !linkedCustomer?.customerId) throw new Error('CUSTOMER_LINK_REQUIRED')
+
+  if (data.enforcePasswordPolicy) {
+    const policy = validatePasswordPolicy(data.password)
+    if (!policy.ok) throw new Error(`WEAK_PASSWORD: ${policy.errors.join('; ')}`)
+  }
 
   const hash = bcrypt.hashSync(data.password, 10)
   const [rec] = await db
@@ -189,7 +312,7 @@ export async function createUser(data: { username: string; password: string; ten
   }
 }
 
-export async function updateUser(tenantId: string, id: string, patch: Partial<{ password: string; roles: string[]; disabled: boolean; customerRef: string | null }>): Promise<Omit<UserRecord, 'passwordHash'>> {
+export async function updateUser(tenantId: string, id: string, patch: Partial<{ password: string; roles: string[]; disabled: boolean; customerRef: string | null; enforcePasswordPolicy: boolean }>): Promise<Omit<UserRecord, 'passwordHash'>> {
   const db = getPoolDrizzle()
 
   const existingRows = await db
@@ -230,10 +353,14 @@ export async function updateUser(tenantId: string, id: string, patch: Partial<{ 
   }
 
   if (patch.password) {
+    if (patch.enforcePasswordPolicy) {
+      const policy = validatePasswordPolicy(patch.password)
+      if (!policy.ok) throw new Error(`WEAK_PASSWORD: ${policy.errors.join('; ')}`)
+    }
     const hash = bcrypt.hashSync(patch.password, 10)
     await db
       .update(users)
-      .set({ passwordHash: hash })
+      .set({ passwordHash: hash, passwordUpdatedAt: new Date() })
       .where(eq(users.userId, id as any))
   }
 

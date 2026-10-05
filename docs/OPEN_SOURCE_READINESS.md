@@ -1,6 +1,7 @@
 # Open Source Readiness
 
-This checklist tracks work needed before publishing the repository publicly.
+This checklist records the repository's public-release baseline and the checks
+maintainers should repeat before releases or major public announcements.
 
 ## Completed
 
@@ -12,7 +13,7 @@ This checklist tracks work needed before publishing the repository publicly.
 - Added generated `tmpclaude-*-cwd` files to `.gitignore`.
 - Removed local generated `tmpclaude-*-cwd` files from the workspace.
 - Ran non-breaking `npm audit fix`.
-- Split claims API/UI into a separate sibling project at `C:\JK\MVP\Claims`.
+- Split claims API/UI into a separate sibling Claims project.
 - Removed claims services from Policy workspaces, Docker Compose, production proxy routing, and public README.
 - Updated root build/test scripts to run sequentially to avoid local workspace fan-out memory failures.
 - Reviewed sample product, tenant, and contract seed data as synthetic/demo data.
@@ -46,12 +47,21 @@ This checklist tracks work needed before publishing the repository publicly.
 
 ## Verification
 
-Last local verification:
+Current verification:
 
-- `npm audit fix` applied available non-force updates before v0.2.0.
-- v0.2.0 release validation is tracked in `docs/tasks/issue-102-v0.2.0-release-readiness.md`.
+- GitHub recognizes the repository license as Apache License 2.0 after the
+  canonical `LICENSE` normalization. This was reconfirmed on 2026-09-27 from
+  the GitHub repository and license APIs, which both report SPDX identifier
+  `Apache-2.0`. Issue #104 is closed; it is historical work, not an open
+  publishing blocker.
+- `npm audit --audit-level=high` reports 0 vulnerabilities.
+- Main branch CI is green for build, frontend tests, server tests, typecheck,
+  DB integration tests, Playwright E2E smoke tests, dependency audit, CodeQL,
+  and container scanning.
+- v0.2.3 release validation is tracked in
+  `docs/tasks/issue-194-v0.2.3-release-readiness.md`.
 
-## Before Publishing
+## Before Releases Or Public Announcements
 
 - Re-run `npm run security:audit`, `npm run test`, `npm run typecheck`, and `npm run build` from the repository root.
 - Re-run `npm run test:integration` and `npm run test:e2e:docker` before cutting a release.
@@ -62,16 +72,20 @@ Last local verification:
 
 ## Remaining Security Work
 
-`npm audit` currently reports the React Router RSC Mode CSRF advisory chain for
-`react-router-dom` 7.18.2. LatticePolicy uses React Router as a Vite
-client-side SPA router and does not enable React Router RSC/framework server
-actions. The npm-suggested downgrade to 7.11.0 reintroduces older high-severity
-React Router advisories, so the project keeps 7.18.2 and tracks
-`GHSA-qwww-vcr4-c8h2` as a temporary explicit exception in
-`scripts/check-npm-audit.mjs`.
+No open npm audit exceptions are currently documented for the public-readiness
+baseline. Keep running `npm run security:audit` and `npm audit` from the
+repository root after dependency changes, because the project uses the root npm
+workspace lockfile as the source of truth.
 
-Keep monitoring for the next patched non-regressing `react-router-dom` release
-and remove the audit exception as soon as one is available.
+The temporary React Router exception is fully retired. The RSC Mode CSRF advisory
+(`GHSA-qwww-vcr4-c8h2`, high) affects `react-router` `>= 7.12.0, < 7.18.2` and was
+first patched in `7.18.2`, so the advisory stopped applying once the project moved
+onto the `7.18.2` line. `react-router-dom` is now on `7.18.3` (resolving
+`react-router` `7.18.3`), a further patch bump on the same already-patched line;
+it required no downgrade and reintroduces no older high-severity advisories.
 
-Keep running `npm audit` from the repository root after dependency changes, because
-the project uses the root npm workspace lockfile as the source of truth.
+Both exception surfaces are now empty: the advisory allowlist in
+`scripts/check-npm-audit.mjs` is an empty set, and the stale
+`allow-ghsas: GHSA-qwww-vcr4-c8h2` entry has been removed from the
+dependency-review step in `.github/workflows/security.yml`. Keep both empty unless
+a new exception is deliberately documented here.

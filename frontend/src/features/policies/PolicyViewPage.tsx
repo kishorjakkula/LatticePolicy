@@ -34,27 +34,43 @@ import {
   formatDisplayDate as tt,
   formatDisplayDateTime as nt,
 } from "../../shared/dateDisplay";
-function je(n) {
+import { TransactionAuditPanel as AuditPanel } from "./TransactionAuditPanel";
+import { PolicyAsOfPanel } from "./PolicyAsOfPanel";
+type JsonRecord = Record<string, any>;
+type TransactionMode = "endorse" | "cancel" | "reinstate" | "rewrite" | "renew";
+type PendingTransactionByMode = Record<TransactionMode, JsonRecord | null>;
+type VersionSortKey =
+  | "transactionNumber"
+  | "policyEffectiveDate"
+  | "effectiveDate"
+  | "expirationDate"
+  | "createdDate"
+  | "updatedDate"
+  | "updatedUser"
+  | "transactionType"
+  | "amount";
+
+function je(n: unknown): string {
   if (!n) return "";
-  const t = new Date(n);
+  const t = new Date(String(n));
   if (!Number.isNaN(t.getTime())) return t.toISOString().slice(0, 10);
   const a = String(n),
     i = /^(\d{4}-\d{2}-\d{2})/.exec(a);
   return i ? i[1] : "";
 }
-function oe(n) {
+function oe(n: unknown): boolean {
   const t = String(n || "")
     .trim()
     .toLowerCase();
   return t === "cancel" || t === "cancelled" || t === "cancellation";
 }
-function Pe(n) {
+function Pe(n: unknown): boolean {
   const t = String(n || "")
     .trim()
     .toLowerCase();
   return t === "reinstate" || t === "reinstated" || t === "reinstatement";
 }
-function yt(n) {
+function yt(n: unknown): TransactionMode | "quote" {
   const t = String(n || "")
     .trim()
     .toLowerCase();
@@ -70,15 +86,38 @@ function yt(n) {
             ? "renew"
             : "quote";
 }
+function findAuditTransaction(timeline: JsonRecord | null | undefined, version: JsonRecord | null | undefined) {
+  const transactions = Array.isArray(timeline?.transactions) ? timeline.transactions : [];
+  if (version?.transactionId) {
+    const byId = transactions.find((tx) => tx?.transactionId === version.transactionId);
+    if (byId) return byId;
+  }
+  const num = String(version?.transactionNumber || "").trim();
+  if (num) {
+    const byNumber = transactions.find(
+      (tx) => String(tx?.metadata?.transactionNumber || "").trim() === num,
+    );
+    if (byNumber) return byNumber;
+  }
+  return null;
+}
+function findAuditLedgerEvents(timeline: JsonRecord | null | undefined, version: JsonRecord | null | undefined) {
+  const ledger = Array.isArray(timeline?.ledger) ? timeline.ledger : [];
+  const num = String(version?.transactionNumber || "").trim();
+  return ledger.filter(
+    (ev) => String(ev?.payload?.transactionNumber || "").trim() === num,
+  );
+}
 function Tt() {
   const { id: n } = Ye(),
     t = Ge(),
     a = Qe(),
-    [i, l] = v.useState(null),
+    [i, l] = v.useState<string | null>(null),
     [o, d] = v.useState(!1),
-    [c, x] = v.useState("updatedDate"),
-    [N, S] = v.useState("desc"),
-    [u, m] = v.useState({
+    [expandedVersionId, setExpandedVersionId] = v.useState<string | null>(null),
+    [c, x] = v.useState<VersionSortKey>("updatedDate"),
+    [N, S] = v.useState<"asc" | "desc">("desc"),
+    [u, m] = v.useState<PendingTransactionByMode>({
       endorse: null,
       cancel: null,
       reinstate: null,
@@ -108,7 +147,7 @@ function Tt() {
     W = v.useMemo(() => {
       const s = Array.isArray(H) ? [...H] : [],
         h = N === "asc" ? 1 : -1,
-        j = (y, f) => {
+        j = (y: unknown, f: unknown) => {
           const b = String(y || "")
               .trim()
               .toUpperCase(),
@@ -117,7 +156,7 @@ function Tt() {
               .toUpperCase();
           return b === C ? 0 : b > C ? 1 : -1;
         },
-        g = (y, f) => {
+        g = (y: unknown, f: unknown) => {
           const b = Number.isFinite(Date.parse(String(y || "")))
               ? Date.parse(String(y || ""))
               : 0,
@@ -126,13 +165,13 @@ function Tt() {
               : 0;
           return b === C ? 0 : b > C ? 1 : -1;
         },
-        Ne = (y, f) => {
+        Ne = (y: unknown, f: unknown) => {
           const b = Number(y || 0),
             C = Number(f || 0);
           return b === C ? 0 : b > C ? 1 : -1;
         };
       return (
-        s.sort((y, f) => {
+        s.sort((y: JsonRecord, f: JsonRecord) => {
           let b = 0;
           return (
             c === "transactionNumber"
@@ -196,7 +235,7 @@ function Tt() {
         l(null);
         try {
           (await le.mutateAsync(r.policyId), Z());
-        } catch (s) {
+        } catch (s: any) {
           l(s.message || String(s));
         }
       }
@@ -221,13 +260,13 @@ function Tt() {
           re(r.policyId, "rewrite"),
           m((g) => ({ ...g, reinstate: null, rewrite: null })),
           Z());
-      } catch (h) {
+      } catch (h: any) {
         l(h.message || String(h));
       } finally {
         d(!1);
       }
     },
-    Ve = async (s, h, j) => {
+    Ve = async (s: string, h: string, j: string) => {
       if (r) {
         (I(!0), l(null));
         try {
@@ -237,17 +276,17 @@ function Tt() {
           }),
             w(!1),
             Z());
-        } catch (g) {
+        } catch (g: any) {
           l(g.message || String(g));
         } finally {
           I(!1);
         }
       }
     },
-    K = (s) => {
+    K = (s: TransactionMode) => {
       r?.policyId && (re(r.policyId, s), m((h) => ({ ...h, [s]: null })));
     },
-    _ = async (s) => {
+    _ = async (s: TransactionMode) => {
       if (!r) return;
       const h = u[s],
         j = !!h?.quoteId;
@@ -281,12 +320,12 @@ function Tt() {
         const b = U.length ? U[U.length - 1]?.versionId : "";
         if (b)
           try {
-            const D = await Ze.getVersionDetails(r.policyId, b);
+            const D = await et.getVersionDetails(r.policyId, b);
             D?.payload && typeof D.payload == "object" && (f = D.payload);
           } catch {}
         if (!f) throw new Error("Policy payload missing");
         const C = ge(f),
-          ae = await et.createQuoteDraft(C, {
+          ae = await Ze.createQuoteDraft(C, {
             status: "Draft",
             progressStep: 1,
           }),
@@ -317,13 +356,13 @@ function Tt() {
           },
         })),
           a(`/wizard?${F.toString()}`));
-      } catch (g) {
+      } catch (g: any) {
         l(g.message || String(g));
       } finally {
         d(!1);
       }
     },
-    qe = (s) => {
+    qe = (s: JsonRecord) => {
       const h = r?.policyId || n;
       if (!h || !s?.versionId) return;
       const j = new URLSearchParams();
@@ -337,7 +376,7 @@ function Tt() {
       const g = je(s.effectiveDate);
       (g && j.set("effectiveDate", g), a(`/wizard?${j.toString()}`));
     },
-    Oe = (s) =>
+    Oe = (s: VersionSortKey): "asc" | "desc" =>
       s === "policyEffectiveDate" ||
       s === "effectiveDate" ||
       s === "expirationDate" ||
@@ -346,15 +385,15 @@ function Tt() {
       s === "amount"
         ? "desc"
         : "asc",
-    P = (s) => {
+    P = (s: VersionSortKey) => {
       if (c === s) {
-        S(N === "asc" ? "^" : "v");
+        S(N === "asc" ? "desc" : "asc");
         return;
       }
       (x(s), S(Oe(s)));
     },
-    E = (s, h) => (c !== s ? h : `${h} ${N === "asc" ? "^" : "v"}`),
-    Y = (s) => (c !== s ? "" : N === "asc" ? "^" : "v");
+    E = (s: VersionSortKey, h: string) => (c !== s ? h : `${h} ${N === "asc" ? "^" : "v"}`),
+    Y = (s: VersionSortKey) => (c !== s ? "" : N === "asc" ? "^" : "v");
   if (i)
     return e.jsx("div", {
       className: "card",
@@ -606,6 +645,20 @@ function Tt() {
                     }),
                   ],
                 }),
+                r.productVersion &&
+                  e.jsxs("div", {
+                    className: "policy-summary-item",
+                    children: [
+                      e.jsx("div", {
+                        className: "policy-summary-label",
+                        children: "Governed Product Version",
+                      }),
+                      e.jsx("div", {
+                        className: "policy-summary-value",
+                        children: r.productVersion,
+                      }),
+                    ],
+                  }),
                 e.jsxs("div", {
                   className: "policy-summary-item",
                   children: [
@@ -674,6 +727,7 @@ function Tt() {
                 ],
               }),
             }),
+          e.jsx(PolicyAsOfPanel, { policyId: r.policyId }),
           e.jsxs("div", {
             className: "card policy-section-card policy-versions-card",
             children: [
@@ -779,6 +833,10 @@ function Tt() {
                             children: E("amount", "Amount"),
                           }),
                         }),
+                        e.jsx("th", {
+                          "data-mobile-label": "Audit",
+                          children: "Audit",
+                        }),
                       ],
                     }),
                   }),
@@ -787,13 +845,14 @@ function Tt() {
                       W.length === 0 &&
                         e.jsx("tr", {
                           children: e.jsx("td", {
-                            colSpan: 9,
+                            colSpan: 10,
                             className: "muted",
                             children: "No versions",
                           }),
                         }),
-                      $.rows.map((s) =>
-                        e.jsxs(
+                      $.rows.flatMap((s) => {
+                        const isExpanded = expandedVersionId === s.versionId;
+                        const row = e.jsxs(
                           "tr",
                           {
                             children: [
@@ -834,11 +893,44 @@ function Tt() {
                                   : void 0,
                                 children: De(s.premium?.total),
                               }),
+                              e.jsx("td", {
+                                children: e.jsx("button", {
+                                  type: "button",
+                                  className: "table-link-button",
+                                  onClick: () =>
+                                    setExpandedVersionId(
+                                      isExpanded ? null : s.versionId,
+                                    ),
+                                  children: isExpanded ? "Hide" : "Audit",
+                                }),
+                              }),
                             ],
                           },
                           s.versionId,
-                        ),
-                      ),
+                        );
+                        if (!isExpanded) return [row];
+                        return [
+                          row,
+                          e.jsx(
+                            "tr",
+                            {
+                              children: e.jsx("td", {
+                                colSpan: 10,
+                                children: e.jsx(AuditPanel, {
+                                  policyId: r.policyId,
+                                  version: s,
+                                  timelineTransaction: findAuditTransaction(
+                                    me,
+                                    s,
+                                  ),
+                                  ledgerEvents: findAuditLedgerEvents(me, s),
+                                }),
+                              }),
+                            },
+                            `${s.versionId}-audit`,
+                          ),
+                        ];
+                      }),
                     ],
                   }),
                 ],
@@ -892,8 +984,8 @@ function Tt() {
     ],
   });
 }
-function ht({ timeline: n }) {
-  const t = Array.isArray(n?.ledger) ? n.ledger : [],
+function ht({ timeline: n }: { timeline: JsonRecord }) {
+  const t: JsonRecord[] = Array.isArray(n?.ledger) ? n.ledger : [],
     a = we(t, 10);
   return e.jsx("div", {
     className: "card stack-card timeline-card",
@@ -982,11 +1074,11 @@ function ht({ timeline: n }) {
     }),
   });
 }
-function ft(n) {
+function ft(n: unknown): string {
   const t = String(n || "").trim();
   if (!t) return "-";
   const a = t.toUpperCase(),
-    i = {
+    i: Record<string, string> = {
       STATUS_CHANGE: "Status Change",
       ENDORSE_ISSUED: "Endorsement Issued",
       CANCELLED: "Cancellation Issued",
@@ -1001,10 +1093,10 @@ function ft(n) {
         .toLowerCase()
         .replace(/\b[a-z]/g, (l) => l.toUpperCase());
 }
-function bt(n) {
-  const t = n?.payload;
+function bt(n: JsonRecord): string {
+  const t = n?.payload as JsonRecord | undefined;
   if (!t || typeof t != "object") return "Recorded by system";
-  const a = [],
+  const a: string[] = [],
     i = String(t.transactionNumber || "").trim();
   i && a.push(`Transaction # ${i}`);
   const l = Number(t.delta);
@@ -1020,7 +1112,7 @@ function bt(n) {
     Array.isArray(t.changes) && t.changes.length > 0)
   ) {
     const c = t.changes
-        .map((N) => xt(N))
+        .map((N: unknown) => xt(N))
         .filter(Boolean)
         .slice(0, 2),
       x = t.changes.length > 2 ? ` +${t.changes.length - 2} more` : "";
@@ -1038,7 +1130,7 @@ function bt(n) {
     a.length ? a.join(" | ") : "Recorded by system"
   );
 }
-function xt(n) {
+function xt(n: unknown): string {
   const t = String(n || "");
   return t
     ? t.startsWith("/coverages")
@@ -1057,10 +1149,10 @@ function xt(n) {
                 .trim() || ""
     : "";
 }
-function T(n) {
+function T(n: unknown): string {
   return tt(n, { fallback: "" });
 }
-function ie(n, t = "USD") {
+function ie(n: unknown, t = "USD"): string {
   const a = Number(n);
   return Number.isFinite(a)
     ? new Intl.NumberFormat(void 0, { style: "currency", currency: t }).format(
@@ -1068,12 +1160,12 @@ function ie(n, t = "USD") {
       )
     : String(n || "");
 }
-function Nt({ insights: n }) {
+function Nt({ insights: n }: { insights: JsonRecord }) {
   const t = n?.scores || {},
     a = n?.summary || {},
-    i = Array.isArray(n?.alerts) ? n.alerts : [],
-    l = Array.isArray(n?.recommendations) ? n.recommendations : [],
-    o = Array.isArray(n?.premiumTimeline) ? n.premiumTimeline : [];
+    i: string[] = Array.isArray(n?.alerts) ? n.alerts : [],
+    l: string[] = Array.isArray(n?.recommendations) ? n.recommendations : [],
+    o: JsonRecord[] = Array.isArray(n?.premiumTimeline) ? n.premiumTimeline : [];
   return e.jsxs(e.Fragment, {
     children: [
       e.jsxs("div", {
@@ -1241,10 +1333,10 @@ function Nt({ insights: n }) {
     ],
   });
 }
-function Ie(n) {
+function Ie(n: unknown): string {
   return nt(n, { fallback: "" });
 }
-function ve(n, t = "-") {
+function ve(n: unknown, t = "-"): string {
   const a = String(n || "").trim();
   if (!a) return t;
   const i = new Date(a);
@@ -1256,7 +1348,7 @@ function ve(n, t = "-") {
     x = String(i.getMinutes()).padStart(2, "0");
   return `${l}-${o}-${d} ${c}:${x}`;
 }
-function gt(n) {
+function gt(n: JsonRecord[]): number {
   return !Array.isArray(n) || n.length === 0
     ? 1
     : 1 +
@@ -1267,7 +1359,7 @@ function gt(n) {
           return l === "RENEW" || l === "RENEWAL" ? a + 1 : a;
         }, 0);
 }
-function De(n) {
+function De(n: JsonRecord | null | undefined): string {
   if (!n) return "";
   const t = typeof n.amount == "number" ? n.amount : Number(n.amount),
     a = n.currency || "USD";
@@ -1277,16 +1369,16 @@ function De(n) {
       )
     : "";
 }
-function Se(n) {
+function Se(n: JsonRecord | null | undefined): boolean {
   if (!n) return !1;
   const t = typeof n.amount == "number" ? n.amount : Number(n.amount);
   return Number.isFinite(t) && t < 0;
 }
-function ce(n) {
+function ce(n: unknown): string {
   const t = Number(n);
   return Number.isFinite(t) ? `${Math.round(t * 100)}%` : "-";
 }
-function L(n, t = "USD") {
+function L(n: unknown, t = "USD"): string {
   const a = Number(n);
   return Number.isFinite(a)
     ? new Intl.NumberFormat(void 0, { style: "currency", currency: t }).format(
@@ -1294,7 +1386,7 @@ function L(n, t = "USD") {
       )
     : "-";
 }
-function jt(n) {
+function jt(n: JsonRecord[]): JsonRecord[] {
   if (!Array.isArray(n) || n.length === 0) return Array.isArray(n) ? n : [];
   const a = [...n.map((o, d) => ({ version: o, index: d }))].sort((o, d) => {
       const c = o.version,
@@ -1358,7 +1450,7 @@ function jt(n) {
         };
       });
 }
-function vt(n, t) {
+function vt(n: JsonRecord[], t: JsonRecord | null | undefined): JsonRecord | null {
   if (!Array.isArray(n) || n.length === 0) return null;
   const a = G(t?.effectiveDate),
     i = G(t?.expirationDate),
@@ -1409,7 +1501,7 @@ function vt(n, t) {
   }
   return x ? { amount: c, currency: N } : null;
 }
-function G(n) {
+function G(n: unknown): string {
   const t = String(n || "").trim();
   if (!t) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
@@ -1420,12 +1512,17 @@ function G(n) {
     o = String(a.getDate()).padStart(2, "0");
   return `${i}-${l}-${o}`;
 }
-function Dt({ policy: n, busy: t, onClose: a, onSubmit: i }) {
+function Dt({ policy: n, busy: t, onClose: a, onSubmit: i }: {
+  policy: JsonRecord;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (noticeDate: string, reasonCode: string, reason: string) => void;
+}) {
   const l = new Date().toISOString().slice(0, 10),
     [o, d] = v.useState(l),
     [c, x] = v.useState(""),
     [N, S] = v.useState(""),
-    u = (p) => {
+    u = (p: v.FormEvent<HTMLFormElement>) => {
       (p.preventDefault(), i(o, c, N));
     },
     m = n.term?.expirationDate
@@ -1472,7 +1569,7 @@ function Dt({ policy: n, busy: t, onClose: a, onSubmit: i }) {
                     e.jsx("input", {
                       type: "date",
                       value: o,
-                      onChange: (p) => d(p.target.value),
+                      onChange: (p: v.ChangeEvent<HTMLInputElement>) => d(p.target.value),
                       required: !0,
                     }),
                     e.jsx("div", {
@@ -1488,7 +1585,7 @@ function Dt({ policy: n, busy: t, onClose: a, onSubmit: i }) {
                     e.jsx("label", { children: "Reason Code" }),
                     e.jsxs("select", {
                       value: c,
-                      onChange: (p) => x(p.target.value),
+                      onChange: (p: v.ChangeEvent<HTMLSelectElement>) => x(p.target.value),
                       children: [
                         e.jsx("option", { value: "", children: "- Select -" }),
                         e.jsx("option", {
@@ -1520,7 +1617,7 @@ function Dt({ policy: n, busy: t, onClose: a, onSubmit: i }) {
                 e.jsx("label", { children: "Reason / Notes" }),
                 e.jsx("textarea", {
                   value: N,
-                  onChange: (p) => S(p.target.value),
+                  onChange: (p: v.ChangeEvent<HTMLTextAreaElement>) => S(p.target.value),
                   rows: 3,
                   placeholder: "Reason for non-renewal",
                   style: { width: "100%" },

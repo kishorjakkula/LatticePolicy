@@ -44,6 +44,8 @@ export function getByPath(obj: any, path: string): any {
 
 export type PatchOp = { path: string; op: 'add' | 'replace' | 'remove'; value?: any }
 
+const UNSAFE_PATCH_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 /**
  * Apply a minimal subset of RFC 6902 JSON Patch operations (add, replace, remove)
  * to `obj` in-place and return it.
@@ -52,17 +54,18 @@ export function applyJsonPatch(obj: any, ops: PatchOp[]): any {
   for (const op of ops) {
     const path = op.path || ''
     const parts = path.split('/').slice(1).map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
+    if (parts.some(part => UNSAFE_PATCH_KEYS.has(part))) continue
     let target = obj
     for (let i = 0; i < parts.length - 1; i++) {
       const key = parts[i]
-      if (!(key in target) || typeof target[key] !== 'object' || target[key] === null) {
+      if (!Object.prototype.hasOwnProperty.call(target, key) || typeof target[key] !== 'object' || target[key] === null) {
         target[key] = {}
       }
       target = target[key]
     }
     const last = parts[parts.length - 1]
     if (op.op === 'remove') {
-      if (last in target) delete target[last]
+      if (Object.prototype.hasOwnProperty.call(target, last)) delete target[last]
     } else if (op.op === 'add' || op.op === 'replace') {
       target[last] = op.value
     }

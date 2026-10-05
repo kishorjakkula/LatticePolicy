@@ -19,6 +19,9 @@ Architecture Style
 
 Modules
 - Core Policy: policy lifecycle, effective-dated versions, transactions, premium breakdown.
+- Product capability registry: product packs are discovered from
+  `products/*/coverage.yaml`; one shared descriptor drives API discovery,
+  transaction support, rating dispatch, risk mapping, and frontend defaults.
 - Product Packs: coverage model + rating inputs for Personal Auto and Homeowners.
 - Customer Domain + Identity Links: customer master records, policy/customer relationships, user/customer linking, and portal-safe views.
 - Authentication + Security: JWT auth, tenant isolation, RBAC, and optional tenant-level TOTP MFA.
@@ -31,6 +34,8 @@ Modules
 - AI/ML Decisioning: tenant-configurable inference for risk, fraud, premium adequacy, and recommendation outputs.
 - Batch Processing: scheduled and asynchronous jobs for nightly processing and heavy workloads.
 - Async Event Push: outbox-based message push for downstream systems (webhooks/event consumers).
+- Producer Commission Handoff: transaction-fact events for downstream
+  commission/accounting systems without owning commission accounting.
 - Cache Layer: Redis-backed read-through cache for high-read APIs and invalidation on admin updates.
 - Observability: structured JSON logging with request correlation IDs.
 - API Documentation Service: OpenAPI + Swagger UI (admin-only access).
@@ -80,6 +85,35 @@ Document Architecture (Operational + Customer-Facing)
   - `RATING_WORKSHEET` document metadata is stored in `documents` for persisted policy transactions
   - contains rating input/premium/calc-trace snapshot for actuarial/UW auditability
 - Customer portal consumes minimal policy detail and renders customer-safe PDF views; it does not expose raw internal calc traces.
+
+Canonical Policy Lifecycle
+- Persisted policy status uses one vocabulary: `Quote`, `Draft`, `Bound`,
+  `Issued`, `Cancelled`, and `Expired`. Display concepts such as "in force" are
+  derived from status and effective dates rather than persisted as another status.
+- Every policy-changing service validates its action through the shared state
+  machine before writing a transaction or lifecycle side effect.
+- Repeating `bind`, `issue`, or `expire` after the policy has reached that action's
+  target state is idempotent. It returns the existing state without creating a
+  duplicate transaction, document, event, or notification.
+- `nonRenew` records the decision and future term disposition; the current policy
+  remains `Issued` until its term expires.
+- Policy-changing requests may include `expectedTimelineVersion`. The mutation
+  fails with `STALE_POLICY_VERSION` when that value is no longer current.
+- Policy changes lock the tenant-scoped policy row for the transaction. Sequence
+  and timeline versions are unique per policy, and persisted policy-version rows
+  cannot be updated; corrections are represented by a new effective-dated row.
+
+| Action | Allowed current state | Resulting state |
+| --- | --- | --- |
+| Bind | `Quote`, `Draft` | `Bound` |
+| Issue | `Bound` | `Issued` |
+| Endorse | `Issued` | `Issued` |
+| Cancel | `Bound`, `Issued` | `Cancelled` |
+| Reinstate | `Cancelled` | `Issued` |
+| Rewrite | `Cancelled` | `Issued` |
+| Renew | `Issued` | `Issued` |
+| Non-renew | `Issued` | `Issued` |
+| Expire | `Issued` | `Expired` |
 
 Effective-Dated Transaction Architecture (Out-of-Sequence Safe)
 - Every policy transaction is immutable and must store:
@@ -157,6 +191,16 @@ Async Message Push (Outbox Pattern)
 - Outbox rows retain tenant, topic, payload, attempts, and timestamps for audit/debug.
 - Runtime controls: `ASYNC_PUSH_ENABLED`, `ASYNC_PUSH_POLL_MS`, `ASYNC_PUSH_BATCH_SIZE`, `ASYNC_PUSH_TIMEOUT_MS`.
 
+Producer Commission Handoff
+- Policy-changing transactions emit separate `COMMISSION_HANDOFF` ledger events
+  for downstream commission/accounting systems.
+- Payloads include tenant, policy, transaction, producer/agency, product,
+  state, premium impact, idempotency, and correlation context.
+- LatticePolicy owns the transaction-fact handoff only; commission calculation,
+  payables, statements, chargebacks, and settlement status stay outside the
+  platform.
+- Contract details: `docs/COMMISSION_HANDOFF.md`.
+
 Email Capabilities
 - Transactional emails: quote-ready, bind confirmation, issue notices, cancellation/reinstatement communications.
 - Channel adapters: AWS SES / SMTP / vendor API through an abstract notification port.
@@ -173,11 +217,26 @@ Batch Processing Capabilities
 - Retry/Backoff: transient failure retries with dead-letter handling.
 - Tenant Safety: tenant-scoped execution context and data access in every job run.
 
+First production slice: `docs/JOB_QUEUE_DESIGN.md` defines the proposed
+PostgreSQL-backed job registry, tenant schedule, run-history, retry,
+dead-letter, checkpointing, and tenant-safety boundaries. The first job type is
+async outbox delivery retry so implementation can build on the current
+`async_message_outbox` worker before adding broader scheduling features.
+
 Typical Job Types
-- Renewal pre-processing and offer generation.
+
+Implemented (see `server/src/jobs/registerBuiltinJobs.ts` and
+`docs/JOB_QUEUE_DESIGN.md`):
+- Scheduled email reminders and delivery retries (`async_outbox_delivery_retry`).
+- Renewal candidate scanning (`renewal_candidate_scan`) — identifies and
+  notifies on upcoming renewals; does not yet generate a renewal offer or
+  auto-bind a renewal.
+- Stale quote cleanup (`stale_quote_cleanup`) — expires inactive draft/rated
+  quotes after a configurable age, with a dry-run mode for operational review.
+
+Planned, not yet implemented:
 - Premium recomputation for queued policy changes.
 - Forms/documents pre-generation and packet assembly.
-- Scheduled email reminders and delivery retries.
 - Data reconciliation and stale draft cleanup.
 - Export/report generation.
 
@@ -236,6 +295,40 @@ Actuarial Rating Workbench and Published Rater Integration
   - generated after rating and visible in Forms/Documents
   - includes policy context, premium summary, coverage-level formula details, and structured calc trace table
   - persisted for issued policy transactions as `RATING_WORKSHEET` metadata
+
+Product Governance Releases
+- Product, rating, underwriting-rule, coverage, and form references are grouped
+  into one effective-dated release snapshot with a canonical SHA-256 digest.
+- Releases use a maker-checker lifecycle: Draft, Review, Approved, Scheduled,
+  Active, and Retired. Submitted artifacts are immutable and transitions are
+  retained in a tenant-scoped audit log.
+- Activating a release rejects overlapping active dates for the same product
+  and jurisdiction. Quote creation selects the most specific active release by
+  product, state, and effective date.
+- The selected release lineage is pinned to the quote and carried into the
+  policy projection and append-only policy-version metadata at bind.
+
+Underwriting Authority
+- Tenant-scoped authority grants are effective-dated by user, role, or producer
+  and can constrain transaction type, premium, and requested coverage limit.
+- Bind, endorsement, renewal, and rewrite evaluate authority before committing
+  the policy transaction. Exceeded authority creates an underwriting referral.
+- Authority exceptions require the dedicated `uw.authority.override` permission
+  and a recorded reason. The resulting referral is linked to the committed
+  policy transaction and immutable policy version.
+- Grant creation and changes are retained in a tenant-scoped audit log.
+
+Reproducible Policy Packets
+- Bind, issue, endorsement, cancellation, reinstatement, renewal, rewrite, and
+  non-renewal generate transaction-scoped packets from exact form editions.
+- Packet records pin the policy version, canonical input snapshot hash, form-set
+  hash, rendered-content hash, and the complete source snapshots needed for
+  deterministic regeneration.
+- Required forms are validated before transaction completion. Stored bytes are
+  verified immediately after generation and again before download; integrity
+  failures are exposed as a visible document exception state.
+- Required delivery methods begin with pending evidence and can be updated with
+  delivery status, evidence reference, actor, and timestamp.
 
 OpenAPI / Swagger Access Model
 - Swagger UI (`/api-docs`) and OpenAPI spec (`/openapi.json`) are admin-only.

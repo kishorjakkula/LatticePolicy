@@ -59,4 +59,18 @@ describe('patch.utils', () => {
       customer: { contact: { email: 'test@example.com' } },
     })
   })
+
+  it('ignores patch operations targeting __proto__, constructor, or prototype segments', () => {
+    const payload: Record<string, unknown> = { risk: { state: 'CA' } }
+
+    applyJsonPatch(payload, [
+      { op: 'add', path: '/__proto__/polluted', value: true },
+      { op: 'add', path: '/constructor/prototype/polluted', value: true },
+      { op: 'replace', path: '/risk/prototype', value: 'ignored' },
+    ])
+
+    expect(({} as any).polluted).toBeUndefined()
+    expect(Object.prototype.hasOwnProperty.call(payload, '__proto__')).toBe(false)
+    expect(payload).toEqual({ risk: { state: 'CA' } })
+  })
 })

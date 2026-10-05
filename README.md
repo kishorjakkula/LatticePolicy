@@ -110,6 +110,22 @@ Benefits:
 
 The framework should treat "portal" as an access pattern, not a separate product. A portal user is a user with a constrained identity link, constrained permissions, constrained routes, and constrained data projections over the shared policy administration domain.
 
+## Product Tour
+
+These screens use the local `sample-carrier` tenant and synthetic demo data.
+
+| Sign in | Policy search |
+| --- | --- |
+| ![LatticePolicy sign-in screen](docs/assets/screenshots/login.png) | ![Policy search with an in-force policy result](docs/assets/screenshots/policy-search.png) |
+
+| Policy lifecycle | Role-based security |
+| --- | --- |
+| ![In-force policy detail and lifecycle actions](docs/assets/screenshots/policy-detail.png) | ![Administration security role and permission mapping](docs/assets/screenshots/admin-security.png) |
+
+### Customer Portal
+
+![Customer-safe policy summary and coverage view](docs/assets/screenshots/customer-portal.png)
+
 ## Repository Layout
 
 ```text
@@ -174,29 +190,60 @@ npm run dev:server
 npm run dev:frontend
 ```
 
+## Contributor On-Ramp
+
+New contributors can start with docs, tests, product-pack examples, small UI
+states, or demo experience improvements before taking on deeper policy lifecycle
+work.
+
+- Start here: [Contributor on-ramp](docs/CONTRIBUTOR_ONRAMP.md)
+- Pick scoped starter work: [First good tasks](docs/FIRST_GOOD_TASKS.md)
+- Read contribution rules: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Review architecture context: [Project context](docs/PROJECT_CONTEXT.md)
+
+Maintainers label beginner-friendly work with `good first issue` and broader
+collaboration opportunities with `help wanted`.
+
 ## Documentation
 
 - [Developer local setup](docs/DEVELOPER_SETUP.md)
+- [Contributor on-ramp](docs/CONTRIBUTOR_ONRAMP.md)
 - [AI contributor process](docs/AI_CONTRIBUTOR_PROCESS.md)
+- [First good tasks](docs/FIRST_GOOD_TASKS.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Public GitHub roadmap board](https://github.com/users/kishorjakkula/projects/1)
 - [Release process](docs/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
 - [GitHub roadmap setup](docs/GITHUB_ROADMAP_SETUP.md)
+- [Epic development workflow](docs/EPIC_WORKFLOW.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [API](docs/API.md)
 - [Domain model](docs/DOMAIN.md)
+- [Insurance and platform glossary](docs/GLOSSARY.md)
 - [Notifications and notices](docs/NOTIFICATIONS.md)
 - [Multitenancy](docs/MULTITENANCY.md)
 - [Data model ERD](docs/DATA_MODEL_ERD.md)
 - [Cloud deployment](docs/CLOUD_DEPLOYMENT.md)
+- [Production runtime configuration](docs/PRODUCTION_RUNTIME_CONFIGURATION.md)
+- [Frontend production configuration](docs/FRONTEND_PRODUCTION_CONFIGURATION.md)
+- [Production runbooks](docs/PRODUCTION_RUNBOOKS.md)
 - [AWS GitHub Actions deployment](docs/GITHUB_ACTIONS_AWS.md)
 - [Open-source readiness](docs/OPEN_SOURCE_READINESS.md)
+- [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md)
+- [Commercial support and services](COMMERCIAL.md)
+- [Carrier onboarding and go-live certification kit](docs/CARRIER_ONBOARDING_KIT.md)
+- [Enterprise identity and security controls](docs/ENTERPRISE_IDENTITY_SECURITY.md)
+- [Reinsurance treaty and facultative placement model](docs/REINSURANCE_MODEL.md)
+- [ACORD and GRLC canonical data mapping](docs/ACORD_GRLC_MAPPING.md)
+- [Bordereaux generation and validation framework](docs/tasks/issue-62-bordereaux-framework.md)
+- [Data migration and legacy book import framework](docs/DATA_IMPORT_DESIGN.md)
+- [Data import templates](docs/DATA_IMPORT_TEMPLATES.md)
 
 ## Extension Points
 
 The framework is intended to be extended through product packs, tenant configuration, and service adapters. The existing sample tenant and product folders are the best starting point:
 
-- `products/`
+- `products/` — see [Product pack extension contract](docs/PRODUCT_PACK_CONTRACT.md) for the required files and framework code paths.
 - `tenants/sample-carrier/`
 - `server/src/`
 - `contracts/`
@@ -210,6 +257,10 @@ Report security issues using the process in [SECURITY.md](SECURITY.md).
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, standards, and pull request guidance.
+
+## Commercial Support
+
+LatticePolicy is fully open-source with no feature gating. Paid implementation, hosting, and deployment support may also be available; see [COMMERCIAL.md](COMMERCIAL.md).
 
 ## License
 

@@ -48,6 +48,7 @@ export function AdminIndexRedirect() {
   if (hasPermission(user, 'page.admin.security.view')) return <Navigate to="/admin/security" replace />
   if (hasPermission(user, 'page.admin.customers.view')) return <Navigate to="/admin/customers" replace />
   if (hasPermission(user, 'page.admin.onboarding.view')) return <Navigate to="/admin/onboarding" replace />
+  if (hasPermission(user, 'page.admin.notifications.view')) return <Navigate to="/admin/notification-templates" replace />
   return <Navigate to={resolveHomePath(user)} replace />
 }
 

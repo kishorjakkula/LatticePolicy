@@ -49,6 +49,8 @@ jobs:
             ECS_CONTAINER_NAME_API
             ECS_CONTAINER_NAME_FRONTEND
             VITE_API_BASE_URL
+            TEST_API_HEALTH_URL
+            TEST_FRONTEND_URL
             AWS_ROLE_TO_ASSUME
           )
 
@@ -108,6 +110,14 @@ jobs:
           container-name: ${{ env.ECS_CONTAINER_NAME_API }}
           image: ${{ steps.api-image.outputs.image }}
 
+      - name: Require API deployment rollback on failure
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_API" \
+            --deployment-configuration 'deploymentCircuitBreaker={enable=true,rollback=true}' \
+            >/dev/null
+
       - name: Deploy API service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
@@ -133,11 +143,10 @@ jobs:
           wait-for-service-stability: true
 
       - name: Smoke test API health
-        if: ${{ env.TEST_API_HEALTH_URL != '' }}
         run: |
-          curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL"
+          body=$(curl --fail --silent --show-error --retry 6 --retry-delay 10 --retry-all-errors "$TEST_API_HEALTH_URL")
+          echo "$body" | grep -q '"status":"ok"'
 
       - name: Smoke test frontend
-        if: ${{ env.TEST_FRONTEND_URL != '' }}
         run: |
           curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_FRONTEND_URL"

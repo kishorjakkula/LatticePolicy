@@ -1,4 +1,7 @@
-type RouteDef = {
+import { collectRegisteredRoutes } from './route-registry.js'
+import { routes } from './routes/index.js'
+
+export type RouteDef = {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete'
   path: string
   tag: string
@@ -7,7 +10,7 @@ type RouteDef = {
   requiresAuth?: boolean
 }
 
-const routeDefs: RouteDef[] = [
+export const routeDefs: RouteDef[] = [
   { method: 'get', path: '/health', tag: 'System', summary: 'Health check', requiresAuth: false, requiresTenant: false },
   { method: 'post', path: '/auth/login', tag: 'Auth', summary: 'Login', requiresAuth: false, requiresTenant: false },
   { method: 'post', path: '/auth/mfa/verify', tag: 'Auth', summary: 'Verify MFA', requiresAuth: false, requiresTenant: false },
@@ -47,6 +50,10 @@ const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/policies/{id}/full', tag: 'Policies', summary: 'Get reconstructed policy payload' },
   { method: 'get', path: '/v1/policies/{id}/state', tag: 'Policies', summary: 'Get policy state snapshot' },
   { method: 'get', path: '/v1/policies/{id}/timeline', tag: 'Policies', summary: 'Get policy history timeline' },
+  { method: 'get', path: '/v1/policies/{id}/documents', tag: 'Documents', summary: 'List version-pinned policy documents and evidence' },
+  { method: 'get', path: '/v1/policies/{id}/documents/{documentId}/content', tag: 'Documents', summary: 'Retrieve and verify policy document content' },
+  { method: 'patch', path: '/v1/policies/{id}/documents/{documentId}/delivery', tag: 'Documents', summary: 'Record policy document delivery evidence' },
+  { method: 'post', path: '/v1/policies/{id}/documents/{documentId}/regenerate', tag: 'Documents', summary: 'Deterministically regenerate and verify a policy document' },
 
   { method: 'post', path: '/v1/policies/{id}/endorse/reserve-number', tag: 'Transactions', summary: 'Reserve endorsement number' },
   { method: 'post', path: '/v1/policies/{id}/transactions/reserve-number', tag: 'Transactions', summary: 'Reserve transaction number' },
@@ -57,14 +64,30 @@ const routeDefs: RouteDef[] = [
   { method: 'post', path: '/v1/policies/{id}/rewrite', tag: 'Transactions', summary: 'Issue rewrite' },
   { method: 'post', path: '/v1/policies/{id}/renew', tag: 'Transactions', summary: 'Issue renewal' },
   { method: 'post', path: '/v1/policies/{id}/renew/preview', tag: 'Transactions', summary: 'Preview renewal' },
+  { method: 'post', path: '/v1/policies/{id}/non-renew', tag: 'Transactions', summary: 'Record policy non-renewal' },
 
-  { method: 'get', path: '/v1/uw/referrals', tag: 'UW Queue', summary: 'List UW referrals' },
-  { method: 'patch', path: '/v1/uw/referrals/{versionId}/approve', tag: 'UW Queue', summary: 'Approve referral' },
-  { method: 'patch', path: '/v1/uw/referrals/{versionId}/decline', tag: 'UW Queue', summary: 'Decline referral' },
+  { method: 'get', path: '/v1/uw/referrals', tag: 'UW Queue', summary: 'List underwriting referrals' },
+  { method: 'get', path: '/v1/uw/referrals/{referralId}', tag: 'UW Queue', summary: 'Get an underwriting referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/assign', tag: 'UW Queue', summary: 'Assign a referral to an underwriter' },
+  { method: 'post', path: '/v1/uw/referrals/{referralId}/comments', tag: 'UW Queue', summary: 'Add a comment to a referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/decide', tag: 'UW Queue', summary: 'Approve, decline, or request info on a referral' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/approve', tag: 'UW Queue', summary: 'Approve referral (alias for decide)' },
+  { method: 'patch', path: '/v1/uw/referrals/{referralId}/decline', tag: 'UW Queue', summary: 'Decline referral (alias for decide)' },
+  { method: 'get', path: '/v1/uw/authority-grants', tag: 'UW Authority', summary: 'List effective-dated underwriting authority grants' },
+  { method: 'post', path: '/v1/uw/authority-grants', tag: 'UW Authority', summary: 'Create an underwriting authority grant' },
+  { method: 'patch', path: '/v1/uw/authority-grants/{grantId}', tag: 'UW Authority', summary: 'Expire or deactivate an underwriting authority grant' },
 
   { method: 'get', path: '/v1/products/{code}/config', tag: 'Products', summary: 'Get product config' },
   { method: 'get', path: '/v1/products/{code}/form', tag: 'Products', summary: 'Get product form schema' },
   { method: 'get', path: '/v1/products/{code}/field-meta', tag: 'Products', summary: 'Get product field metadata' },
+  { method: 'get', path: '/v1/product-governance/releases', tag: 'Product Governance', summary: 'List governed product releases' },
+  { method: 'post', path: '/v1/product-governance/releases', tag: 'Product Governance', summary: 'Create governed product release' },
+  { method: 'post', path: '/v1/product-governance/releases/{releaseId}/submit', tag: 'Product Governance', summary: 'Submit product release for review' },
+  { method: 'post', path: '/v1/product-governance/releases/{releaseId}/approve', tag: 'Product Governance', summary: 'Approve product release' },
+  { method: 'post', path: '/v1/product-governance/releases/{releaseId}/schedule', tag: 'Product Governance', summary: 'Schedule product release' },
+  { method: 'post', path: '/v1/product-governance/releases/{releaseId}/activate', tag: 'Product Governance', summary: 'Activate product release' },
+  { method: 'post', path: '/v1/product-governance/releases/{releaseId}/retire', tag: 'Product Governance', summary: 'Retire product release' },
+  { method: 'get', path: '/v1/product-governance/releases/{releaseId}/audit', tag: 'Product Governance', summary: 'Get product release audit history' },
 
   { method: 'get', path: '/v1/rating/models', tag: 'Rating Workbench', summary: 'List rating models' },
   { method: 'post', path: '/v1/rating/models/import', tag: 'Rating Workbench', summary: 'Import rating workbook' },
@@ -90,6 +113,8 @@ const routeDefs: RouteDef[] = [
   { method: 'patch', path: '/v1/admin/underwriting-companies/{id}', tag: 'Admin - UW Companies', summary: 'Update UW company' },
   { method: 'delete', path: '/v1/admin/underwriting-companies/{id}', tag: 'Admin - UW Companies', summary: 'Delete UW company' },
   { method: 'post', path: '/v1/admin/seed', tag: 'Admin - Utilities', summary: 'Seed demo data' },
+
+  { method: 'post', path: '/v1/admin/notification-templates/{id}/clone', tag: 'Admin - Notifications', summary: 'Clone notification template' },
 
   { method: 'get', path: '/v1/admin/forms', tag: 'Admin - Forms', summary: 'List forms' },
   { method: 'post', path: '/v1/admin/forms', tag: 'Admin - Forms', summary: 'Create form' },
@@ -152,6 +177,9 @@ const routeDefs: RouteDef[] = [
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/quotes', tag: 'Admin - Customers', summary: 'List customer quotes' },
   { method: 'get', path: '/v1/admin/customers/{idOrKey}/ai-insights', tag: 'Admin - Customers', summary: 'Get customer AI/ML insights' },
 
+  { method: 'get', path: '/v1/customer-portal/summary', tag: 'Customer Portal', summary: 'Get portal-safe customer and policy summary' },
+  { method: 'get', path: '/v1/customer-portal/policies/{policyId}', tag: 'Customer Portal', summary: 'Get portal-safe policy detail' },
+
   { method: 'get', path: '/v1/admin/onboarding/settings', tag: 'Admin - Onboarding', summary: 'Get onboarding settings' },
   { method: 'patch', path: '/v1/admin/onboarding/settings', tag: 'Admin - Onboarding', summary: 'Update onboarding settings' },
   { method: 'get', path: '/v1/admin/onboarding/agencies/search', tag: 'Admin - Onboarding', summary: 'Search agencies' },
@@ -174,8 +202,27 @@ const routeDefs: RouteDef[] = [
   { method: 'patch', path: '/v1/admin/onboarding/jobs/{jobId}/rows/{rowId}', tag: 'Admin - Onboarding', summary: 'Edit onboarding staging row' },
   { method: 'get', path: '/v1/admin/onboarding/jobs/{jobId}/results', tag: 'Admin - Onboarding', summary: 'Get onboarding artifacts/results' },
   { method: 'get', path: '/v1/admin/onboarding/history', tag: 'Admin - Onboarding', summary: 'List onboarding job history' },
-  { method: 'get', path: '/v1/admin/onboarding/audit', tag: 'Admin - Onboarding', summary: 'Get onboarding audit events' }
+  { method: 'get', path: '/v1/admin/onboarding/audit', tag: 'Admin - Onboarding', summary: 'Get onboarding audit events' },
+
+  { method: 'get', path: '/v1/admin/exposure/summary', tag: 'Admin - Exposure', summary: 'Get aggregated exposure summary' },
+  { method: 'get', path: '/v1/admin/exposure/export.csv', tag: 'Admin - Exposure', summary: 'Export exposure dataset as CSV' }
 ]
+
+export function getCompleteRouteDefs(): RouteDef[] {
+  const complete = [...routeDefs]
+  const known = new Set(complete.map((route) => `${route.method.toUpperCase()} ${route.path}`))
+  for (const route of collectRegisteredRoutes(routes, '/v1')) {
+    const key = `${route.method.toUpperCase()} ${route.path}`
+    if (known.has(key)) continue
+    complete.push({
+      ...route,
+      tag: 'API',
+      summary: `${route.method.toUpperCase()} ${route.path}`,
+    })
+    known.add(key)
+  }
+  return complete
+}
 
 function pathToParameters(path: string) {
   const matches = Array.from(path.matchAll(/\{([^}]+)\}/g))
@@ -211,40 +258,185 @@ function jsonResponse(schemaRefOrSchema: any, description = 'Success') {
   }
 }
 
-function errorResponse(schemaName = 'ErrorResponse', description = 'Error') {
-  return jsonResponse(schemaName, description)
+function errorResponse(schema = 'ErrorResponse', description = 'Error') {
+  return jsonResponse(schema, description)
+}
+
+const standardErrorResponses = {
+  '400': errorResponse('ValidationErrorResponse', 'Bad Request'),
+  '401': errorResponse('ErrorResponse', 'Unauthorized'),
+  '403': errorResponse('ErrorResponse', 'Forbidden'),
+  '404': errorResponse('ErrorResponse', 'Not Found'),
+  '409': errorResponse('ErrorResponse', 'Conflict'),
+  '422': errorResponse('ValidationErrorResponse', 'Validation Error'),
+  '500': errorResponse('ErrorResponse', 'Server Error'),
 }
 
 const componentSchemas: Record<string, any> = {
+  GenericJsonObject: {
+    type: 'object',
+    additionalProperties: true,
+    description: 'Baseline JSON object contract. Domain-specific mutation schemas override this where available.',
+  },
+  DataImportBatchRequest: {
+    type: 'object',
+    required: ['entityType', 'sourceSystem', 'rows'],
+    properties: {
+      entityType: { type: 'string', minLength: 1, maxLength: 80 },
+      sourceSystem: { type: 'string', minLength: 1, maxLength: 120 },
+      rows: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'object' } },
+      notes: { type: 'string', maxLength: 2000 },
+    },
+    additionalProperties: false,
+  },
+  ReinsuranceTreatyRequest: {
+    type: 'object',
+    required: ['treatyName', 'treatyType', 'effectiveDate', 'expirationDate', 'layers'],
+    properties: {
+      treatyName: { type: 'string', minLength: 1, maxLength: 200 },
+      treatyType: { type: 'string', minLength: 1, maxLength: 80 },
+      effectiveDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      expirationDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      layers: { type: 'array', minItems: 1, items: { type: 'object' } },
+    },
+    additionalProperties: true,
+  },
+  PortalPolicySummary: {
+    type: 'object',
+    required: ['policyId', 'policyNumber', 'productCode', 'status', 'term', 'premium', 'createdAt', 'updatedAt'],
+    properties: {
+      policyId: { type: 'string' }, policyNumber: { type: 'string' },
+      productCode: { type: 'string' }, status: { type: 'string' },
+      term: { $ref: '#/components/schemas/PortalTerm' },
+      premium: { allOf: [{ $ref: '#/components/schemas/PortalMoney' }], nullable: true },
+      createdAt: { type: 'string', nullable: true }, updatedAt: { type: 'string', nullable: true },
+    },
+    additionalProperties: false,
+  },
+  PortalTerm: {
+    type: 'object', required: ['effectiveDate', 'expirationDate'], additionalProperties: false,
+    properties: {
+      effectiveDate: { type: 'string', nullable: true },
+      expirationDate: { type: 'string', nullable: true },
+    },
+  },
+  PortalMoney: {
+    type: 'object', required: ['amount', 'currency'], additionalProperties: false,
+    properties: { amount: { type: 'number' }, currency: { type: 'string' } },
+  },
+  PortalSummaryResponse: {
+    type: 'object', required: ['customer', 'policies'], additionalProperties: false,
+    properties: {
+      customer: { type: 'object', required: ['customerId', 'customerKey', 'customerName', 'entityType'], additionalProperties: false, properties: {
+        customerId: { type: 'string' }, customerKey: { type: 'string', nullable: true },
+        customerName: { type: 'string', nullable: true }, entityType: { type: 'string', nullable: true },
+      } },
+      policies: { type: 'array', items: { $ref: '#/components/schemas/PortalPolicySummary' } },
+    },
+  },
+  PortalPolicyDetailResponse: {
+    type: 'object', required: ['policy', 'declarations', 'idCard'], additionalProperties: false,
+    properties: {
+      policy: { $ref: '#/components/schemas/PortalPolicySummary' },
+      declarations: {
+        type: 'object', additionalProperties: false,
+        required: ['policyNumber', 'productCode', 'status', 'namedInsured', 'customerKey', 'term', 'premium', 'transaction', 'coverages'],
+        properties: {
+          policyNumber: { type: 'string' }, productCode: { type: 'string' }, status: { type: 'string' },
+          namedInsured: { type: 'string' }, customerKey: { type: 'string', nullable: true },
+          term: { $ref: '#/components/schemas/PortalTerm' },
+          premium: { allOf: [{ $ref: '#/components/schemas/PortalMoney' }], nullable: true },
+          transaction: { type: 'object', nullable: true, additionalProperties: false,
+            required: ['versionId', 'transactionNumber', 'transactionType', 'transactionEffectiveDate', 'processedAt'],
+            properties: {
+              versionId: { type: 'string' }, transactionNumber: { type: 'string' }, transactionType: { type: 'string' },
+              transactionEffectiveDate: { type: 'string', nullable: true }, processedAt: { type: 'string', nullable: true },
+            },
+          },
+          coverages: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['code', 'label', 'selected', 'limit', 'deductible', 'percent'],
+            properties: {
+              code: { type: 'string' }, label: { type: 'string' }, selected: { type: 'boolean' },
+              limit: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              deductible: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              percent: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+            },
+          } },
+        },
+      },
+      idCard: {
+        type: 'object', additionalProperties: false,
+        required: ['available', 'policyNumber', 'namedInsured', 'term', 'vehicles', 'state'],
+        properties: {
+          available: { type: 'boolean' }, policyNumber: { type: 'string' }, namedInsured: { type: 'string' },
+          term: { $ref: '#/components/schemas/PortalTerm' },
+          vehicles: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['index', 'year', 'make', 'model', 'vin'],
+            properties: {
+              index: { type: 'integer', minimum: 1 },
+              year: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              make: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              model: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+              vin: { nullable: true, oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+            },
+          } },
+          state: { type: 'string', nullable: true },
+        },
+      },
+    },
+  },
+  PortalDocumentsResponse: {
+    type: 'object', required: ['documents'], additionalProperties: false,
+    properties: { documents: { type: 'array', items: { type: 'object',
+      required: ['documentId', 'displayName', 'type', 'generatedAt', 'transaction', 'forms', 'contentId'],
+      additionalProperties: false, properties: {
+      documentId: { type: 'string' }, displayName: { type: 'string' }, type: { type: 'string' },
+      generatedAt: { type: 'string', nullable: true },
+      transaction: { type: 'object', additionalProperties: false,
+        required: ['transactionId', 'transactionType', 'transactionNumber'],
+        properties: {
+          transactionId: { type: 'string', nullable: true }, transactionType: { type: 'string', nullable: true },
+          transactionNumber: { type: 'string', nullable: true },
+        },
+      },
+      forms: { type: 'array', items: { type: 'object', additionalProperties: false,
+        required: ['code', 'title', 'edition'],
+        properties: {
+          code: { type: 'string', nullable: true }, title: { type: 'string', nullable: true },
+          edition: { type: 'string', nullable: true },
+        },
+      } },
+      contentId: { type: 'string', nullable: true },
+    } } } },
+  },
   ErrorResponse: {
     type: 'object',
     required: ['code', 'message', 'traceId'],
     properties: {
-      code: { type: 'string', example: 'VALIDATION_ERROR' },
-      message: { type: 'string', example: 'Validation failed' },
+      code: { type: 'string', example: 'DB_ERROR' },
+      message: { type: 'string', example: 'Something failed' },
       traceId: {
         type: 'string',
-        description: 'Request correlation id from the x-request-id response header.',
-        example: 'req_01J7Z3N0WJ7Y0N2M5RZ0Z9R8Q1'
+        example: 'req-01HZY4W5J8Q9AVH32R3K8Z4V7P',
+        description: 'Request correlation id returned in the x-request-id response header.',
       },
       details: {
-        description: 'Optional structured error metadata. Shape depends on the error code.',
-        nullable: true
-      }
+        description: 'Optional structured machine-readable details for validation, conflict, or domain errors.',
+      },
     },
     additionalProperties: true
   },
   ContractValidationError: {
     type: 'object',
-    required: ['path', 'keyword', 'message', 'schemaSource'],
+    required: ['path', 'keyword', 'message', 'schema'],
     properties: {
       path: { type: 'string', example: '/risks/0/year' },
       keyword: { type: 'string', example: 'type' },
       message: { type: 'string', example: 'must be integer' },
-      schemaSource: { type: 'string', example: 'quote.request.schema.json#/definitions/autoVehicle/properties/year/type' },
-      params: { type: 'object', additionalProperties: true }
+      schema: { type: 'string', example: 'quote.request.schema.json' },
+      params: { type: 'object', additionalProperties: true },
     },
-    additionalProperties: false
+    additionalProperties: true,
   },
   ValidationErrorResponse: {
     allOf: [
@@ -256,44 +448,18 @@ const componentSchemas: Record<string, any> = {
           details: {
             oneOf: [
               {
-                type: 'object',
-                properties: {
-                  formErrors: { type: 'array', items: { type: 'string' } },
-                  fieldErrors: {
-                    type: 'object',
-                    additionalProperties: { type: 'array', items: { type: 'string' } }
-                  }
-                },
-                additionalProperties: true
-              },
-              {
                 type: 'array',
-                items: { $ref: '#/components/schemas/ContractValidationError' }
+                items: { $ref: '#/components/schemas/ContractValidationError' },
               },
               {
                 type: 'object',
-                additionalProperties: true
-              }
-            ]
-          }
-        }
-      }
-    ]
-  },
-  IdempotencyConflictErrorResponse: {
-    allOf: [
-      { $ref: '#/components/schemas/ErrorResponse' },
-      {
-        type: 'object',
-        properties: {
-          code: { type: 'string', example: 'IDEMPOTENCY_KEY_CONFLICT' },
-          message: {
-            type: 'string',
-            example: 'Idempotency-Key was already used with a different request'
-          }
-        }
-      }
-    ]
+                additionalProperties: true,
+              },
+            ],
+          },
+        },
+      },
+    ],
   },
   LoginRequest: {
     type: 'object',
@@ -459,6 +625,7 @@ const componentSchemas: Record<string, any> = {
     type: 'object',
     properties: {
       versionId: { type: 'string', format: 'uuid' },
+      transactionId: { type: 'string', format: 'uuid', nullable: true },
       transactionNumber: { type: 'string' },
       transactionType: { type: 'string' },
       effectiveDate: { type: 'string', format: 'date' },
@@ -599,7 +766,7 @@ const operationOverrides: Record<string, any> = {
     },
     responses: {
       '200': jsonResponse('QuoteRateResponse'),
-      '400': jsonResponse('ErrorResponse')
+      '400': jsonResponse('ValidationErrorResponse')
     }
   },
   'GET /v1/quotes/{id}': {
@@ -707,6 +874,29 @@ const operationOverrides: Record<string, any> = {
     },
     responses: { '200': jsonResponse({ type: 'object', additionalProperties: true }) }
   },
+  'POST /v1/admin/import/batches': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/DataImportBatchRequest' } } }
+    },
+    responses: { '201': jsonResponse({ type: 'object', additionalProperties: true }) }
+  },
+  'POST /v1/admin/reinsurance/treaties': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/ReinsuranceTreatyRequest' } } }
+    },
+    responses: { '201': jsonResponse({ type: 'object', additionalProperties: true }) }
+  },
+  'GET /v1/customer-portal/summary': {
+    responses: { '200': jsonResponse('PortalSummaryResponse') }
+  },
+  'GET /v1/customer-portal/policies/{policyId}': {
+    responses: { '200': jsonResponse('PortalPolicyDetailResponse') }
+  },
+  'GET /v1/customer-portal/policies/{policyId}/documents': {
+    responses: { '200': jsonResponse('PortalDocumentsResponse') }
+  },
   'GET /v1/rating/published': {
     parameters: [
       { name: 'productCode', in: 'query', schema: { type: 'string' }, required: false },
@@ -719,8 +909,14 @@ const operationOverrides: Record<string, any> = {
 }
 
 export function buildOpenApiSpec(serverUrl: string) {
+  const completeRouteDefs = getCompleteRouteDefs()
+  const routeKeys = completeRouteDefs.map((route) => `${route.method.toUpperCase()} ${route.path}`)
+  const duplicates = routeKeys.filter((key, index) => routeKeys.indexOf(key) !== index)
+  if (duplicates.length) throw new Error(`Duplicate OpenAPI routes: ${Array.from(new Set(duplicates)).join(', ')}`)
+  const staleOverrides = Object.keys(operationOverrides).filter((key) => !routeKeys.includes(key))
+  if (staleOverrides.length) throw new Error(`OpenAPI overrides reference missing routes: ${staleOverrides.join(', ')}`)
   const paths: Record<string, any> = {}
-  for (const route of routeDefs) {
+  for (const route of completeRouteDefs) {
     const path = route.path
     const method = route.method
     if (!paths[path]) paths[path] = {}
@@ -737,13 +933,13 @@ export function buildOpenApiSpec(serverUrl: string) {
       security,
       responses: {
         '200': { description: 'Success' },
-        '400': errorResponse('ErrorResponse', 'Bad Request'),
-        '401': errorResponse('ErrorResponse', 'Unauthorized'),
-        '403': errorResponse('ErrorResponse', 'Forbidden'),
-        '404': errorResponse('ErrorResponse', 'Not Found'),
-        '409': errorResponse('IdempotencyConflictErrorResponse', 'Idempotency key conflict'),
-        '422': errorResponse('ValidationErrorResponse', 'Validation failed'),
-        '500': errorResponse('ErrorResponse', 'Server Error')
+        ...standardErrorResponses
+      }
+    }
+    if (['post', 'patch', 'put'].includes(method)) {
+      ;(baseOp as any).requestBody = {
+        required: false,
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/GenericJsonObject' } } },
       }
     }
     const mergedOp = {
@@ -764,10 +960,10 @@ export function buildOpenApiSpec(serverUrl: string) {
       title: 'LatticePolicy API',
       version: '1.0.0',
       description:
-        'Operational API inventory for LatticePolicy. This is a route-level catalog (schemas are intentionally minimal and can be expanded into a full OpenAPI contract).'
+        'Runtime-derived API inventory for LatticePolicy with baseline mutation contracts and detailed schemas for high-risk operations.'
     },
     servers: [{ url: serverUrl }],
-    tags: Array.from(new Set(routeDefs.map((r) => r.tag))).sort().map((name) => ({ name })),
+    tags: Array.from(new Set(completeRouteDefs.map((r) => r.tag))).sort().map((name) => ({ name })),
     components: {
       securitySchemes: {
         BearerAuth: {

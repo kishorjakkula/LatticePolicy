@@ -257,14 +257,14 @@ describe('customer portal, RBAC, and cache integration', () => {
     const token = await login(`portal-doc-ada-${run}`)
 
     const res = await authGet(`/api/v1/customer-portal/policies/${adaPolicy.policyId}/documents`, token).expect(200)
-    expect(res.body.documents).toHaveLength(1)
-    expect(res.body.documents[0]).toMatchObject({
+    const safeDocument = res.body.documents.find((document: any) => document.documentId === safeDocumentId)
+    expect(safeDocument).toMatchObject({
       documentId: safeDocumentId,
       displayName: 'Policy Document Packet',
       type: 'POLICY_PACKET',
       contentId: 'hash-safe',
     })
-    expect(res.body.documents[0].forms).toEqual([{ code: 'PA-DEC', title: 'Declarations', edition: '2024-01' }])
+    expect(safeDocument.forms).toEqual([{ code: 'PA-DEC', title: 'Declarations', edition: '2024-01' }])
     expect(JSON.stringify(res.body)).not.toContain(internalDocumentId)
     expect(JSON.stringify(res.body)).not.toContain('generated://')
 

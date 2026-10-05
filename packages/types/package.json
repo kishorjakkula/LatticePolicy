@@ -1,6 +1,6 @@
 {
   "name": "@lattice-policy/types",
-  "version": "0.1.0",
+  "version": "0.2.3",
   "description": "Shared LatticePolicy TypeScript types.",
   "private": true,
   "license": "Apache-2.0",
@@ -10,6 +10,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "zod": "^3.23.0"
+    "zod": "^4.6.5"
   }
 }

@@ -8,6 +8,11 @@ Automated tests are part of the definition of done for behavior changes. Any
 new functionality or change in functionality should include automated coverage
 in the same pull request.
 
+CI runs `npm run test:coverage` and enforces the current repository baselines:
+20% statements, 20% lines, 20% functions, and 15% branches in both workspaces.
+Raise these thresholds as coverage grows; lowering them requires an explicit
+review justification.
+
 Choose the lowest-cost test layer that proves the behavior, then add broader
 coverage when the risk crosses module, API, database, tenant, security, or user
 workflow boundaries. A PR may skip new automation only when it is
@@ -164,6 +169,12 @@ Add Playwright E2E:
 - Key responsive smoke tests.
 
 ## Running Tests
+
+The production policy scenario matrix is implemented in
+`server/src/__tests__/production-policy-scenario-matrix.integration.test.ts`
+with reusable fixtures under `server/src/__tests__/fixtures/`. Its browser
+critical path is `e2e/production-policy-scenarios.spec.ts`; both suites run in
+the required CI integration and Playwright jobs.
 
 ```bash
 npm run test:server

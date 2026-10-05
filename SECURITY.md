@@ -23,3 +23,7 @@ Maintainers should acknowledge reports within 5 business days and coordinate dis
 - Keep tenant isolation checks in API and data access changes.
 - Treat policy, claims, customer, and rating data as sensitive.
 - Use strong local secrets when testing authentication or token flows.
+
+See [Enterprise identity and security controls](docs/ENTERPRISE_IDENTITY_SECURITY.md)
+for SSO, account lockout, password policy, production CORS/CSP, and
+sensitive-data audit logging details.

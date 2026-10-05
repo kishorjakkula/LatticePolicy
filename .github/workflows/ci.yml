@@ -29,7 +29,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check module boundaries
+        run: npm run check:architecture
+
       - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://api.example.com
+          VITE_USE_MOCK: "0"
         run: npm run build:frontend
 
       - name: Test frontend
@@ -40,6 +46,9 @@ jobs:
 
       - name: Test server
         run: npm run test:server
+
+      - name: Enforce coverage thresholds
+        run: npm run test:coverage
 
       - name: Typecheck
         run: npm run typecheck
@@ -107,7 +116,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -115,7 +124,7 @@ jobs:
 
       - name: Upload Playwright test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-test-results
           path: test-results/

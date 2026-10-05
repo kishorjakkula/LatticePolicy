@@ -14,6 +14,14 @@ export function usePolicy(id: string) {
   })
 }
 
+export function usePolicyAsOf(id: string, asOf: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.policies.detail(id), 'asOf', asOf],
+    queryFn: () => api.getPolicyState(id, asOf || undefined),
+    enabled: !!id && !!asOf,
+  })
+}
+
 export function usePolicyVersions(id: string) {
   return useQuery({
     queryKey: queryKeys.policies.versions(id),
@@ -34,6 +42,14 @@ export function usePolicyTimeline(id: string) {
   return useQuery({
     queryKey: queryKeys.policies.timeline(id),
     queryFn: () => api.getPolicyTimeline(id),
+    enabled: !!id,
+  })
+}
+
+export function usePolicyDocuments(id: string) {
+  return useQuery({
+    queryKey: queryKeys.policies.documents(id),
+    queryFn: () => api.getPolicyDocuments(id),
     enabled: !!id,
   })
 }

@@ -1,7 +1,13 @@
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { requirePermission } from '../auth.js'
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { isUuidLike } from '../lib/utils.js'
+import { getRequestLogger } from '../logger.js'
+import {
+  PortalResponseContractError,
+  validatePortalResponse,
+  type PortalResponseContract,
+} from '../contracts/customer-portal.contracts.js'
 
 export const customerPortalRoutes = Router()
 
@@ -9,6 +15,27 @@ customerPortalRoutes.use(requirePermission('customer.portal.read'))
 
 // `Inforced` is a derived UI status; persisted policy_status_enum values are used here.
 const PORTAL_VISIBLE_POLICY_STATUSES = ['Issued', 'Expired', 'Cancelled']
+
+function sendPortalResponse(
+  req: Request,
+  res: Response,
+  contract: PortalResponseContract,
+  payload: unknown,
+) {
+  try {
+    return res.json(validatePortalResponse(contract, payload))
+  } catch (error) {
+    if (!(error instanceof PortalResponseContractError)) throw error
+    getRequestLogger(req, res).error(
+      { contract, issues: error.issues },
+      'Customer portal response contract validation failed',
+    )
+    return res.status(500).json({
+      code: 'PORTAL_RESPONSE_CONTRACT_ERROR',
+      message: 'Customer portal response could not be generated',
+    })
+  }
+}
 
 
 function titleize(code: string): string {
@@ -158,7 +185,7 @@ customerPortalRoutes.get('/summary', async (req, res) => {
       updatedAt: row.updated_at || null
     }))
 
-    return res.json({
+    return sendPortalResponse(req, res, 'summary', {
       customer: portalCustomer,
       policies
     })
@@ -266,7 +293,7 @@ customerPortalRoutes.get('/policies/:policyId', async (req, res) => {
       state: String(payload?.state || payload?.jurisdictionCode || '').trim() || null
     }
 
-    return res.json({
+    return sendPortalResponse(req, res, 'policyDetail', {
       policy: {
         policyId: String(policyRow.policy_id),
         policyNumber: declarations.policyNumber,
@@ -363,7 +390,7 @@ customerPortalRoutes.get('/policies/:policyId/documents', async (req, res) => {
       }
     })
 
-    return res.json({ documents })
+    return sendPortalResponse(req, res, 'documents', { documents })
   } catch (err: any) {
     return res.status(500).json({ code: 'DB_ERROR', message: String(err?.message || err) })
   }

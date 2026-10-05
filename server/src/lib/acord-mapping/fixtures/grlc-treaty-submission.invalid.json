@@ -1,0 +1,14 @@
+{
+  "TreatyName": "Broken Treaty",
+  "TreatyTypeCd": "NOT_A_REAL_TYPE",
+  "ContractTerm.EffectiveDt": "2026-01-01",
+  "ContractTerm.ExpirationDt": "2027-01-01",
+  "TreatyLayer": [
+    {
+      "LayerNumber": 1,
+      "CededPct": 140,
+      "RetainedPct": 60,
+      "SecurityInfo": []
+    }
+  ]
+}

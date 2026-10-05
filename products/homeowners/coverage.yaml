@@ -1,5 +1,25 @@
 product: homeowners
 version: 1.0.0
+capabilities:
+  label: Homeowners
+  riskLabel: Property
+  ratingAdapter: homeowners
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    dwelling: HO.Dwelling
+    otherStructure: HO.OtherStructure
+    personalProperty: HO.PersonalProperty
+    liability: HO.LiabilityExposure
+  defaultRisk:
+    type: dwelling
+    address: ''
+    yearBuilt: 2000
+    squareFeet: 1800
+    construction: frame
+    roofAgeYears: 10
+    occupancy: OwnerOccupied
+  ui: {}
 coverages:
   - code: A
     name: Dwelling
@@ -40,4 +60,3 @@ ratingKeys:
     name: Water Backup
     selectable: true
     limits: [2500, 5000, 10000]
-

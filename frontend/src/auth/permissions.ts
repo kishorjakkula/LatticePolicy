@@ -17,6 +17,9 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'menu.admin.security.view',
     'menu.admin.customers.view',
     'menu.admin.onboarding.view',
+    'menu.admin.notifications.view',
+    'menu.admin.compliance.view',
+    'menu.admin.import.view',
     'page.search.view',
     'page.portal.view',
     'page.rating.view',
@@ -30,6 +33,9 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.admin.security.view',
     'page.admin.customers.view',
     'page.admin.onboarding.view',
+    'page.admin.notifications.view',
+    'page.admin.compliance.view',
+    'page.admin.import.view',
     'admin.forms.read',
     'admin.forms.manage',
     'admin.forms.approve',
@@ -55,8 +61,35 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.onboarding.upload',
     'admin.onboarding.service',
     'admin.onboarding.approve',
+    'admin.notifications.read',
+    'admin.notifications.manage',
+    'admin.compliance.read',
+    'admin.compliance.manage',
+    'admin.import.read',
+    'admin.import.manage',
+    'menu.admin.dashboard.view',
+    'page.admin.dashboard.view',
+    'admin.dashboard.read',
+    'menu.admin.exposure.view',
+    'page.admin.exposure.view',
+    'admin.exposure.read',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage',
+    'menu.admin.jobs.view',
+    'page.admin.jobs.view',
+    'admin.jobs.read',
+    'admin.jobs.manage',
     'uw.referrals.read',
     'uw.referrals.decide',
+    'uw.authority.read',
+    'uw.authority.manage',
+    'uw.authority.override',
     'rating.models.read',
     'rating.models.manage',
     'rating.models.publish'
@@ -72,16 +105,47 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'page.policy.view',
     'page.uw_queue.view',
     'uw.referrals.read',
-    'uw.referrals.decide'
+    'uw.referrals.decide',
+    'uw.authority.read',
+    'uw.authority.override',
+    'menu.placements.view',
+    'page.placements.view',
+    'placement.read',
+    'placement.manage'
   ],
   forms_admin: ['menu.admin.view', 'menu.admin.forms.view', 'page.admin.forms.view', 'admin.forms.read', 'admin.forms.manage'],
   compliance_admin: [
     'menu.admin.view',
     'menu.admin.forms.view',
+    'menu.admin.compliance.view',
     'page.admin.forms.view',
+    'page.admin.compliance.view',
     'admin.forms.read',
     'admin.forms.manage',
-    'admin.forms.approve'
+    'admin.forms.approve',
+    'admin.compliance.read',
+    'admin.compliance.manage'
+  ],
+  reinsurance_admin: [
+    'menu.admin.view',
+    'menu.admin.reinsurance.view',
+    'page.admin.reinsurance.view',
+    'admin.reinsurance.read',
+    'admin.reinsurance.manage'
+  ],
+  bordereaux_admin: [
+    'menu.admin.view',
+    'menu.admin.bordereaux.view',
+    'page.admin.bordereaux.view',
+    'admin.bordereaux.read',
+    'admin.bordereaux.manage'
+  ],
+  data_import_admin: [
+    'menu.admin.view',
+    'menu.admin.import.view',
+    'page.admin.import.view',
+    'admin.import.read',
+    'admin.import.manage'
   ],
   security_admin: [
     'menu.admin.view',
@@ -137,6 +201,26 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'admin.onboarding.manage',
     'admin.onboarding.upload',
     'admin.onboarding.service'
+  ],
+  notification_admin: [
+    'menu.admin.view',
+    'menu.admin.notifications.view',
+    'page.admin.notifications.view',
+    'admin.notifications.read',
+    'admin.notifications.manage'
+  ],
+  jobs_admin: [
+    'menu.admin.view',
+    'menu.admin.jobs.view',
+    'page.admin.jobs.view',
+    'admin.jobs.read',
+    'admin.jobs.manage'
+  ],
+  exposure_admin: [
+    'menu.admin.view',
+    'menu.admin.exposure.view',
+    'page.admin.exposure.view',
+    'admin.exposure.read'
   ],
   read_only: ['menu.search.view', 'page.search.view', 'page.policy.view']
 }

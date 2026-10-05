@@ -1,0 +1,45 @@
+{
+  "entityType": "producer",
+  "status": "framework-only",
+  "note": "Same status as agency.json: rows can be staged, but there is no validator/commit handler yet. Proposes the target shape for an individual producer (agent) linked to a parent agency, distinct from the agency org record itself.",
+  "mapsTo": {
+    "party": "parties (type='producer')",
+    "roles": "party_roles (roleCode='PRODUCER')",
+    "contacts": "party_contacts",
+    "licenses": "party_licenses"
+  },
+  "fields": [
+    { "name": "firstName", "required": true, "mapsTo": "parties.name.firstName" },
+    { "name": "lastName", "required": true, "mapsTo": "parties.name.lastName" },
+    { "name": "agencyExternalId", "required": false, "description": "Links this producer to an agency row imported via agency.json, resolved through import_external_refs rather than a direct foreign key at staging time." },
+    { "name": "licenses[].licenseType", "required": false, "mapsTo": "party_licenses.license_type" },
+    { "name": "licenses[].licenseNumber", "required": false, "mapsTo": "party_licenses.license_number" },
+    { "name": "licenses[].jurisdictionCode", "required": false, "mapsTo": "party_licenses.jurisdiction_code" },
+    { "name": "externalIdentifiers[].sourceSystem", "required": true, "mapsTo": "import_external_refs.source_system" },
+    { "name": "externalIdentifiers[].externalId", "required": true, "mapsTo": "import_external_refs.external_id" }
+  ],
+  "sampleRows": [
+    {
+      "firstName": "Marcus",
+      "lastName": "Reyes",
+      "agencyExternalId": "AGY-000042",
+      "licenses": [
+        { "licenseType": "ProducerLicense", "licenseNumber": "TX-PR-771234", "jurisdictionCode": "TX" }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "PROD-001001" }
+      ]
+    },
+    {
+      "firstName": "Priya",
+      "lastName": "Natarajan",
+      "agencyExternalId": "AGY-000091",
+      "licenses": [
+        { "licenseType": "ProducerLicense", "licenseNumber": "FL-PR-552301", "jurisdictionCode": "FL" }
+      ],
+      "externalIdentifiers": [
+        { "sourceSystem": "legacy-pas-v1", "externalId": "PROD-001002" }
+      ]
+    }
+  ]
+}

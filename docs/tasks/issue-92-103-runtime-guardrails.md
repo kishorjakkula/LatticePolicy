@@ -1,70 +1,65 @@
-# Task Note: Production Runtime Guardrails
+# Task Note: Runtime Guardrails
 
 ## Links
 
-- Issue: https://github.com/kishorjakkula/LatticePolicy/issues/92
-- Issue: https://github.com/kishorjakkula/LatticePolicy/issues/103
+- Issues: #92, #103
 - Pull request:
 
 ## Summary
 
-Issues #92 and #103 both apply to server startup and auth behavior. The server
-already had a small managed-deployment validator, but it did not treat
-`NODE_ENV=production` as production-like and did not reject weak/default
-runtime values. This change keeps local demo mode easy while making
-production/managed runtime validation fail fast on missing or unsafe settings.
+Managed deployments now fail fast when production runtime configuration is
+missing or unsafe. The server validates required database, auth, customer-data,
+MFA, CORS, and cache settings before startup-sensitive helpers return defaults.
+The frontend also rejects production builds that still point at the mock API.
 
 ## Important Files
 
-- `server/src/config.ts`: central runtime validation, secret helpers, allowed
-  origin parsing, and managed deployment detection.
-- `server/src/auth.ts`: DB-backed login no longer seeds local demo users in
-  managed/production deployments.
-- `server/src/__tests__/config.test.ts`: regression coverage for missing,
-  unsafe, and valid production runtime settings.
-- `server/src/__tests__/auth-demo-access.test.ts`: regression coverage for
-  local demo login and managed demo-seeding behavior.
+- `server/src/config.ts`: central managed-deployment validation and secret/origin guardrails.
+- `server/src/auth.ts`: avoids local demo user seeding in managed database-backed login.
+- `frontend/src/config.ts`: production Vite build guardrail for mock mode and API URL.
+- `.github/workflows/ci.yml`: supplies production-safe Vite settings for CI builds.
+- `.env.example`, `frontend/.env.example`, `docs/CLOUD_DEPLOYMENT.md`: documents safe runtime values.
 
 ## Behavior Rules
 
-- `NODE_ENV=production` is treated as a managed deployment even when
-  `DEPLOYMENT_ENV`/`APP_ENV` are unset.
+- `NODE_ENV=production` and `DEPLOYMENT_ENV` values of `test`, `validation`,
+  `staging`, or `production` are managed deployments.
+- `DEPLOYMENT_ENV=local` is reserved for local Docker/demo smoke tests and keeps
+  demo defaults available even when the container image sets `NODE_ENV=production`.
 - Managed deployments require `DATABASE_URL`, `JWT_SECRET`,
   `CUSTOMER_DATA_KEY`, `MFA_TOKEN_SECRET`, and `ALLOWED_ORIGINS`.
-- Managed deployment secrets must be non-placeholder, at least 32 characters,
-  and distinct from one another.
-- Managed `ALLOWED_ORIGINS` values must be explicit HTTPS origins, not `*` or
-  localhost URLs.
-- `CACHE_ENABLED=true` requires `REDIS_URL`.
-- `DEMO_ACCESS_MODE=invite_only` still requires a non-empty demo allowlist.
-- In-memory demo login remains available outside managed deployments.
-- DB-backed login must not call `ensureDefaults()` in managed deployments,
-  because that helper can create local demo users with password `password`.
+- Managed secrets must be unique, non-placeholder values with at least 32
+  characters.
+- Managed CORS origins must be explicit HTTPS origins, not wildcard, HTTP, or
+  localhost values.
+- `CACHE_ENABLED` requires `REDIS_URL` in managed deployments.
+- Production frontend builds require `VITE_USE_MOCK=0/false` and an absolute
+  HTTPS `VITE_API_BASE_URL`, except for localhost/127.0.0.1 URLs used by local
+  smoke tests.
+- Local/demo mode remains available when the deployment is not managed.
 
 ## Automated Tests
 
 - Tests added or updated:
   - `server/src/__tests__/config.test.ts`
   - `server/src/__tests__/auth-demo-access.test.ts`
-- Test layer used: server unit/API-helper tests with Vitest mocks.
-- Why this layer is enough: the changed behavior is pure runtime validation
-  and auth branching before persistence-specific user lookup.
+  - `frontend/src/__tests__/config.test.ts`
+- Test layer used: server and frontend unit tests.
+- Why this layer is enough: the change is runtime configuration validation and
+  auth fallback branching, both of which are exercised without a live database
+  or browser.
 
 ## Validation
 
-Attempted:
-
 ```bash
 npm run test --workspace=server -- src/__tests__/config.test.ts src/__tests__/auth-demo-access.test.ts
+npm run test --workspace=frontend -- src/__tests__/config.test.ts
+npm run build:frontend
+npm run build:server
+npm run typecheck
 ```
-
-Result: blocked locally because this shell has `npm` but no `node` binary
-available (`env: node: No such file or directory`).
 
 ## Follow-Ups Or Risks
 
-- Issue #103 also mentions frontend production build variables and broader
-  deployment documentation. Those are intentionally out of scope for this
-  backend-only change.
-- Existing cloud/developer setup docs may need a follow-up update to reflect
-  the stronger production secret length and origin rules.
+- Deployment workflows must continue to pass real HTTPS frontend API URLs when
+  building production frontend images.

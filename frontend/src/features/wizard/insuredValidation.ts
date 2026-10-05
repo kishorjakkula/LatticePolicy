@@ -61,7 +61,7 @@ export function validateInsureds(insureds: any, productCode: ProductCode | strin
   validateOptionalNamedInsured(errs, 'insureds.secondary', 'Secondary insured', insureds?.secondary)
 
   const additional = Array.isArray(insureds?.additional) ? insureds.additional : []
-  additional.forEach((party, index) => {
+  additional.forEach((party: InsuredLike, index: number) => {
     validateOptionalNamedInsured(errs, `insureds.additional.${index}`, `Additional insured ${index + 1}`, party)
   })
 

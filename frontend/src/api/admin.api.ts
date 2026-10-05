@@ -5,6 +5,85 @@ export const adminApi = {
   createUser: (payload: { username: string; password: string; roles: string[]; customerRef?: string }) => request<any>('POST', '/v1/admin/users', payload),
   updateUser: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/users/${id}`, patch),
   deleteUser: (id: string) => request<any>('DELETE', `/v1/admin/users/${id}`),
+  // Compliance administration
+  listEligibility: (opts?: { productCode?: string; stateCode?: string; status?: string }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.stateCode) params.set('stateCode', opts.stateCode)
+    if (opts?.status) params.set('status', opts.status)
+    const qs = params.toString()
+    return request<{ items: any[] }>('GET', `/v1/admin/compliance/eligibility${qs ? `?${qs}` : ''}`)
+  },
+  createEligibility: (payload: any) => request<any>('POST', '/v1/admin/compliance/eligibility', payload),
+  updateEligibility: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/compliance/eligibility/${id}`, patch),
+  importOfacSdnList: (entries: any[]) => request<{ imported: number }>('POST', '/v1/admin/compliance/ofac/sdn-list/import', { entries }),
+  listOfacScreens: (disposition?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/compliance/ofac/screens${disposition ? `?disposition=${disposition}` : ''}`),
+  dispositionOfacScreen: (screenId: string, payload: { disposition: string; reason: string }) =>
+    request<any>('PATCH', `/v1/admin/compliance/ofac/screens/${screenId}`, payload),
+  // Reinsurance administration
+  listTreaties: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/treaties${status ? `?status=${status}` : ''}`),
+  createTreaty: (payload: any) => request<any>('POST', '/v1/admin/reinsurance/treaties', payload),
+  updateTreaty: (id: string, patch: any) => request<any>('PATCH', `/v1/admin/reinsurance/treaties/${id}`, patch),
+  listFacultative: (policyId?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/facultative${policyId ? `?policyId=${policyId}` : ''}`),
+  createFacultative: (payload: any) => request<any>('POST', '/v1/admin/reinsurance/facultative', payload),
+  computePlacement: (policyId: string, transactionId: string) =>
+    request<{ items: any[] }>('POST', `/v1/admin/reinsurance/policies/${policyId}/transactions/${transactionId}/compute`),
+  listPolicyPlacements: (policyId: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/reinsurance/policies/${policyId}/placements`),
+  // Bordereaux administration
+  listBordereauxBatches: (bordereauType?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/bordereaux/batches${bordereauType ? `?bordereauType=${bordereauType}` : ''}`),
+  getBordereauxBatch: (batchId: string) => request<any>('GET', `/v1/admin/bordereaux/batches/${batchId}`),
+  generateBordereauxBatch: (payload: any) => request<any>('POST', '/v1/admin/bordereaux/batches', payload),
+  listBordereauxRows: (batchId: string) => request<{ items: any[] }>('GET', `/v1/admin/bordereaux/batches/${batchId}/rows`),
+  // Data import administration
+  listImportBatches: () => request<any[]>('GET', '/v1/admin/import/batches'),
+  getImportBatch: (batchId: string) => request<any>('GET', `/v1/admin/import/batches/${batchId}`),
+  listImportRows: (batchId: string, status?: string) =>
+    request<any[]>('GET', `/v1/admin/import/batches/${batchId}/rows${status ? `?status=${status}` : ''}`),
+  stageImportBatch: (payload: { entityType: string; sourceSystem: string; rows: any[]; notes?: string }) =>
+    request<any>('POST', '/v1/admin/import/batches', payload),
+  validateImportBatch: (batchId: string) => request<any>('POST', `/v1/admin/import/batches/${batchId}/validate`, {}),
+  commitImportBatch: (batchId: string) => request<any>('POST', `/v1/admin/import/batches/${batchId}/commit`, {}),
+  retryImportRow: (batchId: string, rowId: string) =>
+    request<any>('POST', `/v1/admin/import/batches/${batchId}/rows/${rowId}/retry`, {}),
+  // Operations dashboard
+  getDashboardSummary: () => request<any>('GET', '/v1/admin/dashboard/summary'),
+  listDashboardOutbox: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/outbox${status ? `?status=${status}` : ''}`),
+  listDashboardNotifications: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/notifications${status ? `?status=${status}` : ''}`),
+  listPolicyIntegrityExceptions: (status?: string) =>
+    request<{ items: any[] }>('GET', `/v1/admin/dashboard/policy-integrity${status ? `?status=${status}` : ''}`),
+  updatePolicyIntegrityException: (id: string, status: 'Acknowledged' | 'Resolved', note?: string) =>
+    request<any>('PATCH', `/v1/admin/dashboard/policy-integrity/${id}`, { status, note }),
+  retryPolicyIntegrityException: (id: string) =>
+    request<any>('POST', `/v1/admin/dashboard/policy-integrity/${id}/retry`, {}),
+  exportPolicyIntegrityExceptions: () => requestBlob('/v1/admin/dashboard/policy-integrity?format=csv'),
+  // Job queue administration
+  listJobDefinitions: () => request<{ items: any[] }>('GET', '/v1/admin/jobs/definitions'),
+  listJobRuns: (opts?: { jobCode?: string; status?: string; limit?: number }) => {
+    const params = new URLSearchParams()
+    if (opts?.jobCode) params.set('jobCode', opts.jobCode)
+    if (opts?.status) params.set('status', opts.status)
+    if (opts?.limit) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    return request<{ items: any[] }>('GET', `/v1/admin/jobs/runs${qs ? `?${qs}` : ''}`)
+  },
+  getJobRun: (runId: string) => request<{ run: any; events: any[] }>('GET', `/v1/admin/jobs/runs/${runId}`),
+  retryJobRun: (runId: string) => request<{ run: any }>('POST', `/v1/admin/jobs/runs/${runId}/retry`, {}),
+  // Exposure management
+  getExposureSummary: (opts?: { productCode?: string; state?: string; asOf?: string }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.state) params.set('state', opts.state)
+    if (opts?.asOf) params.set('asOf', opts.asOf)
+    const qs = params.toString()
+    return request<any>('GET', `/v1/admin/exposure/summary${qs ? `?${qs}` : ''}`)
+  },
   listSecurityPermissions: () => request<any[]>('GET', '/v1/admin/security/permissions'),
   listSecurityRoles: () => request<any[]>('GET', '/v1/admin/security/roles'),
   listSecurityRelationships: () => request<any>('GET', '/v1/admin/security/relationships'),
@@ -219,6 +298,7 @@ export const adminApi = {
   }) =>
     request<any>('PATCH', '/v1/admin/tenant', payload),
   seed: () => request<any>('POST', '/v1/admin/seed'),
+  seedReferenceData: () => request<any>('POST', '/v1/admin/seed-reference-data'),
   listUnderwritingCompanies: (opts?: { productCode?: string; country?: string; state?: string; includeInactive?: boolean }) => {
     const params = new URLSearchParams()
     if (opts?.productCode) params.set('productCode', opts.productCode)
@@ -233,6 +313,53 @@ export const adminApi = {
   updateUnderwritingCompany: (id: string, payload: Partial<{ name: string; productCode: string; country: string; state: string; active: boolean }>) =>
     request<any>('PATCH', `/v1/admin/underwriting-companies/${id}`, payload),
   deleteUnderwritingCompany: (id: string) => request<any>('DELETE', `/v1/admin/underwriting-companies/${id}`),
+  // Notification templates
+  listNotificationTemplates: (opts?: { eventType?: string; channel?: string; productCode?: string; transactionType?: string; active?: boolean }) => {
+    const params = new URLSearchParams()
+    if (opts?.eventType) params.set('eventType', opts.eventType)
+    if (opts?.channel) params.set('channel', opts.channel)
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.transactionType) params.set('transactionType', opts.transactionType)
+    if (opts?.active != null) params.set('active', String(opts.active))
+    const query = params.toString()
+    return request<any[]>('GET', `/v1/admin/notification-templates${query ? `?${query}` : ''}`)
+  },
+  getNotificationTemplate: (id: string) => request<any>('GET', `/v1/admin/notification-templates/${id}`),
+  createNotificationTemplate: (payload: {
+    templateCode: string
+    eventType: string
+    channel?: string
+    productCode?: string | null
+    transactionType?: string | null
+    locale?: string
+    subjectTemplate: string
+    bodyTemplate: string
+    visibility?: string[]
+    effectiveDate?: string | null
+    expirationDate?: string | null
+    active?: boolean
+    metadata?: Record<string, unknown>
+  }) => request<any>('POST', '/v1/admin/notification-templates', payload),
+  updateNotificationTemplate: (id: string, payload: Partial<{
+    templateCode: string
+    eventType: string
+    channel: string
+    productCode: string | null
+    transactionType: string | null
+    locale: string
+    subjectTemplate: string
+    bodyTemplate: string
+    visibility: string[]
+    effectiveDate: string | null
+    expirationDate: string | null
+    metadata: Record<string, unknown>
+  }>) => request<any>('PATCH', `/v1/admin/notification-templates/${id}`, payload),
+  cloneNotificationTemplate: (id: string) =>
+    request<any>('POST', `/v1/admin/notification-templates/${encodeURIComponent(id)}/clone`),
+  activateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/activate`),
+  deactivateNotificationTemplate: (id: string) => request<any>('POST', `/v1/admin/notification-templates/${id}/deactivate`),
+  previewNotificationTemplate: (payload: { subjectTemplate: string; bodyTemplate: string; sampleFields?: Record<string, unknown> }) =>
+    request<{ subject: string; body: string }>('POST', '/v1/admin/notification-templates/preview', payload),
   // Forms administration
   listForms: (opts?: {
     q?: string

@@ -59,6 +59,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.portal.view', scope: 'menu', resourceKey: 'portal', actionKey: 'view', label: 'Menu: Customer Portal', description: 'View customer portal menu entry', sortOrder: 12 },
   { permissionCode: 'menu.rating.view', scope: 'menu', resourceKey: 'rating', actionKey: 'view', label: 'Menu: Rating', description: 'View Rating workbench menu entry', sortOrder: 15 },
   { permissionCode: 'menu.uw_queue.view', scope: 'menu', resourceKey: 'uw_queue', actionKey: 'view', label: 'Menu: UW Queue', description: 'View UW Queue menu entry', sortOrder: 20 },
+  { permissionCode: 'menu.placements.view', scope: 'menu', resourceKey: 'placements', actionKey: 'view', label: 'Menu: Placements', description: 'View large commercial placements menu entry', sortOrder: 21 },
   { permissionCode: 'menu.admin.view', scope: 'menu', resourceKey: 'admin', actionKey: 'view', label: 'Menu: Administration', description: 'View Administration menu entry', sortOrder: 30 },
   { permissionCode: 'menu.admin.forms.view', scope: 'menu', resourceKey: 'admin.forms', actionKey: 'view', label: 'Admin Menu: Forms', description: 'View Forms section in Administration', sortOrder: 31 },
   { permissionCode: 'menu.admin.uw_company.view', scope: 'menu', resourceKey: 'admin.uw_company', actionKey: 'view', label: 'Admin Menu: UW Company', description: 'View UW Company section in Administration', sortOrder: 32 },
@@ -67,6 +68,14 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.admin.security.view', scope: 'menu', resourceKey: 'admin.security', actionKey: 'view', label: 'Admin Menu: Security', description: 'View Security section in Administration', sortOrder: 35 },
   { permissionCode: 'menu.admin.customers.view', scope: 'menu', resourceKey: 'admin.customers', actionKey: 'view', label: 'Admin Menu: Customers', description: 'View Customers section in Administration', sortOrder: 36 },
   { permissionCode: 'menu.admin.onboarding.view', scope: 'menu', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Admin Menu: Agency Onboarding', description: 'View agency and broker onboarding section in Administration', sortOrder: 37 },
+  { permissionCode: 'menu.admin.notifications.view', scope: 'menu', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Admin Menu: Notifications', description: 'View Notification Templates section in Administration', sortOrder: 38 },
+  { permissionCode: 'menu.admin.compliance.view', scope: 'menu', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Admin Menu: Compliance', description: 'View Compliance section in Administration', sortOrder: 39 },
+  { permissionCode: 'menu.admin.import.view', scope: 'menu', resourceKey: 'admin.import', actionKey: 'view', label: 'Admin Menu: Data Import', description: 'View Data Import section in Administration', sortOrder: 40 },
+  { permissionCode: 'menu.admin.dashboard.view', scope: 'menu', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Admin Menu: Operations Dashboard', description: 'View Operations Dashboard section in Administration', sortOrder: 41 },
+  { permissionCode: 'menu.admin.jobs.view', scope: 'menu', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Admin Menu: Jobs', description: 'View Batch Jobs section in Administration', sortOrder: 42 },
+  { permissionCode: 'menu.admin.reinsurance.view', scope: 'menu', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Admin Menu: Reinsurance', description: 'View Reinsurance section in Administration', sortOrder: 43 },
+  { permissionCode: 'menu.admin.bordereaux.view', scope: 'menu', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Admin Menu: Bordereaux', description: 'View Bordereaux section in Administration', sortOrder: 44 },
+  { permissionCode: 'menu.admin.exposure.view', scope: 'menu', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Admin Menu: Exposure', description: 'View Exposure Management section in Administration', sortOrder: 45 },
 
   { permissionCode: 'page.search.view', scope: 'page', resourceKey: 'search', actionKey: 'view', label: 'Page: Search', description: 'Access Search page', sortOrder: 110 },
   { permissionCode: 'page.portal.view', scope: 'page', resourceKey: 'portal', actionKey: 'view', label: 'Page: Customer Portal', description: 'Access customer portal page', sortOrder: 112 },
@@ -74,6 +83,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.wizard.view', scope: 'page', resourceKey: 'wizard', actionKey: 'view', label: 'Page: Quote/Transaction Wizard', description: 'Access Quote and transaction wizard pages', sortOrder: 120 },
   { permissionCode: 'page.policy.view', scope: 'page', resourceKey: 'policy', actionKey: 'view', label: 'Page: Policy View', description: 'Access policy detail and timeline pages', sortOrder: 130 },
   { permissionCode: 'page.uw_queue.view', scope: 'page', resourceKey: 'uw_queue', actionKey: 'view', label: 'Page: UW Queue', description: 'Access underwriting queue page', sortOrder: 140 },
+  { permissionCode: 'page.placements.view', scope: 'page', resourceKey: 'placements', actionKey: 'view', label: 'Page: Placements', description: 'Access large commercial placement workflow page', sortOrder: 141 },
   { permissionCode: 'page.admin.forms.view', scope: 'page', resourceKey: 'admin.forms', actionKey: 'view', label: 'Page: Admin Forms', description: 'Access forms administration page', sortOrder: 150 },
   { permissionCode: 'page.admin.uw_company.view', scope: 'page', resourceKey: 'admin.uw_company', actionKey: 'view', label: 'Page: Admin UW Company', description: 'Access underwriting company administration page', sortOrder: 160 },
   { permissionCode: 'page.admin.users.view', scope: 'page', resourceKey: 'admin.users', actionKey: 'view', label: 'Page: Admin Users', description: 'Access user administration page', sortOrder: 170 },
@@ -81,6 +91,14 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.admin.security.view', scope: 'page', resourceKey: 'admin.security', actionKey: 'view', label: 'Page: Admin Security', description: 'Access role and permission administration page', sortOrder: 190 },
   { permissionCode: 'page.admin.customers.view', scope: 'page', resourceKey: 'admin.customers', actionKey: 'view', label: 'Page: Admin Customers', description: 'Access customer administration page', sortOrder: 200 },
   { permissionCode: 'page.admin.onboarding.view', scope: 'page', resourceKey: 'admin.onboarding', actionKey: 'view', label: 'Page: Admin Agency Onboarding', description: 'Access agency and broker onboarding administration page', sortOrder: 210 },
+  { permissionCode: 'page.admin.notifications.view', scope: 'page', resourceKey: 'admin.notifications', actionKey: 'view', label: 'Page: Admin Notification Templates', description: 'Access notification template administration page', sortOrder: 215 },
+  { permissionCode: 'page.admin.compliance.view', scope: 'page', resourceKey: 'admin.compliance', actionKey: 'view', label: 'Page: Admin Compliance', description: 'Access compliance administration page', sortOrder: 216 },
+  { permissionCode: 'page.admin.import.view', scope: 'page', resourceKey: 'admin.import', actionKey: 'view', label: 'Page: Admin Data Import', description: 'Access data migration/import administration page', sortOrder: 217 },
+  { permissionCode: 'page.admin.dashboard.view', scope: 'page', resourceKey: 'admin.dashboard', actionKey: 'view', label: 'Page: Admin Operations Dashboard', description: 'Access operations dashboard page', sortOrder: 218 },
+  { permissionCode: 'page.admin.jobs.view', scope: 'page', resourceKey: 'admin.jobs', actionKey: 'view', label: 'Page: Admin Jobs', description: 'Access batch job administration page', sortOrder: 219 },
+  { permissionCode: 'page.admin.reinsurance.view', scope: 'page', resourceKey: 'admin.reinsurance', actionKey: 'view', label: 'Page: Admin Reinsurance', description: 'Access reinsurance treaty and facultative administration page', sortOrder: 220 },
+  { permissionCode: 'page.admin.bordereaux.view', scope: 'page', resourceKey: 'admin.bordereaux', actionKey: 'view', label: 'Page: Admin Bordereaux', description: 'Access bordereaux generation and validation administration page', sortOrder: 221 },
+  { permissionCode: 'page.admin.exposure.view', scope: 'page', resourceKey: 'admin.exposure', actionKey: 'view', label: 'Page: Admin Exposure', description: 'Access exposure management page', sortOrder: 222 },
 
   { permissionCode: 'admin.forms.read', scope: 'api', resourceKey: 'admin.forms', actionKey: 'read', label: 'Admin API: Forms Read', description: 'Read forms administration data', sortOrder: 210 },
   { permissionCode: 'admin.forms.manage', scope: 'api', resourceKey: 'admin.forms', actionKey: 'manage', label: 'Admin API: Forms Manage', description: 'Create and edit forms administration data', sortOrder: 220 },
@@ -113,7 +131,30 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'rating.models.read', scope: 'api', resourceKey: 'rating.models', actionKey: 'read', label: 'Rating API: Models Read', description: 'Read rating workbook models and published versions', sortOrder: 480 },
   { permissionCode: 'rating.models.manage', scope: 'api', resourceKey: 'rating.models', actionKey: 'manage', label: 'Rating API: Models Manage', description: 'Import and manage rating workbook versions', sortOrder: 490 },
   { permissionCode: 'rating.models.publish', scope: 'api', resourceKey: 'rating.models', actionKey: 'approve', label: 'Rating API: Models Publish', description: 'Publish/activate rating workbook versions', sortOrder: 500 },
-  { permissionCode: 'customer.portal.read', scope: 'api', resourceKey: 'customer.portal', actionKey: 'read', label: 'Customer Portal API: Read', description: 'Read own customer portal policies, declarations, and ID cards', sortOrder: 510 }
+  { permissionCode: 'customer.portal.read', scope: 'api', resourceKey: 'customer.portal', actionKey: 'read', label: 'Customer Portal API: Read', description: 'Read own customer portal policies, declarations, and ID cards', sortOrder: 510 },
+
+  { permissionCode: 'admin.notifications.read', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'read', label: 'Admin API: Notifications Read', description: 'Read notification templates and render previews', sortOrder: 520 },
+  { permissionCode: 'admin.notifications.manage', scope: 'api', resourceKey: 'admin.notifications', actionKey: 'manage', label: 'Admin API: Notifications Manage', description: 'Create, edit, and activate/deactivate notification templates', sortOrder: 530 },
+  { permissionCode: 'admin.compliance.read', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'read', label: 'Admin API: Compliance Read', description: 'Read state/product eligibility records and OFAC screen queue', sortOrder: 540 },
+  { permissionCode: 'admin.compliance.manage', scope: 'api', resourceKey: 'admin.compliance', actionKey: 'manage', label: 'Admin API: Compliance Manage', description: 'Manage eligibility records, import OFAC list entries, and disposition OFAC screens', sortOrder: 550 },
+  { permissionCode: 'admin.import.read', scope: 'api', resourceKey: 'admin.import', actionKey: 'read', label: 'Admin API: Data Import Read', description: 'Read legacy data import batches, staged rows, and reconciliation status', sortOrder: 560 },
+  { permissionCode: 'admin.import.manage', scope: 'api', resourceKey: 'admin.import', actionKey: 'manage', label: 'Admin API: Data Import Manage', description: 'Stage, validate, commit, and retry legacy data import batches', sortOrder: 570 },
+  { permissionCode: 'admin.dashboard.read', scope: 'api', resourceKey: 'admin.dashboard', actionKey: 'read', label: 'Admin API: Operations Dashboard Read', description: 'Read aggregated operational failure and pending-work summaries across outbox, notifications, OFAC, and UW referrals', sortOrder: 580 },
+  { permissionCode: 'admin.jobs.read', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'read', label: 'Admin API: Jobs Read', description: 'Read job definitions and run history', sortOrder: 590 },
+  { permissionCode: 'admin.jobs.manage', scope: 'api', resourceKey: 'admin.jobs', actionKey: 'manage', label: 'Admin API: Jobs Manage', description: 'Manually enqueue job runs and retry dead-lettered runs', sortOrder: 600 },
+  { permissionCode: 'admin.reinsurance.read', scope: 'api', resourceKey: 'admin.reinsurance', actionKey: 'read', label: 'Admin API: Reinsurance Read', description: 'Read reinsurance treaties, layers, facultative certificates, and policy placements', sortOrder: 610 },
+  { permissionCode: 'admin.reinsurance.manage', scope: 'api', resourceKey: 'admin.reinsurance', actionKey: 'manage', label: 'Admin API: Reinsurance Manage', description: 'Create/update treaties and facultative certificates, and compute policy transaction placements', sortOrder: 620 },
+  { permissionCode: 'admin.bordereaux.read', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'read', label: 'Admin API: Bordereaux Read', description: 'Read bordereaux batches, rows, and export generated data', sortOrder: 630 },
+  { permissionCode: 'admin.bordereaux.manage', scope: 'api', resourceKey: 'admin.bordereaux', actionKey: 'manage', label: 'Admin API: Bordereaux Manage', description: 'Generate risk/premium/transaction/cancellation/correction bordereaux batches', sortOrder: 640 },
+  { permissionCode: 'placement.read', scope: 'api', resourceKey: 'placements', actionKey: 'read', label: 'Placement API: Read', description: 'Read large commercial placement workflow records', sortOrder: 650 },
+  { permissionCode: 'placement.manage', scope: 'api', resourceKey: 'placements', actionKey: 'manage', label: 'Placement API: Manage', description: 'Create placements, manage market participants/subjectivities, and transition placement status', sortOrder: 660 },
+  { permissionCode: 'admin.exposure.read', scope: 'api', resourceKey: 'admin.exposure', actionKey: 'read', label: 'Admin API: Exposure Read', description: 'Read aggregated policy exposure summaries and export exposure datasets', sortOrder: 670 },
+  { permissionCode: 'product.governance.read', scope: 'api', resourceKey: 'product.governance', actionKey: 'read', label: 'Product Governance API: Read', description: 'Read governed product releases and approval history', sortOrder: 680 },
+  { permissionCode: 'product.governance.manage', scope: 'api', resourceKey: 'product.governance', actionKey: 'manage', label: 'Product Governance API: Manage', description: 'Create and submit governed product releases', sortOrder: 690 },
+  { permissionCode: 'product.governance.approve', scope: 'api', resourceKey: 'product.governance', actionKey: 'approve', label: 'Product Governance API: Approve', description: 'Approve, schedule, activate, and retire governed product releases', sortOrder: 700 },
+  { permissionCode: 'uw.authority.read', scope: 'api', resourceKey: 'uw.authority', actionKey: 'read', label: 'UW Authority API: Read', description: 'Read effective-dated underwriting authority grants', sortOrder: 710 },
+  { permissionCode: 'uw.authority.manage', scope: 'api', resourceKey: 'uw.authority', actionKey: 'manage', label: 'UW Authority API: Manage', description: 'Create, expire, and deactivate underwriting authority grants', sortOrder: 720 },
+  { permissionCode: 'uw.authority.override', scope: 'api', resourceKey: 'uw.authority', actionKey: 'approve', label: 'UW Authority API: Override', description: 'Approve an authority exception with a recorded reason', sortOrder: 730 },
 ]
 
 type RoleSeed = {
@@ -154,7 +195,13 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.policy.view',
       'page.uw_queue.view',
       'uw.referrals.read',
-      'uw.referrals.decide'
+      'uw.referrals.decide',
+      'uw.authority.read',
+      'uw.authority.override',
+      'menu.placements.view',
+      'page.placements.view',
+      'placement.read',
+      'placement.manage'
     ]
   },
   {
@@ -197,15 +244,83 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
   {
     roleCode: 'compliance_admin',
     roleName: 'Compliance Administrator',
-    description: 'Approves and activates form filings',
+    description: 'Approves and activates form filings; manages state/product eligibility and OFAC screening review',
     isSystem: true,
     permissionCodes: [
       'menu.admin.view',
       'menu.admin.forms.view',
+      'menu.admin.compliance.view',
       'page.admin.forms.view',
+      'page.admin.compliance.view',
       'admin.forms.read',
       'admin.forms.manage',
-      'admin.forms.approve'
+      'admin.forms.approve',
+      'admin.compliance.read',
+      'admin.compliance.manage'
+    ]
+  },
+  {
+    roleCode: 'jobs_admin',
+    roleName: 'Jobs Administrator',
+    description: 'Reads job run history and manually enqueues or retries batch operational jobs',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.jobs.view',
+      'page.admin.jobs.view',
+      'admin.jobs.read',
+      'admin.jobs.manage'
+    ]
+  },
+  {
+    roleCode: 'exposure_admin',
+    roleName: 'Exposure Administrator',
+    description: 'Reviews aggregate policy exposure by product, jurisdiction, and class/industry for carrier and reinsurance operations',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.exposure.view',
+      'page.admin.exposure.view',
+      'admin.exposure.read'
+    ]
+  },
+  {
+    roleCode: 'reinsurance_admin',
+    roleName: 'Reinsurance Administrator',
+    description: 'Manages reinsurance treaties, facultative certificates, and computes policy transaction placements',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.reinsurance.view',
+      'page.admin.reinsurance.view',
+      'admin.reinsurance.read',
+      'admin.reinsurance.manage'
+    ]
+  },
+  {
+    roleCode: 'bordereaux_admin',
+    roleName: 'Bordereaux Administrator',
+    description: 'Generates and reviews risk, premium, transaction, cancellation, and correction bordereaux',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.bordereaux.view',
+      'page.admin.bordereaux.view',
+      'admin.bordereaux.read',
+      'admin.bordereaux.manage'
+    ]
+  },
+  {
+    roleCode: 'data_import_admin',
+    roleName: 'Data Import Administrator',
+    description: 'Stages, validates, commits, and retries legacy book-of-business import batches',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.import.view',
+      'page.admin.import.view',
+      'admin.import.read',
+      'admin.import.manage'
     ]
   },
   {
@@ -276,6 +391,19 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'page.admin.customers.view',
       'admin.customers.read',
       'admin.customers.pii_reveal'
+    ]
+  },
+  {
+    roleCode: 'notification_admin',
+    roleName: 'Notification Administrator',
+    description: 'Manages tenant notification templates',
+    isSystem: true,
+    permissionCodes: [
+      'menu.admin.view',
+      'menu.admin.notifications.view',
+      'page.admin.notifications.view',
+      'admin.notifications.read',
+      'admin.notifications.manage'
     ]
   },
   {

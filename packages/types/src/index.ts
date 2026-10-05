@@ -29,14 +29,36 @@ export type TenantPreferences = {
 // ─── Policy ──────────────────────────────────────────────────────────────────
 
 export type PolicyStatus =
+  | 'Quote'
   | 'Draft'
-  | 'Quoted'
   | 'Bound'
-  | 'Active'
+  | 'Issued'
   | 'Cancelled'
   | 'Expired'
-  | 'NonRenewed'
-  | 'PendingCancellation'
+
+export type ProductTransactionCapability =
+  | 'quote'
+  | 'bind'
+  | 'issue'
+  | 'endorse'
+  | 'cancel'
+  | 'reinstate'
+  | 'rewrite'
+  | 'renew'
+  | 'nonRenew'
+
+export type ProductCapabilityDescriptor = {
+  code: string
+  version: string
+  label: string
+  riskLabel: string
+  ratingAdapter: string
+  formsMode: 'catalog' | 'none'
+  supportedTransactions: ProductTransactionCapability[]
+  riskKinds: Record<string, string>
+  defaultRisk: Record<string, unknown>
+  ui: Record<string, unknown>
+}
 
 export type TransactionType =
   | 'Issue'

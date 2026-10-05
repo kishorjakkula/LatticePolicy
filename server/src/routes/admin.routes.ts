@@ -5,9 +5,18 @@ import { withTenantTx, getDb, toRawQuery } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
-import { formsAdminRoutes } from '../formsAdmin.js'
+import { formsAdminRoutes, ensureDefaultFormRows } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
-import { onboardingAdminRoutes } from '../agencyOnboarding.js'
+import { complianceAdminRoutes } from './compliance-admin.routes.js'
+import { adminJobsRoutes } from './admin-jobs.routes.js'
+import { dataImportRoutes } from './data-import.routes.js'
+import { adminDashboardRoutes } from './admin-dashboard.routes.js'
+import { exposureRoutes } from './exposure.routes.js'
+import { reinsuranceAdminRoutes } from './reinsurance-admin.routes.js'
+import { bordereauxRoutes } from './bordereaux.routes.js'
+import { onboardingAdminRoutes, loadOnboardingConfig, upsertAgencyEntity } from '../agencyOnboarding.js'
+import { notificationTemplatesRoutes } from '../notificationTemplates.js'
+import { createNotificationTemplate } from '../services/notification-template-admin.service.js'
 import {
   createMemoryUnderwritingCompany,
   deleteMemoryUnderwritingCompany,
@@ -46,6 +55,18 @@ import {
   tenantAiMlConfigFromRow
 } from '../tenantAi.js'
 import {
+  defaultTenantLocalAuthEnabled,
+  defaultTenantSsoConfig,
+  getMemoryTenantLocalAuthEnabled,
+  getMemoryTenantSsoConfig,
+  normalizeTenantLocalAuthEnabled,
+  normalizeTenantSsoConfig,
+  setMemoryTenantLocalAuthEnabled,
+  setMemoryTenantSsoConfig,
+  tenantLocalAuthEnabledFromRow,
+  tenantSsoConfigFromRow
+} from '../tenantIdentity.js'
+import {
   createRole,
   deleteRole as deleteSecurityRole,
   ensureTenantRbacDefaults,
@@ -58,6 +79,7 @@ import {
 import { generatePolicyNumber } from '../policyNumbers.js'
 import { buildCacheKey, cacheDeleteKey, cacheDeletePrefix } from '../cache.js'
 import { routeParam } from '../lib/utils.js'
+import { mountRouter } from '../route-registry.js'
 
 export const adminRoutes = Router()
 const DUPLICATE_UW_COMPANY_MESSAGE =
@@ -65,9 +87,17 @@ const DUPLICATE_UW_COMPANY_MESSAGE =
 const memoryTenantNames = new Map<string, string>()
 
 adminRoutes.use(requirePermission('menu.admin.view'))
-adminRoutes.use('/forms', requirePermission('admin.forms.read'), formsAdminRoutes)
-adminRoutes.use('/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
-adminRoutes.use('/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
+mountRouter(adminRoutes, '/forms', requirePermission('admin.forms.read'), formsAdminRoutes)
+mountRouter(adminRoutes, '/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
+mountRouter(adminRoutes, '/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)
+mountRouter(adminRoutes, '/notification-templates', requirePermission('admin.notifications.read'), notificationTemplatesRoutes)
+mountRouter(adminRoutes, '/compliance', requirePermission('admin.compliance.read'), complianceAdminRoutes)
+mountRouter(adminRoutes, '/jobs', requirePermission('admin.jobs.read'), adminJobsRoutes)
+mountRouter(adminRoutes, '/import', requirePermission('admin.import.read'), dataImportRoutes)
+mountRouter(adminRoutes, '/dashboard', requirePermission('admin.dashboard.read'), adminDashboardRoutes)
+mountRouter(adminRoutes, '/exposure', requirePermission('admin.exposure.read'), exposureRoutes)
+mountRouter(adminRoutes, '/reinsurance', reinsuranceAdminRoutes)
+mountRouter(adminRoutes, '/bordereaux', bordereauxRoutes)
 
 adminRoutes.get('/users', requirePermission('admin.users.read'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
@@ -92,12 +122,13 @@ adminRoutes.post('/users', requirePermission('admin.users.manage'), async (req, 
         message: `Unknown or inactive role(s): ${roleValidation.missingRoleCodes.join(', ')}`
       })
     }
-    const user = await createUser({ username, password, tenantId, roles: roleValidation.validRoleCodes, customerRef })
+    const user = await createUser({ username, password, tenantId, roles: roleValidation.validRoleCodes, customerRef, enforcePasswordPolicy: true })
     return res.status(201).json(user)
   } catch (e: any) {
     if (String(e?.message) === 'USERNAME_EXISTS') return res.status(409).json({ code: 'USERNAME_EXISTS' })
     if (String(e?.message) === 'CUSTOMER_NOT_FOUND') return res.status(400).json({ code: 'CUSTOMER_NOT_FOUND', message: 'Linked customer not found' })
     if (String(e?.message) === 'CUSTOMER_LINK_REQUIRED') return res.status(400).json({ code: 'CUSTOMER_LINK_REQUIRED', message: 'Customer role requires a linked customer' })
+    if (String(e?.message).startsWith('WEAK_PASSWORD')) return res.status(400).json({ code: 'WEAK_PASSWORD', message: String(e.message).replace(/^WEAK_PASSWORD:\s*/, '') })
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
 })
@@ -120,7 +151,7 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
       }
       validatedRoles = roleValidation.validRoleCodes
     }
-    const patch: any = { password, roles: validatedRoles, disabled }
+    const patch: any = { password, roles: validatedRoles, disabled, enforcePasswordPolicy: true }
     if (Object.prototype.hasOwnProperty.call(body, 'customerRef')) patch.customerRef = body.customerRef
     const user = await updateUser(tenantId, id, patch)
     return res.json(user)
@@ -128,6 +159,7 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
     if (String(e?.message) === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
     if (String(e?.message) === 'CUSTOMER_NOT_FOUND') return res.status(400).json({ code: 'CUSTOMER_NOT_FOUND', message: 'Linked customer not found' })
     if (String(e?.message) === 'CUSTOMER_LINK_REQUIRED') return res.status(400).json({ code: 'CUSTOMER_LINK_REQUIRED', message: 'Customer role requires a linked customer' })
+    if (String(e?.message).startsWith('WEAK_PASSWORD')) return res.status(400).json({ code: 'WEAK_PASSWORD', message: String(e.message).replace(/^WEAK_PASSWORD:\s*/, '') })
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
 })
@@ -283,6 +315,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
     const policyNumberFormatsByProduct = getMemoryTenantPolicyNumberFormats(tenantId)
     const mfaRequired = getMemoryTenantMfaRequired(tenantId)
     const aiMlConfig = getMemoryTenantAiMlConfig(tenantId)
+    const localAuthEnabled = getMemoryTenantLocalAuthEnabled(tenantId)
+    const ssoConfig = getMemoryTenantSsoConfig(tenantId)
     const savedName = memoryTenantNames.get(tenantId) || tenantId
     return res.json({
       tenantId,
@@ -291,14 +325,16 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       dateFormatsByCountry: prefs.dateFormatsByCountry,
       policyNumberFormatsByProduct,
       mfaRequired,
-      aiMlConfig
+      aiMlConfig,
+      localAuthEnabled,
+      ssoConfig
     })
   }
   try {
     const r = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       return q(
-        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config FROM tenants WHERE tenant_id=$1',
+        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config FROM tenants WHERE tenant_id=$1',
         [tenantId]
       )
     })
@@ -307,6 +343,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       const policyNumberFormatsByProduct = defaultTenantPolicyNumberFormats()
       const mfaRequired = defaultTenantMfaRequired()
       const aiMlConfig = defaultTenantAiMlConfig()
+      const localAuthEnabled = defaultTenantLocalAuthEnabled()
+      const ssoConfig = defaultTenantSsoConfig()
       return res.json({
         tenantId,
         name: tenantId,
@@ -314,7 +352,9 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
         dateFormatsByCountry: defaults.dateFormatsByCountry,
         policyNumberFormatsByProduct,
         mfaRequired,
-        aiMlConfig
+        aiMlConfig,
+        localAuthEnabled,
+        ssoConfig
       })
     }
     const row = r.rows[0]
@@ -322,6 +362,8 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
     const policyNumberFormatsByProduct = tenantPolicyNumberFormatsFromRow(row)
     const mfaRequired = tenantMfaRequiredFromRow(row)
     const aiMlConfig = tenantAiMlConfigFromRow(row)
+    const localAuthEnabled = tenantLocalAuthEnabledFromRow(row)
+    const ssoConfig = tenantSsoConfigFromRow(row)
     return res.json({
       tenantId: row.tenant_id,
       name: row.name,
@@ -329,7 +371,9 @@ adminRoutes.get('/tenant', requirePermission('admin.tenant.read'), async (req, r
       dateFormatsByCountry: prefs.dateFormatsByCountry,
       policyNumberFormatsByProduct,
       mfaRequired,
-      aiMlConfig
+      aiMlConfig,
+      localAuthEnabled,
+      ssoConfig
     })
   } catch (e:any) { return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) }) }
 })
@@ -346,7 +390,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
     req.body?.dateFormatsByCountry != null ||
     req.body?.policyNumberFormatsByProduct != null ||
     req.body?.mfaRequired != null ||
-    req.body?.aiMlConfig != null
+    req.body?.aiMlConfig != null ||
+    req.body?.localAuthEnabled != null ||
+    req.body?.ssoConfig != null
   if (!nameProvided && !preferencesProvided) {
     return res.status(400).json({ code: 'INVALID_INPUT', message: 'Provide at least one tenant setting to update' })
   }
@@ -361,6 +407,8 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
     const currentPolicyNumberFormats = getMemoryTenantPolicyNumberFormats(tenantId)
     const currentMfaRequired = getMemoryTenantMfaRequired(tenantId)
     const currentAiMlConfig = getMemoryTenantAiMlConfig(tenantId)
+    const currentLocalAuthEnabled = getMemoryTenantLocalAuthEnabled(tenantId)
+    const currentSsoConfig = getMemoryTenantSsoConfig(tenantId)
     const nextPrefs = normalizeTenantDatePreferences(
       {
         defaultCountry: req.body?.defaultCountry ?? currentPrefs.defaultCountry,
@@ -382,6 +430,14 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       tenantId,
       req.body?.aiMlConfig ?? currentAiMlConfig
     )
+    const savedLocalAuthEnabled = setMemoryTenantLocalAuthEnabled(
+      tenantId,
+      req.body?.localAuthEnabled ?? currentLocalAuthEnabled
+    )
+    const savedSsoConfig = setMemoryTenantSsoConfig(
+      tenantId,
+      req.body?.ssoConfig ?? currentSsoConfig
+    )
     await cacheDeleteKey(buildCacheKey(['tenant-preferences', tenantId]))
     return res.json({
       tenantId,
@@ -390,7 +446,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       dateFormatsByCountry: saved.dateFormatsByCountry,
       policyNumberFormatsByProduct: savedPolicyNumberFormats,
       mfaRequired: savedMfaRequired,
-      aiMlConfig: savedAiMlConfig
+      aiMlConfig: savedAiMlConfig,
+      localAuthEnabled: savedLocalAuthEnabled,
+      ssoConfig: savedSsoConfig
     })
   }
   try {
@@ -402,11 +460,13 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       policyNumberFormatsByProduct: Record<string, string>
       mfaRequired: boolean
       aiMlConfig: any
+      localAuthEnabled: boolean
+      ssoConfig: any
     } | null = null
     await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       const existingResult = await q(
-        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config FROM tenants WHERE tenant_id=$1',
+        'SELECT tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config FROM tenants WHERE tenant_id=$1',
         [tenantId]
       )
       const existingRow = (existingResult as any).rows?.[0] || null
@@ -420,6 +480,12 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
       const existingAiMlConfig = existingRow
         ? tenantAiMlConfigFromRow(existingRow)
         : defaultTenantAiMlConfig()
+      const existingLocalAuthEnabled = existingRow
+        ? tenantLocalAuthEnabledFromRow(existingRow)
+        : defaultTenantLocalAuthEnabled()
+      const existingSsoConfig = existingRow
+        ? tenantSsoConfigFromRow(existingRow)
+        : defaultTenantSsoConfig()
       const nextPrefs = normalizeTenantDatePreferences(
         {
           defaultCountry: req.body?.defaultCountry ?? existingPrefs.defaultCountry,
@@ -439,11 +505,19 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
         req.body?.aiMlConfig,
         existingAiMlConfig
       )
+      const nextLocalAuthEnabled = normalizeTenantLocalAuthEnabled(
+        req.body?.localAuthEnabled,
+        existingLocalAuthEnabled
+      )
+      const nextSsoConfig = normalizeTenantSsoConfig(
+        req.body?.ssoConfig,
+        existingSsoConfig
+      )
       const nextName = nameProvided ? name : (existingRow?.name || tenantId)
       if (existingRow) {
         await q(
           `UPDATE tenants
-           SET name=$2, default_country_code=$3, date_formats_by_country=$4, policy_number_formats_by_product=$5, mfa_required=$6, ai_ml_config=$7
+           SET name=$2, default_country_code=$3, date_formats_by_country=$4, policy_number_formats_by_product=$5, mfa_required=$6, ai_ml_config=$7, local_auth_enabled=$8, sso_config=$9
            WHERE tenant_id=$1`,
           [
             tenantId,
@@ -452,13 +526,15 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
             JSON.stringify(nextPrefs.dateFormatsByCountry),
             JSON.stringify(nextPolicyNumberFormats),
             nextMfaRequired,
-            JSON.stringify(nextAiMlConfig)
+            JSON.stringify(nextAiMlConfig),
+            nextLocalAuthEnabled,
+            JSON.stringify(nextSsoConfig)
           ]
         )
       } else {
         await q(
-          `INSERT INTO tenants (tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          `INSERT INTO tenants (tenant_id, name, default_country_code, date_formats_by_country, policy_number_formats_by_product, mfa_required, ai_ml_config, local_auth_enabled, sso_config)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             tenantId,
             nextName,
@@ -466,7 +542,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
             JSON.stringify(nextPrefs.dateFormatsByCountry),
             JSON.stringify(nextPolicyNumberFormats),
             nextMfaRequired,
-            JSON.stringify(nextAiMlConfig)
+            JSON.stringify(nextAiMlConfig),
+            nextLocalAuthEnabled,
+            JSON.stringify(nextSsoConfig)
           ]
         )
       }
@@ -477,7 +555,9 @@ adminRoutes.patch('/tenant', requirePermission('admin.tenant.manage'), async (re
         dateFormatsByCountry: nextPrefs.dateFormatsByCountry,
         policyNumberFormatsByProduct: nextPolicyNumberFormats,
         mfaRequired: nextMfaRequired,
-        aiMlConfig: nextAiMlConfig
+        aiMlConfig: nextAiMlConfig,
+        localAuthEnabled: nextLocalAuthEnabled,
+        ssoConfig: nextSsoConfig
       }
     })
     await cacheDeleteKey(buildCacheKey(['tenant-preferences', tenantId]))
@@ -805,6 +885,24 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
         seedStep = `insert issue version ${productCode}`
         await q('INSERT INTO policy_versions (tenant_id, policy_id, version_id, effective_date, transaction_type, premium_total, premium_fees, premium_taxes, currency, uw_decision, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)',
           [tenantId, policyId, issueVid, eff, 'NB', premium.total?.amount || 0, premium.fees?.amount || 0, premium.taxes?.amount || 0, 'USD', uw.decision, JSON.stringify(s.payload)])
+        if (uw.decision === 'Refer') {
+          seedStep = 'insert underwriting referral'
+          await q(
+            `INSERT INTO underwriting_referrals
+               (tenant_id, policy_id, version_id, product_code, insured_name, effective_date, transaction_type, status, priority, reasons, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,'NewBusiness','Open','Normal',$7,$8)`,
+            [
+              tenantId,
+              policyId,
+              issueVid,
+              productCode,
+              s.payload?.insureds?.primary?.displayName || null,
+              eff,
+              uw.reasons || [],
+              null,
+            ]
+          )
+        }
         const risk = s.payload.risks?.[0]
         if (s.payload.productCode === 'personal-auto') {
           seedStep = 'insert auto vehicle'
@@ -862,6 +960,169 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
     })
     return res.json({ ok: true })
   } catch (e:any) {
+    return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
+  }
+})
+
+// Seed baseline reference/admin data (underwriting companies, an agency + contact, a forms catalog
+// entry, and notification templates) for every product line the tenant has enabled in
+// tenants/<id>/config.yaml. Idempotent: safe to re-run — each section checks for an existing row
+// on its natural key before creating anything, so it only fills gaps.
+const SEED_PRODUCT_LINES: Array<{ code: string; uwCompanyName: string; formNumber: string; formTitle: string }> = [
+  { code: 'personal-auto', uwCompanyName: 'Sample Carrier Personal Lines', formNumber: 'PA-DEC', formTitle: 'Personal Auto Declarations' },
+  { code: 'homeowners', uwCompanyName: 'Sample Carrier Property', formNumber: 'HO-DEC', formTitle: 'Homeowners Declarations' },
+  { code: 'commercial-auto', uwCompanyName: 'Sample Carrier Commercial Lines', formNumber: 'CA-DEC', formTitle: 'Commercial Auto Declarations' },
+  { code: 'professional-liability', uwCompanyName: 'Sample Carrier Professional Lines', formNumber: 'PL-DEC', formTitle: 'Professional Liability Declarations' },
+  { code: 'cyber', uwCompanyName: 'Sample Carrier Specialty Cyber', formNumber: 'CYB-DEC', formTitle: 'Cyber Liability Declarations' }
+]
+const SEED_FORM_EDITION_DATE = '2024-01-01'
+
+const SEED_NOTIFICATION_TEMPLATES: Array<{ templateCode: string; eventType: string; subjectTemplate: string; bodyTemplate: string }> = [
+  {
+    templateCode: 'policy-issued-default',
+    eventType: 'POLICY_ISSUED',
+    subjectTemplate: 'Policy {{policyNumber}} issued',
+    bodyTemplate: 'Policy {{policyNumber}} was issued effective {{effectiveDate}}. Thank you for choosing us.'
+  },
+  {
+    templateCode: 'policy-cancelled-default',
+    eventType: 'POLICY_CANCELLED',
+    subjectTemplate: 'Policy {{policyNumber}} cancelled',
+    bodyTemplate: 'Policy {{policyNumber}} has been cancelled effective {{effectiveDate}}. Reason: {{reason}}.'
+  },
+  {
+    templateCode: 'policy-renewed-default',
+    eventType: 'POLICY_RENEWED',
+    subjectTemplate: 'Policy {{policyNumber}} renewed',
+    bodyTemplate: 'Policy {{policyNumber}} has been renewed for a new term effective {{effectiveDate}}.'
+  }
+]
+
+adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const actor = req.user?.username || req.user?.id || 'system'
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Seeding requires DB' })
+
+  const summary = {
+    underwritingCompanies: { created: [] as string[], skipped: [] as string[] },
+    forms: { created: [] as string[], skipped: [] as string[] },
+    notificationTemplates: { created: [] as string[], skipped: [] as string[] },
+    agency: { created: false, skipped: false }
+  }
+
+  let seedStep = 'start'
+  try {
+    await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+
+      // Product enablement lives in tenants/<id>/config.yaml (file-based), not a DB column, so this
+      // seeds every product line the app ships with; disable a line by removing it from
+      // SEED_PRODUCT_LINES if a tenant shouldn't get reference data for it.
+      for (const line of SEED_PRODUCT_LINES) {
+        seedStep = `underwriting company: ${line.code}`
+        const existingUw = await q(
+          `SELECT 1 FROM underwriting_companies WHERE tenant_id=$1 AND product_code=$2 AND country_code=$3 AND state_code=$4 LIMIT 1`,
+          [tenantId, line.code, 'US', 'ALL']
+        )
+        if ((existingUw as any).rowCount > 0) {
+          summary.underwritingCompanies.skipped.push(line.code)
+        } else {
+          await q(
+            `INSERT INTO underwriting_companies (tenant_id, name, product_code, country_code, state_code, active, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,now())`,
+            [tenantId, line.uwCompanyName, line.code, 'US', 'ALL', true]
+          )
+          summary.underwritingCompanies.created.push(line.code)
+        }
+
+        seedStep = `form: ${line.formNumber}`
+        const existingForm = await q(
+          `SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND carrier_code=$2 AND authority=$3 AND form_number=$4 AND edition_date=$5 LIMIT 1`,
+          [tenantId, 'SAMPLE', 'ISO', line.formNumber, SEED_FORM_EDITION_DATE]
+        )
+        if ((existingForm as any).rowCount > 0) {
+          summary.forms.skipped.push(line.formNumber)
+        } else {
+          const inserted = await q(
+            `INSERT INTO forms_admin_forms (
+                tenant_id, carrier_code, authority, form_number, form_title, edition_date,
+                form_type, line_of_business, workflow_status, active, edit_lock, require_approved_jurisdiction,
+                metadata, created_by, updated_by, updated_at
+             ) VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,now())
+             RETURNING form_id`,
+            [
+              tenantId, 'SAMPLE', 'ISO', line.formNumber, line.formTitle, SEED_FORM_EDITION_DATE,
+              'Policy', line.code, 'Draft', false, true, false,
+              JSON.stringify({ seedCode: 'seed-reference-data' }), actor, actor
+            ]
+          )
+          const formId = (inserted as any).rows[0].form_id
+          await ensureDefaultFormRows(q, tenantId, formId, actor)
+          summary.forms.created.push(line.formNumber)
+        }
+      }
+
+      for (const tmpl of SEED_NOTIFICATION_TEMPLATES) {
+        seedStep = `notification template: ${tmpl.templateCode}`
+        const existingTemplate = await q(
+          `SELECT 1 FROM notification_templates WHERE tenant_id=$1 AND template_code=$2 LIMIT 1`,
+          [tenantId, tmpl.templateCode]
+        )
+        if ((existingTemplate as any).rowCount > 0) {
+          summary.notificationTemplates.skipped.push(tmpl.templateCode)
+        } else {
+          await createNotificationTemplate(db, tenantId, {
+            templateCode: tmpl.templateCode,
+            eventType: tmpl.eventType,
+            channel: 'EMAIL',
+            locale: 'en-US',
+            subjectTemplate: tmpl.subjectTemplate,
+            bodyTemplate: tmpl.bodyTemplate,
+            visibility: ['customer'],
+            active: true,
+            metadata: { seedCode: 'seed-reference-data' }
+          }, actor)
+          summary.notificationTemplates.created.push(tmpl.templateCode)
+        }
+      }
+
+      seedStep = 'agency'
+      const existingAgency = await q(
+        `SELECT agency_id FROM agencies WHERE tenant_id=$1 AND agency_np_number=$2 LIMIT 1`,
+        [tenantId, '8675309']
+      )
+      if ((existingAgency as any).rowCount > 0) {
+        summary.agency.skipped = true
+      } else {
+        const config = await loadOnboardingConfig(q, tenantId)
+        await upsertAgencyEntity(q, tenantId, {
+          legalName: 'Sample Carrier Agency',
+          npn: '8675309',
+          feinLast4: '4242',
+          agencyType: 'INDEPENDENT',
+          status: 'ACTIVE',
+          commissionRate: 10,
+          contacts: [{
+            firstName: 'Jordan',
+            lastName: 'Casey',
+            email: 'jordan.casey@samplecarrieragency.example',
+            phoneNumber: '+1 555 123 4567',
+            preferred: true
+          }]
+        }, {
+          actor,
+          strategy: 'ALWAYS_CREATE',
+          conflictBehavior: 'SKIP',
+          canApprove: true,
+          config,
+          reason: 'SEED_REFERENCE_DATA'
+        })
+        summary.agency.created = true
+      }
+    })
+    return res.json({ ok: true, summary })
+  } catch (e: any) {
     return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
   }
 })

@@ -45,6 +45,30 @@ Templates can use `{{field}}` placeholders. Supported top-level fields include:
 - `recipient.name`
 - `recipient.email`
 
+## Template Administration
+
+Administrators with the `admin.notifications.read` / `admin.notifications.manage`
+permissions (granted by the `notification_admin` role, or any role with
+`admin` permissions) can manage `notification_templates` without direct
+database access, under `/api/v1/admin/notification-templates`:
+
+- `GET /` — list templates, optionally filtered by `eventType`, `channel`,
+  `productCode`, `transactionType`, or `active`.
+- `GET /:id` — fetch a single template.
+- `POST /` — create a template. `channel` is currently restricted to `EMAIL`,
+  matching runtime delivery support.
+- `PATCH /:id` — partially update a template; unspecified fields are left
+  unchanged.
+- `POST /:id/activate` / `POST /:id/deactivate` — toggle whether a template is
+  eligible for runtime selection. Deactivated templates are immediately
+  excluded from `loadTemplate()`'s selection query.
+- `POST /preview` — render `subjectTemplate`/`bodyTemplate` against arbitrary
+  sample merge fields without persisting anything, using the same renderer the
+  runtime notification service uses.
+
+An Administration UI page (`Administration -> Notifications`) provides list,
+create/edit, activate/deactivate, and preview flows over these APIs.
+
 ## Local Development
 
 With `ASYNC_PUSH_ENABLED=true` and no `ASYNC_PUSH_WEBHOOK_URL`, the existing

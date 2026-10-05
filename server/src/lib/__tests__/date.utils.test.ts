@@ -27,9 +27,11 @@ describe('date.utils', () => {
   it('coerces strings and Date values to date-only values', () => {
     expect(coerceDateOnly('2026-07-01')).toBe('2026-07-01')
     expect(coerceDateOnly('July 4, 2026')).toBe('2026-07-04')
+    expect(coerceDateOnly('2026-07-04T23:30:00-05:00')).toBe('2026-07-05')
     expect(coerceDateOnly(new Date('2026-08-09T10:30:00Z'))).toBe('2026-08-09')
 
     expect(asDateOnly('2026-09-10T12:00:00Z')).toBe('2026-09-10')
+    expect(asDateOnly('July 4, 2026')).toBe('2026-07-04')
     expect(asDateOnly(new Date('2026-10-11T03:00:00Z'))).toBe('2026-10-11')
     expect(asDateOnly('')).toBeUndefined()
     expect(asDateOnly('not a date')).toBeUndefined()

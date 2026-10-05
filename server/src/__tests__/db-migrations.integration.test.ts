@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeDb, getDb, initDb } from '../db.js'
+import { closeDb, getDb, initDb, runMigrations } from '../db.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -39,6 +39,8 @@ describe('database migrations', () => {
     )
 
     expect(applied.rows.map((row) => row.name)).toEqual(expected)
+
+    await expect(Promise.all([runMigrations(), runMigrations()])).resolves.toEqual([undefined, undefined])
 
     const tables = await db!.query<{ table_name: string }>(
       `SELECT table_name

@@ -23,8 +23,33 @@ import {
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
 import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib/date.utils.js'
-import { diffPayloadPaths, getByPath } from '../lib/patch.utils.js'
+import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
+import { createCommissionHandoffEvent } from './commission-handoff.service.js'
+import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { lockPolicyForMutation } from './policy-concurrency.service.js'
+import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
+import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
+import { computePlacementForTransactionSafely } from './reinsurance.service.js'
+import {
+  buildEndorsementChangeSet,
+  buildPolicyDocumentPacket,
+  persistPolicyDocumentPacket,
+} from './document-generation.service.js'
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * `loadPolicyContext` returns Drizzle-shaped camelCase fields
+ * (`termEffectiveDate`, not `term_effective_date`). Several call sites below
+ * previously read the snake_case key directly, which is always `undefined`
+ * on that shape, silently falling `coerceDateOnly` back to today's date and
+ * corrupting term-window/segment computation for every endorsement (issue
+ * #52 follow-up fix).
+ */
+function policyField(row: any, camelKey: string, snakeKey: string): any {
+  return row?.[camelKey] ?? row?.[snakeKey]
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,8 +92,6 @@ type PremiumDeltaInput = {
   factor: number
   currency: string
 }
-
-type PatchOp = { path: string; op: 'add' | 'replace' | 'remove'; value?: any }
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -116,7 +139,7 @@ function validateTransactionNumberReservation(
 
 function assertPolicyTransactionState(action: PolicyTransactionAction, status: unknown): void {
   const result = validatePolicyTransactionState(action, status)
-  if (!result.ok) throw new BadRequestError(result.code, result.message)
+  if (!result.ok) throw new BadRequestError(result.code, result.message, result)
 }
 
 function generateTransactionNumber(prefix = 'EN-'): string {
@@ -130,57 +153,8 @@ function reserveTransactionNumber(mode: TransactionNumberMode): string {
   return generateTransactionNumber(transactionNumberPrefix(mode))
 }
 
-function applyJsonPatch(obj: any, ops: PatchOp[]): any {
-  for (const op of ops) {
-    const path = op.path || ''
-    const parts = path.split('/').slice(1).map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
-    let target = obj
-    for (let i = 0; i < parts.length - 1; i++) {
-      const key = parts[i]
-      if (!(key in target) || typeof target[key] !== 'object' || target[key] === null) {
-        target[key] = {}
-      }
-      target = target[key]
-    }
-    const last = parts[parts.length - 1]
-    if (op.op === 'remove') {
-      if (last in target) delete target[last]
-    } else if (op.op === 'add' || op.op === 'replace') {
-      target[last] = op.value
-    }
-  }
-  return obj
-}
-
 function mapRiskKind(productCode: string | undefined, risk: any): string {
-  const type = (risk?.type || '').toString()
-  if (!productCode) return type || 'Unknown'
-  const normalized = productCode.toLowerCase()
-  if (normalized === 'personal-auto') {
-    if (type === 'autoVehicle') return 'PA.Vehicle'
-    if (type === 'driver') return 'PA.Driver'
-  }
-  if (normalized === 'commercial-auto') {
-    if (type === 'commercialAutoFleet') return 'CA.Fleet'
-    if (type === 'commercialAutoVehicle') return 'CA.Vehicle'
-    if (type === 'driverSchedule') return 'CA.DriverSchedule'
-  }
-  if (normalized === 'homeowners') {
-    if (type === 'dwelling') return 'HO.Dwelling'
-    if (type === 'otherStructure') return 'HO.OtherStructure'
-    if (type === 'personalProperty') return 'HO.PersonalProperty'
-    if (type === 'liability') return 'HO.LiabilityExposure'
-  }
-  if (normalized === 'cyber') {
-    if (type === 'cyberProfile') return 'CYBER.Profile'
-    if (type === 'thirdParty') return 'CYBER.ThirdParty'
-    if (type === 'firstParty') return 'CYBER.FirstParty'
-  }
-  if (normalized === 'professional-liability') {
-    if (type === 'professionalLiabilityProfile') return 'PL.Profile'
-    if (type === 'clientContract') return 'PL.ClientContract'
-  }
-  return `${normalized.toUpperCase()}.${type || 'UNKNOWN'}`
+  return mapProductRiskKind(productCode, risk)
 }
 
 function summarizeRisk(risk: any): string {
@@ -405,7 +379,7 @@ function currentPolicyStateAsOfDate(termEffectiveDate: string, termExpirationDat
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
-async function loadPolicyTimelineVersions(
+export async function loadPolicyTimelineVersions(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -457,7 +431,7 @@ async function loadPolicyTimelineVersions(
   return versions
 }
 
-async function loadCurrentTimelineVersion(
+export async function loadCurrentTimelineVersion(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -471,7 +445,7 @@ async function loadCurrentTimelineVersion(
   return Number(result.rows?.[0]?.max_timeline_version || 0)
 }
 
-async function nextPolicyTransactionSequence(
+export async function nextPolicyTransactionSequence(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string
@@ -485,7 +459,7 @@ async function nextPolicyTransactionSequence(
   return Number(result.rows?.[0]?.max_sequence_no || 0) + 1
 }
 
-async function persistPolicyTimelineSegments(
+export async function persistPolicyTimelineSegments(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   policyId: string,
@@ -573,7 +547,10 @@ async function computeEndorsementTimeline(
     effectiveDate,
     processedAt,
     payload: nextPayload,
-    changes: changes.map((path: string) => ({ path, newValue: getByPath(nextPayload, path) })),
+    changes: changes.map((entry: string | PatchOp) => {
+      const path = typeof entry === 'string' ? entry : entry.path
+      return { path, newValue: getByPath(nextPayload, path) }
+    }),
   }
   const newSegments = deriveTimelineSegments({
     tenantId,
@@ -646,9 +623,10 @@ export async function previewEndorsement(
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
+  requireProductCapability(String(policyField(policyRow, 'productCode', 'product_code') || ''), 'endorse')
   assertPolicyTransactionState('endorse', policyRow.status)
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
+  const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
   const effectiveDate = asDateOnly(body.effectiveDate) || termEffective
   const computation = await computeEndorsementTimeline(
     q,
@@ -663,7 +641,7 @@ export async function previewEndorsement(
     new Date().toISOString()
   )
   const underwriting = evaluateUW(tenantId, computation.nextPayload)
-  const currency = policyRow.currency_code || computation.newStateAtEffective?.currency || 'USD'
+  const currency = policyField(policyRow, 'currencyCode', 'currency_code') || computation.newStateAtEffective?.currency || 'USD'
   const factor = proRataFactor(effectiveDate, termEffective, termExpiration)
   const endorsementPremium = buildEndorsementPremiumDelta({
     previousStored: { total: { amount: computation.oldStateAtEffective?.premiumTotal ?? safeMoney(computation.previousPremium?.total?.amount), currency } },
@@ -725,15 +703,14 @@ export async function executeEndorsement(
   const endorsementReason = typeof body.reason === 'string' ? body.reason.trim() : ''
   const endorsementNotes = typeof body.notes === 'string' ? body.notes.trim() : ''
   const requestedTransactionNumber = typeof body.transactionNumber === 'string' ? body.transactionNumber.trim() : ''
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  const isUw = roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
 
+  await lockPolicyForMutation(q, tenantId, policyId, body?.expectedTimelineVersion)
   const ctx = await loadPolicyContext(db, tenantId, policyId)
   if (!ctx) throw new NotFoundError('POLICY_NOT_FOUND')
   const policyRow = ctx.policy
-  const termEffective = coerceDateOnly(policyRow.term_effective_date)
-  const termExpiration = coerceDateOnly(policyRow.term_expiration_date)
+  requireProductCapability(String(policyField(policyRow, 'productCode', 'product_code') || ''), 'endorse')
+  const termEffective = coerceDateOnly(policyField(policyRow, 'termEffectiveDate', 'term_effective_date'))
+  const termExpiration = coerceDateOnly(policyField(policyRow, 'termExpirationDate', 'term_expiration_date'))
   const eff = asDateOnly(body.effectiveDate) || termEffective
   const processedAt = new Date().toISOString()
   const versionId = uuidv4()
@@ -761,7 +738,7 @@ export async function executeEndorsement(
   const oldPrem = computation.previousPremium
   const newPrem = computation.nextPremium
   const factor = proRataFactor(eff, termEffective, termExpiration)
-  const currency = policyRow.currency_code || computation.newStateAtEffective?.currency || 'USD'
+  const currency = policyField(policyRow, 'currencyCode', 'currency_code') || computation.newStateAtEffective?.currency || 'USD'
   const endorsementPremium = buildEndorsementPremiumDelta({
     previousStored: { total: { amount: computation.oldStateAtEffective?.premiumTotal ?? safeMoney(oldPrem?.total?.amount), currency } },
     previousCalculated: oldPrem,
@@ -781,17 +758,55 @@ export async function executeEndorsement(
   const fullNew = endorsementPremium.fullNew
   const delta = endorsementPremium.totalDelta
   const uw = evaluateUW(tenantId, newPayload)
+  const authority = await resolveAuthorityDecision(q, {
+    tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
+    producerId: newPayload?.producer?.producerId || newPayload?.producer?.producerKey || null,
+    productCode: String(policyField(policyRow, 'productCode', 'product_code') || ''),
+    stateCode: newPayload?.state || newPayload?.jurisdiction?.code || '', effectiveDate: eff,
+    transactionType: 'Endorse', premium: Number(newPrem?.total?.amount || fullNew),
+    requestedLimit: maximumRequestedLimit(newPayload),
+  })
   if (uw.decision === 'Decline') {
     throw new BadRequestError('UW_DECLINED', `Underwriting decision: Decline. Reasons: ${uw.reasons?.join('; ')}`)
   }
-  const uwOverride = uw.decision === 'Refer' && isUw && !!overrideReason
-  const submittedBy = !uwOverride && uw.decision === 'Refer' ? (actor?.username || null) : null
+  let referralId: string | null = null
+  if (uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
+    const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
+    const gate = await resolveReferralGateForActor(
+      db,
+      tenantId,
+      {
+        policyId,
+        transactionType: 'Endorse',
+        productCode: policyField(policyRow, 'productCode', 'product_code'),
+        insuredName: newPayload?.insureds?.primary
+          ? `${newPayload.insureds.primary.firstName || ''} ${newPayload.insureds.primary.lastName || ''}`.trim()
+          : null,
+        effectiveDate: eff,
+        reasons: [...(uw.reasons || []), ...authorityReasons],
+        authorityOverrideRequired: authorityReasons.length > 0,
+        createdBy: actor?.id || null,
+      },
+      actor,
+      overrideReason
+    )
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
+      )
+    }
+    referralId = gate.referral.referralId
+  }
+  const uwOverride = (uw.decision === 'Refer' || !authority.authorized) && !!referralId
+  const submittedBy = !uwOverride && (uw.decision === 'Refer' || !authority.authorized) ? (actor?.username || null) : null
   const baseTimelineVersion = await loadCurrentTimelineVersion(q, tenantId, policyId)
   const timelineVersion = baseTimelineVersion + 1
   const sequenceNo = await nextPolicyTransactionSequence(q, tenantId, policyId)
   const transactionNumber = requestedTransactionNumber || reserveTransactionNumber('endorse')
   const version: any = {
     versionId,
+    transactionId,
     effectiveDate: eff,
     processedDate: processedAt,
     transactionType: 'Endorse',
@@ -801,11 +816,12 @@ export async function executeEndorsement(
       changes,
       uwDecision: uw,
       uwOverride,
-      overrideReason: uwOverride ? overrideReason : undefined,
+      uwReferralId: referralId || undefined,
       reason: endorsementReason || undefined,
       notes: endorsementNotes || undefined,
       submittedBy: submittedBy || undefined,
       transactionNumber,
+      authority,
       coveragePremiumDelta: endorsementPremium.byCoverage,
       proRataFactor: factor,
       baseTimelineVersion,
@@ -822,7 +838,7 @@ export async function executeEndorsement(
   const riskList = Array.isArray(newPayload?.risks) ? newPayload.risks : []
   const riskEntries: RiskEntry[] = riskList.map((risk: any) => ({
     id: uuidv4(),
-    kind: mapRiskKind(policyRow.product_code, risk),
+    kind: mapRiskKind(policyField(policyRow, 'productCode', 'product_code'), risk),
     attributes: risk,
   }))
   const projectionAsOf = currentPolicyStateAsOfDate(termEffective, termExpiration)
@@ -831,7 +847,7 @@ export async function executeEndorsement(
   const projectionPremium = projectionState?.premium || newPrem
   const projectionRiskList = Array.isArray(projectionPayload?.risks) ? projectionPayload.risks : []
   const riskSummary = projectionRiskList.length
-    ? { risks: projectionRiskList.map((risk: any) => ({ kind: mapRiskKind(policyRow.product_code, risk), summary: summarizeRisk(risk) })) }
+    ? { risks: projectionRiskList.map((risk: any) => ({ kind: mapRiskKind(policyField(policyRow, 'productCode', 'product_code'), risk), summary: summarizeRisk(risk) })) }
     : null
   const premiumSummary = projectionPremium
     ? {
@@ -852,6 +868,29 @@ export async function executeEndorsement(
     lastTimelineVersion: timelineVersion,
   }
   const trace = submittedBy ? { uw: { submittedBy, submittedAt: processedAt } } : null
+  const endorsementChanges = buildEndorsementChangeSet(
+    prevPayload,
+    newPayload,
+    changes.map((entry: any) => typeof entry === 'string' ? entry : entry.path).filter(Boolean),
+  )
+  const documentContext = {
+    tenantId,
+    policyId,
+    policyNumber: policyField(policyRow, 'policyNumber', 'policy_number'),
+    transactionId,
+    transactionType: 'Endorse' as const,
+    transactionNumber,
+    productCode: policyField(policyRow, 'productCode', 'product_code') || newPayload?.productCode,
+    state: newPayload?.state || newPayload?.jurisdiction?.code || null,
+    effectiveDate: eff,
+    versionId,
+    generatedAt: processedAt,
+    inputSnapshot: newPayload,
+    generatedBy: actor?.id || null,
+    correlationId: transactionNumber,
+    endorsementChanges,
+  }
+  const documentPacket = await buildPolicyDocumentPacket(q, documentContext)
 
   await insertPolicyTransaction(db, {
     tenantId,
@@ -866,8 +905,8 @@ export async function executeEndorsement(
     ratingId,
     uw,
     notes: [],
-    forms: [],
-    documents: [],
+    forms: documentPacket.forms,
+    documents: documentPacket.documents,
     createdBy: actor?.id || null,
     effectiveDate: eff,
     processedAt,
@@ -875,15 +914,17 @@ export async function executeEndorsement(
     baseTimelineVersion,
     timelineVersion,
     metadata: {
-      overrideReason: uwOverride ? overrideReason : null,
+      uwReferralId: referralId || null,
       submittedBy,
       delta,
       feesDelta: endorsementPremium.feesDelta,
       taxesDelta: endorsementPremium.taxesDelta,
       coveragePremiumDelta: endorsementPremium.byCoverage,
       transactionNumber,
+      authority,
       baseTimelineVersion,
       timelineVersion,
+      outOfSequence: computation.rebasedTransactions.length > 0,
       rebasedTransactions: computation.rebasedTransactions,
       retroAdjustment: computation.retroResult,
     },
@@ -902,13 +943,22 @@ export async function executeEndorsement(
     currency,
     uwDecision: uw.decision,
     uwOverride,
-    overrideReason: uwOverride ? overrideReason : null,
+    overrideReason: null,
     calcTrace: trace,
     payload: newPayload,
     transactionNumber,
     baseTimelineVersion,
     timelineVersion,
   })
+
+  await persistPolicyDocumentPacket(db, documentContext, documentPacket)
+
+  if (referralId) {
+    await q(
+      'UPDATE underwriting_referrals SET transaction_id=$1, version_id=$2, updated_at=now() WHERE tenant_id=$3 AND referral_id=$4',
+      [transactionId, versionId, tenantId, referralId]
+    )
+  }
 
   const componentsValue = jsonParam(Array.isArray(endorsementPremium.byCoverage) ? endorsementPremium.byCoverage : [])
   const discountsValue = jsonParam(toArray((newPrem as any)?.discounts))
@@ -950,7 +1000,7 @@ export async function executeEndorsement(
     policyId,
     versionId,
     entries: riskEntries,
-    productCode: policyRow.product_code,
+    productCode: policyField(policyRow, 'productCode', 'product_code'),
     transactionId,
     effectiveDate: eff,
     expirationDate: termExpiration,
@@ -973,7 +1023,8 @@ export async function executeEndorsement(
     })
   }
 
-  for (const path of changes) {
+  for (const entry of changes) {
+    const path = typeof entry === 'string' ? entry : entry.path
     const oldVal = prevPayload ? getByPath(prevPayload, path) : null
     const newVal = getByPath(newPayload, path)
     const oldJson = jsonParam(oldVal)
@@ -1051,6 +1102,28 @@ export async function executeEndorsement(
       actor?.id || null,
     ]
   )
+  await createCommissionHandoffEvent(db, {
+    tenantId,
+    policyId,
+    policyNumber: policyRow.policyNumber || policyRow.policy_number || null,
+    transactionId,
+    transactionNumber,
+    transactionType: 'Endorse',
+    sourceEvent: 'ENDORSEMENT_ISSUED',
+    effectiveDate: eff,
+    expirationDate: termExpiration,
+    processedAt,
+    productCode: policyRow.productCode || policyRow.product_code || newPayload?.productCode || null,
+    state: newPayload?.state || newPayload?.jurisdiction?.code || null,
+    premiumImpact: delta,
+    currency,
+    payload: newPayload,
+    policyMetadata: policyRow.metadata || {},
+    actorId: actor?.id || null,
+    correlationId: transactionNumber,
+  })
+
+  await computePlacementForTransactionSafely(db, tenantId, policyId, transactionId)
 
   return version
 }
