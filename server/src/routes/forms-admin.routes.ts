@@ -2036,7 +2036,7 @@ async function loadFormRow(q: QueryFn, tenantId: string, formId: string): Promis
   return row.rowCount ? (row.rows[0] as FormRow) : null
 }
 
-async function ensureDefaultFormRows(q: QueryFn, tenantId: string, formId: string, actor: string) {
+export async function ensureDefaultFormRows(q: QueryFn, tenantId: string, formId: string, actor: string) {
   await q(
     `INSERT INTO forms_admin_output (tenant_id, form_id, template_source, output_format, merge_scope, packet_placement, sort_order, active, created_by, updated_by, updated_at)
      VALUES ($1,$2,'Static PDF','PDF','policy','End',100,true,$3,$3,now())

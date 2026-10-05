@@ -37,14 +37,14 @@ type QueryFn = (text: string, params?: any[]) => Promise<any>
 
 type OnboardingMode = 'UPLOAD' | 'SERVICE_HIT' | 'MANUAL'
 type EntityType = 'AGENCY' | 'PRODUCER' | 'LICENSE' | 'APPOINTMENT' | 'COMMISSION'
-type RootEntityType = 'AGENCY' | 'PRODUCER'
-type IdempotencyStrategy = 'EXTERNAL_ID_WINS' | 'KEY_WINS' | 'ALWAYS_CREATE'
-type ConflictBehavior = 'SKIP' | 'OVERWRITE_ALLOWED' | 'REQUIRE_APPROVAL'
+export type RootEntityType = 'AGENCY' | 'PRODUCER'
+export type IdempotencyStrategy = 'EXTERNAL_ID_WINS' | 'KEY_WINS' | 'ALWAYS_CREATE'
+export type ConflictBehavior = 'SKIP' | 'OVERWRITE_ALLOWED' | 'REQUIRE_APPROVAL'
 type JobStatus = 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED'
 type RowStatus = 'STAGED' | 'VALIDATED' | 'ERROR' | 'COMMITTED' | 'FAILED' | 'SKIPPED' | 'PENDING_APPROVAL'
 type RowAction = 'CREATE' | 'UPDATE' | 'SKIP'
 
-type OnboardingConfig = {
+export type OnboardingConfig = {
   keyPatterns: {
     agency: string
     producer: string
@@ -100,7 +100,7 @@ type MatchCandidate = {
   source: 'EXTERNAL_ID' | 'NPN' | 'NAME' | 'EMAIL' | 'PHONE' | 'KEY'
 }
 
-type CommitResult = {
+export type CommitResult = {
   status: RowStatus
   actionType: RowAction
   message: string
@@ -1267,7 +1267,7 @@ onboardingAdminRoutes.get('/audit', async (req, res) => {
   }
 })
 
-async function loadOnboardingConfig(q: QueryFn, tenantId: string): Promise<OnboardingConfig> {
+export async function loadOnboardingConfig(q: QueryFn, tenantId: string): Promise<OnboardingConfig> {
   const result = await q('SELECT onboarding_config FROM tenants WHERE tenant_id=$1 LIMIT 1', [tenantId])
   if (!result.rowCount) return clone(DEFAULT_ONBOARDING_CONFIG)
   return normalizeOnboardingConfig(result.rows[0]?.onboarding_config || {}, DEFAULT_ONBOARDING_CONFIG)
@@ -1977,7 +1977,7 @@ async function retryFailedRows(q: QueryFn, tenantId: string, jobId: string, acto
   return { newJob: created ? mapJobRow(created) : null }
 }
 
-async function upsertAgencyEntity(
+export async function upsertAgencyEntity(
   q: QueryFn,
   tenantId: string,
   payload: Record<string, any>,
@@ -3585,7 +3585,7 @@ async function loadEntityFull(q: QueryFn, tenantId: string, entityType: RootEnti
   return { ...base.rows[0], contacts: contacts.rows || [], addresses: addresses.rows || [], externalIdentifiers: externalIds.rows || [], affiliations: affiliations.rows || [] }
 }
 
-async function upsertEntityContacts(
+export async function upsertEntityContacts(
   q: QueryFn,
   tenantId: string,
   entityType: RootEntityType,
