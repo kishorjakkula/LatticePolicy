@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:contracts": "vitest run src/__tests__/contracts.openapi.test.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "smoke": "tsx scripts/smoke.ts",

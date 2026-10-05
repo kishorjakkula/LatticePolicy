@@ -211,14 +211,89 @@ function jsonResponse(schemaRefOrSchema: any, description = 'Success') {
   }
 }
 
+function errorResponse(schemaName = 'ErrorResponse', description = 'Error') {
+  return jsonResponse(schemaName, description)
+}
+
 const componentSchemas: Record<string, any> = {
   ErrorResponse: {
     type: 'object',
+    required: ['code', 'message', 'traceId'],
     properties: {
-      code: { type: 'string', example: 'DB_ERROR' },
-      message: { type: 'string', example: 'Something failed' }
+      code: { type: 'string', example: 'VALIDATION_ERROR' },
+      message: { type: 'string', example: 'Validation failed' },
+      traceId: {
+        type: 'string',
+        description: 'Request correlation id from the x-request-id response header.',
+        example: 'req_01J7Z3N0WJ7Y0N2M5RZ0Z9R8Q1'
+      },
+      details: {
+        description: 'Optional structured error metadata. Shape depends on the error code.',
+        nullable: true
+      }
     },
     additionalProperties: true
+  },
+  ContractValidationError: {
+    type: 'object',
+    required: ['path', 'keyword', 'message', 'schemaSource'],
+    properties: {
+      path: { type: 'string', example: '/risks/0/year' },
+      keyword: { type: 'string', example: 'type' },
+      message: { type: 'string', example: 'must be integer' },
+      schemaSource: { type: 'string', example: 'quote.request.schema.json#/definitions/autoVehicle/properties/year/type' },
+      params: { type: 'object', additionalProperties: true }
+    },
+    additionalProperties: false
+  },
+  ValidationErrorResponse: {
+    allOf: [
+      { $ref: '#/components/schemas/ErrorResponse' },
+      {
+        type: 'object',
+        properties: {
+          code: { type: 'string', example: 'VALIDATION_ERROR' },
+          details: {
+            oneOf: [
+              {
+                type: 'object',
+                properties: {
+                  formErrors: { type: 'array', items: { type: 'string' } },
+                  fieldErrors: {
+                    type: 'object',
+                    additionalProperties: { type: 'array', items: { type: 'string' } }
+                  }
+                },
+                additionalProperties: true
+              },
+              {
+                type: 'array',
+                items: { $ref: '#/components/schemas/ContractValidationError' }
+              },
+              {
+                type: 'object',
+                additionalProperties: true
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  IdempotencyConflictErrorResponse: {
+    allOf: [
+      { $ref: '#/components/schemas/ErrorResponse' },
+      {
+        type: 'object',
+        properties: {
+          code: { type: 'string', example: 'IDEMPOTENCY_KEY_CONFLICT' },
+          message: {
+            type: 'string',
+            example: 'Idempotency-Key was already used with a different request'
+          }
+        }
+      }
+    ]
   },
   LoginRequest: {
     type: 'object',
@@ -662,11 +737,13 @@ export function buildOpenApiSpec(serverUrl: string) {
       security,
       responses: {
         '200': { description: 'Success' },
-        '400': { description: 'Bad Request' },
-        '401': { description: 'Unauthorized' },
-        '403': { description: 'Forbidden' },
-        '404': { description: 'Not Found' },
-        '500': { description: 'Server Error' }
+        '400': errorResponse('ErrorResponse', 'Bad Request'),
+        '401': errorResponse('ErrorResponse', 'Unauthorized'),
+        '403': errorResponse('ErrorResponse', 'Forbidden'),
+        '404': errorResponse('ErrorResponse', 'Not Found'),
+        '409': errorResponse('IdempotencyConflictErrorResponse', 'Idempotency key conflict'),
+        '422': errorResponse('ValidationErrorResponse', 'Validation failed'),
+        '500': errorResponse('ErrorResponse', 'Server Error')
       }
     }
     const mergedOp = {
