@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleLogin } from '../auth.js'
+import { getDb } from '../db.js'
+import { ensureDefaults } from '../users.js'
 
 vi.mock('../db.js', () => ({
   getDb: vi.fn(() => null),
@@ -10,6 +12,12 @@ vi.mock('../db.js', () => ({
 vi.mock('../users.js', () => ({
   ensureDefaults: vi.fn(),
   findByUsername: vi.fn()
+}))
+
+vi.mock('../rbac.js', () => ({
+  ensureTenantRbacDefaults: vi.fn(),
+  getDefaultPermissionCodesForRoles: vi.fn((roles: string[]) => roles.map((role) => `${role}:default`)),
+  resolvePermissionsForRoles: vi.fn()
 }))
 
 function mockReq(body: Record<string, unknown>, headers: Record<string, string> = {}) {
@@ -40,6 +48,7 @@ describe('demo fallback login access', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getDb).mockReturnValue(null)
     process.env.NODE_ENV = 'test'
     delete process.env.DEMO_ACCESS_MODE
     delete process.env.DEMO_ALLOWED_EMAILS
@@ -98,5 +107,22 @@ describe('demo fallback login access', () => {
 
     expect(res.status).toHaveBeenCalledWith(403)
     expect(res.body.code).toBe('DEMO_ACCESS_NOT_ALLOWED')
+  })
+
+  it('does not seed local demo users during managed database-backed login', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.JWT_SECRET = 'jwt-secret-for-production-runtime-tests-12345'
+    process.env.CUSTOMER_DATA_KEY = 'customer-data-key-for-production-tests-12345'
+    process.env.MFA_TOKEN_SECRET = 'mfa-token-secret-for-production-tests-12345'
+    process.env.DATABASE_URL = 'postgres://example'
+    process.env.ALLOWED_ORIGINS = 'https://demo.example.com'
+    vi.mocked(getDb).mockReturnValue({} as any)
+
+    const res = mockRes()
+    await handleLogin(mockReq({ username: 'admin', password: 'password', tenantId: 'sample-carrier' }), res)
+
+    expect(ensureDefaults).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(401)
+    expect(res.body.code).toBe('INVALID_CREDENTIALS')
   })
 })

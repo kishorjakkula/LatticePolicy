@@ -218,7 +218,7 @@ export async function handleLogin(req: Request, res: Response) {
     return res.json({ token, user })
   }
 
-  await ensureDefaults()
+  if (!isManagedDeployment()) await ensureDefaults()
   await ensureTenantRbacDefaults(tenantId)
   // Run user lookup under tenant RLS
   const u = await withTenantTx(tenantId, async () => await findByUsername(username))
