@@ -34,7 +34,7 @@ jobs:
           RESTORE_METADATA_FILE: restore-metadata.json
         run: npm run validate:restore --workspace=server | tee restore-drill-evidence.json
       - name: Publish restore evidence
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-evidence-${{ github.run_id }}
           path: |
