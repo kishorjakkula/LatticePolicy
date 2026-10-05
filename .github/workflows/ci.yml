@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check module boundaries
+        run: npm run check:architecture
+
       - name: Build frontend
         env:
           VITE_API_BASE_URL: https://api.example.com

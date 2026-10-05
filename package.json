@@ -45,6 +45,7 @@
     "security:audit": "node scripts/check-npm-audit.mjs",
     "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
     "check:import-templates": "node scripts/check-import-templates.mjs",
+    "check:architecture": "node --test scripts/check-module-boundaries.test.mjs && node scripts/check-module-boundaries.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
