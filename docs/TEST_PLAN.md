@@ -170,6 +170,12 @@ Add Playwright E2E:
 
 ## Running Tests
 
+The production policy scenario matrix is implemented in
+`server/src/__tests__/production-policy-scenario-matrix.integration.test.ts`
+with reusable fixtures under `server/src/__tests__/fixtures/`. Its browser
+critical path is `e2e/production-policy-scenarios.spec.ts`; both suites run in
+the required CI integration and Playwright jobs.
+
 ```bash
 npm run test:server
 npm run test:frontend
