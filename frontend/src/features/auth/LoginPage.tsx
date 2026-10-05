@@ -216,11 +216,13 @@ export function LoginPage() {
                 Back
               </button>
             )}
+            {mfaStep === 'credentials' && config.apiBaseUrl && !config.useMock && (
+              <button type="button" className="btn-secondary" onClick={startSso} disabled={loading}>
+                Continue with SSO
+              </button>
+            )}
           </div>
         </form>
-        {mfaStep === 'credentials' && config.apiBaseUrl && !config.useMock && (
-          <button type="button" className="btn secondary" onClick={startSso} disabled={loading}>Continue with SSO</button>
-        )}
         {mfaStep === 'credentials' && (
           <div className="login-demo-box">
             <strong>Demo Credentials</strong>
