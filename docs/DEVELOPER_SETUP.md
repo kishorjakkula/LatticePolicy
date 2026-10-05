@@ -232,6 +232,16 @@ manual setup.
   `ho_policy_seed.sql` and `pas_mvp_seed.sql`). Product coverage/rate
   configuration used by the demo tenant lives under
   [`products/`](../products/).
+- **Reference/admin data** (underwriting companies, an agency, a forms
+  catalog entry, and notification templates — one set per product line in
+  `tenants/sample-carrier/config.yaml`): click **Seed Reference Data** on the
+  Tenant admin page (`/admin/tenant`), or call
+  `POST /api/v1/admin/seed-reference-data` directly (requires
+  `admin.security.manage`). The endpoint is idempotent — it only creates
+  rows that don't already exist, so it's safe to run again after adding a
+  new product line or on a fresh environment. Without this, new quotes have
+  nothing to populate the Underwriting Company/Agency/Country/State/Product
+  dropdowns with.
 - **Local URLs**: see the [Full Docker Stack](#option-1-full-docker-stack)
   service table above for the UI, API, PostgreSQL, and Redis addresses used
   by the demo stack.

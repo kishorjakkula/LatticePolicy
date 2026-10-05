@@ -298,6 +298,7 @@ export const adminApi = {
   }) =>
     request<any>('PATCH', '/v1/admin/tenant', payload),
   seed: () => request<any>('POST', '/v1/admin/seed'),
+  seedReferenceData: () => request<any>('POST', '/v1/admin/seed-reference-data'),
   listUnderwritingCompanies: (opts?: { productCode?: string; country?: string; state?: string; includeInactive?: boolean }) => {
     const params = new URLSearchParams()
     if (opts?.productCode) params.set('productCode', opts.productCode)
