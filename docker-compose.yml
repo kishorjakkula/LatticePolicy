@@ -49,6 +49,14 @@ services:
     environment:
       DATABASE_URL: postgres://${DB_USER:-lattice_policy}:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DB_NAME:-lattice_policy}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CUSTOMER_DATA_KEY: ${CUSTOMER_DATA_KEY:-lattice-policy-customer-dev-key}
+      MFA_TOKEN_SECRET: ${MFA_TOKEN_SECRET:-mfa-token-secret}
+      PII_LOOKUP_KEY: ${PII_LOOKUP_KEY:-lattice-policy-pii-lookup-dev-key}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-local}
+      DEMO_ACCESS_MODE: ${DEMO_ACCESS_MODE:-}
+      DEMO_ALLOWED_EMAILS: ${DEMO_ALLOWED_EMAILS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       PORT: 3000
       REDIS_URL: redis://cache:6379
       CACHE_ENABLED: "1"

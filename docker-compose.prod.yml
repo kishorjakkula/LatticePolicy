@@ -27,6 +27,11 @@ services:
   server:
     environment:
       NODE_ENV: production
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:?DEPLOYMENT_ENV is required in production (e.g. production or staging, not local)}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required in production (explicit HTTPS origins)}
+      CUSTOMER_DATA_KEY: ${CUSTOMER_DATA_KEY:?CUSTOMER_DATA_KEY is required in production}
+      MFA_TOKEN_SECRET: ${MFA_TOKEN_SECRET:?MFA_TOKEN_SECRET is required in production}
+      PII_LOOKUP_KEY: ${PII_LOOKUP_KEY:?PII_LOOKUP_KEY is required in production}
     ports:
       # Not exposed directly â€” nginx proxy handles routing
       - "127.0.0.1:3300:3000"
