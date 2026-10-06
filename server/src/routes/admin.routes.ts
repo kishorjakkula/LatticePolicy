@@ -1052,8 +1052,11 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
              ) VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,now())
              RETURNING form_id`,
             [
+              // workflow_status='Approved' + active=true: forms.service.previewForm only attaches
+              // forms where both hold (active=true AND workflow_status='Approved'), so a freshly
+              // seeded Draft/inactive form silently never attaches to any quote.
               tenantId, 'SAMPLE', 'ISO', line.formNumber, line.formTitle, SEED_FORM_EDITION_DATE,
-              'Policy', line.code, 'Draft', false, true, false,
+              'Policy', line.code, 'Approved', true, true, false,
               JSON.stringify({ seedCode: 'seed-reference-data' }), actor, actor
             ]
           )
