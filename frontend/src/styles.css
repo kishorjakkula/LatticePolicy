@@ -5759,9 +5759,9 @@ code {
   }
 }
 
-/* ── Responsive: 768px — hamburger menu ────────────────────────────── */
+/* ── Responsive: 900px — hamburger menu ────────────────────────────── */
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .topbar-inner {
     padding: 12px 16px;
     flex-wrap: wrap;
@@ -6887,10 +6887,10 @@ code {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   RESPONSIVE — Mobile breakpoint (<768px)
+   RESPONSIVE — Compact breakpoint (<900px)
    ═══════════════════════════════════════════════════════════════════ */
 
-@media (max-width: 767px) {
+@media (max-width: 900px) {
   /* ── Page layout ────────────────────────────────────────────── */
 
   .ps-page-shell {

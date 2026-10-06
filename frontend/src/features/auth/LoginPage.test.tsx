@@ -7,7 +7,7 @@ const login = vi.fn()
 const navigate = vi.fn()
 
 vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ login }) }))
-vi.mock('../../config', () => ({ config: { apiBaseUrl: 'https://api.example.com', useMock: false } }))
+vi.mock('../../config', () => ({ config: { apiBaseUrl: 'https://api.example.com', useMock: false, showDemoCredentials: false } }))
 vi.mock('react-router-dom', async (importOriginal) => {
   const original = await importOriginal<typeof import('react-router-dom')>()
   return { ...original, useNavigate: () => navigate }
@@ -32,6 +32,14 @@ describe('LoginPage SSO', () => {
       'popup,width=520,height=720',
     )
     open.mockRestore()
+  })
+
+  it('does not expose local demo credentials in a client configuration', () => {
+    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+
+    expect(screen.queryByText('Demo Credentials')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Email / Username')).toHaveValue('')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
   })
 
   it('accepts credentials only from the configured API origin', async () => {

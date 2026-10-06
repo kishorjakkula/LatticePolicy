@@ -11,7 +11,7 @@ import { getInitials } from './utils/initials'
 import { useGlobalSearch } from './hooks/useGlobalSearch'
 import { useMobileNav } from './hooks/useMobileNav'
 import { useMobileTableLabels } from './hooks/useMobileTableLabels'
-import { RequireAuth, RequireAdmin, RequirePermission, AdminIndexRedirect, HomeRedirect } from './components/RouteGuards'
+import { RequireAuth, RequireAdmin, RequirePermission, RequireCustomerIdentity, AdminIndexRedirect, HomeRedirect, hasCustomerIdentity } from './components/RouteGuards'
 import latticePolicyLogo from './assets/lattice-policy-logo.svg'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
@@ -48,10 +48,8 @@ export default function App() {
   const location = useLocation()
   const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : undefined)
   const isLoginRoute = location.pathname === '/login'
-  const isAdminUser = Array.isArray(user?.roles) && user.roles.includes('admin')
   const canUseGlobalSearch = hasPermission(user, 'page.search.view')
   const canSearchCustomers = hasPermission(user, 'admin.customers.read')
-  const apiDocsUrl = `${config.apiBaseUrl || ''}/api-docs${token ? `?token=${encodeURIComponent(token)}` : ''}`
 
   const { mobileNavOpen, setMobileNavOpen } = useMobileNav()
   const {
@@ -69,7 +67,7 @@ export default function App() {
     { path: '/rating', label: 'Rating', icon: '⚙️', permission: 'menu.rating.view' },
     { path: '/portal', label: 'Portal', icon: '🌐', permission: 'menu.portal.view' },
     { path: '/admin', label: 'Administration', icon: '🛠️', permission: 'menu.admin.view' }
-  ].filter((item) => hasPermission(user, item.permission))
+  ].filter((item) => hasPermission(user, item.permission) && (item.path !== '/portal' || hasCustomerIdentity(user)))
 
   const { data: tenantPrefs } = useTenantPreferences(!!token)
   useEffect(() => {
@@ -89,7 +87,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dashboard" element={<RequireAuth><RequirePermission permission="page.search.view"><DashboardPage /></RequirePermission></RequireAuth>} />
             <Route path="/rating" element={<RequireAuth><RequirePermission permission="page.rating.view"><RatingWorkbenchPage /></RequirePermission></RequireAuth>} />
-            <Route path="/portal" element={<RequireAuth><RequirePermission permission="page.portal.view"><CustomerPortalPage /></RequirePermission></RequireAuth>} />
+            <Route path="/portal" element={<RequireAuth><RequirePermission permission="page.portal.view"><RequireCustomerIdentity><CustomerPortalPage /></RequireCustomerIdentity></RequirePermission></RequireAuth>} />
             <Route path="/search" element={<RequireAuth><RequirePermission permission="page.search.view"><SearchPage /></RequirePermission></RequireAuth>} />
             <Route path="/wizard" element={<RequireAuth><RequirePermission permission="page.wizard.view"><QuoteWizard /></RequirePermission></RequireAuth>} />
             <Route path="/wizard-wireframes" element={<RequireAuth><RequirePermission permission="page.wizard.view"><WizardWireframesPage /></RequirePermission></RequireAuth>} />
@@ -177,12 +175,6 @@ export default function App() {
                 <span className="topnav-label">{item.label}</span>
               </NavLink>
             ))}
-            {!config.useMock && isAdminUser && (
-              <a href={apiDocsUrl} target="_blank" rel="noopener noreferrer">
-                <span className="topnav-icon" aria-hidden="true">📖</span>
-                <span className="topnav-label">API Docs</span>
-              </a>
-            )}
           </nav>
 
           {/* Quick lookup */}

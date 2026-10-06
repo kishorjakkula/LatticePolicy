@@ -6,7 +6,9 @@ import {
   HomeRedirect,
   RequireAdmin,
   RequireAuth,
+  RequireCustomerIdentity,
   RequirePermission,
+  hasCustomerIdentity,
   resolveHomePath,
 } from '../RouteGuards'
 import { useAuthStore, type AuthUser } from '../../store/auth.store'
@@ -35,8 +37,18 @@ describe('RouteGuards', () => {
   it('resolves the expected home path by role priority', () => {
     expect(resolveHomePath({ roles: ['agent'] })).toBe('/search')
     expect(resolveHomePath({ roles: ['actuary'] })).toBe('/rating')
-    expect(resolveHomePath({ roles: ['customer'] })).toBe('/portal')
+    expect(resolveHomePath({ roles: ['customer'], customerId: 'customer-1' })).toBe('/portal')
+    expect(resolveHomePath({ roles: ['customer'] })).toBe('/login')
     expect(resolveHomePath({ roles: [] })).toBe('/login')
+  })
+
+  it('requires a linked customer identity for portal content', () => {
+    expect(hasCustomerIdentity({ customerKey: 'C-100' })).toBe(true)
+    expect(hasCustomerIdentity({ roles: ['admin'] })).toBe(false)
+
+    setAuth({ id: 'u1', username: 'admin', tenantId: 'sample-carrier', roles: ['admin'] })
+    renderWithRoutes('/portal-protected', <RequireCustomerIdentity><div>Customer Portal Content</div></RequireCustomerIdentity>)
+    expect(screen.getByText('Search Page')).toBeInTheDocument()
   })
 
   it('redirects unauthenticated users to login', () => {
@@ -67,7 +79,7 @@ describe('RouteGuards', () => {
   })
 
   it('redirects users without a required permission to their home path', () => {
-    setAuth({ id: 'u1', username: 'customer1', tenantId: 'sample-carrier', roles: ['customer'] })
+    setAuth({ id: 'u1', username: 'customer1', tenantId: 'sample-carrier', roles: ['customer'], customerId: 'customer-1' })
     renderWithRoutes(
       '/admin-protected',
       <RequirePermission permission="page.admin.users.view"><div>Users Protected</div></RequirePermission>,
@@ -82,7 +94,7 @@ describe('RouteGuards', () => {
   })
 
   it('redirects home based on authenticated user role', () => {
-    setAuth({ id: 'u1', username: 'customer1', tenantId: 'sample-carrier', roles: ['customer'] })
+    setAuth({ id: 'u1', username: 'customer1', tenantId: 'sample-carrier', roles: ['customer'], customerId: 'customer-1' })
     renderWithRoutes('/', <HomeRedirect />)
     expect(screen.getByText('Portal Page')).toBeInTheDocument()
   })

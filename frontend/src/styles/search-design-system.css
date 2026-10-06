@@ -705,9 +705,9 @@
   }
 }
 
-/* ── Responsive: 768px — hamburger menu ────────────────────────────── */
+/* ── Responsive: 900px — hamburger menu ────────────────────────────── */
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .topbar-inner {
     padding: 0 16px;
     flex-wrap: wrap;
