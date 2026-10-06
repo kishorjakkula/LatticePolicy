@@ -3,10 +3,14 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { hasPermission } from '../auth/permissions'
 
+export function hasCustomerIdentity(user: any): boolean {
+  return Boolean(user?.customerId || user?.customerKey)
+}
+
 export function resolveHomePath(user: any): string {
   if (hasPermission(user, 'page.search.view')) return '/search'
   if (hasPermission(user, 'page.rating.view')) return '/rating'
-  if (hasPermission(user, 'page.portal.view')) return '/portal'
+  if (hasPermission(user, 'page.portal.view') && hasCustomerIdentity(user)) return '/portal'
   if (hasPermission(user, 'page.wizard.view')) return '/wizard'
   if (hasPermission(user, 'page.policy.view')) return '/search'
   if (hasPermission(user, 'page.uw_queue.view')) return '/uw/queue'
@@ -36,6 +40,12 @@ export function RequirePermission({ children, permission }: { children: ReactEle
   const { user } = useAuth()
   const ok = hasPermission(user, permission)
   if (!ok) return <Navigate to={resolveHomePath(user)} replace />
+  return children
+}
+
+export function RequireCustomerIdentity({ children }: { children: ReactElement }) {
+  const { user } = useAuth()
+  if (!hasCustomerIdentity(user)) return <Navigate to={resolveHomePath(user)} replace />
   return children
 }
 

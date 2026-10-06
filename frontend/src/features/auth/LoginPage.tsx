@@ -6,8 +6,8 @@ import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
 import { getDefaultPermissionsForRoles } from '../../auth/permissions'
 
 export function LoginPage() {
-  const [username, setUsername] = useState('agent1')
-  const [password, setPassword] = useState('password')
+  const [username, setUsername] = useState(config.showDemoCredentials ? 'agent1' : '')
+  const [password, setPassword] = useState(config.showDemoCredentials ? 'password' : '')
   const [tenantId, setTenantId] = useState(() => localStorage.getItem('tenantId') || 'sample-carrier')
   const [mfaStep, setMfaStep] = useState<'credentials' | 'verify' | 'setup'>('credentials')
   const [mfaToken, setMfaToken] = useState('')
@@ -223,7 +223,7 @@ export function LoginPage() {
             )}
           </div>
         </form>
-        {mfaStep === 'credentials' && (
+        {mfaStep === 'credentials' && config.showDemoCredentials && (
           <div className="login-demo-box">
             <strong>Demo Credentials</strong>
             <div>Org slug: <span className="muted">{tenantId || 'sample-carrier'}</span></div>
@@ -233,9 +233,6 @@ export function LoginPage() {
             <div>Admin: <span className="muted">admin / password</span></div>
           </div>
         )}
-        <div className="login-footer-link">
-          <a href="/login">Admin Login →</a>
-        </div>
         <div className="muted login-help">
           MFA-enabled tenants will prompt for a verification code after credential sign-in.
         </div>

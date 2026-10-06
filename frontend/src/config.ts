@@ -7,6 +7,10 @@ const resolvedUseMock = mockEnv != null
 const resolvedMockDelayMs = Number.isFinite(mockDelayEnv) && mockDelayEnv >= 0
   ? mockDelayEnv
   : 75
+const showDemoCredentialsEnv = import.meta.env.VITE_SHOW_DEMO_CREDENTIALS
+const resolvedShowDemoCredentials = showDemoCredentialsEnv != null
+  ? showDemoCredentialsEnv === '1' || showDemoCredentialsEnv.toLowerCase() === 'true'
+  : import.meta.env.DEV
 
 function validateFrontendRuntimeConfig() {
   if (!import.meta.env.PROD) return
@@ -31,5 +35,6 @@ export const config = {
   apiBaseUrl,
   useMock: resolvedUseMock,
   apiVersion: '1',
-  mockApiDelayMs: resolvedMockDelayMs
+  mockApiDelayMs: resolvedMockDelayMs,
+  showDemoCredentials: resolvedShowDemoCredentials
 }
