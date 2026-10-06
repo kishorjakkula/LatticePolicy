@@ -874,6 +874,10 @@ export function QuoteWizard() {
   const [primarySearchResults, setPrimarySearchResults] = useState<any[]>([])
   const [primarySearchLoading, setPrimarySearchLoading] = useState(false)
   const [primarySelecting, setPrimarySelecting] = useState(false)
+  const [showCreatePrimaryCustomer, setShowCreatePrimaryCustomer] = useState(false)
+  const [createPrimaryCustomerForm, setCreatePrimaryCustomerForm] = useState({ firstName: '', lastName: '', dob: '', email: '', phone: '' })
+  const [createPrimaryCustomerError, setCreatePrimaryCustomerError] = useState<string | null>(null)
+  const [createPrimaryCustomerSubmitting, setCreatePrimaryCustomerSubmitting] = useState(false)
   const [secondarySearchQuery, setSecondarySearchQuery] = useState('')
   const [secondarySearchResults, setSecondarySearchResults] = useState<any[]>([])
   const [secondarySearchLoading, setSecondarySearchLoading] = useState(false)
@@ -934,6 +938,7 @@ export function QuoteWizard() {
   const canViewCustomerClassic = !!hasPermission(user, 'admin.customers.read')
   const canViewCustomerDetails = canViewCustomerInAdmin || canViewCustomerClassic
   const canEditCustomerInAdmin = !!(canViewCustomerInAdmin && (hasPermission(user, 'admin.customers.manage') || hasPermission(user, 'admin.customers.contact.manage')))
+  const canCreateCustomer = !!hasPermission(user, 'admin.customers.manage')
   const hoDefaultsApplied = useRef(false)
   const customerPrefillAppliedRef = useRef('')
   const ratedPayloadSnapshot = useRef<string>('')
@@ -2406,6 +2411,18 @@ export function QuoteWizard() {
       }))
       setPrimarySearchQuery('')
       setPrimarySearchResults([])
+      // A selection (existing or newly created) satisfies the primary-insured
+      // requirement, but validation only reruns on the next Continue click, so
+      // clear the stale errors now rather than leaving them displayed against
+      // fields that are already filled in.
+      setFieldErrors(prev => {
+        if (!prev['insureds.primary.firstName'] && !prev['insureds.primary.lastName'] && !prev['insureds.primary.displayName']) return prev
+        const next = { ...prev }
+        delete next['insureds.primary.firstName']
+        delete next['insureds.primary.lastName']
+        delete next['insureds.primary.displayName']
+        return next
+      })
     }
     try {
       const lookupKey = summaryMapped.customerId || summaryMapped.customerKey
@@ -2419,6 +2436,47 @@ export function QuoteWizard() {
       applyPrimarySelection(summaryMapped)
     } finally {
       setPrimarySelecting(false)
+    }
+  }
+
+  async function createNewPrimaryCustomer() {
+    if (isViewOnly) return
+    const firstName = createPrimaryCustomerForm.firstName.trim()
+    const lastName = createPrimaryCustomerForm.lastName.trim()
+    const dob = createPrimaryCustomerForm.dob.trim()
+    const email = createPrimaryCustomerForm.email.trim()
+    const phone = createPrimaryCustomerForm.phone.trim()
+    if (!firstName || !lastName) {
+      setCreatePrimaryCustomerError('First name and last name are required.')
+      return
+    }
+    if (!dob) {
+      setCreatePrimaryCustomerError('Date of birth is required.')
+      return
+    }
+    if (!email && !phone) {
+      setCreatePrimaryCustomerError('An email or phone number is required.')
+      return
+    }
+    setCreatePrimaryCustomerError(null)
+    setCreatePrimaryCustomerSubmitting(true)
+    try {
+      const contactPoints: any[] = []
+      if (email) contactPoints.push({ contactType: 'EMAIL', value: email, preferred: true, emailConsent: true })
+      if (phone) contactPoints.push({ contactType: 'PHONE', value: phone, preferred: !email })
+      const created = await adminApi.createCustomer({
+        entityType: 'INDIVIDUAL',
+        status: 'ACTIVE',
+        identity: { person: { firstName, lastName, dob } },
+        contactPoints
+      })
+      await selectPrimaryInsured(created)
+      setShowCreatePrimaryCustomer(false)
+      setCreatePrimaryCustomerForm({ firstName: '', lastName: '', dob: '', email: '', phone: '' })
+    } catch (e: any) {
+      setCreatePrimaryCustomerError(e?.message || 'Could not create customer.')
+    } finally {
+      setCreatePrimaryCustomerSubmitting(false)
     }
   }
 
@@ -3878,6 +3936,93 @@ export function QuoteWizard() {
           )}
           {primarySearchLoading && <div className="muted">Searching primary insureds...</div>}
           {primarySelecting && <div className="muted">Loading selected insured details...</div>}
+          {!primarySearchLoading && primarySearchQuery.trim().length > 1 && primarySearchResults.length === 0 && !isViewOnly && (
+            <div className="muted" style={{ marginBottom: 16 }}>
+              No matching customers found.
+              {canCreateCustomer && !showCreatePrimaryCustomer && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      const parts = primarySearchQuery.trim().split(/\s+/)
+                      setCreatePrimaryCustomerForm((prev) => ({
+                        ...prev,
+                        firstName: parts[0] || '',
+                        lastName: parts.slice(1).join(' ') || ''
+                      }))
+                      setCreatePrimaryCustomerError(null)
+                      setShowCreatePrimaryCustomer(true)
+                    }}
+                  >
+                    + Create New Customer
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {showCreatePrimaryCustomer && (
+            <div className="card" style={{ marginBottom: 16, padding: 12 }}>
+              <h4 style={{ marginTop: 0 }}>Create New Customer</h4>
+              {createPrimaryCustomerError && <div className="error">{createPrimaryCustomerError}</div>}
+              <div className="row">
+                <div className="col">
+                  <label>First Name</label>
+                  <input
+                    type="text"
+                    value={createPrimaryCustomerForm.firstName}
+                    onChange={(e) => setCreatePrimaryCustomerForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  />
+                </div>
+                <div className="col">
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={createPrimaryCustomerForm.lastName}
+                    onChange={(e) => setCreatePrimaryCustomerForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                  />
+                </div>
+                <div className="col">
+                  <label>Date of Birth</label>
+                  <input
+                    type="date"
+                    value={createPrimaryCustomerForm.dob}
+                    onChange={(e) => setCreatePrimaryCustomerForm((prev) => ({ ...prev, dob: e.target.value }))}
+                  />
+                </div>
+                <div className="col">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={createPrimaryCustomerForm.email}
+                    onChange={(e) => setCreatePrimaryCustomerForm((prev) => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div className="col">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={createPrimaryCustomerForm.phone}
+                    onChange={(e) => setCreatePrimaryCustomerForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button type="button" onClick={() => void createNewPrimaryCustomer()} disabled={createPrimaryCustomerSubmitting}>
+                  {createPrimaryCustomerSubmitting ? 'Creating...' : 'Create & Select'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => { setShowCreatePrimaryCustomer(false); setCreatePrimaryCustomerError(null) }}
+                  disabled={createPrimaryCustomerSubmitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <div style={{ overflowX: 'auto', marginTop: 10 }}>
             <table className="table table-no-sticky-head">
               <thead>
