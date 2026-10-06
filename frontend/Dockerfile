@@ -3,6 +3,8 @@ WORKDIR /app
 
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ARG VITE_SHOW_DEMO_CREDENTIALS
+ENV VITE_SHOW_DEMO_CREDENTIALS=${VITE_SHOW_DEMO_CREDENTIALS}
 
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
