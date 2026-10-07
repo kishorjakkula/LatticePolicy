@@ -125,7 +125,7 @@ quoteRoutes.post(
 )
 
 // ── GET /quotes/:id ───────────────────────────────────────────────────────────
-quoteRoutes.get('/quotes/:id', async (req, res, next) => {
+quoteRoutes.get('/quotes/:id', requirePermission(['page.wizard.view', 'page.search.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -148,7 +148,7 @@ quoteRoutes.get('/quotes/:id', async (req, res, next) => {
 
 // ── POST /quotes/draft — create draft quote ───────────────────────────────────
 // NOTE: must be registered BEFORE /quotes/:id to avoid route conflict
-quoteRoutes.post('/quotes/draft', validate(DraftQuoteSchema), async (req, res, next) => {
+quoteRoutes.post('/quotes/draft', requirePermission(['page.wizard.view']), validate(DraftQuoteSchema), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const body = req.body || {}
@@ -205,7 +205,7 @@ quoteRoutes.post('/quotes/draft', validate(DraftQuoteSchema), async (req, res, n
 })
 
 // ── PATCH /quotes/:id/draft — update draft quote ─────────────────────────────
-quoteRoutes.patch('/quotes/:id/draft', validate(DraftQuoteSchema), async (req, res, next) => {
+quoteRoutes.patch('/quotes/:id/draft', requirePermission(['page.wizard.view']), validate(DraftQuoteSchema), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const quoteId = routeParam(req.params.id)
@@ -291,7 +291,7 @@ quoteRoutes.patch('/quotes/:id/draft', validate(DraftQuoteSchema), async (req, r
 })
 
 // ── POST /quotes/:id/bind ─────────────────────────────────────────────────────
-quoteRoutes.post('/quotes/:id/bind', validate(BindQuoteSchema), async (req, res, next) => {
+quoteRoutes.post('/quotes/:id/bind', requirePermission(['page.wizard.view']), validate(BindQuoteSchema), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const id = routeParam(req.params.id)
@@ -418,7 +418,7 @@ quoteRoutes.post('/quotes/:id/bind', validate(BindQuoteSchema), async (req, res,
 })
 
 // ── POST /quotes/:id/copy ─────────────────────────────────────────────────────
-quoteRoutes.post('/quotes/:id/copy', async (req, res, next) => {
+quoteRoutes.post('/quotes/:id/copy', requirePermission(['page.wizard.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const id = routeParam(req.params.id)
@@ -465,7 +465,7 @@ quoteRoutes.post('/quotes/:id/copy', async (req, res, next) => {
 })
 
 // ── GET /quotes — list ────────────────────────────────────────────────────────
-quoteRoutes.get('/quotes', async (req, res, next) => {
+quoteRoutes.get('/quotes', requirePermission(['page.wizard.view', 'page.search.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const q = (req.query.q || '').toString().toLowerCase()
@@ -548,7 +548,7 @@ quoteRoutes.get('/quotes', async (req, res, next) => {
 })
 
 // ── GET /quotes/export ────────────────────────────────────────────────────────
-quoteRoutes.get('/quotes/export', async (req, res, next) => {
+quoteRoutes.get('/quotes/export', requirePermission(['page.wizard.view', 'page.search.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const q = (req.query.q || '').toString().toLowerCase()

@@ -47,7 +47,7 @@ const policyDocumentLimiter = rateLimit({
 })
 
 // ── GET /policies — list ──────────────────────────────────────────────────────
-policyRoutes.get('/policies', async (req, res, next) => {
+policyRoutes.get('/policies', requirePermission(['page.policy.view', 'page.search.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const q = (req.query.q || '').toString().toLowerCase()
@@ -148,7 +148,7 @@ policyRoutes.get('/policies', async (req, res, next) => {
 })
 
 // ── GET /policies/export ──────────────────────────────────────────────────────
-policyRoutes.get('/policies/export', async (req, res, next) => {
+policyRoutes.get('/policies/export', requirePermission(['page.policy.view', 'page.search.view']), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const q = (req.query.q || '').toString().toLowerCase()
@@ -217,14 +217,15 @@ policyRoutes.get('/policies/export', async (req, res, next) => {
 })
 
 // ── GET /policies/:id ─────────────────────────────────────────────────────────
-policyRoutes.get('/policies/:id', (req, res, next) => {
-  if (req.params.id === 'export') return next()
+policyRoutes.get('/policies/:id', requirePermission('page.policy.view'), (req, res, next) => {
+  const policyId = routeParam(req.params.id)
+  if (policyId === 'export') return next()
   const tenantId = req.tenant!.tenantId
   const db = getDb()
 
   if (db) {
     policyService
-      .getPolicy(db as unknown as DrizzleDB, tenantId, req.params.id)
+      .getPolicy(db as unknown as DrizzleDB, tenantId, policyId)
       .then((data) => res.json(data))
       .catch((err: any) => {
         if (err?.statusCode === 404) {
@@ -237,7 +238,7 @@ policyRoutes.get('/policies/:id', (req, res, next) => {
 
   // In-memory fallback
   try {
-    const p = store.getPolicyForTenant(req.params.id, tenantId)
+    const p = store.getPolicyForTenant(policyId, tenantId)
     if (!p) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     return res.json({
       ...p,
@@ -265,12 +266,12 @@ policyRoutes.get('/policies/:id', (req, res, next) => {
 })
 
 // ── GET /policies/:id/full ────────────────────────────────────────────────────
-policyRoutes.get('/policies/:id/full', async (req, res, next) => {
+policyRoutes.get('/policies/:id/full', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
     if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Full payload requires DB' })
-    const payload = await policyService.getFullPolicyPayload(db as unknown as DrizzleDB, tenantId, req.params.id)
+    const payload = await policyService.getFullPolicyPayload(db as unknown as DrizzleDB, tenantId, routeParam(req.params.id))
     if (!payload) return res.status(404).json({ code: 'NOT_FOUND' })
     return ok(res, payload)
   } catch (err) {
@@ -279,14 +280,15 @@ policyRoutes.get('/policies/:id/full', async (req, res, next) => {
 })
 
 // ── GET /policies/:id/state ───────────────────────────────────────────────────
-policyRoutes.get('/policies/:id/state', async (req, res, next) => {
+policyRoutes.get('/policies/:id/state', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
+    const policyId = routeParam(req.params.id)
     const asOfParam = asDateOnly(req.query?.asOf)
     const db = getDb()
 
     if (!db) {
-      const policy = store.getPolicyForTenant(req.params.id, tenantId)
+      const policy = store.getPolicyForTenant(policyId, tenantId)
       if (!policy) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
       const asOf = asOfParam || today()
       const premium = rate(tenantId, (policy as any).payload)
@@ -302,7 +304,7 @@ policyRoutes.get('/policies/:id/state', async (req, res, next) => {
       })
     }
 
-    const result = await policyService.getPolicyState(db as unknown as DrizzleDB, tenantId, req.params.id, asOfParam)
+    const result = await policyService.getPolicyState(db as unknown as DrizzleDB, tenantId, policyId, asOfParam)
     return ok(res, result)
   } catch (err: any) {
     if (err?.statusCode === 404) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
@@ -311,12 +313,12 @@ policyRoutes.get('/policies/:id/state', async (req, res, next) => {
 })
 
 // ── GET /policies/:id/timeline ────────────────────────────────────────────────
-policyRoutes.get('/policies/:id/timeline', async (req, res, next) => {
+policyRoutes.get('/policies/:id/timeline', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
     if (!db) return res.status(501).json({ code: 'NO_DB', message: 'Timeline requires DB' })
-    const result = await policyService.getPolicyTimeline(db as unknown as DrizzleDB, tenantId, req.params.id)
+    const result = await policyService.getPolicyTimeline(db as unknown as DrizzleDB, tenantId, routeParam(req.params.id))
     return ok(res, result)
   } catch (err: any) {
     if (err?.statusCode === 404) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
@@ -325,18 +327,19 @@ policyRoutes.get('/policies/:id/timeline', async (req, res, next) => {
 })
 
 // ── GET /policies/:id/versions ────────────────────────────────────────────────
-policyRoutes.get('/policies/:id/versions', async (req, res, next) => {
+policyRoutes.get('/policies/:id/versions', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
+    const policyId = routeParam(req.params.id)
     const db = getDb()
 
     if (db) {
-      const rows = await policyService.getPolicyVersions(db as unknown as DrizzleDB, tenantId, req.params.id)
+      const rows = await policyService.getPolicyVersions(db as unknown as DrizzleDB, tenantId, policyId)
       return ok(res, rows)
     }
 
     // In-memory fallback
-    const p = store.getPolicyForTenant(req.params.id, tenantId)
+    const p = store.getPolicyForTenant(policyId, tenantId)
     if (!p) return res.status(404).json({ code: 'POLICY_NOT_FOUND' })
     const versions = ((p as any).versions || []).map((version: any) => ({
       ...version,
@@ -353,10 +356,11 @@ policyRoutes.get('/policies/:id/versions', async (req, res, next) => {
 })
 
 // ── GET /policies/:id/versions/:vid/details ───────────────────────────────────
-policyRoutes.get('/policies/:id/versions/:vid/details', async (req, res, next) => {
+policyRoutes.get('/policies/:id/versions/:vid/details', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
-    const { id, vid } = req.params
+    const id = routeParam(req.params.id)
+    const vid = routeParam(req.params.vid)
     const db = getDb()
     if (!db) {
       return res.status(501).json({ code: 'NOT_IMPLEMENTED', message: 'Details available only with DB configured.' })
@@ -369,10 +373,11 @@ policyRoutes.get('/policies/:id/versions/:vid/details', async (req, res, next) =
 })
 
 // ── GET /policies/:id/versions/:vid/rating-worksheet ─────────────────────────
-policyRoutes.get('/policies/:id/versions/:vid/rating-worksheet', async (req, res, next) => {
+policyRoutes.get('/policies/:id/versions/:vid/rating-worksheet', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
-    const { id, vid } = req.params
+    const id = routeParam(req.params.id)
+    const vid = routeParam(req.params.vid)
     const db = getDb()
     if (!db) {
       return res.status(501).json({ code: 'NO_DB', message: 'Rating worksheet documents require DB' })
