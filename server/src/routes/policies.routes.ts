@@ -622,10 +622,16 @@ policyRoutes.get(
         return res.status(409).json({ code: 'ARTIFACT_INTEGRITY_FAILED' })
       }
 
-      res.setHeader('Content-Type', String(artifact.contentType || 'application/octet-stream'))
+      const resolvedContentType = String(artifact.contentType || 'application/octet-stream')
+      const fileExtension = resolvedContentType.includes('application/pdf')
+        ? 'pdf'
+        : resolvedContentType.includes('text/html')
+          ? 'html'
+          : 'bin'
+      res.setHeader('Content-Type', resolvedContentType)
       res.setHeader(
         'Content-Disposition',
-        `inline; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.html`)}"`
+        `inline; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.${fileExtension}`)}"`
       )
       res.setHeader('Cache-Control', 'no-store')
       return res.status(200).send(content)

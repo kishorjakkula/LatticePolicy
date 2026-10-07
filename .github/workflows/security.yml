@@ -49,6 +49,10 @@ jobs:
         uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
+          # Puppeteer only reaches these extract-zip paths while installing a
+          # browser archive. Production uses Alpine's packaged Chromium and
+          # disables Puppeteer's download; see scripts/check-npm-audit.mjs.
+          allow-ghsas: GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3
 
   container-scan:
     name: Container Scan

@@ -12,6 +12,12 @@ business. The bind flow now selects configured forms, attaches form metadata to
 the NB transaction, persists `policy_forms`, and creates a generated
 `POLICY_PACKET` document record with audit and visibility metadata.
 
+The artifact follow-up now renders the packet as a real PDF through a shared
+headless Chromium process, stores and verifies the PDF bytes, and serves them
+through the policy document content endpoint. Form selection now also treats
+admin forms with no applicability rows as match-all, matching the preview
+workflow. The shared renderer is closed during graceful server shutdown.
+
 ## Important Files
 
 - `server/src/services/document-generation.service.ts`: form selection,
@@ -21,6 +27,11 @@ the NB transaction, persists `policy_forms`, and creates a generated
   after the transaction row exists.
 - `server/src/services/__tests__/document-generation.service.test.ts`: unit
   coverage for admin/catalog form selection and customer-safe packet metadata.
+- `server/src/services/document-storage.service.ts`: deterministic PDF
+  rendering, artifact storage, retrieval, and integrity verification.
+- `.github/workflows/security.yml` and `scripts/check-npm-audit.mjs`: narrowly
+  scoped exceptions for the two unfixed `extract-zip` advisories in
+  Puppeteer's browser installer, which is disabled in the runtime image.
 - `server/src/__tests__/quote-to-bind.integration.test.ts`: DB integration
   assertions for persisted forms and policy packet documents.
 
@@ -64,4 +75,5 @@ PATH="/Users/srividyajakkula/.cache/codex-runtimes/codex-primary-runtime/depende
   `metadata.customerSafe = true`. Done: see
   `docs/tasks/issue-86-portal-document-listing.md` (issue #86).
 - Add real artifact rendering/storage behind the generated URI scheme
-  (tracked in issue #88).
+  (tracked in issue #88). Done: policy packets are now stored as verified PDF
+  artifacts; cloud object storage remains a deployment-specific adapter.

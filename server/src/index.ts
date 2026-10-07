@@ -7,6 +7,7 @@ import { logger } from './logger.js'
 import { closeCache, initCache } from './cache.js'
 import { warmPublishedRatingModelCache } from './ratingModelRegistry.js'
 import { assertDeploymentConfig, isManagedDeployment } from './config.js'
+import { closePdfRenderer } from './services/document-storage.service.js'
 
 const app = createApp()
 const port = process.env.PORT ? Number(process.env.PORT) : 3000
@@ -14,12 +15,14 @@ let stopAsyncWorker: (() => void) | null = null
 let stopJobWorker: (() => void) | null = null
 
 function registerShutdown(stopServer: () => void) {
+  let shuttingDown = false
   const shutdown = (signal: string) => {
+    if (shuttingDown) return
+    shuttingDown = true
     logger.info({ signal }, 'Shutdown requested')
     try { stopAsyncWorker?.() } catch {}
     try { stopJobWorker?.() } catch {}
-    void closeCache()
-    stopServer()
+    void Promise.all([closeCache(), closePdfRenderer()]).finally(stopServer)
   }
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))

@@ -1,7 +1,18 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 
-const allowedAdvisories = new Set()
+// extract-zip (a transitive dependency of @puppeteer/browsers, pulled in by the
+// `puppeteer` package used for server-side PDF rendering) has two symlink-handling
+// advisories with no non-breaking fix available (the only `fixAvailable` path is a
+// major downgrade to puppeteer@19.8.0). Accepted: the vulnerable code path only runs
+// during extract-zip's own zip extraction of a Chromium download archive, which this
+// app's Docker deployment never exercises at all (PUPPETEER_SKIP_DOWNLOAD=true, since
+// Alpine's own `chromium` package is used instead), and in dev/CI only ever extracts
+// Puppeteer's own trusted download from Google's CDN, not attacker-controlled input.
+const allowedAdvisories = new Set([
+  'GHSA-jmr9-qjv8-65gv', // extract-zip: unvalidated symlink path traversal
+  'GHSA-7pqw-9j4j-h8q3', // extract-zip: arbitrary file writes via symlink archive entries
+])
 
 const result = spawnSync('npm', ['audit', '--json'], {
   encoding: 'utf8',
