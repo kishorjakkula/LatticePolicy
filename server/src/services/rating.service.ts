@@ -22,33 +22,63 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
   const tenant = loadTenantOverrides(tenantId)
   const rates = mergeRates(pack.rates, tenant)
 
+  let fallback: () => PremiumResult
   if (descriptor.ratingAdapter === 'personal-auto') {
-    return rateAuto(payload, rates, tenantId)
+    fallback = () => rateAuto(payload, rates)
+  } else if (descriptor.ratingAdapter === 'commercial-auto') {
+    fallback = () => rateCommercialAuto(payload, rates)
+  } else if (descriptor.ratingAdapter === 'cyber') {
+    fallback = () => rateCyber(payload, rates)
+  } else if (descriptor.ratingAdapter === 'professional-liability') {
+    fallback = () => rateProfessionalLiability(payload, rates)
+  } else if (descriptor.ratingAdapter === 'homeowners') {
+    fallback = () => rateHO(payload, rates)
+  } else {
+    throw new BadRequestError(
+      'PRODUCT_RATING_ADAPTER_UNSUPPORTED',
+      `Product '${product}' does not have an executable rating adapter.`,
+      { productCode: product, ratingAdapter: descriptor.ratingAdapter },
+    )
   }
-  if (descriptor.ratingAdapter === 'commercial-auto') {
-    return rateCommercialAuto(payload, rates)
-  }
-  if (descriptor.ratingAdapter === 'cyber') {
-    return rateCyber(payload, rates)
-  }
-  if (descriptor.ratingAdapter === 'professional-liability') {
-    return rateProfessionalLiability(payload, rates)
-  }
-  if (descriptor.ratingAdapter === 'homeowners') return rateHO(payload, rates)
-  throw new BadRequestError(
-    'PRODUCT_RATING_ADAPTER_UNSUPPORTED',
-    `Product '${product}' does not have an executable rating adapter.`,
-    { productCode: product, ratingAdapter: descriptor.ratingAdapter },
-  )
+
+  return rateWithPublishedModelOrFallback(tenantId, product, payload, rates, fallback)
 }
 
-function rateAuto(payload: any, rates: Rates, tenantId?: string) {
+/**
+ * Product-agnostic "check for a published rating workbook first, fall back to the
+ * hardcoded rater otherwise" control flow. Every product line (personal-auto,
+ * commercial-auto, homeowners, cyber, professional-liability) goes through this
+ * same gate: if a tenant has an active published `rating_model_versions` row
+ * matching (tenantId, productCode, stateCode), that workbook is consulted via
+ * `rateFromPublishedWorkbook`; otherwise (or if the workbook doesn't produce a
+ * ratable result) the product's existing hardcoded rater runs unchanged.
+ *
+ * The result is always annotated with a `calcTrace.source` so the audit trail
+ * records whether a quote was priced from a published actuarial workbook or
+ * from the built-in rater, without overwriting any richer calcTrace a
+ * hardcoded rater already attaches.
+ */
+function rateWithPublishedModelOrFallback(
+  tenantId: string | undefined,
+  productCode: string,
+  payload: any,
+  rates: Rates,
+  fallback: () => PremiumResult
+): PremiumResult {
   const publishedModel = tenantId
-    ? getPublishedRatingModelForProduct(tenantId, 'personal-auto', payload?.state)
+    ? getPublishedRatingModelForProduct(tenantId, productCode, payload?.state)
     : null
-  const workbookRated = publishedModel ? rateAutoWithPublishedModel(payload, rates, publishedModel) : null
+  const workbookRated = publishedModel ? rateFromPublishedWorkbook(payload, rates, publishedModel) : null
   if (workbookRated) return workbookRated
 
+  const result = fallback()
+  if (result && !(result as any).calcTrace) {
+    ;(result as any).calcTrace = { source: `builtin-${productCode}-rater` }
+  }
+  return result
+}
+
+function rateAuto(payload: any, rates: Rates) {
   let base = 500
   const zip = payload?.risks?.[0]?.garagingZip
   const terr = rates.territoryFactors?.byZip?.[zip] ?? rates.territoryFactors?.default ?? 1
@@ -70,7 +100,24 @@ function rateAuto(payload: any, rates: Rates, tenantId?: string) {
   return breakdown(total, fees, taxes, autoBreakdown.byCoverage)
 }
 
-function rateAutoWithPublishedModel(payload: any, rates: Rates, model: any) {
+/**
+ * Generic interpreter for an actuary-published rating workbook (`workbookJson`,
+ * produced by the generic Excel parser in rating-workbench.routes.ts). This is
+ * intentionally product-agnostic: it reads whatever tabular sheets the
+ * workbook actually contains (base loss costs, territory/driver/vehicle/usage
+ * relativities, limit & deductible relativities, discounts, LCM, and
+ * assumptions) and prices whichever coverage codes are present, rather than
+ * assuming any one product line's rating variables.
+ *
+ * Lookups that reference auto-flavored concepts (e.g. vehicle symbol
+ * relativities, or named driver attributes like "Age"/"Violations") degrade
+ * gracefully to a neutral 1x factor whenever the workbook or the submission
+ * doesn't carry that data, so this same function is safe to reuse for any
+ * product's published workbook. Returns null (triggering the hardcoded
+ * fallback rater) whenever the workbook doesn't contain a usable base loss
+ * cost table or none of the submission's coverages can be priced from it.
+ */
+function rateFromPublishedWorkbook(payload: any, rates: Rates, model: any) {
   const workbookJson = model?.workbookJson
   const tables = workbookJson?.tables
   if (!tables || typeof tables !== 'object') return null
@@ -78,9 +125,9 @@ function rateAutoWithPublishedModel(payload: any, rates: Rates, model: any) {
   const baseLossRows = asTableRows(tables.baseLossCosts)
   if (!baseLossRows.length) return null
 
-  const selectedCoverages = getSelectedCoverages(payload?.coverages)
-  const coverages = selectedCoverages.length ? selectedCoverages : [{ code: 'BI' }, { code: 'PD' }, { code: 'COMP' }, { code: 'COLL' }]
   const stateCode = String(payload?.state || model?.stateCode || '').trim().toUpperCase()
+  const selectedCoverages = getSelectedCoverages(payload?.coverages)
+  const coverages = selectedCoverages.length ? selectedCoverages : defaultCoveragesFromBaseLossRows(baseLossRows, stateCode)
   const risk = Array.isArray(payload?.risks) ? payload.risks[0] || {} : {}
   const termMonths = Number(payload?.termMonths || 12)
   const termFactor = Number.isFinite(termMonths) && termMonths > 0 ? clamp(termMonths / 12, 0.25, 3) : 1
@@ -433,6 +480,29 @@ function asTableRows(value: any): any[] {
   if (Array.isArray(value)) return value.filter((row) => row && typeof row === 'object')
   if (value && typeof value === 'object') return [value]
   return []
+}
+
+/**
+ * When a submission doesn't specify which coverages to price, derive the
+ * default coverage set generically from whatever Coverage codes the
+ * published workbook's base loss cost table actually defines for this state
+ * -- rather than assuming a fixed (auto-specific) coverage list, so this
+ * works for any product's workbook.
+ */
+function defaultCoveragesFromBaseLossRows(baseLossRows: any[], stateCode: string): any[] {
+  const scoped = baseLossRows.filter((row) => matchRowState(row, stateCode))
+  const source = scoped.length ? scoped : baseLossRows
+  const seen = new Set<string>()
+  const result: any[] = []
+  for (const row of source) {
+    const raw = String(row?.Coverage || '').trim()
+    if (!raw) continue
+    const key = coverageKey(raw)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push({ code: raw })
+  }
+  return result
 }
 
 function toFiniteNumber(value: any): number | null {
