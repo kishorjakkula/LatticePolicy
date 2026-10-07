@@ -2,17 +2,22 @@ import crypto from 'crypto'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   LocalFileSystemDocumentStorageAdapter,
+  closePdfRenderer,
   getDocumentStorageAdapter,
   renderAndStoreDocument,
+  renderHtmlToPdf,
   renderPolicyPacketHtml,
   retrieveStoredDocument,
   retrieveAndVerifyStoredDocument,
   regenerateAndVerifyDocument,
   setDocumentStorageAdapter,
 } from '../document-storage.service.js'
+
+// PDF bytes start with this magic header regardless of content.
+const PDF_MAGIC = '%PDF-'
 
 describe('document storage service', () => {
   let tempDir: string
@@ -27,6 +32,13 @@ describe('document storage service', () => {
   afterEach(async () => {
     setDocumentStorageAdapter(originalAdapter)
     await fs.rm(tempDir, { recursive: true, force: true })
+  })
+
+  // Closes the shared headless Chromium instance after this file's tests so
+  // the vitest worker process can exit cleanly instead of hanging on an open
+  // browser process.
+  afterAll(async () => {
+    await closePdfRenderer()
   })
 
   const baseMetadata = {
@@ -56,27 +68,35 @@ describe('document storage service', () => {
     expect(escaped).toContain('&lt;script&gt;')
   })
 
-  it('stores rendered content with a matching hash, content type, and byte size', async () => {
+  it('renders real PDF bytes via the shared headless browser, not an HTML stub', async () => {
+    const html = renderPolicyPacketHtml(baseMetadata)
+    const pdf = await renderHtmlToPdf(html, baseMetadata.generatedAt)
+    expect(pdf.subarray(0, PDF_MAGIC.length).toString('latin1')).toBe(PDF_MAGIC)
+    expect(pdf.length).toBeGreaterThan(500)
+  })
+
+  it('stores rendered content as a real PDF with a matching hash, content type, and byte size', async () => {
     const artifact = await renderAndStoreDocument({
       tenantId: 'sample-carrier',
       documentId: 'doc-1',
       metadata: baseMetadata,
     })
 
-    expect(artifact.contentType).toBe('text/html; charset=utf-8')
+    expect(artifact.contentType).toBe('application/pdf')
     expect(artifact.storageAdapter).toBe('local-fs')
-    expect(artifact.storageUri).toBe('local-fs://sample-carrier/doc-1.html')
+    expect(artifact.storageUri).toBe('local-fs://sample-carrier/doc-1.pdf')
     expect(artifact.byteSize).toBeGreaterThan(0)
 
     const stored = await retrieveStoredDocument(artifact.storageUri)
     expect(stored).not.toBeNull()
+    expect(stored!.subarray(0, PDF_MAGIC.length).toString('latin1')).toBe(PDF_MAGIC)
     expect(stored!.length).toBe(artifact.byteSize)
     const actualHash = crypto.createHash('sha256').update(stored!).digest('hex')
     expect(actualHash).toBe(artifact.contentHash)
   })
 
   it('returns null when retrieving an unknown storage URI', async () => {
-    const missing = await retrieveStoredDocument('local-fs://sample-carrier/does-not-exist.html')
+    const missing = await retrieveStoredDocument('local-fs://sample-carrier/does-not-exist.pdf')
     expect(missing).toBeNull()
     const wrongScheme = await retrieveStoredDocument('s3://bucket/key')
     expect(wrongScheme).toBeNull()
@@ -90,7 +110,7 @@ describe('document storage service', () => {
     expect(await retrieveAndVerifyStoredDocument(artifact.storageUri, '0'.repeat(64))).toBeNull()
   })
 
-  it('regenerates deterministic content with the original hash', async () => {
+  it('regenerates byte-for-byte deterministic PDF content with the original hash, despite real wall-clock rendering', async () => {
     const first = await renderAndStoreDocument({
       tenantId: 'sample-carrier', documentId: 'doc-regenerate', metadata: baseMetadata,
     })
@@ -119,7 +139,17 @@ describe('document storage service', () => {
     expect(a.storageUri).not.toBe(b.storageUri)
     const contentA = await retrieveStoredDocument(a.storageUri)
     const contentB = await retrieveStoredDocument(b.storageUri)
-    expect(contentA!.toString('utf8')).toContain('PA-2026-000001')
-    expect(contentB!.toString('utf8')).toContain('PA-2026-000002')
+    expect(contentA!.subarray(0, PDF_MAGIC.length).toString('latin1')).toBe(PDF_MAGIC)
+    expect(contentB!.subarray(0, PDF_MAGIC.length).toString('latin1')).toBe(PDF_MAGIC)
+    // Different policy numbers render to a different byte-for-byte document.
+    expect(contentA!.equals(contentB!)).toBe(false)
+  })
+
+  it('normalizes embedded PDF timestamps so re-rendering the same metadata at a different wall-clock time still hashes identically', async () => {
+    const pdfOne = await renderHtmlToPdf(renderPolicyPacketHtml(baseMetadata), baseMetadata.generatedAt)
+    // A tiny real delay to prove this isn't passing by coincidence of identical timestamps.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const pdfTwo = await renderHtmlToPdf(renderPolicyPacketHtml(baseMetadata), baseMetadata.generatedAt)
+    expect(pdfOne.equals(pdfTwo)).toBe(true)
   })
 })

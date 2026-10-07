@@ -313,13 +313,42 @@ export async function selectPolicyForms(
   const state = normalizeText(context.state).toUpperCase()
   const effectiveDate = context.effectiveDate
 
+  // Forms-applicability matching here must use the same semantics as
+  // `isPreviewApplicabilityMatch` in forms.service.ts: a form with ZERO rows in
+  // forms_admin_applicability has no declared scoping at all, so it is treated as
+  // matching every submission (see that function's comment for the full rationale).
+  // Previously this used an INNER JOIN, which silently excluded every zero-row form
+  // from the actual bound/issued packet even though the Wizard's live preview would
+  // show it as "will attach" — a form could show up in the preview and then never
+  // attach for real. The LEFT JOIN below restores that parity:
+  //   - a.form_id IS NOT NULL:      an applicability row exists and matches this
+  //                                 product (unchanged from before).
+  //   - has_app.form_id IS NULL:    the form has NO applicability rows at all
+  //                                 (for ANY product), so per the zero-rows rule it
+  //                                 matches — but only once scoped against the
+  //                                 form's own `line_of_business`, which in this
+  //                                 schema is populated with the same value as
+  //                                 `product_code` (see forms_admin seed/fixture
+  //                                 data). This is the "upstream line-of-business
+  //                                 filtering" previewForm's caller performs via its
+  //                                 own `lineOfBusiness` request field; selectPolicyForms
+  //                                 has no separate lineOfBusiness input, so it uses
+  //                                 productCode as that equivalent scoping value.
+  // A form that HAS applicability rows, but only for a different product, is still
+  // correctly excluded (a.form_id IS NULL AND has_app.form_id IS NOT NULL).
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
             a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
             d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata
        FROM forms_admin_forms f
-       JOIN forms_admin_applicability a
+       LEFT JOIN forms_admin_applicability a
          ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id AND a.active = true
+        AND lower(a.product_code) = lower($2)
+       LEFT JOIN (
+         SELECT DISTINCT form_id FROM forms_admin_applicability
+          WHERE tenant_id = $1 AND active = true
+       ) has_app
+         ON has_app.form_id = f.form_id
        LEFT JOIN forms_admin_output o
          ON o.tenant_id = f.tenant_id AND o.form_id = f.form_id AND o.active = true
        LEFT JOIN forms_admin_delivery d
@@ -333,7 +362,10 @@ export async function selectPolicyForms(
       WHERE f.tenant_id = $1
         AND f.active = true
         AND lower(f.workflow_status) IN ('approved', 'active', 'filed')
-        AND lower(a.product_code) = lower($2)
+        AND (
+          a.form_id IS NOT NULL
+          OR (has_app.form_id IS NULL AND lower(f.line_of_business) = lower($2))
+        )
       ORDER BY COALESCE(o.sort_order, 100), f.form_number`,
     [context.tenantId, productCode, state, effectiveDate]
   )

@@ -3,7 +3,9 @@ import {
   buildEndorsementChangeSet,
   buildPolicyDocumentPacket,
   matchesEndorsementChanges,
+  selectPolicyForms,
 } from '../document-generation.service.js'
+import { isPreviewApplicabilityMatch } from '../forms.service.js'
 
 function createQuery(rowsByTable: Record<string, any[]>) {
   return async (text: string) => {
@@ -11,6 +13,19 @@ function createQuery(rowsByTable: Record<string, any[]>) {
     if (text.includes('FROM forms_catalog')) return { rows: rowsByTable.forms_catalog || [], rowCount: rowsByTable.forms_catalog?.length || 0 }
     return { rows: [], rowCount: 0 }
   }
+}
+
+// Captures the exact SQL text sent for each query so tests can assert on the
+// shape of the admin-forms query itself (not just its mocked results).
+function createCapturingQuery(rowsByTable: Record<string, any[]>) {
+  const calls: string[] = []
+  const query = async (text: string) => {
+    calls.push(text)
+    if (text.includes('FROM forms_admin_forms')) return { rows: rowsByTable.forms_admin_forms || [], rowCount: rowsByTable.forms_admin_forms?.length || 0 }
+    if (text.includes('FROM forms_catalog')) return { rows: rowsByTable.forms_catalog || [], rowCount: rowsByTable.forms_catalog?.length || 0 }
+    return { rows: [], rowCount: 0 }
+  }
+  return { query, calls }
 }
 
 const context = {
@@ -294,6 +309,88 @@ describe('document generation service', () => {
     expect(packet.forms.map((form) => form.code)).toEqual(['PA-BI-END'])
     expect(packet.documents[0].metadata).toMatchObject({
       endorsementChanges: { modifiedCoverageCodes: ['BI'] },
+    })
+  })
+
+  describe('forms-applicability parity with the Wizard preview (zero applicability rows)', () => {
+    // These lock in that a form with zero rows in forms_admin_applicability is
+    // treated identically by the Wizard's live preview (isPreviewApplicabilityMatch
+    // in forms.service.ts) and by the actual packet-building path
+    // (selectPolicyForms here) — the exact gap described in the task: a form could
+    // previously show as "will attach" in the preview and then silently not attach
+    // when the policy actually bound, because selectPolicyForms used an INNER JOIN
+    // against forms_admin_applicability that excluded every zero-row form outright.
+
+    it('selectPolicyForms queries forms_admin_applicability with a LEFT JOIN, not an INNER JOIN, so zero-row forms are not excluded at the SQL layer', async () => {
+      const { query, calls } = createCapturingQuery({})
+      await selectPolicyForms(query, context)
+      const adminQuery = calls.find((text) => text.includes('FROM forms_admin_forms'))
+      expect(adminQuery).toBeDefined()
+      // Must LEFT JOIN applicability (an INNER/plain JOIN would silently drop every
+      // form with zero applicability rows before the zero-rows rule ever runs).
+      expect(adminQuery).toMatch(/LEFT JOIN forms_admin_applicability/)
+      expect(adminQuery).not.toMatch(/\bJOIN forms_admin_applicability a\s*\n\s*ON[^\n]*\n\s*LEFT JOIN forms_admin_output/)
+      // The WHERE clause must explicitly admit the zero-applicability-row case.
+      expect(adminQuery).toMatch(/has_app\.form_id IS NULL/)
+    })
+
+    it('includes a form with zero applicability rows in the actual packet (parity with the preview matching every submission)', async () => {
+      // This row represents what the LEFT JOIN now returns for a zero-applicability-row
+      // form: all applicability-sourced columns (transaction_types,
+      // endorsement_change_criteria) come back null, exactly as a real LEFT JOIN with
+      // no matching right-hand row would produce.
+      const forms = await selectPolicyForms(createQuery({
+        forms_admin_forms: [
+          {
+            form_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            form_number: 'PA-UNSCOPED',
+            form_title: 'Unscoped Personal Auto Notice',
+            edition_date: '2026-01-01',
+            form_type: 'Notice',
+            transaction_types: null,
+            endorsement_change_criteria: null,
+            visibility: ['internal', 'customer'],
+            state_code: 'CA',
+            regulatory_status: 'Approved',
+            sort_order: 50,
+          },
+        ],
+      }), context)
+
+      expect(forms.map((form) => form.code)).toEqual(['PA-UNSCOPED'])
+      expect(forms[0].customerSafe).toBe(true)
+
+      // Same zero-rows input, same transaction type, evaluated through the Wizard
+      // preview's own matcher: it must also treat this as a match.
+      expect(
+        isPreviewApplicabilityMatch([], {
+          lineOfBusiness: 'personal-auto',
+          productCode: context.productCode,
+          transactionType: 'NB',
+        })
+      ).toBe(true)
+    })
+
+    it('still excludes a zero-applicability-row form for an Endorse transaction with no explicit endorsement criteria (conservative default, unchanged)', async () => {
+      const forms = await selectPolicyForms(createQuery({
+        forms_admin_forms: [
+          {
+            form_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            form_number: 'PA-UNSCOPED-END',
+            form_title: 'Unscoped Form',
+            edition_date: '2026-01-01',
+            form_type: 'Notice',
+            transaction_types: null,
+            endorsement_change_criteria: null,
+            visibility: ['internal'],
+            state_code: 'CA',
+            regulatory_status: 'Approved',
+            sort_order: 50,
+          },
+        ],
+      }), { ...context, transactionType: 'Endorse' })
+
+      expect(forms).toHaveLength(0)
     })
   })
 })

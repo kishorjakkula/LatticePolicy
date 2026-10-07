@@ -110,7 +110,7 @@ function pickMatchingPreviewJurisdiction(
   return null
 }
 
-function isPreviewApplicabilityMatch(
+export function isPreviewApplicabilityMatch(
   rows: any[],
   input: { lineOfBusiness: string; productCode: string; transactionType: string }
 ): boolean {
@@ -119,6 +119,13 @@ function isPreviewApplicabilityMatch(
   // Wizard) always filters by line_of_business first (see the `lineOfBusiness` check
   // above this function's call site) — a caller that omits lineOfBusiness will get
   // every active/approved form in the tenant back, regardless of product line.
+  //
+  // This "zero rows = matches" rule must stay consistent with the applicability
+  // matching in document-generation.service.ts's `selectPolicyForms`, which builds the
+  // actual bound/issued policy packet. That function applies the same zero-rows rule
+  // (scoped by productCode, since it has no separate lineOfBusiness input) so a form
+  // that shows as "will attach" in this preview never silently fails to attach when
+  // the policy actually binds, and vice versa.
   if (!rows?.length) return true
   return rows.some((row) => {
     const lob = String(row.line_of_business || '').trim().toLowerCase()

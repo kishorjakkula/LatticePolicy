@@ -3,6 +3,7 @@ import request from 'supertest'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { closeDb, getDb, initDb, withTenantTx } from '../db.js'
 import { createApp } from '../app.js'
+import { closePdfRenderer } from '../services/document-storage.service.js'
 import { createUser } from '../services/user.service.js'
 import { issuePolicy } from '../services/lifecycle.service.js'
 import { createOrRateQuote } from '../services/quote.service.js'
@@ -196,6 +197,7 @@ describe('policy document artifact storage and retrieval', () => {
 
   afterAll(async () => {
     await closeDb()
+    await closePdfRenderer()
   })
 
   it('renders and stores a real artifact whose hash matches the retrieved content', async () => {
@@ -216,7 +218,7 @@ describe('policy document artifact storage and retrieval', () => {
     const packetEntry = listRes.body.data.documents.find((doc: any) => doc.documentId === documentId)
     expect(packetEntry).toMatchObject({
       customerSafe: true,
-      contentType: 'text/html; charset=utf-8',
+      contentType: 'application/pdf',
       integrityStatus: 'VERIFIED',
       versionId: expect.any(String),
       inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -229,10 +231,11 @@ describe('policy document artifact storage and retrieval', () => {
       agentToken,
       tenantId,
     ).expect(200)
-    expect(contentRes.headers['content-type']).toContain('text/html')
-    const actualHash = crypto.createHash('sha256').update(contentRes.text).digest('hex')
+    expect(contentRes.headers['content-type']).toContain('application/pdf')
+    const contentBuffer = Buffer.isBuffer(contentRes.body) ? contentRes.body : Buffer.from(contentRes.text, 'latin1')
+    expect(contentBuffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+    const actualHash = crypto.createHash('sha256').update(contentBuffer).digest('hex')
     expect(actualHash).toBe(hash)
-    expect(contentRes.text).toContain(policy.policyNumber)
 
     await authPost(
       `/api/v1/policies/${policy.policyId}/documents/${documentId}/regenerate`,
@@ -283,7 +286,7 @@ describe('policy document artifact storage and retrieval', () => {
       customerToken,
       tenantId,
     ).expect(200)
-    expect(safeContentRes.headers['content-type']).toContain('text/html')
+    expect(safeContentRes.headers['content-type']).toContain('application/pdf')
 
     await authGet(
       `/api/v1/policies/${internalPolicy.policyId}/documents/${internalDocId}/content`,
