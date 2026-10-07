@@ -29,6 +29,9 @@ workflow. The shared renderer is closed during graceful server shutdown.
   coverage for admin/catalog form selection and customer-safe packet metadata.
 - `server/src/services/document-storage.service.ts`: deterministic PDF
   rendering, artifact storage, retrieval, and integrity verification.
+- `.github/workflows/security.yml` and `scripts/check-npm-audit.mjs`: narrowly
+  scoped exceptions for the two unfixed `extract-zip` advisories in
+  Puppeteer's browser installer, which is disabled in the runtime image.
 - `server/src/__tests__/quote-to-bind.integration.test.ts`: DB integration
   assertions for persisted forms and policy packet documents.
 
