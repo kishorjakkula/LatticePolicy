@@ -1021,12 +1021,20 @@
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.12s;
+  border-radius: 4px;
+  transition:
+    color 0.12s,
+    background-color 0.12s,
+    box-shadow 0.12s;
 }
 
 .ps-policy-link:hover {
-  color: var(--ps-primary-hover, #2563eb);
-  text-decoration: underline;
+  color: #174ea6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px #eff6ff;
+  text-decoration: none;
+  transform: none;
+  filter: none;
 }
 
 .ps-col-primary {

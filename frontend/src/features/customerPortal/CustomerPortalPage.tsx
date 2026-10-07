@@ -49,13 +49,16 @@ async function loadImageAsPngDataUrl(
       const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight, 1)
       const width = Math.max(1, Math.round(naturalWidth * scale))
       const height = Math.max(1, Math.round(naturalHeight * scale))
+      const printScale = 4
       const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
+      canvas.width = width * printScale
+      canvas.height = height * printScale
       const ctx = canvas.getContext('2d')
       if (!ctx) return resolve(null)
-      ctx.clearRect(0, 0, width, height)
-      ctx.drawImage(img, 0, 0, width, height)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       resolve({ dataUrl: canvas.toDataURL('image/png'), width, height })
     }
     img.onerror = () => resolve(null)

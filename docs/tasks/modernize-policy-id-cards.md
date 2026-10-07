@@ -17,6 +17,8 @@ now generate the same visual treatment.
 - Retained letter-size output and multi-vehicle pagination.
 - Replaced placeholder carrier branding across generated documents with the
   LatticePolicy wordmark and added a matching browser favicon.
+- Rasterized the original SVG wordmark at 4x print density before PDF
+  embedding so the logo remains sharp while retaining its layout dimensions.
 
 ## Verification
 
