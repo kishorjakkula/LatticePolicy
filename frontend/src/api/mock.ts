@@ -438,17 +438,20 @@ export async function mockApi<T>(method: string, path: string, body?: any): Prom
     if (status) items = items.filter(x => x.status === status)
     if (product) items = items.filter(x => (x.payload?.productCode || '').toLowerCase() === product)
     const dirMul = sortDir === 'asc' ? 1 : -1
+    const sortValue = (item: (typeof items)[number]): string => {
+      switch (sortBy) {
+        case 'quoteNumber': return item.quoteNumber || ''
+        case 'updatedAt': return item.updatedAt || ''
+        case 'productCode': return item.payload?.productCode || ''
+        case 'status': return item.status || ''
+        case 'effectiveDate':
+        default:
+          return item.payload?.effectiveDate || ''
+      }
+    }
     items.sort((a, b) => {
-      const map = {
-        effectiveDate: (x: any) => x.payload?.effectiveDate || '',
-        quoteNumber: (x: any) => x.quoteNumber || '',
-        updatedAt: (x: any) => x.updatedAt || '',
-        productCode: (x: any) => x.payload?.productCode || '',
-        status: (x: any) => x.status || ''
-      } as Record<string, (x:any)=>string>
-      const getter = Object.prototype.hasOwnProperty.call(map, sortBy) ? map[sortBy] : map.effectiveDate
-      const av = getter(a)
-      const bv = getter(b)
+      const av = sortValue(a)
+      const bv = sortValue(b)
       if (av < bv) return -1 * dirMul
       if (av > bv) return 1 * dirMul
       return 0
