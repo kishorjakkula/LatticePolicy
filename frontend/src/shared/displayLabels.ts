@@ -7,6 +7,7 @@ const PRODUCT_LABELS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  RISK: 'Risk',
   QUOTA_SHARE: 'Quota Share',
   EXCESS_OF_LOSS: 'Excess of Loss',
   FACULTATIVE_OBLIGATORY: 'Facultative Obligatory',
