@@ -97,7 +97,10 @@ export function createApp() {
     res.cookie('lp_docs_session', token, {
       httpOnly: true,
       secure: isManagedDeployment(),
-      sameSite: 'strict',
+      // 'lax' (not 'strict') so the cookie still rides along on the top-level GET
+      // navigation from the frontend origin to the API origin when they're deployed
+      // on different subdomains; the 5-minute, purpose-scoped token keeps this safe.
+      sameSite: 'lax',
       maxAge: 5 * 60 * 1000,
       path: '/'
     })

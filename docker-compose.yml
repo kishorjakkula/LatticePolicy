@@ -92,5 +92,14 @@ services:
           memory: 64m
 
 volumes:
+  # Marked external so `docker compose down -v` (or any `-v`/`--volumes` teardown)
+  # refuses to delete them instead of silently wiping all demo data. These names
+  # match the volumes Compose already created; this does not create new ones or
+  # touch existing data. To intentionally wipe local data, run:
+  #   docker volume rm latticepolicy_pgdata latticepolicy_redisdata
   pgdata:
+    name: latticepolicy_pgdata
+    external: true
   redisdata:
+    name: latticepolicy_redisdata
+    external: true

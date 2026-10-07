@@ -192,10 +192,14 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   const headerToken = hdr.startsWith(bearerPrefix) ? hdr.slice(bearerPrefix.length) : ''
   const docsCookieAllowed = req.path === '/api-docs' || req.path === '/openapi.json'
   const docsCookie = docsCookieAllowed ? readCookie(req.header('Cookie') || '', 'lp_docs_session') : ''
+  const usingDocsCookie = !headerToken && !!docsCookie
   const rawToken = (headerToken || docsCookie || '').trim()
   if (rawToken) {
     try {
       const payload: any = jwt.verify(rawToken, getJwtSecret())
+      // The docs-session cookie only ever carries a purpose-scoped token minted by
+      // issueDocsToken; reject any other token type that shows up in that cookie.
+      if (usingDocsCookie && payload.purpose !== 'api-docs') throw new Error('not a docs token')
       req.user = {
         id: payload.sub,
         username: payload.username,
