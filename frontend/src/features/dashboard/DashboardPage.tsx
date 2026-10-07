@@ -8,6 +8,7 @@ import { hasPermission } from '../../auth/permissions'
 import { derivePolicyWorkflowStatus } from '../policies/statusModel'
 import { formatDisplayDateTime } from '../../shared/dateDisplay'
 import { useDashboardAiInsights } from '../../api/hooks'
+import { aiModelSummary, productLabel } from '../../shared/displayLabels'
 
 type PolicyStatus =
   | 'Draft'
@@ -365,7 +366,7 @@ export function DashboardPage() {
               const width = Math.max(4, Math.round((toNumber(count) / productMax) * 100))
               return (
                 <div key={productCode} className="dashboard-bar-row">
-                  <span className="dashboard-bar-label">{productCode}</span>
+                  <span className="dashboard-bar-label">{productLabel(productCode)}</span>
                   <div className="dashboard-bar-track">
                     <div className="dashboard-bar-fill dashboard-bar-fill-secondary" style={{ width: `${width}%` }} />
                   </div>
@@ -383,8 +384,7 @@ export function DashboardPage() {
             <div>
               <h3>AI Insights and Predictions</h3>
               <p className="muted dashboard-section-subtitle">
-                {aiInsights.enabled ? 'Enabled' : 'Baseline'} - {aiInsights.provider} - {aiInsights.modelVersion}
-                {aiInsights.shadowMode ? ' - Shadow mode' : ''}
+                {aiModelSummary(aiInsights)}
               </p>
             </div>
           </div>

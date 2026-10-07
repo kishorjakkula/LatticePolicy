@@ -1167,7 +1167,7 @@ export function SearchPage() {
                     <th data-col="dates">
                       <SortHeader
                         field="effectiveDate"
-                        label="Effective -> Expiry"
+                        label="Effective Date - Expiration Date"
                       />
                     </th>
                     <th data-col="created">

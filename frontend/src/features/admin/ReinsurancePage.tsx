@@ -6,6 +6,8 @@ import {
   useFacultativeCertificates,
   useCreateFacultativeMutation,
 } from '../../api/hooks'
+import { formatDisplayDate } from '../../shared/dateDisplay'
+import { statusLabel } from '../../shared/displayLabels'
 
 type LayerRow = {
   layerId: string
@@ -193,7 +195,7 @@ function TreatiesSection() {
           <label>
             Type
             <select value={treatyType} onChange={e => setTreatyType(e.target.value)}>
-              {TREATY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {TREATY_TYPES.map(t => <option key={t} value={t}>{statusLabel(t)}</option>)}
             </select>
           </label>
         </div>
@@ -215,10 +217,10 @@ function TreatiesSection() {
             {rows.map(row => (
               <tr key={row.treaty_id}>
                 <td>{row.treaty_name}</td>
-                <td>{row.treaty_type}</td>
-                <td>{row.status}</td>
-                <td>{row.effective_date}</td>
-                <td>{row.expiration_date}</td>
+                <td>{statusLabel(row.treaty_type)}</td>
+                <td>{statusLabel(row.status)}</td>
+                <td>{formatDisplayDate(row.effective_date, { fallback: '-' })}</td>
+                <td>{formatDisplayDate(row.expiration_date, { fallback: '-' })}</td>
                 <td>
                   {row.layers.map(l => `L${l.layerNumber}: ${l.cededPercent}% ceded`).join(', ') || <span className="muted">-</span>}
                 </td>
@@ -326,9 +328,9 @@ function FacultativeSection() {
               <tr key={row.certificate_id}>
                 <td>{row.certificate_number || <span className="muted">-</span>}</td>
                 <td>{row.policy_id}</td>
-                <td>{row.status}</td>
-                <td>{row.effective_date}</td>
-                <td>{row.expiration_date}</td>
+                <td>{statusLabel(row.status)}</td>
+                <td>{formatDisplayDate(row.effective_date, { fallback: '-' })}</td>
+                <td>{formatDisplayDate(row.expiration_date, { fallback: '-' })}</td>
                 <td>{row.ceded_percent}</td>
               </tr>
             ))}

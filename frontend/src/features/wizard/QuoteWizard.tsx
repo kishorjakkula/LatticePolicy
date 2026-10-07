@@ -9,7 +9,7 @@ import {
   useCancellationReasonCodes,
   useAgencyContacts
 } from '../../api/hooks'
-import carrierLogo from '../../assets/sample-carrier-logo.svg'
+import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
 import { normalizePayloadCoverages } from './coverageUtils'
 import {
   defaultAutoRisk,
@@ -6271,7 +6271,7 @@ async function buildQuoteSummaryPdf(model: QuoteSummaryDocumentModel): Promise<B
     y += 12
   }
 
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 170, 52)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 170, 44)
   const headerStartY = y
   let textX = marginLeft
   let headerBottomY = headerStartY
@@ -6423,7 +6423,7 @@ async function buildRatingWorksheetPdf(model: RatingWorksheetDocumentModel): Pro
     y += 10
   }
 
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 160, 48)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 160, 42)
   const headerY = y
   let textX = marginLeft
   let headerBottom = headerY
@@ -6738,7 +6738,7 @@ async function buildPolicyPacketPdf(model: PolicyPacketDocumentModel): Promise<B
     y += 8
   }
 
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 170, 52)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 170, 44)
   const headerStartY = y
   let textX = marginLeft
   let headerBottomY = headerStartY
@@ -6845,7 +6845,7 @@ async function buildPolicyIdCardsPdf(model: PolicyIdCardsDocumentModel): Promise
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const cardWidth = pageWidth - marginLeft - marginRight
-  const cardHeight = 156
+  const cardHeight = 214
   let y = top
 
   const ensureSpace = (needed: number): void => {
@@ -6854,39 +6854,78 @@ async function buildPolicyIdCardsPdf(model: PolicyIdCardsDocumentModel): Promise
     y = top
   }
 
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 130, 40)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 130, 34)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.text('Policy ID Cards', marginLeft, y)
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(19)
+  doc.text('Insurance ID Cards', marginLeft, y)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
+  doc.setTextColor(71, 85, 105)
+  doc.setFontSize(9)
   doc.text(`Generated: ${formatDateForDocument(model.generatedAt)}`, pageWidth - marginRight - 170, y)
   y += 18
-  doc.text(`Policy #: ${model.policyNumber}`, marginLeft, y)
+  doc.text(`POLICY ${model.policyNumber}`, marginLeft, y)
   y += 20
 
   const vehicles = model.vehicles.length ? model.vehicles : [{ vehicleLabel: 'Vehicle', vin: '-', garagingZip: '-' }]
   for (const vehicle of vehicles) {
     ensureSpace(cardHeight + 10)
     const topY = y
-    doc.setDrawColor(72, 104, 176)
-    doc.roundedRect(marginLeft, topY, cardWidth, cardHeight, 8, 8, 'S')
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(203, 213, 225)
+    doc.roundedRect(marginLeft, topY, cardWidth, cardHeight, 7, 7, 'FD')
+    doc.setFillColor(15, 23, 42)
+    doc.roundedRect(marginLeft, topY, cardWidth, 56, 7, 7, 'F')
+    doc.rect(marginLeft, topY + 48, cardWidth, 8, 'F')
     if (logo) {
-      doc.addImage(logo.dataUrl, 'PNG', marginLeft + 10, topY + 10, logo.width, logo.height)
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(marginLeft + 12, topY + 9, 124, 38, 4, 4, 'F')
+      doc.addImage(logo.dataUrl, 'PNG', marginLeft + 16, topY + 10, 116, 35)
     }
     doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255)
     doc.setFontSize(12)
-    doc.text('AUTO INSURANCE IDENTIFICATION CARD', marginLeft + 160, topY + 26)
+    doc.text('AUTO INSURANCE', marginLeft + 154, topY + 23)
+    doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.text(`Insured: ${model.insuredName}`, marginLeft + 14, topY + 58)
-    doc.text(`Policy Number: ${model.policyNumber}`, marginLeft + 14, topY + 74)
-    doc.text(`Vehicle: ${vehicle.vehicleLabel}`, marginLeft + 14, topY + 90)
-    doc.text(`VIN: ${vehicle.vin}`, marginLeft + 14, topY + 106)
-    doc.text(`Company: ${model.underwritingCompany}`, marginLeft + 14, topY + 122)
-    doc.text(`Effective: ${formatDateForDocument(model.effectiveDate, model.country)}  Expiration: ${formatDateForDocument(model.expirationDate, model.country)}`, marginLeft + 300, topY + 74)
-    doc.text(`State: ${model.state}`, marginLeft + 300, topY + 90)
-    doc.text(`Garaging ZIP: ${vehicle.garagingZip}`, marginLeft + 300, topY + 106)
+    doc.text('IDENTIFICATION CARD', marginLeft + 154, topY + 38)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(model.state || '-', marginLeft + cardWidth - 20, topY + 31, { align: 'right' })
+
+    const leftX = marginLeft + 16
+    const rightX = marginLeft + 276
+    const label = (text: string, x: number, lineY: number) => {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(100, 116, 139)
+      doc.text(text.toUpperCase(), x, lineY)
+    }
+    const value = (text: string, x: number, lineY: number, width: number) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(15, 23, 42)
+      doc.text(doc.splitTextToSize(text || '-', width)[0] || '-', x, lineY)
+    }
+    label('Named insured', leftX, topY + 78)
+    value(model.insuredName, leftX, topY + 92, 230)
+    label('Policy number', rightX, topY + 78)
+    value(model.policyNumber, rightX, topY + 92, 220)
+    label('Effective date', leftX, topY + 116)
+    value(formatDateForDocument(model.effectiveDate, model.country), leftX, topY + 130, 108)
+    label('Expiration date', leftX + 130, topY + 116)
+    value(formatDateForDocument(model.expirationDate, model.country), leftX + 130, topY + 130, 108)
+    label('Vehicle', rightX, topY + 116)
+    value(vehicle.vehicleLabel, rightX, topY + 130, 220)
+    doc.setDrawColor(226, 232, 240)
+    doc.line(leftX, topY + 146, marginLeft + cardWidth - 16, topY + 146)
+    label('Vehicle identification number (VIN)', leftX, topY + 166)
+    value(vehicle.vin, leftX, topY + 181, 245)
+    label('Garaging ZIP', rightX, topY + 166)
+    value(vehicle.garagingZip, rightX, topY + 181, 100)
+    doc.setFontSize(7)
+    doc.setTextColor(100, 116, 139)
+    doc.text(`Issued by ${model.underwritingCompany || 'Insurance Carrier'} | Keep this card in the insured vehicle.`, leftX, topY + 201)
     y += cardHeight + 14
   }
 

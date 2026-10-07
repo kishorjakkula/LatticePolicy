@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { useBordereauxBatches, useBordereauxRows, useGenerateBordereauxMutation } from '../../api/hooks'
+import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
+import { productLabel, statusLabel } from '../../shared/displayLabels'
 
 const BORDEREAU_TYPES = ['RISK', 'PREMIUM', 'TRANSACTION', 'CANCELLATION', 'CORRECTION', 'CLAIMS_REFERENCE_HANDOFF']
 
@@ -62,7 +64,7 @@ export function BordereauxPage() {
           <label>
             Type
             <select value={bordereauType} onChange={e => setBordereauType(e.target.value)}>
-              {BORDEREAU_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {BORDEREAU_TYPES.map(t => <option key={t} value={t}>{statusLabel(t)}</option>)}
             </select>
           </label>
         </div>
@@ -104,14 +106,14 @@ function BatchRowView({ row, expanded, onToggle }: { row: BatchRow; expanded: bo
   return (
     <>
       <tr>
-        <td>{row.bordereau_type}</td>
-        <td>{row.status}</td>
-        <td>{row.period_start} &ndash; {row.period_end}</td>
-        <td>{row.product_code || <span className="muted">All</span>}</td>
+        <td>{statusLabel(row.bordereau_type)}</td>
+        <td>{statusLabel(row.status)}</td>
+        <td>{formatDisplayDate(row.period_start, { fallback: '-' })} &ndash; {formatDisplayDate(row.period_end, { fallback: '-' })}</td>
+        <td>{row.product_code ? productLabel(row.product_code) : <span className="muted">All Products</span>}</td>
         <td>{row.row_count}</td>
         <td>{row.valid_row_count}</td>
         <td>{row.invalid_row_count > 0 ? <span className="error">{row.invalid_row_count}</span> : 0}</td>
-        <td>{new Date(row.generated_at).toLocaleString()}</td>
+        <td>{formatDisplayDateTime(row.generated_at, { fallback: '-', includeTime: true })}</td>
         <td><button className="btn-secondary" onClick={onToggle}>{expanded ? 'Hide rows' : 'View rows'}</button></td>
       </tr>
       {expanded && (

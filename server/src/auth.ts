@@ -64,6 +64,21 @@ export function issueToken(user: User): string {
   )
 }
 
+export function issueDocsToken(user: User): string {
+  return jwt.sign(
+    {
+      sub: user.id,
+      username: user.username,
+      tenantId: user.tenantId,
+      roles: user.roles,
+      permissions: user.permissions || [],
+      purpose: 'api-docs'
+    },
+    getJwtSecret(),
+    { expiresIn: '5m' }
+  )
+}
+
 function issueMfaToken(
   payload: Omit<MfaTokenPayload, 'sub'> & { sub: string },
   expiresIn: jwt.SignOptions['expiresIn']
@@ -175,9 +190,9 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   const hdr = req.header('Authorization') || ''
   const bearerPrefix = 'Bearer '
   const headerToken = hdr.startsWith(bearerPrefix) ? hdr.slice(bearerPrefix.length) : ''
-  const queryTokenAllowed = req.path === '/api-docs' || req.path === '/openapi.json'
-  const queryToken = queryTokenAllowed ? String((req.query as any)?.token || '').trim() : ''
-  const rawToken = (headerToken || queryToken || '').trim()
+  const docsCookieAllowed = req.path === '/api-docs' || req.path === '/openapi.json'
+  const docsCookie = docsCookieAllowed ? readCookie(req.header('Cookie') || '', 'lp_docs_session') : ''
+  const rawToken = (headerToken || docsCookie || '').trim()
   if (rawToken) {
     try {
       const payload: any = jwt.verify(rawToken, getJwtSecret())
@@ -194,6 +209,20 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     } catch {}
   }
   next()
+}
+
+function readCookie(header: string, name: string): string {
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=')
+    if (separator < 0) continue
+    if (part.slice(0, separator).trim() !== name) continue
+    try {
+      return decodeURIComponent(part.slice(separator + 1).trim())
+    } catch {
+      return ''
+    }
+  }
+  return ''
 }
 
 export async function handleLogin(req: Request, res: Response) {

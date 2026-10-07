@@ -118,9 +118,8 @@ export function DataImportPage() {
         <div><h2 className="ps-page-title">Data Import</h2></div>
       </div>
       <p className="muted">
-        Stage a batch of legacy records, validate before commit, and review/retry failed rows. Only the
-        <code> customer</code> entity type has a commit handler in this slice; other entity types can be
-        staged and validated for review, but committing them is a documented follow-up.
+        Import customer records from a legacy system. Every batch is staged and validated before records
+        can be committed, with row-level review and retry support for exceptions.
       </p>
       {errorMessage && <p className="error">{errorMessage}</p>}
 

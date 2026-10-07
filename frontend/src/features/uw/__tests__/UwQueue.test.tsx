@@ -67,7 +67,7 @@ describe('UwQueue', () => {
 
     const table = within(screen.getByRole('table'))
     expect(table.getByText('Pre-bind (quote)')).toBeInTheDocument()
-    expect(table.getByText('personal-auto')).toBeInTheDocument()
+    expect(table.getByText('Personal Auto')).toBeInTheDocument()
     expect(table.getByText('Open')).toBeInTheDocument()
     expect(table.getByRole('button', { name: 'Approve' })).toBeEnabled()
     expect(table.getByRole('button', { name: 'Decline' })).toBeEnabled()

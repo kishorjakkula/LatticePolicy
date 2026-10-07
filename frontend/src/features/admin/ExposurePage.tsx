@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useExposureSummary } from '../../api/hooks'
+import { formatCurrency, productLabel } from '../../shared/displayLabels'
 
-function GroupTable({ title, groups }: { title: string; groups: any[] }) {
+function GroupTable({ title, groups, formatKey }: { title: string; groups: any[]; formatKey?: (value: unknown) => string }) {
   return (
     <div style={{ marginBottom: 20 }}>
       <h3 style={{ marginBottom: 8 }}>{title}</h3>
@@ -21,11 +22,11 @@ function GroupTable({ title, groups }: { title: string; groups: any[] }) {
           <tbody>
             {groups.map((g) => (
               <tr key={g.key}>
-                <td>{g.key}</td>
+                <td>{formatKey ? formatKey(g.key) : g.key}</td>
                 <td>{g.policyCount}</td>
-                <td>{g.totalTiv ? g.totalTiv.toLocaleString() : '—'}</td>
+                <td>{g.totalTiv ? formatCurrency(g.totalTiv) : '—'}</td>
                 <td>{g.totalVehicleFleetCount || '—'}</td>
-                <td>{g.totalCyberAnnualRevenue ? g.totalCyberAnnualRevenue.toLocaleString() : '—'}</td>
+                <td>{g.totalCyberAnnualRevenue ? formatCurrency(g.totalCyberAnnualRevenue) : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -84,11 +85,11 @@ export function ExposurePage() {
               <strong>{data.policyCount}</strong> in-force policies as of {data.asOf}
             </div>
             <div>
-              Total TIV: <strong>{data.totalTiv ? data.totalTiv.toLocaleString() : '—'}</strong>
+              Total TIV: <strong>{data.totalTiv ? formatCurrency(data.totalTiv) : '—'}</strong>
             </div>
           </div>
 
-          <GroupTable title="By Product" groups={data.byProduct || []} />
+          <GroupTable title="By Product" groups={data.byProduct || []} formatKey={productLabel} />
           <GroupTable title="By State" groups={data.byState || []} />
           <GroupTable title="By Class / Industry" groups={data.byClassOrIndustry || []} />
           <GroupTable title="By Treaty / Program" groups={data.byTreatyProgram || []} />

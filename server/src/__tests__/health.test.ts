@@ -19,6 +19,7 @@ vi.mock('../cache.js', () => ({
 }))
 vi.mock('../auth.js', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
+  issueDocsToken: () => 'docs-token',
   handleLogin: (_req: any, res: any) => res.json({ token: 'test' }),
   handleMfaVerify: (_req: any, res: any) => res.json({}),
   handleMfaSetupConfirm: (_req: any, res: any) => res.json({})

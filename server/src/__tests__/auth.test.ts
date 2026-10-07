@@ -34,6 +34,7 @@ vi.mock('../openapi.js', () => ({ buildOpenApiSpec: vi.fn(() => ({})), swaggerUi
 // Mock auth to control login behavior
 vi.mock('../auth.js', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
+  issueDocsToken: () => 'docs-token',
   handleLogin: vi.fn((_req: any, res: any) => res.json({ token: 'valid-token', user: { id: '1', username: 'test' } })),
   handleMfaVerify: vi.fn((_req: any, res: any) => res.json({ ok: true })),
   handleMfaSetupConfirm: vi.fn((_req: any, res: any) => res.json({ ok: true }))

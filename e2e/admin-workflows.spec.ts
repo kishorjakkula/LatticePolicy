@@ -27,7 +27,7 @@ test.describe('admin browser workflows', () => {
 
     const row = page.getByRole('row').filter({ hasText: treatyName })
     await expect(row).toBeVisible()
-    await expect(row).toContainText('QUOTA_SHARE')
+    await expect(row).toContainText('Quota Share')
     await expect(row).toContainText('20% ceded')
   })
 
@@ -43,7 +43,7 @@ test.describe('admin browser workflows', () => {
 
     await expect(page.getByText(/in-force policies as of 2026-08-01/)).toBeVisible()
     const productSection = page.getByRole('heading', { name: 'By Product' }).locator('..')
-    await expect(productSection.getByRole('cell', { name: 'personal-auto' })).toBeVisible()
+    await expect(productSection.getByRole('cell', { name: 'Personal Auto' })).toBeVisible()
   })
 
   test('generates a bordereaux batch and opens its rows', async ({ page, request }) => {
@@ -61,8 +61,8 @@ test.describe('admin browser workflows', () => {
       page.getByRole('button', { name: 'Generate' }).click(),
     ])
 
-    const batchRow = page.getByRole('row').filter({ hasText: '2026-07-01' }).filter({ hasText: 'personal-auto' }).first()
-    await expect(batchRow).toContainText('RISK')
+    const batchRow = page.getByRole('row').filter({ hasText: 'Personal Auto' }).first()
+    await expect(batchRow).toContainText('Risk')
     await batchRow.getByRole('button', { name: 'View rows' }).click()
     await expect(page.getByRole('button', { name: 'Hide rows' })).toBeVisible()
   })
