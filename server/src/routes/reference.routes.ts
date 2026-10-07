@@ -161,7 +161,7 @@ referenceRoutes.get(
 // Lists underwriting companies filtered by productCode, country, and state.
 // Falls back to in-memory store when no DB is configured.
 // Note: mounted at /underwriting-companies (no /reference prefix) to match routes.ts.
-referenceRoutes.get('/underwriting-companies', async (req, res, next) => {
+referenceRoutes.get('/underwriting-companies', requirePermission(['page.wizard.view', 'page.policy.view']), async (req, res, next) => {
   const tenantId = req.tenant!.tenantId
   const productCode = normalizeCompanyProductCode(req.query.productCode)
   const country = req.query.country ? normalizeCompanyCountryCode(req.query.country) : ''

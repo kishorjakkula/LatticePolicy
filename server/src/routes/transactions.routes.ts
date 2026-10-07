@@ -90,7 +90,7 @@ function invalidTransactionState(error: { code: string; message: string; [key: s
 export const transactionRoutes = Router()
 
 // ── POST /policies/:id/issue ──────────────────────────────────────────────────
-transactionRoutes.post('/policies/:id/issue', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/issue', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -119,7 +119,7 @@ transactionRoutes.post('/policies/:id/issue', async (req, res, next) => {
 })
 
 // ── POST /policies/:id/endorse/reserve-number ─────────────────────────────────
-transactionRoutes.post('/policies/:id/endorse/reserve-number', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/endorse/reserve-number', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -146,7 +146,7 @@ transactionRoutes.post('/policies/:id/endorse/reserve-number', async (req, res, 
 })
 
 // ── POST /policies/:id/transactions/reserve-number ────────────────────────────
-transactionRoutes.post('/policies/:id/transactions/reserve-number', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/transactions/reserve-number', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const mode = parseTransactionNumberMode(req.body?.mode)
@@ -180,7 +180,7 @@ transactionRoutes.post('/policies/:id/transactions/reserve-number', async (req, 
 })
 
 // ── POST /policies/:id/endorse/preview ────────────────────────────────────────
-transactionRoutes.post('/policies/:id/endorse/preview', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/endorse/preview', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -201,6 +201,7 @@ transactionRoutes.post('/policies/:id/endorse/preview', async (req, res, next) =
 // ── POST /policies/:id/endorse — execute endorsement ─────────────────────────
 transactionRoutes.post(
   '/policies/:id/endorse',
+  requirePermission('page.policy.view'),
   validate(EndorsePolicySchema),
   async (req, res, next) => {
     try {
@@ -224,6 +225,7 @@ transactionRoutes.post(
 // ── POST /policies/:id/cancel ─────────────────────────────────────────────────
 transactionRoutes.post(
   '/policies/:id/cancel',
+  requirePermission('page.policy.view'),
   validate(CancelPolicySchema),
   async (req, res, next) => {
     try {
@@ -272,6 +274,7 @@ transactionRoutes.post(
 // ── POST /policies/:id/reinstate ──────────────────────────────────────────────
 transactionRoutes.post(
   '/policies/:id/reinstate',
+  requirePermission('page.policy.view'),
   validate(ReinstatePolicySchema),
   async (req, res, next) => {
     try {
@@ -317,7 +320,7 @@ transactionRoutes.post(
 )
 
 // ── POST /policies/:id/rewrite ────────────────────────────────────────────────
-transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -404,7 +407,7 @@ transactionRoutes.post('/policies/:id/rewrite', async (req, res, next) => {
 })
 
 // ── POST /policies/:id/renew ──────────────────────────────────────────────────
-transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
@@ -487,7 +490,7 @@ transactionRoutes.post('/policies/:id/renew', async (req, res, next) => {
 })
 
 // ── POST /policies/:id/renew/preview ─────────────────────────────────────────
-transactionRoutes.post('/policies/:id/renew/preview', async (req, res, next) => {
+transactionRoutes.post('/policies/:id/renew/preview', requirePermission('page.policy.view'), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId
     const db = getDb()
