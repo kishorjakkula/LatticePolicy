@@ -56,6 +56,13 @@ wait_for_api_health() {
 }
 
 docker compose down -v --remove-orphans
+# pgdata/redisdata are external volumes (see docker-compose.yml) so a normal
+# `down -v` no longer deletes them — that's deliberate, to stop a routine
+# teardown from wiping persistent demo data. This script wants a genuinely
+# clean DB on every run, so recreate them explicitly here instead.
+docker volume rm -f latticepolicy_pgdata latticepolicy_redisdata >/dev/null 2>&1 || true
+docker volume create latticepolicy_pgdata >/dev/null
+docker volume create latticepolicy_redisdata >/dev/null
 docker compose up -d --build db cache server frontend
 
 wait_for_api_health

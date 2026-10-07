@@ -114,6 +114,11 @@ function isPreviewApplicabilityMatch(
   rows: any[],
   input: { lineOfBusiness: string; productCode: string; transactionType: string }
 ): boolean {
+  // No applicability rows means the form has no declared scoping, so it's treated as
+  // matching every submission. This is only safe because previewForm's caller (the
+  // Wizard) always filters by line_of_business first (see the `lineOfBusiness` check
+  // above this function's call site) — a caller that omits lineOfBusiness will get
+  // every active/approved form in the tenant back, regardless of product line.
   if (!rows?.length) return true
   return rows.some((row) => {
     const lob = String(row.line_of_business || '').trim().toLowerCase()
