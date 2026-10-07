@@ -77,6 +77,7 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3300}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SHOW_DEMO_CREDENTIALS: ${VITE_SHOW_DEMO_CREDENTIALS:-1}
     container_name: policy-ui
     restart: unless-stopped
     environment:

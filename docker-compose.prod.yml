@@ -48,6 +48,12 @@ services:
       start_period: 30s
 
   frontend:
+    build:
+      args:
+        # Force the login page's demo-credentials hint off for a real production
+        # deploy, regardless of what the base compose file's VITE_SHOW_DEMO_CREDENTIALS
+        # default is -- this overlay is for real production, not a demo.
+        VITE_SHOW_DEMO_CREDENTIALS: "0"
     ports: []
     deploy:
       resources:
