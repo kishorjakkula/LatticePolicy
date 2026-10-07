@@ -6,6 +6,7 @@ import {
   useOfacScreens,
   useDispositionOfacScreenMutation,
 } from '../../api/hooks'
+import { productLabel, statusLabel } from '../../shared/displayLabels'
 
 type EligibilityRow = {
   eligibility_id: string
@@ -99,7 +100,7 @@ function EligibilitySection() {
         <div className="col">
           <label>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)}>
-            {ELIGIBILITY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            {ELIGIBILITY_STATUSES.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
         </div>
         <div className="col"><label>Notes</label><input value={notes} onChange={e => setNotes(e.target.value)} /></div>
@@ -114,14 +115,14 @@ function EligibilitySection() {
             {rows.length === 0 && <tr><td colSpan={6} className="muted">No eligibility records</td></tr>}
             {rows.map(row => (
               <tr key={row.eligibility_id}>
-                <td>{row.product_code}</td>
+                <td>{productLabel(row.product_code)}</td>
                 <td>{row.state_code}</td>
-                <td>{row.status}</td>
+                <td>{statusLabel(row.status)}</td>
                 <td>{row.admitted ? 'Yes' : 'No'}</td>
                 <td>{row.notes || <span className="muted">-</span>}</td>
                 <td>
                   <select value={row.status} onChange={e => onStatusChange(row, e.target.value)}>
-                    {ELIGIBILITY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {ELIGIBILITY_STATUSES.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
                   </select>
                 </td>
               </tr>

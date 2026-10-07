@@ -17,7 +17,7 @@ export function AdminShell() {
             <NavLink to="/admin/forms" className={adminMenuClass}>Forms</NavLink>
           )}
           {hasPermission(user, 'menu.admin.uw_company.view') && (
-            <NavLink to="/admin/uw-company" className={adminMenuClass}>UW Company</NavLink>
+            <NavLink to="/admin/uw-company" className={adminMenuClass}>Underwriting Companies</NavLink>
           )}
           {hasPermission(user, 'menu.admin.users.view') && (
             <NavLink to="/admin/users" className={adminMenuClass}>Users</NavLink>

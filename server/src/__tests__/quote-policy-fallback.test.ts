@@ -37,6 +37,7 @@ vi.mock('../openapi.js', () => ({
 }))
 
 vi.mock('../auth.js', () => ({
+  issueDocsToken: () => 'docs-token',
   authMiddleware: (req: any, _res: any, next: any) => {
     req.user = {
       id: 'test-user',

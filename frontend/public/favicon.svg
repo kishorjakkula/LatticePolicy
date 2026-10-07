@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-label="LatticePolicy">
+  <rect x="2" y="2" width="68" height="68" rx="16" fill="#f8fafc" stroke="#c7d2fe" stroke-width="4"/>
+  <path d="M20 20L52 52M52 20L20 52M36 14V58M14 36H58" stroke="#2563eb" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="20" cy="20" r="5" fill="#0f766e"/>
+  <circle cx="52" cy="20" r="5" fill="#2563eb"/>
+  <circle cx="20" cy="52" r="5" fill="#2563eb"/>
+  <circle cx="52" cy="52" r="5" fill="#0f766e"/>
+  <circle cx="36" cy="36" r="6" fill="#111827"/>
+</svg>

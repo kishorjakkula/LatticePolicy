@@ -60,7 +60,7 @@ describe('CompliancePage', () => {
   it('renders eligibility records by default', () => {
     render(<CompliancePage />)
     expect(screen.getByText('Compliance')).toBeInTheDocument()
-    expect(screen.getByText('personal-auto')).toBeInTheDocument()
+    expect(screen.getByText('Personal Auto')).toBeInTheDocument()
     expect(screen.getByText('NY')).toBeInTheDocument()
   })
 

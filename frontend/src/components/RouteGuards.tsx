@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { hasPermission } from '../auth/permissions'
 
@@ -26,7 +26,8 @@ export function resolveHomePath(user: any): string {
 
 export function RequireAuth({ children }: { children: ReactElement }) {
   const { token } = useAuth()
-  if (!token) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!token) return <Navigate to="/login" state={{ from: location.pathname }} replace />
   return children
 }
 

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDisplayDate } from '../../shared/dateDisplay'
-import carrierLogo from '../../assets/sample-carrier-logo.svg'
+import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
 import { loadJsPdf } from '../../lib/pdf'
 import { useCustomerPortalSummary, useCustomerPortalPolicy } from '../../api/hooks'
 import { PortalDocumentsPanel } from './PortalDocumentsPanel'
+import { coverageLabel, formatCurrency, productLabel } from '../../shared/displayLabels'
 
 type PortalPolicy = {
   policyId: string
@@ -25,7 +26,7 @@ function formatMoney(value: any): string {
 
 function formatCoverageValue(value: any): string {
   if (value == null || value === '') return '-'
-  if (typeof value === 'number') return String(value)
+  if (typeof value === 'number') return formatCurrency(value)
   if (typeof value === 'string') return value
   return JSON.stringify(value)
 }
@@ -108,7 +109,7 @@ async function buildPortalPolicyPacketPdf(detail: any): Promise<Blob> {
     y += 8
   }
 
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 170, 52)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 170, 44)
   const headerY = y
   let textX = marginLeft
   let headerBottom = headerY
@@ -129,7 +130,7 @@ async function buildPortalPolicyPacketPdf(detail: any): Promise<Blob> {
 
   sectionTitle('Policy Summary')
   keyValue('Named Insured', String(detail?.declarations?.namedInsured || '-'))
-  keyValue('Product', String(detail?.policy?.productCode || '-'))
+  keyValue('Product', productLabel(detail?.policy?.productCode))
   keyValue('Status', String(detail?.policy?.status || '-'))
   keyValue('Policy Effective Date', formatDateForDocument(detail?.policy?.term?.effectiveDate))
   keyValue('Policy Expiration Date', formatDateForDocument(detail?.policy?.term?.expirationDate))
@@ -152,7 +153,7 @@ async function buildPortalPolicyPacketPdf(detail: any): Promise<Blob> {
     keyValue('Coverage', 'No coverage details available')
   } else {
     for (const cov of coverages) {
-      const nameLines = doc.splitTextToSize(String(cov?.label || cov?.code || '-'), 190)
+      const nameLines = doc.splitTextToSize(String(cov?.label || coverageLabel(cov?.code)), 190)
       const limitLines = doc.splitTextToSize(formatCoverageValue(cov?.limit), 140)
       const dedLines = doc.splitTextToSize(formatCoverageValue(cov?.deductible), 110)
       const pctLines = doc.splitTextToSize(cov?.percent != null && cov?.percent !== '' ? `${cov.percent}%` : '-', 40)
@@ -216,43 +217,82 @@ async function buildPortalIdCardsPdf(detail: any): Promise<Blob> {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const cardWidth = pageWidth - marginLeft - marginRight
-  const cardHeight = 156
+  const cardHeight = 214
   let y = top
   const ensureSpace = (needed: number): void => {
     if (y + needed <= pageHeight - bottom) return
     doc.addPage()
     y = top
   }
-  const logo = await loadImageAsPngDataUrl(carrierLogo, 130, 40)
+  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 130, 34)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.text('Policy ID Cards', marginLeft, y)
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(19)
+  doc.text('Insurance ID Cards', marginLeft, y)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(`Policy #: ${String(detail?.policy?.policyNumber || '-')}`, marginLeft, y + 18)
-  y += 36
+  doc.setTextColor(71, 85, 105)
+  doc.setFontSize(9)
+  doc.text(`POLICY ${String(detail?.policy?.policyNumber || '-')}`, marginLeft, y + 18)
+  y += 38
   const vehicles = Array.isArray(detail?.idCard?.vehicles) && detail.idCard.vehicles.length ? detail.idCard.vehicles : [{ index: 1, year: '-', make: '-', model: '-', vin: '-' }]
   for (const vehicle of vehicles) {
     ensureSpace(cardHeight + 12)
     const topY = y
-    doc.setDrawColor(72, 104, 176)
-    doc.roundedRect(marginLeft, topY, cardWidth, cardHeight, 8, 8, 'S')
-    if (logo) doc.addImage(logo.dataUrl, 'PNG', marginLeft + 10, topY + 10, logo.width, logo.height)
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(203, 213, 225)
+    doc.roundedRect(marginLeft, topY, cardWidth, cardHeight, 7, 7, 'FD')
+    doc.setFillColor(15, 23, 42)
+    doc.roundedRect(marginLeft, topY, cardWidth, 56, 7, 7, 'F')
+    doc.rect(marginLeft, topY + 48, cardWidth, 8, 'F')
+    if (logo) {
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(marginLeft + 12, topY + 9, 124, 38, 4, 4, 'F')
+      doc.addImage(logo.dataUrl, 'PNG', marginLeft + 16, topY + 10, 116, 35)
+    }
     doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255)
     doc.setFontSize(12)
-    doc.text('AUTO INSURANCE IDENTIFICATION CARD', marginLeft + 160, topY + 26)
+    doc.text('AUTO INSURANCE', marginLeft + 154, topY + 23)
+    doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.text(`Insured: ${String(detail?.idCard?.namedInsured || '-')}`, marginLeft + 14, topY + 58)
-    doc.text(`Policy Number: ${String(detail?.idCard?.policyNumber || '-')}`, marginLeft + 14, topY + 74)
-    doc.text(`Vehicle: ${[vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || '-'}`, marginLeft + 14, topY + 90)
-    doc.text(`VIN: ${String(vehicle?.vin || '-')}`, marginLeft + 14, topY + 106)
-    doc.text(`State: ${String(detail?.idCard?.state || '-')}`, marginLeft + 14, topY + 122)
-    doc.text(
-      `Effective: ${formatDateForDocument(detail?.idCard?.term?.effectiveDate)}  Expiration: ${formatDateForDocument(detail?.idCard?.term?.expirationDate)}`,
-      marginLeft + 300,
-      topY + 74
-    )
+    doc.text('IDENTIFICATION CARD', marginLeft + 154, topY + 38)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(String(detail?.idCard?.state || '-'), marginLeft + cardWidth - 20, topY + 31, { align: 'right' })
+
+    const leftX = marginLeft + 16
+    const rightX = marginLeft + 276
+    const label = (text: string, x: number, lineY: number) => {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      doc.setTextColor(100, 116, 139)
+      doc.text(text.toUpperCase(), x, lineY)
+    }
+    const value = (text: string, x: number, lineY: number, width: number) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(15, 23, 42)
+      doc.text(doc.splitTextToSize(text || '-', width)[0] || '-', x, lineY)
+    }
+    label('Named insured', leftX, topY + 78)
+    value(String(detail?.idCard?.namedInsured || '-'), leftX, topY + 92, 230)
+    label('Policy number', rightX, topY + 78)
+    value(String(detail?.idCard?.policyNumber || '-'), rightX, topY + 92, 220)
+    label('Effective date', leftX, topY + 116)
+    value(formatDateForDocument(detail?.idCard?.term?.effectiveDate), leftX, topY + 130, 108)
+    label('Expiration date', leftX + 130, topY + 116)
+    value(formatDateForDocument(detail?.idCard?.term?.expirationDate), leftX + 130, topY + 130, 108)
+    label('Vehicle', rightX, topY + 116)
+    value([vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || '-', rightX, topY + 130, 220)
+    doc.setDrawColor(226, 232, 240)
+    doc.line(leftX, topY + 146, marginLeft + cardWidth - 16, topY + 146)
+    label('Vehicle identification number (VIN)', leftX, topY + 166)
+    value(String(vehicle?.vin || '-'), leftX, topY + 181, 245)
+    label('Card', rightX, topY + 166)
+    value(`Vehicle ${String(vehicle?.index || 1)}`, rightX, topY + 181, 100)
+    doc.setFontSize(7)
+    doc.setTextColor(100, 116, 139)
+    doc.text('Keep this card in the insured vehicle.', leftX, topY + 201)
     y += cardHeight + 14
   }
   return doc.output('blob')
@@ -343,7 +383,7 @@ export function CustomerPortalPage() {
                           {row.policyNumber || row.policyId}
                         </button>
                       </td>
-                      <td>{row.productCode || '-'}</td>
+                      <td>{productLabel(row.productCode)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -387,7 +427,7 @@ export function CustomerPortalPage() {
                   </div>
                   <div className="col">
                     <label>Product</label>
-                    <div>{detail.policy?.productCode || '-'}</div>
+                    <div>{productLabel(detail.policy?.productCode)}</div>
                   </div>
                   <div className="col">
                     <label>Status</label>
@@ -456,7 +496,7 @@ export function CustomerPortalPage() {
                     )}
                     {(Array.isArray(detail.declarations?.coverages) ? detail.declarations.coverages : []).map((cov: any, index: number) => (
                       <tr key={`${cov.code || cov.label || 'cov'}-${index}`}>
-                        <td>{cov.label || cov.code || '-'}</td>
+                        <td>{cov.label || coverageLabel(cov.code)}</td>
                         <td>{formatCoverageValue(cov.limit)}</td>
                         <td>{formatCoverageValue(cov.deductible)}</td>
                         <td>{cov.percent != null && cov.percent !== '' ? `${cov.percent}%` : '-'}</td>

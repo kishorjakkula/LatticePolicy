@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { config } from '../../config'
 import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
@@ -17,6 +17,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const nav = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
 
   useEffect(() => {
@@ -53,7 +54,8 @@ export function LoginPage() {
   const finishLogin = (token: string, user: any, fallbackTenant: string) => {
     login(token, user as any)
     localStorage.setItem('tenantId', user?.tenantId || fallbackTenant)
-    nav('/')
+    const returnPath = typeof (location.state as any)?.from === 'string' ? (location.state as any).from : '/'
+    nav(returnPath, { replace: true })
   }
 
   const postAuth = async (path: string, hdrTenant: string, payload: any) => {

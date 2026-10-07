@@ -55,7 +55,7 @@ describe('LoginPage SSO', () => {
 
     await waitFor(() => expect(login).toHaveBeenCalledTimes(1))
     expect(login).toHaveBeenCalledWith('good', expect.objectContaining({ id: 'u1' }))
-    expect(navigate).toHaveBeenCalledWith('/')
+    expect(navigate).toHaveBeenCalledWith('/', { replace: true })
   })
 
   it('shows a safe provider error returned by the popup', async () => {

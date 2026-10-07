@@ -13,6 +13,7 @@ import { useMobileNav } from './hooks/useMobileNav'
 import { useMobileTableLabels } from './hooks/useMobileTableLabels'
 import { RequireAuth, RequireAdmin, RequirePermission, RequireCustomerIdentity, AdminIndexRedirect, HomeRedirect, hasCustomerIdentity } from './components/RouteGuards'
 import latticePolicyLogo from './assets/lattice-policy-logo.svg'
+import { authHeaders, tenantId } from './api/request'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const PolicyViewPage = lazy(() => import('./features/policies/PolicyViewPage').then(m => ({ default: m.PolicyViewPage })))
@@ -42,6 +43,7 @@ const ReinsurancePage = lazy(() => import('./features/admin/ReinsurancePage').th
 const BordereauxPage = lazy(() => import('./features/admin/BordereauxPage').then(m => ({ default: m.BordereauxPage })))
 const JobsAdminPage = lazy(() => import('./features/admin/JobsAdminPage').then(m => ({ default: m.JobsAdminPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
+const ApiDocsRedirectPage = lazy(() => import('./features/apiDocs/ApiDocsRedirectPage').then(m => ({ default: m.ApiDocsRedirectPage })))
 
 export default function App() {
   const { token, user, logout } = useAuth()
@@ -50,6 +52,27 @@ export default function App() {
   const isLoginRoute = location.pathname === '/login'
   const canUseGlobalSearch = hasPermission(user, 'page.search.view')
   const canSearchCustomers = hasPermission(user, 'admin.customers.read')
+  const canOpenApiDocs = Array.isArray(user?.roles) && user.roles.includes('admin')
+
+  const openApiDocs = async () => {
+    if (!config.apiBaseUrl) return
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/api-docs/session`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant': tenantId(),
+          ...authHeaders()
+        }
+      })
+      if (!response.ok) throw new Error(`API Docs session failed (${response.status})`)
+      const payload = await response.json()
+      window.open(String(payload.url || `${config.apiBaseUrl}/api-docs`), '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to open API Docs')
+    }
+  }
 
   const { mobileNavOpen, setMobileNavOpen } = useMobileNav()
   const {
@@ -85,6 +108,7 @@ export default function App() {
       <Routes>
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/api-docs" element={<RequireAuth><RequireAdmin><ApiDocsRedirectPage /></RequireAdmin></RequireAuth>} />
             <Route path="/dashboard" element={<RequireAuth><RequirePermission permission="page.search.view"><DashboardPage /></RequirePermission></RequireAuth>} />
             <Route path="/rating" element={<RequireAuth><RequirePermission permission="page.rating.view"><RatingWorkbenchPage /></RequirePermission></RequireAuth>} />
             <Route path="/portal" element={<RequireAuth><RequirePermission permission="page.portal.view"><RequireCustomerIdentity><CustomerPortalPage /></RequireCustomerIdentity></RequirePermission></RequireAuth>} />
@@ -211,6 +235,14 @@ export default function App() {
                 <span className="topbar-user-role">{user.roles[0]}</span>
               )}
             </div>
+            {canOpenApiDocs && (
+              <button type="button" className="topbar-signout" onClick={() => void openApiDocs()} aria-label="Open API Docs" title="API Docs">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M3 2.5h7.5A1.5 1.5 0 0112 4v9.5H4.5A1.5 1.5 0 013 12V2.5z" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M5.5 5.5h4M5.5 8h4M5.5 10.5h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
             <button type="button" className="topbar-signout" onClick={() => logout()} aria-label="Sign out" title="Sign out">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M6 14H3a1 1 0 01-1-1V3a1 1 0 011-1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

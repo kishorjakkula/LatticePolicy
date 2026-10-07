@@ -10,6 +10,7 @@ import {
   useDecideReferralMutation,
   useUwReferrals,
 } from '../../api/hooks'
+import { productLabel, statusLabel } from '../../shared/displayLabels'
 
 const STATUS_BADGE: Record<string, string> = {
   Open: 'yellow',
@@ -130,15 +131,15 @@ export function UwQueue() {
           <div className="ps-table-card">
             <table className="table">
               <thead>
-                <tr><th>Policy #</th><th>Product</th><th>Txn</th><th>Eff</th><th>Reasons</th><th>Status</th><th>Assigned</th><th></th></tr>
+                <tr><th>Policy #</th><th>Product</th><th>Transaction</th><th>Effective Date</th><th>Reasons</th><th>Status</th><th>Assigned To</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {items.length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: 'center', padding: '24px' }}>No referrals found</td></tr>}
                 {items.map((v: any) => (
                   <tr key={v.referralId}>
                     <td>{v.policyNumber || <span className="muted">Pre-bind (quote)</span>}</td>
-                    <td>{v.productCode || '-'}</td>
-                    <td>{v.transactionType}</td>
+                    <td>{productLabel(v.productCode)}</td>
+                    <td>{statusLabel(v.transactionType)}</td>
                     <td>{formatDisplayDate(v.effectiveDate, { fallback: '-' })}</td>
                     <td className="muted" style={{ maxWidth: 260 }}>{(v.reasons || []).join('; ') || '-'}</td>
                     <td><span className={`badge ${STATUS_BADGE[v.status] || 'gray'}`}>{v.status}</span></td>

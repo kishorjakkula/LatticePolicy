@@ -55,7 +55,7 @@ describe('BordereauxPage', () => {
     expect(screen.getByText('Bordereaux')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'RISK' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'Generated' })).toBeInTheDocument()
-    expect(screen.getByRole('cell', { name: 'auto' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Auto' })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: '3' })).toBeInTheDocument()
   })
 

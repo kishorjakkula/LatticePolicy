@@ -155,7 +155,7 @@ export function AdministrationPage() {
   return (
     <div className="ps-admin-page">
       <div className="ps-page-header">
-        <div><h2 className="ps-page-title">UW Company</h2></div>
+        <div><h2 className="ps-page-title">Underwriting Companies</h2></div>
       </div>
       <h3>Underwriting Companies</h3>
       {error && <p className="error">{error}</p>}

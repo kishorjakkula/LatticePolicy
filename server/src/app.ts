@@ -4,7 +4,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { tenancyMiddleware, requireTenant } from './tenancy.js'
-import { authMiddleware, handleLogin, handleMfaSetupConfirm, handleMfaVerify } from './auth.js'
+import { authMiddleware, handleLogin, handleMfaSetupConfirm, handleMfaVerify, issueDocsToken } from './auth.js'
 import { ssoRoutes } from './routes/sso.routes.js'
 import { routes } from './routes/index.js'
 import { httpLogger, logger } from './logger.js'
@@ -92,10 +92,29 @@ export function createApp() {
     const serverUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`
     res.json(buildOpenApiSpec(serverUrl))
   })
-  app.get('/api-docs', requireAdminDocs, (req, res) => {
-    const token = String((req.query as any)?.token || '').trim()
+  app.post('/api-docs/session', requireAdminDocs, (req, res) => {
+    const token = issueDocsToken(req.user!)
+    res.cookie('lp_docs_session', token, {
+      httpOnly: true,
+      secure: isManagedDeployment(),
+      sameSite: 'strict',
+      maxAge: 5 * 60 * 1000,
+      path: '/'
+    })
     const serverUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`
-    const specUrl = `${serverUrl}/openapi.json${token ? `?token=${encodeURIComponent(token)}` : ''}`
+    res.json({ url: `${serverUrl}/api-docs` })
+  })
+  app.get('/api-docs', (req, res, next) => {
+    const roles = Array.isArray(req.user?.roles) ? req.user!.roles : []
+    if (roles.includes('admin')) return next()
+    const frontendOrigin = getAllowedOrigins()[0]
+    if (frontendOrigin && req.accepts('html')) {
+      return res.redirect(302, `${frontendOrigin.replace(/\/$/, '')}/api-docs`)
+    }
+    return res.status(403).json({ code: 'FORBIDDEN', message: 'Admin user required for API Docs' })
+  }, (req, res) => {
+    const serverUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`
+    const specUrl = `${serverUrl}/openapi.json`
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.send(swaggerUiHtml(specUrl))
   })
