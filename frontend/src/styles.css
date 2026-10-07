@@ -66,6 +66,27 @@ body {
   letter-spacing: 0;
 }
 
+.app-main a:not(.admin-menu-link):not(.admin-section-link):not(.ps-admin-nav-link) {
+  border-radius: 4px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.app-main a:not(.admin-menu-link):not(.admin-section-link):not(.ps-admin-nav-link):hover {
+  color: color-mix(in srgb, var(--accent-strong) 88%, #12345b);
+  background-color: color-mix(in srgb, var(--accent-soft) 42%, var(--panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-soft) 42%, var(--panel));
+}
+
+.app-main a:not(.admin-menu-link):not(.admin-section-link):not(.ps-admin-nav-link):focus-visible {
+  color: var(--accent-strong);
+  background-color: color-mix(in srgb, var(--accent-soft) 55%, var(--panel));
+  outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  outline-offset: 2px;
+}
+
 .container {
   width: 100%;
   margin: 0 auto;
@@ -6093,12 +6114,20 @@ code {
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.12s;
+  border-radius: 4px;
+  transition:
+    color 0.12s,
+    background-color 0.12s,
+    box-shadow 0.12s;
 }
 
 .ps-policy-link:hover {
-  color: var(--ps-primary-hover, #2563eb);
-  text-decoration: underline;
+  color: #174ea6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px #eff6ff;
+  text-decoration: none;
+  transform: none;
+  filter: none;
 }
 
 .ps-col-primary {
