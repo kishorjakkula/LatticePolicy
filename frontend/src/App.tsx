@@ -42,6 +42,7 @@ const ExposurePage = lazy(() => import('./features/admin/ExposurePage').then(m =
 const ReinsurancePage = lazy(() => import('./features/admin/ReinsurancePage').then(m => ({ default: m.ReinsurancePage })))
 const BordereauxPage = lazy(() => import('./features/admin/BordereauxPage').then(m => ({ default: m.BordereauxPage })))
 const JobsAdminPage = lazy(() => import('./features/admin/JobsAdminPage').then(m => ({ default: m.JobsAdminPage })))
+const UnderwritingAuthorityPage = lazy(() => import('./features/admin/UnderwritingAuthorityPage').then(m => ({ default: m.UnderwritingAuthorityPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
 const ApiDocsRedirectPage = lazy(() => import('./features/apiDocs/ApiDocsRedirectPage').then(m => ({ default: m.ApiDocsRedirectPage })))
 
@@ -138,6 +139,7 @@ export default function App() {
               <Route path="reinsurance" element={<RequirePermission permission="page.admin.reinsurance.view"><ReinsurancePage /></RequirePermission>} />
               <Route path="bordereaux" element={<RequirePermission permission="page.admin.bordereaux.view"><BordereauxPage /></RequirePermission>} />
               <Route path="jobs" element={<RequirePermission permission="page.admin.jobs.view"><JobsAdminPage /></RequirePermission>} />
+              <Route path="underwriting-authority" element={<RequirePermission permission="uw.authority.read"><UnderwritingAuthorityPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
       </Routes>

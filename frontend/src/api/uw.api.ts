@@ -1,6 +1,21 @@
 import { request } from './request'
 
 export const apiUw = {
+  listAuthorityGrants: () => request<{ items: any[] }>('GET', '/v1/uw/authority-grants'),
+  createAuthorityGrant: (payload: {
+    subjectType: 'USER' | 'ROLE' | 'PRODUCER'
+    subjectId: string
+    productCode?: string | null
+    stateCode?: string | null
+    transactionTypes: string[]
+    maxPremium?: number | null
+    maxLimit?: number | null
+    mayOverride?: boolean
+    effectiveDate: string
+    expirationDate?: string | null
+  }) => request<any>('POST', '/v1/uw/authority-grants', payload),
+  updateAuthorityGrant: (grantId: string, patch: { active?: boolean; expirationDate?: string | null }) =>
+    request<any>('PATCH', `/v1/uw/authority-grants/${grantId}`, patch),
   listReferrals: (page = 1, pageSize = 20, status?: string) =>
     request<any>(
       'GET',
