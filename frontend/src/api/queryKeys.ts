@@ -80,6 +80,10 @@ export const queryKeys = {
     list: (page: number, pageSize: number, status?: string) => ['uw-referrals', 'list', page, pageSize, status ?? null] as const,
     detail: (referralId: string) => ['uw-referrals', 'detail', referralId] as const,
   },
+  uwAuthorityGrants: {
+    all: () => ['uw-authority-grants'] as const,
+    list: () => ['uw-authority-grants', 'list'] as const,
+  },
   placements: {
     all: () => ['placements'] as const,
     list: (page: number, pageSize: number, status?: string) => ['placements', 'list', page, pageSize, status ?? null] as const,
