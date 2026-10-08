@@ -1,3 +1,4 @@
+import PizZip from 'pizzip'
 import { describe, expect, it } from 'vitest'
 import {
   buildEndorsementChangeSet,
@@ -6,6 +7,54 @@ import {
   selectPolicyForms,
 } from '../document-generation.service.js'
 import { isPreviewApplicabilityMatch } from '../forms.service.js'
+import { retrieveStoredDocument } from '../document-storage.service.js'
+import { DOCX_TEMPLATE_MIME_TYPE } from '../document-template-variables.js'
+
+// A real, minimal OOXML .docx package (not a mock) containing one paragraph
+// per string given, used to prove the actual parse -> validate -> resolve ->
+// substitute -> store -> verify pipeline in buildPolicyDocumentPacket, not
+// just a mocked artifact.
+function buildFixtureDocx(paragraphs: string[]): Buffer {
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`
+  const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`
+  const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const bodyParagraphs = paragraphs
+    .map((text) => `<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`)
+    .join('')
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${bodyParagraphs}<w:sectPr/></w:body>
+</w:document>`
+  const zip = new PizZip()
+  zip.file('[Content_Types].xml', contentTypesXml)
+  zip.file('_rels/.rels', rootRelsXml)
+  zip.file('word/document.xml', documentXml)
+  return zip.generate({ type: 'nodebuffer' })
+}
+
+// Extends the base createQuery with a mocked forms_admin_template_assets
+// lookup, so tests can exercise the Task C docx-substitution path.
+function createQueryWithTemplateAsset(
+  rowsByTable: Record<string, any[]>,
+  templateAsset: { mime_type: string; content: Buffer } | null
+) {
+  return async (text: string) => {
+    if (text.includes('FROM forms_admin_template_assets')) {
+      return templateAsset ? { rows: [templateAsset], rowCount: 1 } : { rows: [], rowCount: 0 }
+    }
+    if (text.includes('FROM forms_admin_forms')) return { rows: rowsByTable.forms_admin_forms || [], rowCount: rowsByTable.forms_admin_forms?.length || 0 }
+    if (text.includes('FROM forms_catalog')) return { rows: rowsByTable.forms_catalog || [], rowCount: rowsByTable.forms_catalog?.length || 0 }
+    return { rows: [], rowCount: 0 }
+  }
+}
 
 function createQuery(rowsByTable: Record<string, any[]>) {
   return async (text: string) => {
@@ -391,6 +440,86 @@ describe('document generation service', () => {
       }), { ...context, transactionType: 'Endorse' })
 
       expect(forms).toHaveLength(0)
+    })
+  })
+
+  describe('filled .docx form documents (Task C: real variable substitution at generation time)', () => {
+    const docxFormRow = {
+      form_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      form_number: 'PA-DOCX',
+      form_title: 'Personal Auto Docx Declarations',
+      edition_date: '2026-01-01',
+      form_type: 'Declarations',
+      transaction_types: ['NB'],
+      output_format: 'DOCX',
+      packet_placement: 'Front',
+      sort_order: 10,
+      visibility: ['internal', 'customer'],
+      state_code: 'CA',
+      regulatory_status: 'Approved',
+    }
+
+    it('adds a filled POLICY_FORM_DOCUMENT with real substituted text for a form with a validated .docx template', async () => {
+      const template = buildFixtureDocx([
+        'Insured: {{insuredName}}',
+        'Policy Number: {{policyNumber}}',
+      ])
+      const query = createQueryWithTemplateAsset(
+        { forms_admin_forms: [docxFormRow] },
+        { mime_type: DOCX_TEMPLATE_MIME_TYPE, content: template }
+      )
+
+      const packet = await buildPolicyDocumentPacket(query, {
+        ...context,
+        inputSnapshot: { applicant: { firstName: 'Ada', lastName: 'Lovelace' }, coverages: [] },
+      })
+
+      expect(packet.forms.map((f) => f.code)).toEqual(['PA-DOCX'])
+      // The original generic packet document is still produced (additive, not replacing).
+      expect(packet.documents.some((doc) => doc.type === 'POLICY_PACKET')).toBe(true)
+
+      const formDoc = packet.documents.find((doc) => doc.type === 'POLICY_FORM_DOCUMENT')
+      expect(formDoc).toBeDefined()
+      expect(formDoc!.hash).toMatch(/^[a-f0-9]{64}$/)
+      expect(formDoc!.metadata).toMatchObject({ code: 'PA-DOCX', formId: docxFormRow.form_id })
+
+      const stored = await retrieveStoredDocument(formDoc!.uri)
+      expect(stored).not.toBeNull()
+      const outZip = new PizZip(stored!)
+      const documentXml = outZip.file('word/document.xml')!.asText()
+      expect(documentXml).toContain('Insured: Ada Lovelace')
+      expect(documentXml).toContain(`Policy Number: ${context.policyNumber}`)
+      expect(documentXml).not.toContain('{{')
+    })
+
+    it('skips the .docx substitution and leaves the packet exactly as before when the form has no template asset (regression: unaffected forms)', async () => {
+      const query = createQueryWithTemplateAsset({ forms_admin_forms: [docxFormRow] }, null)
+      const packet = await buildPolicyDocumentPacket(query, context)
+      expect(packet.documents.some((doc) => doc.type === 'POLICY_FORM_DOCUMENT')).toBe(false)
+      expect(packet.documents).toHaveLength(1)
+      expect(packet.documents[0].type).toBe('POLICY_PACKET')
+    })
+
+    it('skips the .docx substitution for a PDF template asset, leaving the existing PDF path untouched (regression)', async () => {
+      const query = createQueryWithTemplateAsset(
+        { forms_admin_forms: [docxFormRow] },
+        { mime_type: 'application/pdf', content: Buffer.from('%PDF-1.4 fake') }
+      )
+      const packet = await buildPolicyDocumentPacket(query, context)
+      expect(packet.documents.some((doc) => doc.type === 'POLICY_FORM_DOCUMENT')).toBe(false)
+      expect(packet.documents).toHaveLength(1)
+      expect(packet.documents[0].type).toBe('POLICY_PACKET')
+    })
+
+    it('skips (does not throw) when the stored .docx template has an unrecognized placeholder token', async () => {
+      const template = buildFixtureDocx(['Hello {{thisTokenDoesNotExist}}'])
+      const query = createQueryWithTemplateAsset(
+        { forms_admin_forms: [docxFormRow] },
+        { mime_type: DOCX_TEMPLATE_MIME_TYPE, content: template }
+      )
+      const packet = await buildPolicyDocumentPacket(query, context)
+      expect(packet.documents.some((doc) => doc.type === 'POLICY_FORM_DOCUMENT')).toBe(false)
+      expect(packet.documents).toHaveLength(1)
     })
   })
 })

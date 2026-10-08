@@ -6,6 +6,13 @@ import { hasPermission } from '../auth.js'
 import { buildCacheKey, cacheDeletePrefix } from '../cache.js'
 import { asDateOnly as _asDateOnly } from '../lib/date.utils.js'
 import { routeParam, sanitizeInlineFileName } from '../lib/utils.js'
+import {
+  DOCUMENT_TEMPLATE_VARIABLES,
+  DOCX_TEMPLATE_MIME_TYPE,
+  describeDocxTemplateError,
+  extractDocxPlaceholderTokens,
+  validateDocxPlaceholderTokens,
+} from '../services/document-template-variables.js'
 
 export const formsAdminRoutes = Router()
 
@@ -473,6 +480,15 @@ formsAdminRoutes.post('/seed/iso-personal-auto-us', async (req, res) => {
   } catch (e: any) {
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
+})
+
+// Read-only catalog of merge-field tokens an uploaded .docx form template may
+// reference as `{{token}}` (see document-template-variables.ts). Must be
+// registered before GET /:id so that path segment isn't swallowed by the
+// :id param route below. Gated by the same admin.forms.read permission
+// already required for the whole /admin/forms mount (see admin.routes.ts).
+formsAdminRoutes.get('/template-variables', (_req, res) => {
+  return res.json({ variables: DOCUMENT_TEMPLATE_VARIABLES })
 })
 
 formsAdminRoutes.get('/:id', async (req, res) => {
@@ -1464,8 +1480,9 @@ formsAdminRoutes.post('/:id/output/template', async (req, res) => {
   if (!payload.fileName || !payload.mimeType || !payload.dataBase64) {
     return res.status(400).json({ code: 'INVALID_INPUT', message: 'fileName, mimeType, and dataBase64 are required' })
   }
-  if (payload.mimeType !== 'application/pdf') {
-    return res.status(400).json({ code: 'INVALID_INPUT', message: 'Only PDF files are supported' })
+  const isDocxUpload = payload.mimeType === DOCX_TEMPLATE_MIME_TYPE
+  if (payload.mimeType !== 'application/pdf' && !isDocxUpload) {
+    return res.status(400).json({ code: 'INVALID_INPUT', message: 'Only PDF or Word (.docx) files are supported' })
   }
 
   const content = decodeBase64ToBuffer(payload.dataBase64)
@@ -1477,6 +1494,33 @@ formsAdminRoutes.post('/:id/output/template', async (req, res) => {
   }
   if (content.length > 10 * 1024 * 1024) {
     return res.status(400).json({ code: 'INVALID_INPUT', message: 'File exceeds 10MB size limit' })
+  }
+
+  // .docx templates may reference `{{token}}` merge-field placeholders — fail
+  // closed here on any unrecognized token so a typo is caught at upload time
+  // rather than silently rendering blank inside a real bound-policy document
+  // later (see document-template-variables.ts for the fixed token catalog).
+  // The existing PDF-upload path above/below is completely untouched.
+  let recognizedTokens: string[] = []
+  if (isDocxUpload) {
+    let tokens: string[]
+    try {
+      tokens = extractDocxPlaceholderTokens(content)
+    } catch (err) {
+      return res.status(400).json({
+        code: 'INVALID_INPUT',
+        message: `Unable to parse the uploaded Word template: ${describeDocxTemplateError(err)}`,
+      })
+    }
+    const { recognized, unrecognized } = validateDocxPlaceholderTokens(tokens)
+    if (unrecognized.length) {
+      return res.status(400).json({
+        code: 'UNRECOGNIZED_TEMPLATE_VARIABLES',
+        message: `Unrecognized template variable(s): ${unrecognized.join(', ')}`,
+        unrecognizedTokens: unrecognized,
+      })
+    }
+    recognizedTokens = recognized
   }
 
   try {
@@ -1519,17 +1563,20 @@ formsAdminRoutes.post('/:id/output/template', async (req, res) => {
 
       const assetRow = mapTemplateAssetRow(upsert.rows[0])
       const assetUri = `asset://${assetRow.assetId}`
+      const uploadedTemplateSource = isDocxUpload ? 'Uploaded DOCX' : 'Uploaded PDF'
+      const uploadedOutputFormat = isDocxUpload ? 'DOCX' : 'PDF'
       await q(
         `INSERT INTO forms_admin_output (
             tenant_id, form_id, template_source, template_uri, output_format, merge_scope, packet_placement,
             sort_order, active, created_by, updated_by, updated_at
-         ) VALUES ($1,$2,'Uploaded PDF',$3,'PDF','policy','End',100,true,$4,$4,now())
+         ) VALUES ($1,$2,$5,$3,$6,'policy','End',100,true,$4,$4,now())
          ON CONFLICT (tenant_id, form_id)
-         DO UPDATE SET template_source = 'Uploaded PDF',
+         DO UPDATE SET template_source = EXCLUDED.template_source,
                        template_uri = EXCLUDED.template_uri,
+                       output_format = EXCLUDED.output_format,
                        updated_by = EXCLUDED.updated_by,
                        updated_at = now()`,
-        [tenantId, formId, assetUri, actor]
+        [tenantId, formId, assetUri, actor, uploadedTemplateSource, uploadedOutputFormat]
       )
 
       const correlationId = uuidv4()
@@ -1552,7 +1599,7 @@ formsAdminRoutes.post('/:id/output/template', async (req, res) => {
     if (!result) return res.status(404).json({ code: 'NOT_FOUND' })
     if ((result as any).code === 'LOCKED') return res.status(409).json(result)
     if ((result as any).code === 'INVALID_INPUT') return res.status(400).json(result)
-    return res.json(result)
+    return res.json(isDocxUpload ? { ...result, ok: true, recognizedTokens } : result)
   } catch (e: any) {
     return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
   }
@@ -1599,7 +1646,14 @@ formsAdminRoutes.delete('/:id/output/template', async (req, res) => {
       )
       await q(
         `UPDATE forms_admin_output
-            SET template_source = CASE WHEN template_source = 'Uploaded PDF' THEN 'Static PDF' ELSE template_source END,
+            SET template_source = CASE
+                  WHEN template_source IN ('Uploaded PDF', 'Uploaded DOCX') THEN 'Static PDF'
+                  ELSE template_source
+                END,
+                output_format = CASE
+                  WHEN template_uri LIKE 'asset://%' THEN 'PDF'
+                  ELSE output_format
+                END,
                 template_uri = CASE WHEN template_uri LIKE 'asset://%' THEN null ELSE template_uri END,
                 updated_by = $3,
                 updated_at = now()
