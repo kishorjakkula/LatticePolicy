@@ -133,25 +133,19 @@ export function evaluateAggregationAppetite(
 }
 
 /** Loads the active aggregation-appetite limit row, if any, for this tenant/product/state. */
-async function loadAggregationLimit(
+export async function loadAggregationLimit(
   q: (text: string, params?: any[]) => Promise<any>,
   tenantId: string,
   productCode: string,
   stateCode: string
 ): Promise<AggregationLimitConfig | null> {
   if (!productCode || !stateCode) return null
-  let result: any
-  try {
-    result = await q(
-      `SELECT max_total_tiv, max_policy_count FROM aggregation_appetite_limits
-        WHERE tenant_id=$1 AND active=true AND LOWER(product_code)=LOWER($2) AND UPPER(state_code)=UPPER($3)
-        LIMIT 1`,
-      [tenantId, productCode, stateCode]
-    )
-  } catch {
-    // Table not present (e.g. migration not yet applied) — treat as unconfigured.
-    return null
-  }
+  const result = await q(
+    `SELECT max_total_tiv, max_policy_count FROM aggregation_appetite_limits
+      WHERE tenant_id=$1 AND active=true AND LOWER(product_code)=LOWER($2) AND UPPER(state_code)=UPPER($3)
+      LIMIT 1`,
+    [tenantId, productCode, stateCode]
+  )
   if (!result?.rowCount) return null
   const row = result.rows[0]
   return {

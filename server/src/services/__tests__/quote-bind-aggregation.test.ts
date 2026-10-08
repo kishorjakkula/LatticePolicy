@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateAggregationAppetite } from '../quote-bind.service.js'
+import { evaluateAggregationAppetite, loadAggregationLimit } from '../quote-bind.service.js'
 
 describe('evaluateAggregationAppetite', () => {
   it('is a no-op (configured: false) when no limit is configured for the tenant/product/state', () => {
@@ -68,5 +68,16 @@ describe('evaluateAggregationAppetite', () => {
     )
     expect(result.projectedTotalTiv).toBe(500)
     expect(result.exceeded).toBe(false)
+  })
+})
+
+describe('loadAggregationLimit', () => {
+  it('propagates database failures instead of silently disabling the underwriting control', async () => {
+    const failure = new Error('database unavailable')
+    const query = async () => { throw failure }
+
+    await expect(
+      loadAggregationLimit(query, 'sample-carrier', 'personal-auto', 'CA')
+    ).rejects.toBe(failure)
   })
 })
