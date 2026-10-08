@@ -21,6 +21,7 @@ vi.mock('../../../api/hooks', () => ({
     refetch: vi.fn(),
   }),
   useForm: () => ({ data: undefined, refetch: vi.fn() }),
+  useFormTemplateVariables: () => ({ data: { variables: [] }, isLoading: false }),
 }))
 
 vi.mock('../../../api/client', () => ({ apiAdmin: {} }))

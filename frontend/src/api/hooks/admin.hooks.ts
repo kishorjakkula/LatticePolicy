@@ -1088,6 +1088,13 @@ export function useUploadFormTemplateAssetMutation() {
   })
 }
 
+export function useFormTemplateVariables() {
+  return useQuery({
+    queryKey: ['forms', 'template-variables'],
+    queryFn: () => adminApi.getFormTemplateVariables(),
+  })
+}
+
 export function useDeleteFormTemplateAssetMutation() {
   const qc = useQueryClient()
   return useMutation({
