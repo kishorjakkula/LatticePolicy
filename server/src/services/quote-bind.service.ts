@@ -36,6 +36,11 @@ import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
+import { extractExposureDimensions, loadExposureRows } from './exposure.service.js'
+import {
+  runExternalVerification,
+  type ExternalVerificationRequest,
+} from './external-verification.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +79,176 @@ function summarizeRisk(risk: any): string {
     return [risk.address, risk.construction, risk.yearBuilt].filter(Boolean).join(', ').trim()
   }
   return risk.type || 'risk'
+}
+
+// ── Task A: aggregation / catastrophe-exposure appetite check ────────────────
+//
+// See migrations/056_aggregation_appetite_limits.sql. A tenant may
+// optionally configure a maximum total TIV and/or policy count for a given
+// (productCode, stateCode). When nothing is configured for that
+// combination, this check is a complete no-op — mirroring
+// underwriting-authority.service.ts's `resolveAuthorityDecision` convention
+// (zero configured grants => `configured: false, authorized: true`).
+
+export interface AggregationLimitConfig {
+  maxTotalTiv: number | null
+  maxPolicyCount: number | null
+}
+
+export interface AggregationAppetiteEvaluation {
+  configured: boolean
+  exceeded: boolean
+  reasons: string[]
+  projectedTotalTiv: number
+  projectedPolicyCount: number
+}
+
+/**
+ * Pure comparison (no DB access): given an optionally-configured
+ * aggregation-appetite limit and the book's CURRENT aggregate exposure for
+ * this (productCode, stateCode) — as already computed by
+ * exposure.service.ts's existing aggregation query — decide whether adding
+ * one more policy with `newPolicyTiv` would push the book over the limit.
+ */
+export function evaluateAggregationAppetite(
+  limit: AggregationLimitConfig | null,
+  currentAggregate: { policyCount: number; totalTiv: number },
+  newPolicyTiv: number | null
+): AggregationAppetiteEvaluation {
+  const projectedTotalTiv = (currentAggregate.totalTiv || 0) + (newPolicyTiv || 0)
+  const projectedPolicyCount = (currentAggregate.policyCount || 0) + 1
+
+  if (!limit || (limit.maxTotalTiv == null && limit.maxPolicyCount == null)) {
+    return { configured: false, exceeded: false, reasons: [], projectedTotalTiv, projectedPolicyCount }
+  }
+
+  const reasons: string[] = []
+  if (limit.maxTotalTiv != null && projectedTotalTiv > limit.maxTotalTiv) {
+    reasons.push('AGGREGATION_TIV_LIMIT_EXCEEDED')
+  }
+  if (limit.maxPolicyCount != null && projectedPolicyCount > limit.maxPolicyCount) {
+    reasons.push('AGGREGATION_POLICY_COUNT_LIMIT_EXCEEDED')
+  }
+  return { configured: true, exceeded: reasons.length > 0, reasons, projectedTotalTiv, projectedPolicyCount }
+}
+
+/** Loads the active aggregation-appetite limit row, if any, for this tenant/product/state. */
+export async function loadAggregationLimit(
+  q: (text: string, params?: any[]) => Promise<any>,
+  tenantId: string,
+  productCode: string,
+  stateCode: string
+): Promise<AggregationLimitConfig | null> {
+  if (!productCode || !stateCode) return null
+  const result = await q(
+    `SELECT max_total_tiv, max_policy_count FROM aggregation_appetite_limits
+      WHERE tenant_id=$1 AND active=true AND LOWER(product_code)=LOWER($2) AND UPPER(state_code)=UPPER($3)
+      LIMIT 1`,
+    [tenantId, productCode, stateCode]
+  )
+  if (!result?.rowCount) return null
+  const row = result.rows[0]
+  return {
+    maxTotalTiv: row.max_total_tiv == null ? null : Number(row.max_total_tiv),
+    maxPolicyCount: row.max_policy_count == null ? null : Number(row.max_policy_count),
+  }
+}
+
+// ── Task B: internal-record consistency check ────────────────────────────────
+//
+// Self-reported qualification answers (frontend/src/features/wizard/QuoteWizard.tsx,
+// QUALIFICATION_QUESTIONS) are never cross-checked against anything today.
+// This system has no external data-vendor integration (see
+// external-verification.service.ts for the honest, inert extension point for
+// that), but it DOES have its own prior-policy records for a matched
+// customer, which is real data worth checking.
+//
+// What this checks, precisely, and why:
+//   - The 'personal-auto' qualification question `continuousInsurance6Months`
+//     ("Continuous auto insurance for last 6 months?") is self-reported as
+//     `true` in the submission's uwAnswers.
+//   - AND this system's OWN records show a `Cancel` transaction for a PRIOR
+//     policy belonging to the SAME matched customer (via policy_customer_links),
+//     with `cancellation_type = 'NON_PAYMENT'` (an exact, unambiguous field
+//     value — not an inference), whose cancellation effective date falls
+//     within the same 6-month window the question itself asks about.
+// That is a direct contradiction between two concrete facts, not a
+// speculative inference — exactly the kind of thing an underwriter can
+// verify by pulling up the two records side by side.
+
+const CONTINUOUS_INSURANCE_LOOKBACK_MONTHS = 6
+const INTERNAL_CONSISTENCY_PRIOR_NONPAYMENT_REASON =
+  'INTERNAL_RECORD_PRIOR_NONPAYMENT_CANCELLATION_CONTRADICTS_QUALIFICATION'
+
+export interface PriorCancellationRecord {
+  policyId: string
+  /** The cancellation's effective date (YYYY-MM-DD), i.e. when coverage ended. */
+  effectiveDate: string
+  cancellationType: string | null
+}
+
+export interface InternalConsistencyFinding {
+  discrepancy: boolean
+  reason: string | null
+}
+
+/**
+ * Pure comparison (no DB access). See the block comment above for exactly
+ * what this does and does not check.
+ */
+export function detectPriorNonpaymentDiscrepancy(input: {
+  qualificationAnswers: Record<string, unknown> | null | undefined
+  newPolicyEffectiveDate: string
+  priorCancellations: PriorCancellationRecord[]
+}): InternalConsistencyFinding {
+  const claimedContinuousInsurance = input.qualificationAnswers?.continuousInsurance6Months === true
+  if (!claimedContinuousInsurance) return { discrepancy: false, reason: null }
+
+  const effective = new Date(input.newPolicyEffectiveDate)
+  if (Number.isNaN(effective.getTime())) return { discrepancy: false, reason: null }
+  const cutoff = new Date(effective)
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - CONTINUOUS_INSURANCE_LOOKBACK_MONTHS)
+
+  const hit = input.priorCancellations.some((record) => {
+    if (record.cancellationType !== 'NON_PAYMENT') return false
+    const cancelDate = new Date(record.effectiveDate)
+    if (Number.isNaN(cancelDate.getTime())) return false
+    return cancelDate >= cutoff && cancelDate <= effective
+  })
+
+  return hit
+    ? { discrepancy: true, reason: INTERNAL_CONSISTENCY_PRIOR_NONPAYMENT_REASON }
+    : { discrepancy: false, reason: null }
+}
+
+/**
+ * Loads this customer's prior `Cancel` policy-version rows (any policy
+ * linked to them via policy_customer_links), narrowed to rows that carry a
+ * cancellation_type at all. Filtering down to NON_PAYMENT specifically, and
+ * to the lookback window, happens in the pure `detectPriorNonpaymentDiscrepancy`
+ * above so that logic stays unit-testable without a DB.
+ */
+async function loadPriorCancellationsForCustomer(
+  q: (text: string, params?: any[]) => Promise<any>,
+  tenantId: string,
+  customerId: string
+): Promise<PriorCancellationRecord[]> {
+  const result = await q(
+    `SELECT pv.policy_id, pv.effective_date, pv.cancellation_type
+       FROM policy_customer_links pcl
+       JOIN policy_versions pv
+         ON pv.tenant_id = pcl.tenant_id AND pv.policy_id = pcl.policy_id
+      WHERE pcl.tenant_id = $1
+        AND pcl.customer_id = $2
+        AND pv.transaction_type = 'CANCEL'
+        AND pv.cancellation_type IS NOT NULL`,
+    [tenantId, customerId]
+  )
+  return (result.rows as any[]).map((row) => ({
+    policyId: String(row.policy_id),
+    effectiveDate: row.effective_date ? new Date(row.effective_date).toISOString().slice(0, 10) : '',
+    cancellationType: row.cancellation_type || null,
+  }))
 }
 
 async function upsertPolicyCustomerLinks(
@@ -190,54 +365,141 @@ export async function bindQuote(
   ).trim()
 
   let referralId: string | null = null
+  const bindProductCode = quote.payload?.productCode || ''
+  const bindStateCode = quote.payload?.state || quote.payload?.jurisdiction?.code || ''
+  const bindEffectiveDate = quote.payload?.effectiveDate || new Date().toISOString().slice(0, 10)
+
   const authority = await withTenantTx(tenantId, innerDb => resolveAuthorityDecision(toRawQuery(innerDb), {
     tenantId,
     actorId: normalizedActorId,
     roles: actor?.roles || [],
     producerId: quote.payload?.producer?.producerId || quote.payload?.producer?.producerKey || null,
-    productCode: quote.payload?.productCode || '',
-    stateCode: quote.payload?.state || quote.payload?.jurisdiction?.code || '',
-    effectiveDate: quote.payload?.effectiveDate || new Date().toISOString().slice(0, 10),
+    productCode: bindProductCode,
+    stateCode: bindStateCode,
+    effectiveDate: bindEffectiveDate,
     transactionType: 'NewBusiness',
     premium: Number(quote.premium?.total?.amount || 0),
     requestedLimit: maximumRequestedLimit(quote.payload),
   }))
-  if (quote.uw) {
-    if (quote.uw.decision === 'Decline') {
-      throw new BadRequestError(
-        'UW_DECLINED',
-        `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
-      )
-    }
-    if (quote.uw.decision === 'Refer' || (authority.configured && !authority.authorized)) {
-      const authorityReasons = authority.authorized ? [] : authority.reasons.map(reason => `AUTHORITY_${reason}`)
-      const gate = await withTenantTx(tenantId, (innerDb) =>
-        resolveReferralGateForActor(
-          innerDb,
-          tenantId,
-          {
-            quoteId,
-            transactionType: 'NewBusiness',
-            productCode: quote.payload?.productCode || null,
-            insuredName: insuredDisplayName || null,
-            effectiveDate: quote.payload?.effectiveDate || null,
-            reasons: [...(quote.uw.reasons || []), ...authorityReasons],
-            authorityOverrideRequired: authorityReasons.length > 0,
-            createdBy: normalizedActorId,
-          },
-          { id: normalizedActorId, username: updatedBy, roles: actor?.roles, permissions: actor?.permissions },
-          overrideReason
-        )
-      )
 
-      if (gate.blocked) {
-        throw new BadRequestError(
-          'UW_REFERRAL_REQUIRED',
-          `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before bind.`
-        )
-      }
-      referralId = gate.referral.referralId
+  if (quote.uw && quote.uw.decision === 'Decline') {
+    throw new BadRequestError(
+      'UW_DECLINED',
+      `Underwriting decision: Decline. Reasons: ${quote.uw.reasons?.join('; ')}`
+    )
+  }
+
+  // Task A: real-time aggregation/catastrophe-exposure appetite check.
+  // No-op unless the tenant has configured a limit for this product+state
+  // (see loadAggregationLimit / migrations/056_aggregation_appetite_limits.sql).
+  const aggregationLimit = await withTenantTx(tenantId, innerDb =>
+    loadAggregationLimit(toRawQuery(innerDb), tenantId, bindProductCode, bindStateCode)
+  )
+  let aggregationEvaluation: AggregationAppetiteEvaluation = {
+    configured: false,
+    exceeded: false,
+    reasons: [],
+    projectedTotalTiv: 0,
+    projectedPolicyCount: 0,
+  }
+  if (aggregationLimit) {
+    const currentExposureRows = await loadExposureRows(db, tenantId, {
+      productCode: bindProductCode,
+      state: bindStateCode,
+    })
+    const currentAggregate = {
+      policyCount: currentExposureRows.length,
+      totalTiv: currentExposureRows.reduce((sum, row) => sum + (row.tiv || 0), 0),
     }
+    const newPolicyDimensions = extractExposureDimensions(bindProductCode, quote.payload)
+    aggregationEvaluation = evaluateAggregationAppetite(aggregationLimit, currentAggregate, newPolicyDimensions.tiv)
+  }
+
+  // Customer link extraction (hoisted ahead of its original §7 spot so the
+  // Task B internal-consistency check below can reuse the same matched
+  // customer the bind already links the policy to).
+  const quoteCustomerLinks = extractQuoteCustomerLinks(quote.payload)
+  const primaryCustomerLink =
+    quoteCustomerLinks.find((item: any) => item.isPrimary) ||
+    quoteCustomerLinks[0] ||
+    null
+
+  // Task B: internal-data consistency check against this system's own
+  // records for the matched customer (see detectPriorNonpaymentDiscrepancy
+  // above for exactly what is and is not checked).
+  let internalConsistency: InternalConsistencyFinding = { discrepancy: false, reason: null }
+  if (primaryCustomerLink?.customerId) {
+    const priorCancellations = await withTenantTx(tenantId, innerDb =>
+      loadPriorCancellationsForCustomer(toRawQuery(innerDb), tenantId, primaryCustomerLink.customerId)
+    )
+    internalConsistency = detectPriorNonpaymentDiscrepancy({
+      qualificationAnswers: quote.payload?.uwAnswers || null,
+      newPolicyEffectiveDate: bindEffectiveDate,
+      priorCancellations,
+    })
+  }
+
+  // Task B (extension point): pluggable external-verification hook. No
+  // provider is configured anywhere in this codebase, so this always
+  // resolves to an empty findings list — see external-verification.service.ts.
+  const externalVerificationRequest: ExternalVerificationRequest = {
+    tenantId,
+    productCode: bindProductCode,
+    stateCode: bindStateCode || null,
+    effectiveDate: bindEffectiveDate,
+    insuredDisplayName: insuredDisplayName || null,
+    customerId: primaryCustomerLink?.customerId || null,
+    qualificationAnswers: quote.payload?.uwAnswers || null,
+  }
+  const externalVerification = await runExternalVerification(externalVerificationRequest)
+  const externalVerificationReasons = externalVerification.findings.map(
+    (finding) => `EXTERNAL_VERIFICATION_${finding.code}`
+  )
+
+  const uwReferReasons = quote.uw?.decision === 'Refer' ? quote.uw.reasons || [] : []
+  const authorityReasons = authority.configured && !authority.authorized
+    ? authority.reasons.map(reason => `AUTHORITY_${reason}`)
+    : []
+  const aggregationReasons = aggregationEvaluation.exceeded ? aggregationEvaluation.reasons : []
+  const internalConsistencyReasons = internalConsistency.discrepancy && internalConsistency.reason
+    ? [internalConsistency.reason]
+    : []
+
+  const allReferralReasons = [
+    ...uwReferReasons,
+    ...authorityReasons,
+    ...aggregationReasons,
+    ...internalConsistencyReasons,
+    ...externalVerificationReasons,
+  ]
+
+  if (allReferralReasons.length > 0) {
+    const gate = await withTenantTx(tenantId, (innerDb) =>
+      resolveReferralGateForActor(
+        innerDb,
+        tenantId,
+        {
+          quoteId,
+          transactionType: 'NewBusiness',
+          productCode: bindProductCode || null,
+          insuredName: insuredDisplayName || null,
+          effectiveDate: quote.payload?.effectiveDate || null,
+          reasons: allReferralReasons,
+          authorityOverrideRequired: authorityReasons.length > 0,
+          createdBy: normalizedActorId,
+        },
+        { id: normalizedActorId, username: updatedBy, roles: actor?.roles, permissions: actor?.permissions },
+        overrideReason
+      )
+    )
+
+    if (gate.blocked) {
+      throw new BadRequestError(
+        'UW_REFERRAL_REQUIRED',
+        `This transaction requires underwriter approval before bind. Referral ${gate.referral.referralId} is open.`
+      )
+    }
+    referralId = gate.referral.referralId
   }
 
   // ── 4. OFAC screening ───────────────────────────────────────────────────────
@@ -313,12 +575,9 @@ export async function bindQuote(
       }
     : null
 
-  // ── 7. Customer link extraction ─────────────────────────────────────────────
-  const quoteCustomerLinks = extractQuoteCustomerLinks(quote.payload)
-  const primaryCustomerLink =
-    quoteCustomerLinks.find((item: any) => item.isPrimary) ||
-    quoteCustomerLinks[0] ||
-    null
+  // ── 7. Customer link extraction (quoteCustomerLinks/primaryCustomerLink were
+  //      hoisted to §3 above so the Task B internal-consistency check could
+  //      reuse them) ───────────────────────────────────────────────────────
   const transactionMetadata: any = {
     sourceQuoteId: quoteId,
     transactionNumber,
@@ -332,6 +591,17 @@ export async function bindQuote(
       authorized: authority.authorized,
       reasons: authority.reasons,
     },
+    aggregation: {
+      configured: aggregationEvaluation.configured,
+      exceeded: aggregationEvaluation.exceeded,
+      reasons: aggregationEvaluation.reasons,
+    },
+    ...(internalConsistency.discrepancy
+      ? { internalConsistencyReason: internalConsistency.reason }
+      : {}),
+    ...(externalVerificationReasons.length
+      ? { externalVerificationReasons }
+      : {}),
     ...(primaryCustomerLink?.customerId
       ? { customerId: primaryCustomerLink.customerId }
       : {}),
@@ -350,7 +620,7 @@ export async function bindQuote(
     quote.payload?.jurisdiction ||
     (quote.payload?.state ? { code: quote.payload.state } : null)
   const uwDecision = quote.uw?.decision || null
-  const uwOverride = (quote.uw?.decision === 'Refer' || !authority.authorized) && !!referralId
+  const uwOverride = allReferralReasons.length > 0 && !!referralId
   const termDetails: any = { effectiveDate, expirationDate, termMonths: months }
   let documentPacket: PolicyDocumentPacket = { forms: [], documents: [] }
 
