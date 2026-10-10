@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { productLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type AuthorityGrantRow = {
   grant_id: string
@@ -134,7 +135,7 @@ export function UnderwritingAuthorityPage() {
         </div>
       </div>
 
-      <div className="ps-content-card">
+      <CollapsibleSection className="ps-content-card">
         <div className="ps-content-card-title">Check gating status for a scope</div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <div className="col">
@@ -179,12 +180,12 @@ export function UnderwritingAuthorityPage() {
             Gating is ON for this scope — at least one active authority grant applies.
           </p>
         )}
-      </div>
+      </CollapsibleSection>
 
       {errorMessage && <p className="error" role="alert">{errorMessage}</p>}
 
       {canManage && (
-        <form onSubmit={onCreate} className="ps-content-card">
+        <CollapsibleSection as="form" onSubmit={onCreate} className="ps-content-card">
           <div className="ps-content-card-title">New authority grant</div>
           <div className="row" style={{ flexWrap: 'wrap' }}>
             <div className="col">
@@ -251,10 +252,10 @@ export function UnderwritingAuthorityPage() {
               Save Grant
             </button>
           </div>
-        </form>
+        </CollapsibleSection>
       )}
 
-      <div className="ps-table-card">
+      <CollapsibleSection title="Authority Grants" className="ps-table-card">
         <table className="table">
           <thead>
             <tr>
@@ -304,7 +305,7 @@ export function UnderwritingAuthorityPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { Link } from 'react-router-dom'
 import {
   useDashboardSummary,
@@ -151,7 +152,7 @@ function PanelShell({ title, isLoading, error, empty, emptyMessage, children }: 
   children: React.ReactNode
 }) {
   return (
-    <section style={{ marginBottom: 24 }}>
+    <CollapsibleSection as="section" style={{ marginBottom: 24 }}>
       <h3>{title}</h3>
       {error ? (
         <p className="error">{String(error)}</p>
@@ -162,7 +163,7 @@ function PanelShell({ title, isLoading, error, empty, emptyMessage, children }: 
       ) : (
         children
       )}
-    </section>
+    </CollapsibleSection>
   )
 }
 

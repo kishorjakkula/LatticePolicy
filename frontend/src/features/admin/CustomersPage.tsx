@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type EntityType = 'INDIVIDUAL' | 'COMPANY' | 'BOTH'
 type CustomerStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'MERGED' | 'PENDING_APPROVAL' | 'ARCHIVED'
@@ -750,7 +751,7 @@ export function CustomersPage() {
             </form>
           </div>
 
-          <div className="ps-table-card" style={{ marginTop: 16 }}>
+          <CollapsibleSection title="Customer List" className="ps-table-card" style={{ marginTop: 16 }}>
             <table className="table table-sticky-header">
               <thead>
                 <tr>
@@ -807,7 +808,7 @@ export function CustomersPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </CollapsibleSection>
           {searchRows.length > 0 && (
             <TablePagination
               page={searchPagination.page}
@@ -851,7 +852,7 @@ export function CustomersPage() {
       )}
 
       {potentialMatches.length > 0 && (
-        <div className="card stack-card">
+        <CollapsibleSection className="card stack-card">
           <div className="panel-header">
             <h3>Potential Matches</h3>
             <button type="button" className="btn-secondary" onClick={() => saveRecord(undefined, 'CREATE_ANYWAY', true)} disabled={!canManageInMode}>
@@ -884,7 +885,7 @@ export function CustomersPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </CollapsibleSection>
       )}
 
       <div className="admin-section-layout">
@@ -932,7 +933,7 @@ export function CustomersPage() {
             <>
               {renderPoliciesSection(record, customerPolicies, policyPagination)}
               {canManageInMode && (
-                <div className="stack-card">
+                <CollapsibleSection className="stack-card">
                   <div className="panel-header">
                     <h3>Manual Policy Mapping</h3>
                     <span className="muted">Select a customer, then link unassigned policies.</span>
@@ -1033,7 +1034,7 @@ export function CustomersPage() {
                       onPageSizeChange={unlinkedPolicyPagination.setPageSize}
                     />
                   )}
-                </div>
+                </CollapsibleSection>
               )}
             </>
           )}
@@ -1311,7 +1312,7 @@ function removeArrayItem(record: any, key: string, index: number) {
 
 function renderIdentitySection(record: any, markRecord: (next: any) => void, canEditIdentity: boolean, canReveal: boolean, revealField: (field: 'ssn' | 'fein' | 'dob') => Promise<void>) {
   return (
-    <div className="stack-card">
+    <CollapsibleSection title="Profile" className="stack-card">
       {(record.entityType === 'INDIVIDUAL' || record.entityType === 'BOTH') && (
         <>
           <h3>Individual</h3>
@@ -1370,7 +1371,7 @@ function renderIdentitySection(record: any, markRecord: (next: any) => void, can
           )}
         </>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }
 
@@ -1378,7 +1379,7 @@ function renderContactSection(record: any, markRecord: (next: any) => void, canE
   const addContact = () => markRecord({ ...record, contactPoints: [...(record.contactPoints || []), { contactType: 'PHONE', subType: 'mobile', value: '', preferred: false, verified: false, effectiveFrom: '', effectiveTo: '', metadata: {} }] })
   const addAddress = () => markRecord({ ...record, addresses: [...(record.addresses || []), { addressType: 'mailing', line1: '', city: '', state: '', postalCode: '', country: 'US', primary: false, effectiveFrom: '', effectiveTo: '', validationStatus: 'unvalidated', metadata: {} }] })
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>Contact Points</h3>
       <table className="table">
         <thead><tr><th>Type</th><th>Sub Type</th><th>Value</th><th>Preferred</th><th>Verified</th><th>Effective From</th><th>Effective To</th><th>Action</th></tr></thead>
@@ -1422,14 +1423,14 @@ function renderContactSection(record: any, markRecord: (next: any) => void, canE
         </tbody>
       </table>
       <button type="button" className="btn-secondary" onClick={addAddress} disabled={!canEdit}>Add Address</button>
-    </div>
+    </CollapsibleSection>
   )
 }
 
 function renderRelationshipsSection(record: any, markRecord: (next: any) => void, canEdit: boolean) {
   const addItem = () => markRecord({ ...record, relationships: [...(record.relationships || []), { relatedCustomerId: '', relationshipType: '', startDate: '', endDate: '', percentOwnership: null, notes: '', metadata: {} }] })
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>Relationships</h3>
       <table className="table">
         <thead><tr><th>Related Customer ID</th><th>Relationship Type</th><th>Start Date</th><th>End Date</th><th>% Ownership</th><th>Notes</th><th>Action</th></tr></thead>
@@ -1449,7 +1450,7 @@ function renderRelationshipsSection(record: any, markRecord: (next: any) => void
         </tbody>
       </table>
       <button type="button" className="btn-secondary" onClick={addItem} disabled={!canEdit}>Add Relationship</button>
-    </div>
+    </CollapsibleSection>
   )
 }
 
@@ -1463,7 +1464,7 @@ function renderPoliciesSection(record: any, policies: any[], pagination: any) {
   }
 
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>Linked Policies</h3>
       <table className="table table-sticky-header">
         <thead>
@@ -1509,14 +1510,14 @@ function renderPoliciesSection(record: any, policies: any[], pagination: any) {
           onPageSizeChange={pagination.setPageSize}
         />
       )}
-    </div>
+    </CollapsibleSection>
   )
 }
 
 function renderIdentifiersSection(record: any, markRecord: (next: any) => void, canEdit: boolean) {
   const addExternal = () => markRecord({ ...record, externalIdentifiers: [...(record.externalIdentifiers || []), { sourceSystem: '', externalId: '', idType: '', active: true, lastSyncAt: '', metadata: {} }] })
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>External IDs</h3>
       <table className="table">
         <thead><tr><th>Source System</th><th>External ID</th><th>ID Type</th><th>Active</th><th>Last Sync</th><th>Action</th></tr></thead>
@@ -1552,7 +1553,7 @@ function renderIdentifiersSection(record: any, markRecord: (next: any) => void, 
       <div className="row">
         <div className="col"><label>Right To Be Forgotten Requested</label><input type="checkbox" checked={record.compliance?.rightToBeForgottenRequested === true} onChange={(e) => markRecord(setInRecord(record, ['compliance', 'rightToBeForgottenRequested'], e.target.checked))} disabled={!canEdit} /></div>
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }
 
@@ -1560,7 +1561,7 @@ function renderNotesSection(record: any, markRecord: (next: any) => void, canEdi
   const addNote = () => markRecord({ ...record, notes: [...(record.notes || []), { category: 'service', noteText: '', metadata: {} }] })
   const addAttachment = () => markRecord({ ...record, attachments: [...(record.attachments || []), { documentId: '', fileName: '', fileType: '', metadata: {} }] })
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>Notes</h3>
       <table className="table">
         <thead><tr><th>Category</th><th>Note</th><th>Created By</th><th>Created At</th><th>Action</th></tr></thead>
@@ -1597,7 +1598,7 @@ function renderNotesSection(record: any, markRecord: (next: any) => void, canEdi
         </tbody>
       </table>
       <button type="button" className="btn-secondary" onClick={addAttachment} disabled={!canEdit}>Add Attachment</button>
-    </div>
+    </CollapsibleSection>
   )
 }
 
@@ -1612,7 +1613,7 @@ function renderAuditSection(
   saveSettings: () => Promise<void>
 ) {
   return (
-    <div className="stack-card">
+    <CollapsibleSection className="stack-card">
       <h3>Record</h3>
       <div className="row">
         <div className="col"><label>Display Name</label><input value={record.displayName || ''} readOnly /></div>
@@ -1634,7 +1635,7 @@ function renderAuditSection(
       <div className="toolbar-actions row-spaced-sm">
         <button type="button" onClick={saveSettings} disabled={!settingsDirty || !canManage}>Save Settings</button>
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }
 

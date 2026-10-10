@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/client'
@@ -541,7 +542,7 @@ export function AgencyOnboardingPage() {
             </form>
           </div>
 
-          <div className="ps-table-card" style={{ marginTop: 16 }}>
+          <CollapsibleSection title="Agency List" className="ps-table-card" style={{ marginTop: 16 }}>
             <table className="table">
               <thead>
                 <tr>
@@ -602,7 +603,7 @@ export function AgencyOnboardingPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </CollapsibleSection>
         </>
       )}
 

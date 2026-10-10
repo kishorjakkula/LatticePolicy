@@ -38,6 +38,7 @@ import {
 } from '../../shared/usStates'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import type { ProductCapabilityDescriptor } from '@lattice-policy/types'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type ProductCode = string
 type QuoteProductCode = ProductCode | ''
@@ -3328,12 +3329,12 @@ export function QuoteWizard() {
   const aiInsightsPendingBanner =
     !aiInsightsPanel && wizardMode !== 'reinstate'
       ? (
-        <div className="card" style={{ marginTop: 12 }}>
+        <CollapsibleSection className="card" style={{ marginTop: 12 }}>
           <h3>AI / ML Insights</h3>
           <div className="muted">
             AI / ML insights will be generated after you click <strong>Rate Premium</strong>.
           </div>
-        </div>
+        </CollapsibleSection>
       )
       : null
   const primaryInsuredErrors = [
@@ -4317,7 +4318,7 @@ export function QuoteWizard() {
                       </div>
                     </div>
 
-                  <div className="ps-table-card" style={{ marginTop: 12 }}>
+                  <CollapsibleSection className="ps-table-card" style={{ marginTop: 12 }}>
                     <h4 className="ps-content-card-title" style={{ marginBottom: 8 }}>Addresses</h4>
                     <table className="table table-no-sticky-head">
                       <thead>
@@ -4347,7 +4348,7 @@ export function QuoteWizard() {
                         )}
                       </tbody>
                     </table>
-                  </div>
+                  </CollapsibleSection>
                 </>
               )}
             </div>
@@ -4404,7 +4405,7 @@ export function QuoteWizard() {
       {step === 6 && (
         <section>
           <div className="summary-grid">
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>Product & Term</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(1)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
@@ -4422,18 +4423,18 @@ export function QuoteWizard() {
               <div className="kvline"><span className="muted">State</span><span>{q.state || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Policy #</span><span>{q.priorPolicyNumber || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Carrier</span><span>{q.priorCarrier || '-'}</span></div>
-            </div>
+            </CollapsibleSection>
 
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>Applicant</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(1)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
               </div>
               <div className="kvline"><span className="muted">Name</span><span>{q.applicant.firstName} {q.applicant.lastName}</span></div>
               {q.applicant.email && <div className="kvline"><span className="muted">Email</span><span>{q.applicant.email}</span></div>}
-            </div>
+            </CollapsibleSection>
 
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>Qualification Questions</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(2)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
@@ -4445,9 +4446,9 @@ export function QuoteWizard() {
                   <span>{formatQualificationAnswer(q.qualificationAnswers?.[question.key] || '')}</span>
                 </div>
               ))}
-            </div>
+            </CollapsibleSection>
 
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>Insureds</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(3)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
@@ -4483,9 +4484,9 @@ export function QuoteWizard() {
                   ))}
                 </div>
               )}
-            </div>
+            </CollapsibleSection>
 
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>{q.productCode === 'personal-auto' ? 'Vehicles' : q.productCode === 'commercial-auto' ? 'Commercial Auto Risk' : q.productCode === 'cyber' ? 'Cyber Risk' : q.productCode === 'professional-liability' ? 'Professional Risk' : 'Risk'}</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(4)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
@@ -4550,9 +4551,9 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Domain</span><span>{q.risks?.[0]?.domain || '-'}</span></div>
                 </>
               )}
-            </div>
+            </CollapsibleSection>
 
-            <div className="card">
+            <CollapsibleSection className="card">
               <div className="card-head">
                 <h3>Coverages</h3>
                 <button className="btn-secondary" onClick={() => attemptStepChange(5)} disabled={locked || isCancellationMode || isViewOnly}>Edit</button>
@@ -4564,7 +4565,7 @@ export function QuoteWizard() {
                   <span>{coverageSummary(c)}</span>
                 </div>
               ))}
-            </div>
+            </CollapsibleSection>
           </div>
 
           <div className="wizard-rate-row">
@@ -4797,7 +4798,7 @@ export function QuoteWizard() {
           {formsError && <div className="error">{formsError}</div>}
 
           {formsTab === 'forms' ? (
-            <div className="card">
+            <CollapsibleSection className="card">
               <h3>Forms</h3>
               <div className="muted wizard-forms-status" style={{ marginBottom: 8 }}>
                 Quote: {quoteResp ? 'evaluated' : 'pending'} · Bind: {boundPolicy ? 'evaluated' : 'pending'} · Issue: {issued ? 'evaluated' : 'pending'}
@@ -4842,9 +4843,9 @@ export function QuoteWizard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </CollapsibleSection>
           ) : (
-            <div className="card">
+            <CollapsibleSection className="card">
               <h3>Documents</h3>
               <table className="table">
                 <thead>
@@ -4881,7 +4882,7 @@ export function QuoteWizard() {
                 </tbody>
               </table>
               <div className="muted">Quote summary is generated when premium rating completes.</div>
-            </div>
+            </CollapsibleSection>
           )}
         </section>
       )}
@@ -5788,7 +5789,7 @@ function HomeownersCoverageEditor({ cfg, selections, onChange, disabled }: { cfg
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="card" style={{ paddingBottom: 16 }}>
+      <CollapsibleSection className="card" style={{ paddingBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>Dwelling Coverage A</h3>
         <div className="row">
           <div className="col">
@@ -5845,17 +5846,17 @@ function HomeownersCoverageEditor({ cfg, selections, onChange, disabled }: { cfg
             </button>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="card" style={{ paddingBottom: 8 }}>
+      <CollapsibleSection className="card" style={{ paddingBottom: 8 }}>
         <h3 style={{ marginTop: 0 }}>Property Extensions</h3>
         {['B', 'C', 'D'].map(renderPercentCoverage)}
-      </div>
+      </CollapsibleSection>
 
-      <div className="card" style={{ paddingBottom: 8 }}>
+      <CollapsibleSection className="card" style={{ paddingBottom: 8 }}>
         <h3 style={{ marginTop: 0 }}>Liability & Medical</h3>
         {['E', 'F'].map(renderLimitCoverage)}
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

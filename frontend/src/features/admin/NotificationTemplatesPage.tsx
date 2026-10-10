@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { FormEvent, useMemo, useState } from 'react'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
@@ -318,7 +319,7 @@ export function NotificationTemplatesPage() {
         </div>
       )}
 
-      <div className="ps-table-card" style={{ marginTop: 16 }}>
+      <CollapsibleSection title="Template List" className="ps-table-card" style={{ marginTop: 16 }}>
         <table className="table">
           <thead>
             <tr>
@@ -353,7 +354,7 @@ export function NotificationTemplatesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
       {!isLoading && items.length > 0 && (
         <TablePagination
           page={pagination.page}

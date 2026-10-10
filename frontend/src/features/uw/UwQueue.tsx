@@ -11,6 +11,7 @@ import {
   useUwReferrals,
 } from '../../api/hooks'
 import { productLabel, statusLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 const STATUS_BADGE: Record<string, string> = {
   Open: 'yellow',
@@ -128,7 +129,7 @@ export function UwQueue() {
         <div className="muted">Loading…</div>
       ) : (
         <>
-          <div className="ps-table-card">
+          <CollapsibleSection title="Referral List" className="ps-table-card">
             <table className="table">
               <thead>
                 <tr><th>Policy #</th><th>Product</th><th>Transaction</th><th>Effective Date</th><th>Reasons</th><th>Status</th><th>Assigned To</th><th>Actions</th></tr>
@@ -160,7 +161,7 @@ export function UwQueue() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </CollapsibleSection>
           <div className="ps-pagination-footer" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div className="muted" style={{ fontSize: 13 }}>Total: {total}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

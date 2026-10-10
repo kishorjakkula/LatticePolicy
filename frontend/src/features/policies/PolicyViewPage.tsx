@@ -26,6 +26,7 @@ import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDispl
 import { TransactionAuditPanel } from './TransactionAuditPanel'
 import { PolicyAsOfPanel } from './PolicyAsOfPanel'
 import { PolicyDocumentsPanel } from './PolicyDocumentsPanel'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type JsonRecord = Record<string, any>
 type TransactionMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
@@ -822,7 +823,7 @@ export function PolicyViewPage() {
           </div>
         </div>
 
-        <div id="policy-edit" className="card policy-actions-card policy-section-card">
+        <CollapsibleSection id="policy-edit" className="card policy-actions-card policy-section-card">
           <div className="policy-actions-header">
             <h3>Policy Actions</h3>
             <div className="policy-action-row">
@@ -917,9 +918,9 @@ export function PolicyViewPage() {
               </button>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="card policy-summary-card policy-section-card">
+        <CollapsibleSection title="Policy Summary" className="card policy-summary-card policy-section-card">
           <div className="policy-summary-grid">
             <div className="policy-summary-item">
               <div className="policy-summary-label">Product</div>
@@ -944,7 +945,7 @@ export function PolicyViewPage() {
               <div className="policy-summary-value">{formatDate(policy.term.expirationDate)}</div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {rawStatus === 'Bound' && (
           <div className="card policy-bound-alert">
@@ -962,7 +963,7 @@ export function PolicyViewPage() {
 
         <PolicyAsOfPanel policyId={policy.policyId} />
 
-        <div className="card policy-section-card policy-versions-card">
+        <CollapsibleSection title="Transactions" className="card policy-section-card policy-versions-card">
           <table className="table table-sticky-header">
             <thead>
               <tr>
@@ -1086,7 +1087,7 @@ export function PolicyViewPage() {
               onPageSizeChange={versionsPagination.setPageSize}
             />
           )}
-        </div>
+        </CollapsibleSection>
 
         <PolicyDocumentsPanel policyId={policy.policyId} />
 

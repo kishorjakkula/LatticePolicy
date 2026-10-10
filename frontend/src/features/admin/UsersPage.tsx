@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { FormEvent, useMemo, useState } from 'react'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
@@ -136,7 +137,7 @@ export function UsersPage() {
           <button type="submit" disabled={loading || !username || !password || selectedRoles.length === 0}>Add User</button>
         </div>
       </form>
-      <div className="ps-table-card" style={{ marginTop: 16 }}>
+      <CollapsibleSection title="User List" className="ps-table-card" style={{ marginTop: 16 }}>
         <table className="table">
         <thead><tr><th>Username</th><th>Roles</th><th>Linked Customer</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
@@ -167,7 +168,7 @@ export function UsersPage() {
           ))}
         </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
       {users.length > 0 && (
         <TablePagination
           page={pagination.page}

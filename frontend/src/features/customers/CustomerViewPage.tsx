@@ -6,6 +6,7 @@ import { useClientPagination } from '../../hooks/useClientPagination'
 import { derivePolicyWorkflowStatus, policyStatusBadgeColor } from '../policies/statusModel'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { useCustomer, useCustomerPolicies, useCustomerQuotes, useCustomerAiInsights } from '../../api/hooks'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type PolicySortField =
   | 'policyNumber'
@@ -276,7 +277,7 @@ export function CustomerViewPage() {
         </div>
       </div>
 
-      <div className="ps-content-card">
+      <CollapsibleSection title="Customer Details" className="ps-content-card">
         <div className="ps-form-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <div className="ps-form-field">
             <label className="ps-filter-label">Type</label>
@@ -299,17 +300,17 @@ export function CustomerViewPage() {
             <div style={{ fontSize: 14, paddingTop: 4 }}>{preferredContact(customer, 'PHONE')}</div>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {(customerAiInsights || customerAiError) && (
-        <div className="ps-content-card">
+        <CollapsibleSection className="ps-content-card">
           <h3 className="ps-content-card-title">AI / ML Insights</h3>
           {customerAiError && <div className="error">{String(customerAiError)}</div>}
           {customerAiInsights && <CustomerAiInsightsPanel insights={customerAiInsights} />}
-        </div>
+        </CollapsibleSection>
       )}
 
-      <div className="ps-content-card">
+      <CollapsibleSection className="ps-content-card">
         <h3 className="ps-content-card-title">Policies</h3>
         <div className="ps-table-card" style={{ marginTop: 0, borderRadius: 8 }}>
           <table className="table table-sticky-header">
@@ -363,9 +364,9 @@ export function CustomerViewPage() {
             onPageSizeChange={pagination.setPageSize}
           />
         )}
-      </div>
+      </CollapsibleSection>
 
-      <div className="ps-content-card">
+      <CollapsibleSection className="ps-content-card">
         <h3 className="ps-content-card-title">Open Quotes (Not Bound)</h3>
         <div className="ps-table-card" style={{ marginTop: 0, borderRadius: 8 }}>
           <table className="table table-sticky-header">
@@ -405,7 +406,7 @@ export function CustomerViewPage() {
           </table>
         </div>
         <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Last Updated: {formatDisplayDateTime(customer.updatedAt, { includeTime: true, fallback: '—' })}</div>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

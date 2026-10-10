@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useJobDefinitions, useJobRuns, useJobRun, useRetryJobRunMutation } from '../../api/hooks'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type JobDefinitionRow = {
   job_code: string
@@ -72,7 +73,7 @@ function DefinitionsPanel() {
       ) : rows.length === 0 ? (
         <p className="muted">No job definitions registered.</p>
       ) : (
-        <div className="ps-table-card">
+        <CollapsibleSection title="Definition List" className="ps-table-card">
           <table className="table">
             <thead>
               <tr>
@@ -92,7 +93,7 @@ function DefinitionsPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+        </CollapsibleSection>
       )}
     </section>
   )
@@ -152,7 +153,7 @@ function RunsPanel() {
       ) : rows.length === 0 ? (
         <p className="muted">No job runs match the current filters.</p>
       ) : (
-        <div className="ps-table-card">
+        <CollapsibleSection title="Run List" className="ps-table-card">
           <table className="table">
             <thead>
               <tr>
@@ -180,7 +181,7 @@ function RunsPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+        </CollapsibleSection>
       )}
 
       {selectedRunId && <RunDetail runId={selectedRunId} onClose={() => setSelectedRunId(null)} />}

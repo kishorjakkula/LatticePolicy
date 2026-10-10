@@ -9,6 +9,7 @@ import {
   usePublishRatingModelVersionMutation,
 } from '../../api/hooks'
 import { api } from '../../api/client'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type RatingModelVersion = {
   versionId: string
@@ -212,7 +213,7 @@ export function RatingWorkbenchPage() {
       {error && <div className="error">{error}</div>}
       {message && <div className="success">{message}</div>}
 
-      <section className="card stack-card rating-overview-card">
+      <CollapsibleSection as="section" title="Overview" className="card stack-card rating-overview-card">
         <div className="rating-overview-grid">
           <div className="rating-overview-item">
             <label>Total Models</label>
@@ -235,9 +236,9 @@ export function RatingWorkbenchPage() {
             <span className="muted">{selectedModel?.status || 'Select a model to view status'}</span>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="card stack-card">
+      <CollapsibleSection as="section" className="card stack-card">
         <div className="card-head">
           <div>
             <h3>Import Workbook</h3>
@@ -293,10 +294,10 @@ export function RatingWorkbenchPage() {
             </button>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
       <div className="rating-layout rating-layout-rows stack-card">
-        <section className="card">
+        <CollapsibleSection as="section" className="card">
           <div className="card-head">
             <div>
               <h3>Rating Models</h3>
@@ -344,9 +345,9 @@ export function RatingWorkbenchPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </CollapsibleSection>
 
-        <section className="card">
+        <CollapsibleSection as="section" className="card">
           <div className="card-head">
             <div>
               <h3>Versions</h3>
@@ -413,11 +414,11 @@ export function RatingWorkbenchPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </CollapsibleSection>
       </div>
 
       <div className="rating-layout stack-card">
-        <section className="card">
+        <CollapsibleSection as="section" className="card">
           <div className="card-head">
             <div>
               <h3>Version Detail</h3>
@@ -439,11 +440,11 @@ export function RatingWorkbenchPage() {
                 <div><label>Created</label><div>{formatDisplayDateTime(selectedVersion.createdAt)}</div></div>
                 <div><label>Updated</label><div>{formatDisplayDateTime(selectedVersion.updatedAt)}</div></div>
               </div>
-              <div className="stack-card">
+              <CollapsibleSection className="stack-card">
                 <h4 className="rating-panel-title">Parser Summary</h4>
                 <pre className="rating-json-preview">{JSON.stringify(parserSummary || {}, null, 2)}</pre>
-              </div>
-              <div className="stack-card">
+              </CollapsibleSection>
+              <CollapsibleSection className="stack-card">
                 <h4 className="rating-panel-title">Workbook Sheet Preview</h4>
                 {sheetNames.length ? (
                   <table className="table table-mobile-cards rating-sheet-table">
@@ -471,12 +472,12 @@ export function RatingWorkbenchPage() {
                 ) : (
                   <p className="muted">No workbook preview found.</p>
                 )}
-              </div>
+              </CollapsibleSection>
             </>
           )}
-        </section>
+        </CollapsibleSection>
 
-        <section className="card">
+        <CollapsibleSection as="section" className="card">
           <div className="card-head">
             <div>
               <h3>Published API Preview</h3>
@@ -501,7 +502,7 @@ export function RatingWorkbenchPage() {
               Publish a version, then load the API response preview for downstream rating consumers.
             </p>
           )}
-        </section>
+        </CollapsibleSection>
       </div>
     </div>
   )

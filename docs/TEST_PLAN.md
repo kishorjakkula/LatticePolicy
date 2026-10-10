@@ -269,6 +269,7 @@ dependence on freshly seeded names.
 | `dashboard-search`, `workflows` | Dashboard KPIs, quick lookup, filters, customers tab, CSV export API, sort/page-size URL state, mobile nav |
 | `forms-management` | Seeded forms, draft form creation, Word template upload, template variable reference |
 | `admin-users-security`, `admin-customers`, `admin-reference-config`, `admin-workflows` | Users, roles, customers and PII reveal, underwriting companies, tenant, compliance, notification templates, agency onboarding, operations dashboard, reinsurance, exposure, bordereaux, import, jobs |
+| `collapsible-sections` | Section cards collapse to their header and expand again, keeping entered values |
 | `placements-rating` | Placement market workflow; rating workbench shell for the actuary role |
 
 Shared helpers live in `e2e/support/`: `fixtures.ts` (per-test synthetic client

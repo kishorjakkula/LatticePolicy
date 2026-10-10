@@ -10,6 +10,7 @@ import {
 } from '../../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type PermissionDef = {
   permissionCode: string
@@ -276,7 +277,7 @@ export function SecurityPage() {
       {error && <p className="error">{error}</p>}
 
       <div className="security-layout">
-        <div className="security-roles card">
+        <CollapsibleSection className="security-roles card">
           <div className="panel-header">
             <h3>Roles</h3>
             <button type="button" onClick={beginNewRole}>New Role</button>
@@ -312,9 +313,9 @@ export function SecurityPage() {
             </tbody>
           </table>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="security-editor card">
+        <CollapsibleSection className="security-editor card">
           <h3>{isNewRole ? 'New Role' : `Role: ${draft.roleCode || '-'}`}</h3>
           <form onSubmit={onSave}>
             <div className="row">
@@ -393,10 +394,10 @@ export function SecurityPage() {
               )}
             </div>
           </form>
-        </div>
+        </CollapsibleSection>
       </div>
 
-      <div className="card stack-card">
+      <CollapsibleSection className="card stack-card">
         <div className="panel-header">
           <h3>Role -&gt; Permission Mapping</h3>
           <span className="muted">{relationships?.generatedAt ? `Refreshed ${new Date(relationships.generatedAt).toLocaleString()}` : ''}</span>
@@ -432,9 +433,9 @@ export function SecurityPage() {
           </tbody>
         </table>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="card stack-card">
+      <CollapsibleSection className="card stack-card">
         <h3>User -&gt; Role Mapping</h3>
         <div className="ps-table-card" style={{ margin: '0 -20px -20px', borderRadius: '0 0 12px 12px', border: 'none', borderTop: '1px solid var(--border)', boxShadow: 'none' }}>
         <table className="table table-sticky-header">
@@ -495,7 +496,7 @@ export function SecurityPage() {
           </tbody>
         </table>
         </div>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

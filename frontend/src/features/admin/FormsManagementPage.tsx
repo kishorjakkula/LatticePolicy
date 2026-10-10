@@ -4,6 +4,7 @@ import { useForms, useForm, useFormTemplateVariables } from '../../api/hooks'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate } from '../../shared/dateDisplay'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type SectionKey = 'catalog' | 'jurisdictions' | 'applicability' | 'output' | 'security' | 'audit' | 'preview'
 type EditorPopupMode = 'new' | 'view' | 'edit' | null
@@ -511,7 +512,7 @@ export function FormsManagementPage() {
         </form>
       </div>
 
-      <div className="ps-table-card">
+      <CollapsibleSection title="Form List" className="ps-table-card">
         <table className="table">
         <thead>
           <tr>
@@ -570,7 +571,7 @@ export function FormsManagementPage() {
           ))}
         </tbody>
       </table>
-      </div>
+      </CollapsibleSection>
       {!loading && items.length > 0 && (
         <TablePagination
           page={formsPagination.page}

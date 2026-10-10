@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { useBordereauxBatches, useBordereauxRows, useGenerateBordereauxMutation } from '../../api/hooks'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { productLabel, statusLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 const BORDEREAU_TYPES = ['RISK', 'PREMIUM', 'TRANSACTION', 'CANCELLATION', 'CORRECTION', 'CLAIMS_REFERENCE_HANDOFF']
 
@@ -78,7 +79,7 @@ export function BordereauxPage() {
           </button>
         </div>
       </form>
-      <div className="ps-table-card">
+      <CollapsibleSection title="Run List" className="ps-table-card">
         <table className="table">
           <thead>
             <tr>
@@ -97,7 +98,7 @@ export function BordereauxPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

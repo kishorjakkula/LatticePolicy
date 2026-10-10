@@ -8,6 +8,7 @@ import {
 } from '../../api/hooks'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { statusLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type LayerRow = {
   layerId: string
@@ -209,7 +210,7 @@ function TreatiesSection() {
           </button>
         </div>
       </form>
-      <div className="ps-table-card">
+      <CollapsibleSection title="Treaties" className="ps-table-card">
         <table className="table">
           <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Effective</th><th>Expiration</th><th>Layers</th><th>Actions</th></tr></thead>
           <tbody>
@@ -229,7 +230,7 @@ function TreatiesSection() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
       {editing && (
         <form onSubmit={saveEdit} style={{ marginTop: 20 }} aria-label="Edit treaty terms">
           <h3>Edit Treaty Version</h3>
@@ -319,7 +320,7 @@ function FacultativeSection() {
           </button>
         </div>
       </form>
-      <div className="ps-table-card">
+      <CollapsibleSection title="Facultative Certificates" className="ps-table-card">
         <table className="table">
           <thead><tr><th>Certificate #</th><th>Policy</th><th>Status</th><th>Effective</th><th>Expiration</th><th>Ceded %</th></tr></thead>
           <tbody>
@@ -336,7 +337,7 @@ function FacultativeSection() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

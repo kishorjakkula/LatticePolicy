@@ -23,6 +23,7 @@ import { Pagination } from "../../components/Pagination";
 import { LoadingBar } from "../../components/LoadingBar";
 import { ActionButton } from "../../components/ActionButton";
 import { PolicyRow } from "./PolicyRow";
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 // Lazy-loaded: only fetched when the context menu is first opened
 const PolicyContextMenuLazy = lazy(() =>
@@ -923,7 +924,7 @@ export function SearchPage() {
       </div>
 
       {/* ===== Filter Panel ===== */}
-      <div className="ps-filter-panel policy-section-card">
+      <CollapsibleSection title="Filters" className="ps-filter-panel policy-section-card">
         <form
           onSubmit={onSubmit}
           className="ps-filter-grid"
@@ -1155,7 +1156,7 @@ export function SearchPage() {
             </div>
           </div>
         )}
-      </div>
+      </CollapsibleSection>
       {error && <p className="error">{error}</p>}
 
       <div className="results-wrap policy-search-results-wrap">
@@ -1248,7 +1249,7 @@ export function SearchPage() {
             )}
 
             {/* Table card */}
-            <div className="ps-table-card" ref={tableRef}>
+            <CollapsibleSection title="Results" className="ps-table-card" ref={tableRef}>
               <LoadingBar active={loading} />
               <table className="table ps-policy-table" role="grid">
                 <colgroup>
@@ -1354,7 +1355,7 @@ export function SearchPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </CollapsibleSection>
           </div>
           {mode === "quotes" && (
             <table className="table table-sticky-header policy-search-table">
