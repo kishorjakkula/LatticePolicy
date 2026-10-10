@@ -155,6 +155,8 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'uw.authority.read', scope: 'api', resourceKey: 'uw.authority', actionKey: 'read', label: 'UW Authority API: Read', description: 'Read effective-dated underwriting authority grants', sortOrder: 710 },
   { permissionCode: 'uw.authority.manage', scope: 'api', resourceKey: 'uw.authority', actionKey: 'manage', label: 'UW Authority API: Manage', description: 'Create, expire, and deactivate underwriting authority grants', sortOrder: 720 },
   { permissionCode: 'uw.authority.override', scope: 'api', resourceKey: 'uw.authority', actionKey: 'approve', label: 'UW Authority API: Override', description: 'Approve an authority exception with a recorded reason', sortOrder: 730 },
+  { permissionCode: 'admin.underwriting_rules.read', scope: 'api', resourceKey: 'admin.underwriting_rules', actionKey: 'read', label: 'Admin API: Underwriting Rules Read', description: 'Read admin-authored underwriting eligibility rules and the field catalog', sortOrder: 740 },
+  { permissionCode: 'admin.underwriting_rules.manage', scope: 'api', resourceKey: 'admin.underwriting_rules', actionKey: 'manage', label: 'Admin API: Underwriting Rules Manage', description: 'Create, update, and seed admin-authored underwriting eligibility rules', sortOrder: 750 },
 ]
 
 type RoleSeed = {
@@ -198,6 +200,7 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'uw.referrals.decide',
       'uw.authority.read',
       'uw.authority.override',
+      'admin.underwriting_rules.read',
       'menu.placements.view',
       'page.placements.view',
       'placement.read',
@@ -256,7 +259,9 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'admin.forms.manage',
       'admin.forms.approve',
       'admin.compliance.read',
-      'admin.compliance.manage'
+      'admin.compliance.manage',
+      'admin.underwriting_rules.read',
+      'admin.underwriting_rules.manage'
     ]
   },
   {

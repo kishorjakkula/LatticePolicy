@@ -850,7 +850,7 @@ export async function renewPolicy(
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   const prem = rate(tenantId, payload)
-  const uw = evaluateUW(tenantId, payload)
+  const uw = await evaluateUW(tenantId, payload)
   const authority = await resolveAuthorityDecision(q, {
     tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
     producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
@@ -1169,7 +1169,7 @@ export async function rewritePolicy(
   payload.productCode = payload.productCode || policyProductCode(policyRow)
 
   const prem = rate(tenantId, payload)
-  const uw = evaluateUW(tenantId, payload)
+  const uw = await evaluateUW(tenantId, payload)
   const authority = await resolveAuthorityDecision(q, {
     tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
     producerId: payload?.producer?.producerId || payload?.producer?.producerKey || null,
@@ -1479,7 +1479,7 @@ export async function previewRenewal(
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   const premium = rate(tenantId, payload)
-  const underwriting = evaluateUW(tenantId, payload)
+  const underwriting = await evaluateUW(tenantId, payload)
   return { underwriting, premium, nextEffectiveDate: nextEff, nextExpirationDate: nextExp }
 }
 
