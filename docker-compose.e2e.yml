@@ -1,0 +1,76 @@
+# Isolated, disposable stack for Playwright E2E runs.
+#
+# Unlike docker-compose.yml this file uses its own project name, ports, and
+# throwaway volumes, so it can run next to the local demo stack without
+# touching latticepolicy_pgdata / latticepolicy_redisdata. Credentials below
+# are local/demo-only defaults.
+#
+#   sh scripts/test-e2e-isolated.sh
+name: latticepolicy-e2e
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: lattice_policy
+      POSTGRES_PASSWORD: ${E2E_DB_PASSWORD:-lattice_policy_e2e}
+      POSTGRES_DB: lattice_policy
+    volumes:
+      - e2e_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lattice_policy -d lattice_policy"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  cache:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://lattice_policy:${E2E_DB_PASSWORD:-lattice_policy_e2e}@db:5432/lattice_policy
+      DEPLOYMENT_ENV: local
+      JWT_SECRET: ${E2E_JWT_SECRET:-e2e-only-jwt-secret}
+      CUSTOMER_DATA_KEY: customer-data-key-for-local-docker-e2e
+      PII_LOOKUP_KEY: pii-lookup-key-for-local-docker-e2e
+      MFA_TOKEN_SECRET: mfa-token-secret-for-local-docker-e2e
+      ALLOWED_ORIGINS: http://localhost:${E2E_UI_PORT:-5174}
+      PORT: 3000
+      REDIS_URL: redis://cache:6379
+      CACHE_ENABLED: "1"
+      # Lets the Playwright fixtures give every test its own synthetic client
+      # IP (X-Forwarded-For) so a full run does not trip the per-IP login and
+      # API rate limiters. Never set this on a directly exposed deployment.
+      TRUST_PROXY: "1"
+    ports:
+      - "${E2E_API_PORT:-3301}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:${E2E_API_PORT:-3301}
+        VITE_SHOW_DEMO_CREDENTIALS: "1"
+    environment:
+      VITE_USE_MOCK: "0"
+    ports:
+      - "${E2E_UI_PORT:-5174}:80"
+    depends_on:
+      - server
+
+volumes:
+  e2e_pgdata:

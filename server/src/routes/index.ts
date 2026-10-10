@@ -12,6 +12,7 @@ import { productsRoutes } from './products.routes.js'
 import { adminRoutes } from './admin.routes.js'
 import { ratingRoutes } from './rating-workbench.routes.js'
 import { customerPortalRoutes } from './customer-portal.routes.js'
+import { customerIntakeRoutes } from './customers.routes.js'
 import { interestsRoutes } from './interests.routes.js'
 import { productGovernanceRoutes } from './product-governance.routes.js'
 import { mountRouter } from '../route-registry.js'
@@ -32,4 +33,5 @@ mountRouter(routes, '/', productGovernanceRoutes)
 mountRouter(routes, '/admin', adminRoutes)
 mountRouter(routes, '/rating', ratingRoutes)
 mountRouter(routes, '/customer-portal', customerPortalRoutes)
+mountRouter(routes, '/customers', customerIntakeRoutes)
 mountRouter(routes, '/policies/:id/interests', interestsRoutes)

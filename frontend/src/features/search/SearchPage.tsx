@@ -54,6 +54,18 @@ const SERVER_SORT_FIELDS = new Set<string>([
   "updatedBy",
 ]);
 
+// Policy # and the selection checkbox always stay visible.
+const TOGGLEABLE_POLICY_COLUMNS: Array<{ key: string; label: string }> = [
+  { key: "insured", label: "Insured Name" },
+  { key: "product", label: "Product" },
+  { key: "dates", label: "Effective / Expiration" },
+  { key: "created", label: "Created" },
+  { key: "updated", label: "Updated" },
+  { key: "premium", label: "Premium" },
+  { key: "status", label: "Status" },
+];
+const HIDDEN_COLUMNS_STORAGE_KEY = "policySearchHiddenColumns";
+
 function normalizePolicyStatusFilterValue(value: string): string {
   const normalized = String(value || "")
     .trim()
@@ -161,6 +173,19 @@ export function SearchPage() {
   const [dateTo, setDateTo] = useState(initialDateTo);
 
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_STORAGE_KEY) || "[]");
+      const known = new Set(TOGGLEABLE_POLICY_COLUMNS.map((column) => column.key));
+      return new Set(Array.isArray(stored) ? stored.filter((key) => known.has(key)) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const isColumnVisible = (key: string) => !hiddenColumns.has(key);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -673,6 +698,67 @@ export function SearchPage() {
           ]),
   ];
 
+
+  // Exports every policy matching the current filters and sort (not just this page).
+  const handleExportCsv = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const blob = await api.exportPoliciesCsv({
+        q,
+        product,
+        status,
+        effectiveFrom: dateFrom || undefined,
+        effectiveTo: dateTo || undefined,
+        sortBy: policySortBy,
+        sortDir: policySortDir,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "policies-export.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, q, product, status, dateFrom, dateTo, policySortBy, policySortDir]);
+
+  const toggleColumn = (key: string) => {
+    setHiddenColumns((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(HIDDEN_COLUMNS_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // storage unavailable: the choice still applies for this session
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!columnMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!columnMenuRef.current?.contains(event.target as Node)) setColumnMenuOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setColumnMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [columnMenuOpen]);
+
   // Keyboard shortcuts: / â†’ focus search, N â†’ new quote
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -690,10 +776,13 @@ export function SearchPage() {
       if (e.key === "n" && !isInputActive && !e.metaKey && !e.ctrlKey) {
         navigate("/wizard");
       }
+      if (e.key === "e" && !isInputActive && !e.metaKey && !e.ctrlKey && !e.altKey && mode === "policies") {
+        void handleExportCsv();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [navigate]);
+  }, [navigate, handleExportCsv, mode]);
 
   // Sort header button â€” closes over sort state + handler
   const SortHeader = ({
@@ -1093,12 +1182,40 @@ export function SearchPage() {
                 )}
               </span>
               <div className="ps-table-meta-actions">
-                <button type="button" className="ps-meta-btn">
-                  Export CSV
+                <button
+                  type="button"
+                  className="ps-meta-btn"
+                  onClick={() => void handleExportCsv()}
+                  disabled={exporting || total === 0}
+                >
+                  {exporting ? "Exporting..." : "Export CSV"}
                 </button>
-                <button type="button" className="ps-meta-btn">
-                  Columns
-                </button>
+                <div className="ps-column-menu-wrap" ref={columnMenuRef}>
+                  <button
+                    type="button"
+                    className="ps-meta-btn"
+                    aria-haspopup="true"
+                    aria-expanded={columnMenuOpen}
+                    aria-controls="ps-column-menu"
+                    onClick={() => setColumnMenuOpen((open) => !open)}
+                  >
+                    Columns
+                  </button>
+                  {columnMenuOpen && (
+                    <div id="ps-column-menu" className="ps-column-menu" role="group" aria-label="Visible columns">
+                      {TOGGLEABLE_POLICY_COLUMNS.map((column) => (
+                        <label key={column.key} className="ps-column-menu-item">
+                          <input
+                            type="checkbox"
+                            checked={isColumnVisible(column.key)}
+                            onChange={() => toggleColumn(column.key)}
+                          />
+                          {column.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1137,13 +1254,13 @@ export function SearchPage() {
                 <colgroup>
                   <col style={{ width: 36 }} />
                   <col style={{ width: 120 }} />
-                  <col />
-                  <col />
-                  <col />
-                <col style={{ width: 116 }} />
-                <col style={{ width: 116 }} />
-                <col />
-                <col style={{ width: 110 }} />
+                  {isColumnVisible("insured") && <col />}
+                  {isColumnVisible("product") && <col />}
+                  {isColumnVisible("dates") && <col />}
+                  {isColumnVisible("created") && <col style={{ width: 116 }} />}
+                  {isColumnVisible("updated") && <col style={{ width: 116 }} />}
+                  {isColumnVisible("premium") && <col />}
+                  {isColumnVisible("status") && <col style={{ width: 110 }} />}
               </colgroup>
                 <thead>
                   <tr>
@@ -1158,36 +1275,50 @@ export function SearchPage() {
                     <th data-col="policy-num">
                       <SortHeader field="policyNumber" label="Policy #" />
                     </th>
-                    <th data-col="insured">
-                      <SortHeader field="insuredName" label="Insured Name" />
+                    {isColumnVisible("insured") && (
+                      <th data-col="insured">
+                        <SortHeader field="insuredName" label="Insured Name" />
+                      </th>
+                    )}
+                    {isColumnVisible("product") && (
+                      <th data-col="product">
+                        <SortHeader field="productCode" label="Product" />
+                      </th>
+                    )}
+                    {isColumnVisible("dates") && (
+                      <th data-col="dates">
+                        <SortHeader
+                          field="effectiveDate"
+                          label="Effective Date - Expiration Date"
+                        />
+                      </th>
+                    )}
+                    {isColumnVisible("created") && (
+                      <th data-col="created">
+                        <SortHeader field="createdAt" label="Created" />
+                      </th>
+                    )}
+                    {isColumnVisible("updated") && (
+                      <th data-col="updated">
+                        <SortHeader field="updatedAt" label="Updated" />
+                      </th>
+                    )}
+                    {isColumnVisible("premium") && (
+                      <th data-col="premium">
+                        <SortHeader field="premium" label="Premium" />
+                      </th>
+                    )}
+                  {isColumnVisible("status") && (
+                    <th data-col="status">
+                      <SortHeader field="status" label="Status" />
                     </th>
-                    <th data-col="product">
-                      <SortHeader field="productCode" label="Product" />
-                    </th>
-                    <th data-col="dates">
-                      <SortHeader
-                        field="effectiveDate"
-                        label="Effective Date - Expiration Date"
-                      />
-                    </th>
-                    <th data-col="created">
-                      <SortHeader field="createdAt" label="Created" />
-                    </th>
-                    <th data-col="updated">
-                      <SortHeader field="updatedAt" label="Updated" />
-                    </th>
-                    <th data-col="premium">
-                      <SortHeader field="premium" label="Premium" />
-                    </th>
-                  <th data-col="status">
-                    <SortHeader field="status" label="Status" />
-                  </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {displayResults.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="ps-empty-cell">
+                    <td colSpan={9 - hiddenColumns.size} className="ps-empty-cell">
                         <div className="ps-empty-state">
                           <div className="ps-empty-icon" aria-hidden="true">
                             ðŸ”
@@ -1217,6 +1348,7 @@ export function SearchPage() {
                         onToggle={handleToggleRow}
                         onContextMenu={handleContextMenu}
                         onNavigate={handleNavigate}
+                        hiddenColumns={hiddenColumns}
                       />
                     ))
                   )}

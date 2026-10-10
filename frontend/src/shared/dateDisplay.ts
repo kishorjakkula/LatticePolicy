@@ -159,6 +159,15 @@ function parseDateValue(value: any): { date: Date; dateOnly: boolean } | null {
     if (Number.isNaN(date.getTime())) return null
     return { date, dateOnly: true }
   }
+  // DATE columns reach the client serialized as UTC-midnight timestamps
+  // ("2026-10-10T00:00:00.000Z"). They carry a calendar date, not an instant, so
+  // render the UTC date; converting to local time shows the previous day in
+  // every timezone west of UTC.
+  const utcMidnight = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.0+)?(?:Z|\+00:?00)$/.exec(raw)
+  if (utcMidnight) {
+    const date = new Date(Date.UTC(Number(utcMidnight[1]), Number(utcMidnight[2]) - 1, Number(utcMidnight[3])))
+    if (!Number.isNaN(date.getTime())) return { date, dateOnly: true }
+  }
   const isoPrefix = /^(\d{4})-(\d{2})-(\d{2})T/.exec(raw)
   if (isoPrefix) {
     const parsedIso = new Date(raw)

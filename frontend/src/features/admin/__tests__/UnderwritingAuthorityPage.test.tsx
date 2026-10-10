@@ -97,6 +97,25 @@ describe('UnderwritingAuthorityPage', () => {
     expect(screen.getByTestId('authority-gating-on-notice')).toBeInTheDocument()
   })
 
+  it('treats a grant effective today as active when the API returns a full timestamp', () => {
+    // Regression: the backend serializes effective_date as an ISO timestamp, and
+    // "2026-10-10T00:00:00.000Z" > "2026-10-10" as strings.
+    const today = new Date().toISOString().slice(0, 10)
+    const effectiveToday = { ...activeGrant, product_code: null, state_code: null, effective_date: `${today}T00:00:00.000Z` }
+    useUwAuthorityGrantsMock.mockReturnValue({ data: { items: [effectiveToday] }, isLoading: false, error: null })
+    render(<UnderwritingAuthorityPage />)
+    expect(screen.getByTestId('authority-gating-on-notice')).toBeInTheDocument()
+    expect(screen.queryByTestId('authority-gating-off-banner')).not.toBeInTheDocument()
+  })
+
+  it('treats a grant that expired yesterday as inactive when the API returns a full timestamp', () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+    const expired = { ...activeGrant, product_code: null, state_code: null, expiration_date: `${yesterday}T00:00:00.000Z` }
+    useUwAuthorityGrantsMock.mockReturnValue({ data: { items: [expired] }, isLoading: false, error: null })
+    render(<UnderwritingAuthorityPage />)
+    expect(screen.getByTestId('authority-gating-off-banner')).toBeInTheDocument()
+  })
+
   it('submits a new grant to the create endpoint', async () => {
     useUwAuthorityGrantsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
     const user = userEvent.setup()

@@ -36,8 +36,10 @@ function todayIso(): string {
 // and its product/state are either unset (wildcard) or match the scope.
 function grantAppliesToScope(grant: AuthorityGrantRow, productCode: string, stateCode: string, asOf: string): boolean {
   if (!grant.active) return false
-  if (grant.effective_date > asOf) return false
-  if (grant.expiration_date && grant.expiration_date < asOf) return false
+  // The API serializes DATE columns as full timestamps ("2026-10-10T00:00:00.000Z");
+  // compare the date portion only, or a grant effective today looks like the future.
+  if (grant.effective_date.slice(0, 10) > asOf) return false
+  if (grant.expiration_date && grant.expiration_date.slice(0, 10) < asOf) return false
   const productMatches = !grant.product_code || (!!productCode && grant.product_code.toLowerCase() === productCode.toLowerCase())
   const stateMatches = !grant.state_code || (!!stateCode && grant.state_code.toUpperCase() === stateCode.toUpperCase())
   return productMatches && stateMatches

@@ -8467,3 +8467,42 @@ code {
     min-height: 0;
   }
 }
+
+/* Policy search: column chooser */
+.ps-column-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ps-column-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.ps-column-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+}
+
+.ps-column-menu-item:hover {
+  background: var(--surface-hover, #f3f4f6);
+}
+
+.ps-meta-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

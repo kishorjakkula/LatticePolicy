@@ -3965,3 +3965,77 @@ function diffObjects(before: any, after: any, basePath = ''): Array<{ path: stri
   }
   return out
 }
+
+// Quote-intake customer access.
+//
+// The Quote Wizard's Insureds step has to find or create the named insured.
+// The admin customer API sits behind menu.admin.view + admin.customers.*, which
+// producer roles (agent) deliberately do not hold, so these three operations
+// are exposed separately for anyone who can use the wizard. They reuse the
+// admin service functions (same tenant scoping, masking, and duplicate
+// detection) and intentionally exclude everything else: no update, merge,
+// export, PII reveal, approval, or delete.
+export const customerIntakeRoutes = Router()
+
+customerIntakeRoutes.get('/search', requirePermission('page.wizard.view'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(503).json({ code: 'DB_REQUIRED', message: 'Database mode required' })
+  try {
+    const result = await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      return searchCustomers(q, tenantId, {
+        q: req.query.q,
+        name: req.query.name,
+        phone: req.query.phone,
+        email: req.query.email,
+        customerKey: req.query.customerKey,
+        limit: req.query.limit
+      })
+    })
+    return res.json(result)
+  } catch (e: any) {
+    return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
+  }
+})
+
+customerIntakeRoutes.post('/', requirePermission('page.wizard.view'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const actor = resolveActor(req)
+  const db = getDb()
+  if (!db) return res.status(503).json({ code: 'DB_REQUIRED', message: 'Database mode required' })
+  try {
+    const payload = normalizeCustomerInput(req.body || {})
+    const result = await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      // Duplicate override (createAnyway) stays an admin-only decision.
+      return createCustomerRecord(q, { tenantId, payload, actor, reason: 'QUOTE_INTAKE', createAnyway: false })
+    })
+    if (result.potentialMatches.length) {
+      return res.status(409).json({
+        code: 'POTENTIAL_DUPLICATE',
+        message: 'Potential duplicate customers found',
+        potentialMatches: result.potentialMatches
+      })
+    }
+    return res.status(201).json(result.customer)
+  } catch (e: any) {
+    return res.status(400).json({ code: 'CREATE_FAILED', message: String(e?.message || e) })
+  }
+})
+
+customerIntakeRoutes.get('/:idOrKey', requirePermission('page.wizard.view'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const db = getDb()
+  if (!db) return res.status(503).json({ code: 'DB_REQUIRED', message: 'Database mode required' })
+  try {
+    const customer = await withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      return loadCustomerRecordByIdOrKey(q, tenantId, routeParam(req.params.idOrKey), true)
+    })
+    if (!customer) return res.status(404).json({ code: 'NOT_FOUND' })
+    return res.json(customer)
+  } catch (e: any) {
+    return res.status(500).json({ code: 'LOAD_FAILED', message: String(e?.message || e) })
+  }
+})

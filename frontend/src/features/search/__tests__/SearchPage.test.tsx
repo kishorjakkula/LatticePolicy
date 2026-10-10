@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { SearchPage } from '../SearchPage'
 import { api, adminApi } from '../../../api/client'
@@ -9,6 +9,7 @@ vi.mock('../../../api/client', () => ({
   api: {
     searchPolicies: vi.fn(),
     searchQuotes: vi.fn(),
+    exportPoliciesCsv: vi.fn(),
   },
   adminApi: {
     searchCustomers: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('../../../api/hooks', () => ({
 }))
 
 const mockSearchPolicies = vi.mocked(api.searchPolicies)
+const mockExportPoliciesCsv = vi.mocked(api.exportPoliciesCsv)
 const mockSearchCustomers = vi.mocked(adminApi.searchCustomers)
 const mockUseAuth = vi.mocked(useAuth)
 
@@ -155,5 +157,96 @@ describe('SearchPage', () => {
 
     await waitFor(() => expect(mockSearchPolicies).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('search failed')).toBeInTheDocument()
+  })
+
+  describe('results toolbar', () => {
+    const onePolicy = {
+      items: [
+        {
+          policyId: 'policy-1',
+          policyNumber: 'PA-100',
+          insuredName: 'Ada Lovelace',
+          productCode: 'personal-auto',
+          status: 'Issued',
+          internalStatus: 'Issued',
+          term: { effectiveDate: '2026-07-01', expirationDate: '2027-07-01' },
+          premium: { total: { amount: 1234.56 } },
+          createdAt: '2026-06-01T10:00:00.000Z',
+          updatedAt: '2026-06-02T10:00:00.000Z',
+        },
+      ],
+      total: 1,
+    }
+
+    beforeEach(() => {
+      localStorage.clear()
+      mockSearchPolicies.mockResolvedValue(onePolicy)
+      ;(URL as any).createObjectURL = vi.fn(() => 'blob:export')
+      ;(URL as any).revokeObjectURL = vi.fn()
+    })
+
+    it('Export CSV requests the export for the active filters and sort, and downloads it', async () => {
+      mockExportPoliciesCsv.mockResolvedValue(new Blob(['policyNumber\nPA-100'], { type: 'text/csv' }))
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+      renderSearch('/search?q=Ada&status=Issued&product=personal-auto&page=1&pageSize=20&mode=policies&sortBy=premium&sortDir=asc')
+      await screen.findByRole('button', { name: 'PA-100' })
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+      await waitFor(() => expect(mockExportPoliciesCsv).toHaveBeenCalledTimes(1))
+      expect(mockExportPoliciesCsv).toHaveBeenCalledWith(expect.objectContaining({
+        q: 'Ada',
+        product: 'personal-auto',
+        sortBy: 'premium',
+        sortDir: 'asc',
+      }))
+      // Export is for the whole result set, so it must not carry paging.
+      expect(mockExportPoliciesCsv.mock.calls[0][0]).not.toHaveProperty('page')
+      await waitFor(() => expect(click).toHaveBeenCalledTimes(1))
+      click.mockRestore()
+    })
+
+    it('shows the failure when the export request fails', async () => {
+      mockExportPoliciesCsv.mockRejectedValue(new Error('Export failed 500'))
+      renderSearch()
+      await screen.findByRole('button', { name: 'PA-100' })
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+      expect(await screen.findByText('Export failed 500')).toBeInTheDocument()
+    })
+
+    it('disables Export CSV when there is nothing to export', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: [], total: 0 })
+      renderSearch()
+      await waitFor(() => expect(mockSearchPolicies).toHaveBeenCalled())
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled())
+    })
+
+    it('Columns menu hides and restores a column in both header and rows, and remembers the choice', async () => {
+      const first = renderSearch()
+      await screen.findByRole('button', { name: 'PA-100' })
+      expect(screen.getByRole('button', { name: 'Premium' })).toBeInTheDocument()
+      expect(screen.getByText('$1,234.56')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
+      const menu = screen.getByRole('group', { name: 'Visible columns' })
+      expect(menu).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Premium' }))
+
+      expect(screen.queryByRole('button', { name: 'Premium' })).not.toBeInTheDocument()
+      expect(screen.queryByText('$1,234.56')).not.toBeInTheDocument()
+      // The identifying column is never hideable.
+      expect(screen.queryByRole('checkbox', { name: /Policy #/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'PA-100' })).toBeInTheDocument()
+
+      // Persisted across a remount.
+      first.unmount()
+      renderSearch()
+      await screen.findByRole('button', { name: 'PA-100' })
+      expect(screen.queryByText('$1,234.56')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Premium' }))
+      expect(screen.getByText('$1,234.56')).toBeInTheDocument()
+    })
   })
 })

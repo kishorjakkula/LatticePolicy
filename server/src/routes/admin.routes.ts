@@ -1125,6 +1125,11 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
         summary.agency.created = true
       }
     })
+    // The wizard reads underwriting companies and form previews through cached
+    // reference endpoints; without this a freshly seeded tenant keeps serving
+    // the cached "nothing configured" answer until the TTL expires.
+    await cacheDeletePrefix(buildCacheKey(['uw-companies', tenantId]))
+    await cacheDeletePrefix(buildCacheKey(['forms-preview', tenantId]))
     return res.json({ ok: true, summary })
   } catch (e: any) {
     return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
