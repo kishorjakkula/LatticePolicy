@@ -274,29 +274,45 @@ uwRoutes.patch(
           }
         }
 
+        // Compute each column's next value explicitly (rather than relying on SQL
+        // COALESCE against the submitted param) so that an admin can actually clear
+        // a nullable field back to null -- e.g. broadening a rule from one state back
+        // to "all states", or removing an expiration date once set. COALESCE cannot
+        // distinguish "field omitted from the request" from "field intentionally set
+        // to null", since both arrive as a null bound parameter; it always keeps the
+        // old value in the latter case, so a clear silently fails to take effect.
+        const nextStateCode = 'stateCode' in body ? normalizeRuleStateCode(body.stateCode) : existing.state_code
+        const nextComparisonValue = 'comparisonValue' in body
+          ? JSON.stringify(body.comparisonValue)
+          : JSON.stringify(existing.comparison_value)
+        const nextOutcome = 'outcome' in body ? body.outcome : existing.outcome
+        const nextReasonCode = 'reasonCode' in body ? body.reasonCode : existing.reason_code
+        const nextReasonDescription = 'reasonDescription' in body ? body.reasonDescription : existing.reason_description
+        const nextActive = 'active' in body ? body.active : existing.active
+        const nextEffectiveDate = 'effectiveDate' in body ? body.effectiveDate : existing.effective_date
+        const nextExpirationDate = 'expirationDate' in body ? (body.expirationDate || null) : existing.expiration_date
+
         const updated = await q(
           `UPDATE underwriting_rules SET
-              state_code = COALESCE($3, state_code),
+              state_code = $3,
               field_path = $4,
               operator = $5,
-              comparison_value = COALESCE($6::jsonb, comparison_value),
-              outcome = COALESCE($7, outcome),
-              reason_code = COALESCE($8, reason_code),
-              reason_description = COALESCE($9, reason_description),
-              active = COALESCE($10, active),
-              effective_date = COALESCE($11::date, effective_date),
-              expiration_date = COALESCE($12::date, expiration_date),
+              comparison_value = $6::jsonb,
+              outcome = $7,
+              reason_code = $8,
+              reason_description = $9,
+              active = $10,
+              effective_date = $11::date,
+              expiration_date = $12::date,
               updated_by = $13,
               updated_at = now()
             WHERE tenant_id=$1 AND rule_id=$2::uuid
             RETURNING *`,
           [
             tenantId, req.params.ruleId,
-            body.stateCode !== undefined ? normalizeRuleStateCode(body.stateCode) : null,
-            nextFieldPath, nextOperator,
-            body.comparisonValue !== undefined ? JSON.stringify(body.comparisonValue) : null,
-            body.outcome ?? null, body.reasonCode ?? null, body.reasonDescription ?? null,
-            body.active, body.effectiveDate || null, body.expirationDate || null,
+            nextStateCode, nextFieldPath, nextOperator, nextComparisonValue,
+            nextOutcome, nextReasonCode, nextReasonDescription,
+            nextActive, nextEffectiveDate, nextExpirationDate,
             actor,
           ]
         )
