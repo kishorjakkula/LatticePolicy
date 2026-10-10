@@ -7,11 +7,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 // for a tenant/product, without a real database.
 let mockRows: any[] = []
 const getDbMock = vi.fn((): any => ({}))
+const queryMock = vi.fn(async (_sql: string, _params?: any[]) => ({ rows: mockRows }))
 
 vi.mock('../../db.js', () => ({
   getDb: () => getDbMock(),
   withTenantTx: async (_tenantId: string, fn: (db: any) => Promise<any>) => fn({}),
-  toRawQuery: () => async () => ({ rows: mockRows }),
+  toRawQuery: () => queryMock,
 }))
 
 import { evaluateUW, evaluateUwRules } from '../uw.service.js'
@@ -20,6 +21,7 @@ import { resolveFieldValue } from '../underwriting-rule-fields.js'
 beforeEach(() => {
   mockRows = []
   getDbMock.mockReset()
+  queryMock.mockClear()
   getDbMock.mockReturnValue(null) // default: no DB -- "nothing configured"
 })
 
@@ -301,6 +303,22 @@ describe('evaluateUwRules', () => {
     ]
     const result = await evaluateUwRules('tenant-a', 'homeowners', { risks: [{ roofAgeYears: 40 }] })
     expect(result).toEqual({ decision: 'Refer', reasons: ['Roof age > 25 (refer)'] })
+  })
+
+  it('selects effective-dated rules using the policy effective date', async () => {
+    mockRows = []
+    await evaluateUwRules('tenant-a', 'homeowners', {
+      effectiveDate: '2027-04-15',
+      state: 'CA',
+      risks: [{ roofAgeYears: 10 }],
+    })
+
+    expect(queryMock).toHaveBeenCalledWith(expect.any(String), [
+      'tenant-a',
+      'homeowners',
+      'CA',
+      '2027-04-15',
+    ])
   })
 
   it('produces Eligible with no reasons when configured rules exist but none fire', async () => {

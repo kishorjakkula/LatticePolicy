@@ -1133,20 +1133,10 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
 
 // Idempotent conversion of today's hand-coded per-product underwriting
 // checks (uw.service.ts's evaluateUwFallback) into real `underwriting_rules`
-// rows, so a configured tenant gets the generic rules engine with the exact
-// same thresholds/outcomes/reasons the hardcoded code already enforces --
-// see evaluateUwRules in uw.service.ts, which this table feeds. A handful
-// of today's checks compare two submission fields to each other (e.g.
-// commercial-auto's driver/vehicle ratio, professional-liability's
-// contract-concentration ratio) or do substring/format matching (e.g.
-// personal-auto's "invalid ZIP" and "high-performance symbol" checks)
-// rather than comparing one field to a fixed value, so they cannot be
-// expressed with this table's single-field-vs-constant rule shape and are
-// intentionally left out below -- those specific checks keep running only
-// via the hardcoded fallback for a product/tenant that hasn't been
-// seeded/configured, and are NOT reproduced once seeding happens for that
-// product (seeding is a full handoff to the rules engine, same as a
-// published rating workbook fully replaces the hardcoded rater).
+// rows. Only products whose current fallback is fully representable by the
+// generic operator model are seeded. Partially representable products stay
+// on the fallback so this convenience action can never silently remove an
+// existing underwriting protection.
 const UNDERWRITING_RULE_SEEDS: Array<{
   productCode: string
   fieldPath: string
@@ -1201,13 +1191,13 @@ const UNDERWRITING_RULE_SEEDS: Array<{
   { productCode: 'professional-liability', fieldPath: 'risks[0].retroactiveYears', operator: 'less_than', comparisonValue: 1, outcome: 'Refer', reasonCode: 'PL-NO-RETRO', reasonDescription: 'No prior acts / retroactive coverage history (refer)' },
 ]
 
+const FULLY_REPRESENTABLE_SEED_PRODUCTS = new Set(['homeowners', 'cyber'])
+
 // POST /admin/seed-underwriting-rules
 // Idempotent (SELECT-before-INSERT, safe to call repeatedly) conversion of
-// evaluateUwFallback's hardcoded per-product checks into real
-// underwriting_rules rows for the calling tenant -- see
-// UNDERWRITING_RULE_SEEDS above for exactly what is (and isn't) ported, and
-// uw.service.ts's evaluateUW for how a configured row takes over from the
-// hardcoded fallback once seeded.
+// the fully representable evaluateUwFallback checks into real
+// underwriting_rules rows for the calling tenant. Products with compound
+// or format-based checks are intentionally left on the fallback.
 //
 // Also migrates the legacy tenants/<id>/config.yaml
 // `overrides.underwriting.rules` mechanism (the HO-ROOF-AGE override that
@@ -1215,14 +1205,17 @@ const UNDERWRITING_RULE_SEEDS: Array<{
 // if this tenant's config has that override configured, an equivalent
 // 'HO-ROOF-AGE' row is seeded for homeowners. That legacy code path has
 // been removed from uw.service.ts entirely -- this is the one-time
-// migration of its effect into the new system.
+// migration of its effect into the new system; the YAML fallback remains
+// active until homeowners has configured database rules.
 adminRoutes.post('/seed-underwriting-rules', requirePermission('admin.underwriting_rules.manage'), async (req, res) => {
   const tenantId = req.tenant!.tenantId
   const actor = req.user?.username || req.user?.id || 'system'
   const db = getDb()
   if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Seeding requires DB' })
 
-  const seeds = [...UNDERWRITING_RULE_SEEDS]
+  const seeds = UNDERWRITING_RULE_SEEDS.filter((seed) =>
+    FULLY_REPRESENTABLE_SEED_PRODUCTS.has(seed.productCode)
+  )
   try {
     const tenantCfg = loadTenantOverrides(tenantId)
     const legacyRules = tenantCfg?.overrides?.underwriting?.rules || []

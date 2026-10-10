@@ -1,4 +1,5 @@
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
+import { loadTenantOverrides } from '../products.js'
 import { resolveFieldValue } from './underwriting-rule-fields.js'
 
 export type UWDecision = { decision: 'Eligible'|'Refer'|'Decline'; reasons: string[] }
@@ -20,7 +21,7 @@ export async function evaluateUW(tenantId: string, payload: any): Promise<UWDeci
   const product = payload?.productCode as string
   const configured = await evaluateUwRules(tenantId, product, payload)
   if (configured) return configured
-  return evaluateUwFallback(product, payload)
+  return evaluateUwFallback(tenantId, product, payload)
 }
 
 /**
@@ -49,6 +50,7 @@ export async function evaluateUwRules(
   if (!getDb()) return null
 
   const stateCode = normalizeStateCode(payload?.state)
+  const effectiveDate = normalizeEffectiveDate(payload?.effectiveDate)
 
   let rows: any[]
   try {
@@ -61,9 +63,9 @@ export async function evaluateUwRules(
             AND product_code = $2
             AND active = true
             AND (state_code IS NULL OR state_code = $3)
-            AND effective_date <= CURRENT_DATE
-            AND (expiration_date IS NULL OR expiration_date >= CURRENT_DATE)`,
-        [tenantId, productCode, stateCode]
+            AND effective_date <= $4::date
+            AND (expiration_date IS NULL OR expiration_date >= $4::date)`,
+        [tenantId, productCode, stateCode, effectiveDate]
       )
       return (result as any).rows || []
     })
@@ -89,6 +91,13 @@ export async function evaluateUwRules(
 function normalizeStateCode(value: unknown): string | null {
   const s = String(value || '').trim().toUpperCase()
   return s.length === 2 ? s : null
+}
+
+function normalizeEffectiveDate(value: unknown): string {
+  const candidate = String(value || '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(candidate)
+    ? candidate
+    : new Date().toISOString().slice(0, 10)
 }
 
 function evaluateRuleCondition(payload: any, rule: { field_path: string; operator: string; comparison_value: unknown }): boolean {
@@ -167,12 +176,10 @@ function applyOperator(fieldValue: unknown, operator: string, comparisonValue: u
  * uw.service.test.ts's zero-rows regression coverage.
  *
  * The one-off tenant config.yaml `overrides.underwriting.rules` mechanism
- * (the old HO-ROOF-AGE override) that used to run at the end of this
- * function has been removed: it is fully subsumed by `underwriting_rules`,
- * and the seed action (see admin.routes.ts's POST /seed-underwriting-rules)
- * migrates any tenant's existing override into a real, tenant-editable row.
+ * remains active on this fallback path until an administrator explicitly
+ * migrates the product to database-authored rules.
  */
-function evaluateUwFallback(product: string, payload: any): UWDecision {
+function evaluateUwFallback(tenantId: string, product: string, payload: any): UWDecision {
   const reasons: string[] = []
   let decision: 'Eligible'|'Refer'|'Decline' = 'Eligible'
 
@@ -351,6 +358,24 @@ function evaluateUwFallback(product: string, payload: any): UWDecision {
       }
     }
   }
+
+  // Preserve legacy tenant overrides until an administrator explicitly
+  // migrates that product to database-authored rules. Removing this fallback
+  // at deployment time would silently change underwriting behavior for a
+  // tenant whose rules table is still empty.
+  try {
+    const tenantCfg = loadTenantOverrides(tenantId)
+    const rules = tenantCfg?.overrides?.underwriting?.rules || []
+    for (const r of rules) {
+      if (r?.id === 'HO-ROOF-AGE' && product === 'homeowners') {
+        const roofAge = Number(payload?.risks?.[0]?.roofAgeYears)
+        if (!Number.isNaN(roofAge) && roofAge > 25) {
+          reasons.push('Roof age > 25 (refer)')
+          decision = maxDecision(decision, 'Refer')
+        }
+      }
+    }
+  } catch {}
 
   return { decision, reasons }
 }
