@@ -438,5 +438,100 @@ export const adminApi = {
   listFormTemplates: () => request<any[]>('GET', '/v1/admin/form-templates'),
   createFormTemplate: (payload: any) => request<any>('POST', '/v1/admin/form-templates', payload),
   updateFormTemplate: (id: string, payload: any) => request<any>('PATCH', `/v1/admin/form-templates/${id}`, payload),
-  deleteFormTemplate: (id: string) => request<any>('DELETE', `/v1/admin/form-templates/${id}`)
+  deleteFormTemplate: (id: string) => request<any>('DELETE', `/v1/admin/form-templates/${id}`),
+  // Underwriting rules (admin-authored rules engine)
+  listUnderwritingRuleFields: (productCode: string) =>
+    request<{ fields: UnderwritingRuleField[] }>(
+      'GET',
+      `/v1/admin/underwriting-rules/fields?productCode=${encodeURIComponent(productCode)}`
+    ),
+  listUnderwritingRules: (opts?: { productCode?: string; stateCode?: string; active?: boolean }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.stateCode) params.set('stateCode', opts.stateCode)
+    if (opts?.active != null) params.set('active', String(opts.active))
+    const qs = params.toString()
+    return request<{ items: UnderwritingRule[] }>('GET', `/v1/admin/underwriting-rules${qs ? `?${qs}` : ''}`)
+  },
+  createUnderwritingRule: (payload: {
+    productCode: string
+    stateCode?: string | null
+    fieldPath: string
+    operator: UnderwritingRuleOperator
+    comparisonValue: UnderwritingRuleComparisonValue
+    outcome: UnderwritingRuleOutcome
+    reasonCode: string
+    reasonDescription: string
+    active?: boolean
+    effectiveDate: string
+    expirationDate?: string | null
+  }) => request<UnderwritingRule>('POST', '/v1/admin/underwriting-rules', payload),
+  updateUnderwritingRule: (
+    ruleId: string,
+    patch: Partial<{
+      stateCode: string | null
+      fieldPath: string
+      operator: UnderwritingRuleOperator
+      comparisonValue: UnderwritingRuleComparisonValue
+      outcome: UnderwritingRuleOutcome
+      reasonCode: string
+      reasonDescription: string
+      active: boolean
+      effectiveDate: string
+      expirationDate: string | null
+    }>
+  ) => request<UnderwritingRule>('PATCH', `/v1/admin/underwriting-rules/${encodeURIComponent(ruleId)}`, patch),
+  seedUnderwritingRules: () => request<any>('POST', '/v1/admin/seed-underwriting-rules', {})
+}
+
+export type UnderwritingRuleDataType = 'number' | 'string' | 'boolean'
+
+export type UnderwritingRuleOperator =
+  | 'equals'
+  | 'not_equals'
+  | 'greater_than'
+  | 'greater_than_or_equal'
+  | 'less_than'
+  | 'less_than_or_equal'
+  | 'is_true'
+  | 'is_false'
+  | 'in'
+  | 'not_in'
+
+export type UnderwritingRuleOutcome = 'Refer' | 'Decline'
+
+export type UnderwritingRuleComparisonValue = string | number | boolean | Array<string | number>
+
+export type UnderwritingRuleField = {
+  fieldPath: string
+  label: string
+  description: string
+  dataType: UnderwritingRuleDataType
+  allowedOperators: UnderwritingRuleOperator[]
+}
+
+// The CRUD routes behind these calls (uw.routes.ts) use raw SQL, not an ORM
+// model, and return the Postgres row verbatim -- so this response shape is
+// snake_case, matching the `underwriting_rules` table's real columns. This
+// mirrors the established convention for this same route file's sibling
+// endpoint (GET /uw/authority-grants / AuthorityGrantRow in
+// UnderwritingAuthorityPage.tsx), which also returns raw rows rather than a
+// camelCase projection. Request bodies for create/update are a separate,
+// intentionally camelCase shape (see createUnderwritingRule/
+// updateUnderwritingRule above) -- that's what the route handlers parse.
+export type UnderwritingRule = {
+  rule_id: string
+  product_code: string
+  state_code: string | null
+  field_path: string
+  operator: UnderwritingRuleOperator
+  comparison_value: UnderwritingRuleComparisonValue
+  outcome: UnderwritingRuleOutcome
+  reason_code: string
+  reason_description: string
+  active: boolean
+  effective_date: string
+  expiration_date: string | null
+  created_at: string
+  updated_at: string
 }
