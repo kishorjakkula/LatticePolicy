@@ -17,7 +17,7 @@ function insuredName() {
 }
 
 test.describe('new business quote wizard', () => {
-  test('quotes, rates, binds, and issues a personal auto policy entirely in the browser', async ({ page, signInAs }) => {
+  test('quotes, rates, binds, and issues a personal auto policy entirely in the browser', { tag: '@smoke' }, async ({ page, signInAs }) => {
     await signInAs(page, 'admin')
     const insured = insuredName()
 

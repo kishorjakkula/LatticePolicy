@@ -7,7 +7,7 @@ import {
 } from './support/api'
 
 test.describe('authentication and route access', () => {
-  test('admin login opens search and renders permission-gated navigation', async ({ page }) => {
+  test('admin login opens search and renders permission-gated navigation', { tag: '@smoke' }, async ({ page }) => {
     await loginThroughUi(page, 'admin')
 
     await expect(page).toHaveURL(/\/search/)
@@ -20,7 +20,7 @@ test.describe('authentication and route access', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   })
 
-  test('agent can access search and quote routes without admin navigation', async ({ page, request }) => {
+  test('agent can access search and quote routes without admin navigation', { tag: '@smoke' }, async ({ page, request }) => {
     const agent = await loginApi(request, 'agent1')
     await installAuthState(page, agent)
 

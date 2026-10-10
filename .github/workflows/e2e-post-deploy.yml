@@ -1,0 +1,69 @@
+name: Post-Deploy Playwright
+
+# Runs the @smoke Playwright tests against an already-deployed environment.
+# Called by the deploy workflows after a successful deploy, and runnable by
+# hand. The full suite is not run here: it creates tenant-wide configuration
+# and exceeds the per-IP API rate limit on a shared environment, so the deploy
+# workflows run it against a disposable stack before deploying instead.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Playwright smoke (deployed)
+    runs-on: ubuntu-latest
+    environment: test
+    env:
+      E2E_BASE_URL: ${{ vars.TEST_FRONTEND_URL }}
+      E2E_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      E2E_TENANT_ID: ${{ vars.E2E_TENANT_ID }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate required variables
+        run: |
+          missing=0
+          for item in E2E_BASE_URL E2E_API_BASE_URL E2E_TENANT_ID E2E_PASSWORD; do
+            if [ -z "$(printenv "$item")" ]; then
+              echo "Missing value: $item"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Set TEST_FRONTEND_URL, VITE_API_BASE_URL, E2E_TENANT_ID (variables) and E2E_PASSWORD (secret)."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests against the deployed environment
+        run: npm run test:e2e:smoke
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: post-deploy-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

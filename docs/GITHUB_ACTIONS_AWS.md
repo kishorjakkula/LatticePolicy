@@ -59,7 +59,12 @@ Attach permissions for:
 - `ECS_CONTAINER_NAME_FRONTEND` (must match task definition container name, default `policy-frontend`)
 - `VITE_API_BASE_URL` (public API base URL compiled into the frontend image)
 - `TEST_API_HEALTH_URL` (optional smoke-test URL, for example `https://api.example.com/health`)
-- `TEST_FRONTEND_URL` (optional smoke-test URL, for example `https://app.example.com`)
+- `TEST_FRONTEND_URL` (smoke-test and Playwright UI URL, for example `https://app.example.com`)
+- `E2E_TENANT_ID` (tenant slug the post-deploy Playwright smoke tests sign in to)
+
+Post-deploy Playwright also needs the secret `E2E_PASSWORD`: the password of the
+`admin` and `agent1` test users in that tenant. Use a test environment only;
+never point it at production credentials.
 
 ## 3) Review task definition templates
 
@@ -88,7 +93,9 @@ For the complete frontend build contract and verification checklist, see
 - CI runs on PR and push to `main`.
 - CD runs only through manual `workflow_dispatch`.
 - CD builds Docker images, pushes to ECR (tag = commit SHA), renders task definitions, and deploys both ECS services.
-- If `TEST_API_HEALTH_URL` or `TEST_FRONTEND_URL` are configured, CD runs simple post-deploy smoke checks.
+- CD runs simple post-deploy health checks against `TEST_API_HEALTH_URL` and `TEST_FRONTEND_URL`.
+- Before deploying, the workflow runs the full Playwright suite against a disposable Docker stack built from the same commit; a failure stops the deploy.
+- After a successful deploy, `e2e-post-deploy.yml` runs the `@smoke` Playwright tests against the deployed environment (`TEST_FRONTEND_URL`, `VITE_API_BASE_URL`). They sign in as `admin` and `agent1`, seed idempotent reference data, and create one quote and two policies per run. The same workflow can be run by hand from the Actions tab.
 
 Automatic deploys on push to `main` are intentionally disabled until the
 test AWS account, repository variables, environment approvals, and task

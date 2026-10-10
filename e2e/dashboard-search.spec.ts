@@ -2,7 +2,7 @@ import { expect, test } from './support/fixtures'
 import { apiBaseUrl, apiJson, createCustomer, createIssuedPolicy, isoDate, tenantId, uniqueName } from './support/api'
 
 test.describe('dashboard', () => {
-  test('shows portfolio KPIs and links into search and the quote wizard', async ({ page, request, sessionFor, signInAs }) => {
+  test('shows portfolio KPIs and links into search and the quote wizard', { tag: '@smoke' }, async ({ page, request, sessionFor, signInAs }) => {
     const admin = await sessionFor('admin')
     await createIssuedPolicy(request, admin.token, 'Dashboard Kpi')
     await signInAs(page, 'admin')

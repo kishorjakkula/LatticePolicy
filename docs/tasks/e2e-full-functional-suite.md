@@ -57,6 +57,24 @@ a unit or route test and a Playwright regression test.
    Tests: `dateDisplay.test.ts` (four time zones), `policy-lifecycle.spec.ts`,
    `underwriting-authority.spec.ts`.
 
+## Run After Every Deployment
+
+- Nine tests are tagged `@smoke` (`npm run test:e2e:smoke`): login, route
+  guards, API auth/tenancy, health, dashboard, browser quote-to-issue, policy
+  view.
+- `scripts/deploy-local.sh` (`npm run deploy:local`) deploys the local demo
+  stack, runs the smoke tests against it, then the full suite on a disposable
+  copy of the build.
+- `.github/workflows/e2e-post-deploy.yml` runs the smoke tests against the
+  deployed test environment; both deploy workflows call it after `deploy` and
+  run the full isolated suite as a gate before `deploy`.
+- `selectProduct` falls back to the first underwriting company that writes the
+  product when the seeded company is absent, so the wizard smoke test works on
+  long-lived environments. `E2E_UW_COMPANY` overrides the default name.
+- Not exercised: the cloud deploy workflows themselves. The repository has no
+  deployment variables configured, so the post-deploy job has only been
+  validated locally against the Docker demo stack.
+
 ## Security Notes
 
 - The intake endpoints widen customer read/create to every role with

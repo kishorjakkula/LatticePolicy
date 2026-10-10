@@ -23,15 +23,41 @@ export async function continueToStep(page: Page, step: number) {
   await expectWizardStep(page, step)
 }
 
+const seededCompany = process.env.E2E_UW_COMPANY || 'Sample Carrier Personal Lines'
+
+/**
+ * Picks the underwriting company, jurisdiction, and product. A freshly seeded
+ * stack has the seeded company; a long-lived environment (local demo stack, a
+ * deployed test environment) has its own, so when the seeded one is missing
+ * fall back to the first company that writes the requested product.
+ */
 export async function selectProduct(
   page: Page,
   options: { company?: string; state?: string; productCode?: string } = {},
 ) {
-  const company = options.company ?? 'Sample Carrier Personal Lines'
-  await fieldByLabel(page, 'Underwriting Company').selectOption({ label: company })
+  const productCode = options.productCode ?? 'personal-auto'
+  const companySelect = fieldByLabel(page, 'Underwriting Company')
+  const productSelect = fieldByLabel(page, 'Product')
+  await expect(companySelect).toBeEnabled()
+  const labels = (await companySelect.locator('option').allTextContents()).map((label) => label.trim())
+  const wanted = options.company ?? seededCompany
+
+  if (options.company || labels.includes(wanted)) {
+    await companySelect.selectOption({ label: wanted })
+  } else {
+    let matched = false
+    for (const label of labels.slice(1)) {
+      await companySelect.selectOption({ label })
+      if (await productSelect.locator(`option[value="${productCode}"]`).count()) {
+        matched = true
+        break
+      }
+    }
+    expect(matched, `an underwriting company that writes ${productCode}`).toBe(true)
+  }
   await fieldByLabel(page, 'Country').selectOption('US')
   await fieldByLabel(page, 'State').selectOption(options.state ?? 'CA')
-  await fieldByLabel(page, 'Product').selectOption(options.productCode ?? 'personal-auto')
+  await productSelect.selectOption(productCode)
 }
 
 export async function answerAllQualificationQuestions(page: Page, answer: 'Yes' | 'No' = 'Yes') {

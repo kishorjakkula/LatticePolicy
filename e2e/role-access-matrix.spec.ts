@@ -56,7 +56,7 @@ test.describe('role-based route access', () => {
 })
 
 test.describe('backend authorization and tenancy', () => {
-  test('API rejects missing credentials, missing tenant, and cross-tenant tokens', async ({ request, sessionFor }) => {
+  test('API rejects missing credentials, missing tenant, and cross-tenant tokens', { tag: '@smoke' }, async ({ request, sessionFor }) => {
     const admin = await sessionFor('admin')
 
     const anonymous = await apiStatus(request, 'GET', '/api/v1/policies')
@@ -103,7 +103,7 @@ test.describe('backend authorization and tenancy', () => {
     expect(Object.keys(spec.body.paths).length).toBeGreaterThan(20)
   })
 
-  test('health endpoint reports database and cache status without authentication', async ({ request }) => {
+  test('health endpoint reports database and cache status without authentication', { tag: '@smoke' }, async ({ request }) => {
     const health = await apiStatus(request, 'GET', '/health', { tenant: null })
     expect(health.status).toBe(200)
     expect(health.body).toMatchObject({ status: 'ok', db: true, cache: true })

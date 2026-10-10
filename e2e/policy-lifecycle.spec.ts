@@ -7,7 +7,7 @@ function insured(prefix: string) {
 }
 
 test.describe('policy lifecycle transactions in the browser', () => {
-  test('policy view shows summary, actions, transactions, and documents for an in-force policy', async ({ page, request, sessionFor, signInAs }) => {
+  test('policy view shows summary, actions, transactions, and documents for an in-force policy', { tag: '@smoke' }, async ({ page, request, sessionFor, signInAs }) => {
     const admin = await sessionFor('admin')
     const policy = await createWizardReadyPolicy(request, admin.token, insured('View'))
     await signInAs(page, 'admin')

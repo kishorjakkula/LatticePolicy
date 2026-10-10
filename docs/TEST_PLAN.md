@@ -234,6 +234,25 @@ Plain `npm run test:e2e` runs against whatever is on `:5173` / `:3300`. The
 suite creates policies, customers, users, and referrals, so do not point it at
 a stack whose data you want to keep clean.
 
+### Playwright after every deployment
+
+- **Local Docker:** `npm run deploy:local` rebuilds and restarts the demo
+  stack, runs the `@smoke` tests against it, then runs the full suite against a
+  disposable copy of the same build. `DEPLOY_SKIP_FULL_E2E=1` stops after the
+  smoke tests.
+- **GitHub deploy workflows** (`deploy-aws-ecs.yml`,
+  `deploy-azure-container-apps.yml`): the full suite runs against a disposable
+  stack before the deploy job and blocks it on failure; after the deploy,
+  `e2e-post-deploy.yml` runs the `@smoke` tests against the deployed
+  environment. It needs the `E2E_TENANT_ID` variable and `E2E_PASSWORD` secret.
+
+Only the `@smoke` subset runs against a live environment. The full suite
+writes tenant-wide underwriting rules and authority grants and makes more
+requests than the per-IP API rate limit (600 / 15 min) allows from one runner,
+so it always runs on a disposable stack. Tag a test `{ tag: '@smoke' }` only if
+it is safe to repeat on shared data: no tenant-wide configuration, and no
+dependence on freshly seeded names.
+
 ### E2E suite layout
 
 | Spec | Covers |

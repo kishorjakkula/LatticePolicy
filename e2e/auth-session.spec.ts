@@ -2,7 +2,7 @@ import { expect, test } from './support/fixtures'
 import { apiStatus, loginThroughUi, tenantId } from './support/api'
 
 test.describe('sign-in, sign-out, and session handling', () => {
-  test('rejects a wrong password and keeps the user on the login page', async ({ page }) => {
+  test('rejects a wrong password and keeps the user on the login page', { tag: '@smoke' }, async ({ page }) => {
     await loginThroughUi(page, 'admin', 'definitely-not-the-password')
     await expect(page.locator('p.error')).toBeVisible()
     await expect(page).toHaveURL(/\/login/)
@@ -19,7 +19,7 @@ test.describe('sign-in, sign-out, and session handling', () => {
     await expect(page).toHaveURL(/\/login/)
   })
 
-  test('unauthenticated visitors are sent to login from every protected route', async ({ page }) => {
+  test('unauthenticated visitors are sent to login from every protected route', { tag: '@smoke' }, async ({ page }) => {
     for (const route of ['/dashboard', '/search', '/wizard', '/uw/queue', '/admin/users', '/portal', '/rating', '/placements']) {
       await page.goto(route)
       await expect(page, `route ${route}`).toHaveURL(/\/login/)
