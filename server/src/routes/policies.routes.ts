@@ -11,7 +11,7 @@ import {
 import * as policyService from '../services/policy.service.js'
 import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
-import { csvEscape, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
+import { csvEscape, fileExtensionForContentType, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 import { requirePermission, hasPermission } from '../auth.js'
 import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument } from '../services/document-storage.service.js'
 
@@ -623,11 +623,7 @@ policyRoutes.get(
       }
 
       const resolvedContentType = String(artifact.contentType || 'application/octet-stream')
-      const fileExtension = resolvedContentType.includes('application/pdf')
-        ? 'pdf'
-        : resolvedContentType.includes('text/html')
-          ? 'html'
-          : 'bin'
+      const fileExtension = fileExtensionForContentType(resolvedContentType)
       res.setHeader('Content-Type', resolvedContentType)
       res.setHeader(
         'Content-Disposition',
