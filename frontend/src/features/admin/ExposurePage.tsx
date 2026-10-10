@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { useExposureSummary } from '../../api/hooks'
 import { formatCurrency, productLabel } from '../../shared/displayLabels'
 
 function GroupTable({ title, groups, formatKey }: { title: string; groups: any[]; formatKey?: (value: unknown) => string }) {
   return (
-    <div style={{ marginBottom: 20 }}>
+    <CollapsibleSection style={{ marginBottom: 20 }}>
       <h3 style={{ marginBottom: 8 }}>{title}</h3>
       {groups.length === 0 ? (
         <p className="muted">No exposure data for the current filters.</p>
@@ -32,7 +33,7 @@ function GroupTable({ title, groups, formatKey }: { title: string; groups: any[]
           </tbody>
         </table>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }
 

@@ -19,6 +19,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { productLabel, humanizeCode } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 // Same five products the Quote Wizard rates today — kept as a fallback only; the real source
 // of truth is GET /v1/products, fetched below.
@@ -295,7 +296,7 @@ export function UnderwritingRulesPage() {
         )}
       </div>
 
-      <div className="ps-content-card">
+      <CollapsibleSection title="Product" className="ps-content-card">
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <div className="col">
             <label>Product</label>
@@ -308,12 +309,12 @@ export function UnderwritingRulesPage() {
             </select>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {seedMessage && <p className="muted" data-testid="seed-result-message">{seedMessage}</p>}
       {errorMessage && <p className="error" role="alert">{errorMessage}</p>}
 
-      <div className="ps-content-card">
+      <CollapsibleSection className="ps-content-card">
         <div className="ps-content-card-title">Rule engine status for {productLabel(selectedProduct)}</div>
         {rulesEngineActive ? (
           <div
@@ -349,10 +350,10 @@ export function UnderwritingRulesPage() {
             </div>
           </div>
         )}
-      </div>
+      </CollapsibleSection>
 
       {canManage && (
-        <form onSubmit={onSubmit} className="ps-content-card">
+        <CollapsibleSection as="form" onSubmit={onSubmit} className="ps-content-card">
           <div className="ps-content-card-title">{editingRuleId ? 'Edit rule' : 'New rule'} — {productLabel(selectedProduct)}</div>
           <div className="row" style={{ flexWrap: 'wrap' }}>
             <div className="col">
@@ -458,10 +459,10 @@ export function UnderwritingRulesPage() {
               </button>
             )}
           </div>
-        </form>
+        </CollapsibleSection>
       )}
 
-      <div className="ps-table-card">
+      <CollapsibleSection title="Rule List" className="ps-table-card">
         <table className="table">
           <thead>
             <tr>
@@ -517,7 +518,7 @@ export function UnderwritingRulesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

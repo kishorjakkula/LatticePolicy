@@ -1,4 +1,5 @@
 import { formatDisplayDate } from '../../shared/dateDisplay'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { usePolicyDocuments } from '../../api/hooks'
 import { api } from '../../api/client'
 
@@ -29,7 +30,7 @@ export function PortalDocumentsPanel({ policyId }: PortalDocumentsPanelProps) {
   const documents = Array.isArray(data?.documents) ? data.documents : []
 
   return (
-    <section
+    <CollapsibleSection as="section"
       className="policy-section-card stack-card customer-portal-section"
       style={{ marginTop: 12 }}
       data-testid="portal-documents-panel"
@@ -80,6 +81,6 @@ export function PortalDocumentsPanel({ policyId }: PortalDocumentsPanelProps) {
           </table>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   )
 }

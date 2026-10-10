@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, apiDetails } from '../../api/client'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 export interface AuditVersionRow {
   versionId: string
@@ -119,7 +120,7 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
   }
 
   return (
-    <div className="card stack-card policy-audit-panel" data-testid="transaction-audit-panel">
+    <CollapsibleSection title="Transaction Audit" className="card stack-card policy-audit-panel" data-testid="transaction-audit-panel">
       <div className="row row-spaced">
         <div className="col">
           <label>Actor</label>
@@ -301,6 +302,6 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
           )}
         </div>
       </details>
-    </div>
+    </CollapsibleSection>
   )
 }

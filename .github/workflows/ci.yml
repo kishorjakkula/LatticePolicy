@@ -116,6 +116,11 @@ jobs:
       - name: Run Docker E2E suite
         run: npm run test:e2e:isolated
 
+      # Writes passed/failed counts and every failing test to the run summary.
+      - name: Report Playwright results
+        if: always()
+        run: node scripts/summarize-playwright.mjs >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7

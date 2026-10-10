@@ -5,6 +5,7 @@ import { formatDisplayDate } from '../../shared/dateDisplay'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { usePlacements, useCreatePlacementMutation, useTransitionPlacementStatusMutation } from '../../api/hooks'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 const STATUS_BADGE: Record<string, string> = {
   Submission: 'gray',
@@ -117,7 +118,7 @@ export function PlacementsPage() {
         <div className="muted">Loading…</div>
       ) : (
         <>
-          <div className="ps-table-card">
+          <CollapsibleSection title="Placement List" className="ps-table-card">
             <table className="table">
               <thead>
                 <tr><th>Insured</th><th>Product</th><th>Facility Ref</th><th>Effective</th><th>Status</th><th></th></tr>
@@ -144,7 +145,7 @@ export function PlacementsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </CollapsibleSection>
           <div className="ps-pagination-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="muted" style={{ fontSize: 13 }}>Total: {total}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -9,6 +9,7 @@ import { derivePolicyWorkflowStatus } from '../policies/statusModel'
 import { formatDisplayDateTime } from '../../shared/dateDisplay'
 import { useDashboardAiInsights } from '../../api/hooks'
 import { aiModelSummary, productLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type PolicyStatus =
   | 'Draft'
@@ -335,7 +336,7 @@ export function DashboardPage() {
 
 
       <div className="summary-grid dashboard-panels-grid">
-        <section className="policy-section-card dashboard-section-card">
+        <CollapsibleSection as="section" className="policy-section-card dashboard-section-card">
           <div className="policy-section-header">
             <h3>Policy Status Distribution</h3>
           </div>
@@ -354,9 +355,9 @@ export function DashboardPage() {
               )
             })}
           </div>
-        </section>
+        </CollapsibleSection>
 
-        <section className="policy-section-card dashboard-section-card">
+        <CollapsibleSection as="section" className="policy-section-card dashboard-section-card">
           <div className="policy-section-header">
             <h3>Product Mix</h3>
           </div>
@@ -375,11 +376,11 @@ export function DashboardPage() {
               )
             })}
           </div>
-        </section>
+        </CollapsibleSection>
       </div>
 
       {aiInsights && (
-        <section className="policy-section-card dashboard-section-card">
+        <CollapsibleSection as="section" className="policy-section-card dashboard-section-card">
           <div className="policy-section-header dashboard-section-header">
             <div>
               <h3>AI Insights and Predictions</h3>
@@ -494,16 +495,16 @@ export function DashboardPage() {
               )}
             </div>
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
 
-      <section className="policy-section-card dashboard-section-card">
+      <CollapsibleSection as="section" className="policy-section-card dashboard-section-card">
         <div className="policy-section-header">
           <h3>6-Month Trend</h3>
         </div>
         <SimpleTrendChart points={trendPoints} />
-      </section>
+      </CollapsibleSection>
 
       <p className="muted dashboard-refreshed">
         Last refreshed: {formatDisplayDateTime(lastRefreshedAt, { fallback: '-' })}

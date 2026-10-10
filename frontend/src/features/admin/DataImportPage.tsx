@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { FormEvent, useState } from 'react'
 import {
   useImportBatches,
@@ -142,7 +143,7 @@ export function DataImportPage() {
         </div>
       </form>
 
-      <div className="ps-table-card" style={{ marginBottom: 16 }}>
+      <CollapsibleSection title="Import Batches" className="ps-table-card" style={{ marginBottom: 16 }}>
         <table className="table">
           <thead>
             <tr>
@@ -177,10 +178,10 @@ export function DataImportPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
 
       {selectedBatchId && (
-        <div className="ps-table-card">
+        <CollapsibleSection className="ps-table-card">
           <h3>Rows for batch {selectedBatchId}</h3>
           <table className="table">
             <thead><tr><th>#</th><th>External ID</th><th>Status</th><th>Errors</th><th>Committed Entity</th><th>Actions</th></tr></thead>
@@ -206,7 +207,7 @@ export function DataImportPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </CollapsibleSection>
       )}
     </div>
   )

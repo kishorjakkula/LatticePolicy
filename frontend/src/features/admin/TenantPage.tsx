@@ -7,6 +7,7 @@ import {
 } from '../../shared/dateDisplay'
 import { COUNTRIES } from '../../shared/usStates'
 import { useTenant, useUpdateTenantMutation, useSeedMutation, useSeedReferenceDataMutation } from '../../api/hooks'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type DateFormatRow = {
   id: string
@@ -344,7 +345,7 @@ export function TenantPage() {
           <button onClick={onSave} disabled={loading || !name.trim()}>Save</button>
         </div>
       </div>
-      <div className="card stack-card">
+      <CollapsibleSection className="card stack-card">
         <div className="panel-header">
           <h3>AI / ML Configuration</h3>
         </div>
@@ -556,8 +557,8 @@ export function TenantPage() {
             </label>
           </div>
         </div>
-      </div>
-      <div className="card stack-card">
+      </CollapsibleSection>
+      <CollapsibleSection className="card stack-card">
         <div className="panel-header">
           <h3>Date Format by Country</h3>
           <button
@@ -603,8 +604,8 @@ export function TenantPage() {
           </tbody>
         </table>
         </div>
-      </div>
-      <div className="card stack-card">
+      </CollapsibleSection>
+      <CollapsibleSection className="card stack-card">
         <div className="panel-header">
           <h3>Policy Number Format by Product</h3>
           <button
@@ -651,7 +652,7 @@ export function TenantPage() {
           </tbody>
         </table>
         </div>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }

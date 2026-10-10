@@ -6,6 +6,7 @@ import { loadJsPdf } from '../../lib/pdf'
 import { useCustomerPortalSummary, useCustomerPortalPolicy } from '../../api/hooks'
 import { PortalDocumentsPanel } from './PortalDocumentsPanel'
 import { coverageLabel, formatCurrency, productLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type PortalPolicy = {
   policyId: string
@@ -356,7 +357,7 @@ export function CustomerPortalPage() {
 
       {!loading && !error && (
         <>
-          <section className="policy-section-card customer-portal-section">
+          <CollapsibleSection as="section" className="policy-section-card customer-portal-section">
             <div className="panel-header">
               <h3>My Policies</h3>
               <span className="muted">
@@ -392,9 +393,9 @@ export function CustomerPortalPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="policy-section-card stack-card customer-portal-section" style={{ marginTop: 12 }}>
+          <CollapsibleSection as="section" className="policy-section-card stack-card customer-portal-section" style={{ marginTop: 12 }}>
             <div className="panel-header">
                 <h3>Policy Summary</h3>
                 <div className="toolbar-actions">
@@ -509,7 +510,7 @@ export function CustomerPortalPage() {
                 </table>
               </>
             )}
-          </section>
+          </CollapsibleSection>
 
           {selectedPolicyId ? <PortalDocumentsPanel policyId={selectedPolicyId} /> : null}
         </>

@@ -1,6 +1,7 @@
 import { formatDisplayDateTime } from '../../shared/dateDisplay'
 import { usePolicyDocuments } from '../../api/hooks'
 import { api } from '../../api/client'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 interface PolicyDocumentsPanelProps {
   policyId: string
@@ -49,7 +50,7 @@ export function PolicyDocumentsPanel({ policyId }: PolicyDocumentsPanelProps) {
   const documents: PolicyDocument[] = Array.isArray(data?.documents) ? data.documents : []
 
   return (
-    <div className="card policy-section-card policy-documents-card" data-testid="policy-documents-panel">
+    <CollapsibleSection className="card policy-section-card policy-documents-card" data-testid="policy-documents-panel">
       <div className="panel-header">
         <h3>Documents</h3>
       </div>
@@ -108,6 +109,6 @@ export function PolicyDocumentsPanel({ policyId }: PolicyDocumentsPanelProps) {
           </table>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }

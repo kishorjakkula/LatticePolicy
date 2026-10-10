@@ -42,7 +42,7 @@ test.describe('admin browser workflows', () => {
     await page.getByLabel('As Of').fill('2026-08-01')
 
     await expect(page.getByText(/in-force policies as of 2026-08-01/)).toBeVisible()
-    const productSection = page.getByRole('heading', { name: 'By Product' }).locator('..')
+    const productSection = page.locator('.collapsible-section').filter({ has: page.getByRole('heading', { name: 'By Product' }) })
     await expect(productSection.getByRole('cell', { name: 'Personal Auto' })).toBeVisible()
   })
 

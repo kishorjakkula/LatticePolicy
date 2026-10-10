@@ -8506,3 +8506,147 @@ code {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Collapsible screen sections (components/CollapsibleSection.tsx) */
+.collapsible-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.collapsible-section-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.collapsible-section-heading > :is(h2, h3, h4) {
+  margin-top: 0;
+}
+
+.collapsible-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.collapsible-section-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #d7dee9);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.collapsible-section-toggle::before {
+  content: "\2212";
+}
+
+.collapsible-section-toggle[aria-expanded="false"]::before {
+  content: "+";
+}
+
+.collapsible-section-toggle:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/* The body adds no box of its own, so a section's flex/grid/margin layout of
+   its children is unchanged by the wrapper. */
+.collapsible-section-body {
+  display: contents;
+}
+
+.collapsible-section-body[hidden] {
+  display: none;
+}
+
+.collapsible-section.is-collapsed .collapsible-section-heading > * {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ps-table-card > .collapsible-section-header {
+  padding: 12px 16px 0;
+}
+
+.ps-table-card.is-collapsed > .collapsible-section-header {
+  padding-bottom: 12px;
+}
+
+/* Sections inside a Quote Wizard step: separated by a rule, not a card. */
+.wizard-section {
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Admin sidebar: collapse to a narrow rail (features/admin/AdminShell.tsx) */
+.ps-admin-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.ps-admin-sidebar-head .ps-admin-sidebar-title {
+  padding: 0;
+}
+
+.ps-admin-sidebar-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #d7dee9);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.ps-admin-sidebar-toggle:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.ps-admin-nav[hidden] {
+  display: none;
+}
+
+.ps-admin-sidebar--collapsed {
+  width: auto;
+  padding: 10px;
+}
+
+.ps-admin-sidebar--collapsed .ps-admin-sidebar-head {
+  padding: 0;
+  justify-content: center;
+}

@@ -44,6 +44,7 @@
     "test:e2e": "playwright test",
     "test:e2e:docker": "sh scripts/test-e2e-docker.sh",
     "test:e2e:isolated": "sh scripts/test-e2e-isolated.sh",
+    "test:e2e:report": "node scripts/summarize-playwright.mjs",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "deploy:local": "sh scripts/deploy-local.sh",
     "security:audit": "node scripts/check-npm-audit.mjs",

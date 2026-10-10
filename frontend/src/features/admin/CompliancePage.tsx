@@ -7,6 +7,7 @@ import {
   useDispositionOfacScreenMutation,
 } from '../../api/hooks'
 import { productLabel, statusLabel } from '../../shared/displayLabels'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 type EligibilityRow = {
   eligibility_id: string
@@ -108,7 +109,7 @@ function EligibilitySection() {
           <button type="submit" disabled={loading || !productCode || stateCode.length !== 2}>Save</button>
         </div>
       </form>
-      <div className="ps-table-card">
+      <CollapsibleSection title="Product Filings" className="ps-table-card">
         <table className="table">
           <thead><tr><th>Product</th><th>State</th><th>Status</th><th>Admitted</th><th>Notes</th><th>Actions</th></tr></thead>
           <tbody>
@@ -129,7 +130,7 @@ function EligibilitySection() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }
@@ -156,7 +157,7 @@ function OfacSection() {
   return (
     <div>
       {errorMessage && <p className="error">{errorMessage}</p>}
-      <div className="ps-table-card">
+      <CollapsibleSection title="OFAC Screenings" className="ps-table-card">
         <table className="table">
           <thead><tr><th>Party</th><th>Result</th><th>Screened</th><th>Matches</th><th>Disposition</th><th>Actions</th></tr></thead>
           <tbody>
@@ -177,7 +178,7 @@ function OfacSection() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CollapsibleSection>
     </div>
   )
 }
