@@ -61,6 +61,9 @@ export function AdminShell() {
           {hasPermission(user, 'uw.authority.read') && (
             <NavLink to="/admin/underwriting-authority" className={adminMenuClass}>Underwriting Authority</NavLink>
           )}
+          {hasPermission(user, 'admin.underwriting_rules.read') && (
+            <NavLink to="/admin/underwriting-rules" className={adminMenuClass}>Underwriting Rules</NavLink>
+          )}
         </nav>
       </aside>
       <section className="admin-content">

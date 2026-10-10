@@ -438,5 +438,104 @@ export const adminApi = {
   listFormTemplates: () => request<any[]>('GET', '/v1/admin/form-templates'),
   createFormTemplate: (payload: any) => request<any>('POST', '/v1/admin/form-templates', payload),
   updateFormTemplate: (id: string, payload: any) => request<any>('PATCH', `/v1/admin/form-templates/${id}`, payload),
-  deleteFormTemplate: (id: string) => request<any>('DELETE', `/v1/admin/form-templates/${id}`)
+  deleteFormTemplate: (id: string) => request<any>('DELETE', `/v1/admin/form-templates/${id}`),
+  // Underwriting rules (admin-authored rules engine)
+  listUnderwritingRuleFields: (productCode: string) =>
+    request<{ fields: UnderwritingRuleField[] }>(
+      'GET',
+      `/v1/admin/underwriting-rules/fields?productCode=${encodeURIComponent(productCode)}`
+    ),
+  listUnderwritingRules: (opts?: { productCode?: string; stateCode?: string; active?: boolean }) => {
+    const params = new URLSearchParams()
+    if (opts?.productCode) params.set('productCode', opts.productCode)
+    if (opts?.stateCode) params.set('stateCode', opts.stateCode)
+    if (opts?.active != null) params.set('active', String(opts.active))
+    const qs = params.toString()
+    return request<{ items: UnderwritingRule[] }>('GET', `/v1/admin/underwriting-rules${qs ? `?${qs}` : ''}`)
+  },
+  createUnderwritingRule: (payload: {
+    productCode: string
+    stateCode?: string | null
+    fieldPath: string
+    operator: UnderwritingRuleOperator
+    comparisonValue: UnderwritingRuleComparisonValue
+    outcome: UnderwritingRuleOutcome
+    reasonCode: string
+    reasonDescription: string
+    active?: boolean
+    effectiveDate: string
+    expirationDate?: string | null
+  }) => request<UnderwritingRule>('POST', '/v1/admin/underwriting-rules', payload),
+  updateUnderwritingRule: (
+    ruleId: string,
+    patch: Partial<{
+      stateCode: string | null
+      fieldPath: string
+      operator: UnderwritingRuleOperator
+      comparisonValue: UnderwritingRuleComparisonValue
+      outcome: UnderwritingRuleOutcome
+      reasonCode: string
+      reasonDescription: string
+      active: boolean
+      effectiveDate: string
+      expirationDate: string | null
+    }>
+  ) => request<UnderwritingRule>('PATCH', `/v1/admin/underwriting-rules/${encodeURIComponent(ruleId)}`, patch),
+  // Seeding admin-authored underwriting rules with the real default rule set. The dedicated
+  // endpoint may not exist yet on every backend — fall back to the general reference-data seed
+  // (which is documented to fold this seeding in) when the specific one 404s.
+  seedUnderwritingRules: async (): Promise<any> => {
+    try {
+      return await request<any>('POST', '/v1/admin/seed-underwriting-rules', {})
+    } catch (err: any) {
+      const message = String(err?.message || '')
+      if (message.includes('404')) {
+        return request<any>('POST', '/v1/admin/seed-reference-data', {})
+      }
+      throw err
+    }
+  }
+}
+
+export type UnderwritingRuleDataType = 'number' | 'string' | 'boolean'
+
+export type UnderwritingRuleOperator =
+  | 'equals'
+  | 'not_equals'
+  | 'greater_than'
+  | 'greater_than_or_equal'
+  | 'less_than'
+  | 'less_than_or_equal'
+  | 'is_true'
+  | 'is_false'
+  | 'in'
+  | 'not_in'
+
+export type UnderwritingRuleOutcome = 'Refer' | 'Decline'
+
+export type UnderwritingRuleComparisonValue = string | number | boolean | Array<string | number>
+
+export type UnderwritingRuleField = {
+  fieldPath: string
+  label: string
+  description: string
+  dataType: UnderwritingRuleDataType
+  allowedOperators: UnderwritingRuleOperator[]
+}
+
+export type UnderwritingRule = {
+  ruleId: string
+  productCode: string
+  stateCode: string | null
+  fieldPath: string
+  operator: UnderwritingRuleOperator
+  comparisonValue: UnderwritingRuleComparisonValue
+  outcome: UnderwritingRuleOutcome
+  reasonCode: string
+  reasonDescription: string
+  active: boolean
+  effectiveDate: string
+  expirationDate: string | null
+  createdAt: string
+  updatedAt: string
 }

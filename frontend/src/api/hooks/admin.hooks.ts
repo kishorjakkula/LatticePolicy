@@ -1147,3 +1147,54 @@ export function useDeleteFormTemplateMutation() {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Admin - Underwriting Rules
+// ---------------------------------------------------------------------------
+
+export function useAdminUnderwritingRuleFields(productCode: string) {
+  return useQuery({
+    queryKey: ['admin-uw-rules', 'fields', productCode],
+    queryFn: () => adminApi.listUnderwritingRuleFields(productCode),
+    enabled: !!productCode,
+  })
+}
+
+export function useAdminUnderwritingRules(opts: { productCode?: string; stateCode?: string; active?: boolean } = {}) {
+  return useQuery({
+    queryKey: ['admin-uw-rules', 'list', opts],
+    queryFn: () => adminApi.listUnderwritingRules(opts),
+  })
+}
+
+export function useCreateAdminUnderwritingRuleMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof adminApi.createUnderwritingRule>[0]) =>
+      adminApi.createUnderwritingRule(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-uw-rules'] })
+    },
+  })
+}
+
+export function useUpdateAdminUnderwritingRuleMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ruleId, patch }: { ruleId: string; patch: Parameters<typeof adminApi.updateUnderwritingRule>[1] }) =>
+      adminApi.updateUnderwritingRule(ruleId, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-uw-rules'] })
+    },
+  })
+}
+
+export function useSeedAdminUnderwritingRulesMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => adminApi.seedUnderwritingRules(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-uw-rules'] })
+    },
+  })
+}
