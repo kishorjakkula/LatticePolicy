@@ -269,7 +269,8 @@ dependence on freshly seeded names.
 | `dashboard-search`, `workflows` | Dashboard KPIs, quick lookup, filters, customers tab, CSV export API, sort/page-size URL state, mobile nav |
 | `forms-management` | Seeded forms, draft form creation, Word template upload, template variable reference |
 | `admin-users-security`, `admin-customers`, `admin-reference-config`, `admin-workflows` | Users, roles, customers and PII reveal, underwriting companies, tenant, compliance, notification templates, agency onboarding, operations dashboard, reinsurance, exposure, bordereaux, import, jobs |
-| `collapsible-sections` | Section cards collapse to their header and expand again, keeping entered values |
+| `collapsible-sections` | Sections collapse and expand keeping entered values; wizard step sections; search tab results; administration side menu collapse |
+| `ui-section-standards` | UI standard audit: visits every screen, fails with a list of any section card that is not collapsible, and exercises every collapse toggle |
 | `placements-rating` | Placement market workflow; rating workbench shell for the actuary role |
 
 Shared helpers live in `e2e/support/`: `fixtures.ts` (per-test synthetic client
@@ -288,6 +289,19 @@ Conventions for new specs:
 - A test that documents a known product defect is written with the correct
   expectation and marked `test.fixme` with a comment naming the defect; remove
   the marker in the change that fixes it. The suite currently has none.
+
+- A new screen must be added to `SCREENS` in `e2e/ui-section-standards.spec.ts`,
+  and its sections must use `CollapsibleSection`; the audit fails otherwise.
+
+### Failure reporting
+
+Every pull request and push to `main` runs the full suite. Failures are
+reported three ways: inline annotations on the pull request (Playwright
+`github` reporter), a "Playwright results" block in the workflow run summary
+listing each failed or flaky test with its first error line
+(`scripts/summarize-playwright.mjs`), and the HTML report and traces uploaded
+as artifacts. Locally, `npm run test:e2e:report` prints the same summary for
+the last run.
 
 Use `npx playwright install chromium` before the first run on a new machine.
 

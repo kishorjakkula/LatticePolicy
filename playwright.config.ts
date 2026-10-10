@@ -11,7 +11,11 @@ export default defineConfig({
   },
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // JSON output feeds scripts/summarize-playwright.mjs; in CI the github
+  // reporter also annotates each failure on the pull request.
+  reporter: process.env.CI
+    ? [['list'], ['github'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/results.json' }]]
+    : [['list'], ['json', { outputFile: 'test-results/results.json' }]],
   use: {
     baseURL,
     trace: 'retain-on-failure',

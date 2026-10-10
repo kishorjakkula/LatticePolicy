@@ -521,7 +521,7 @@ export function AgencyOnboardingPage() {
 
       {!isEditorOpen && (
         <>
-          <div className="ps-filter-panel">
+          <CollapsibleSection title="Filters" className="ps-filter-panel">
             <form className="ps-filter-grid" onSubmit={(e) => { e.preventDefault(); void loadAgencies() }} role="search">
               <div className="ps-filter-col ps-filter-col--wide">
                 <label className="ps-filter-label" htmlFor="agency-filter-q">Query</label>
@@ -540,7 +540,7 @@ export function AgencyOnboardingPage() {
                 <button type="submit" className="ps-filter-btn-search" disabled={isLoading}>Search</button>
               </div>
             </form>
-          </div>
+          </CollapsibleSection>
 
           <CollapsibleSection title="Agency List" className="ps-table-card" style={{ marginTop: 16 }}>
             <table className="table">

@@ -485,7 +485,7 @@ export function FormsManagementPage() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      <div className="ps-filter-panel">
+      <CollapsibleSection title="Filters" className="ps-filter-panel">
         <form className="ps-filter-grid" onSubmit={(e) => { e.preventDefault(); void loadForms() }} role="search">
           <div className="ps-filter-col ps-filter-col--wide">
             <label className="ps-filter-label" htmlFor="fm-filter-q">Search</label>
@@ -510,7 +510,7 @@ export function FormsManagementPage() {
             <button type="submit" className="ps-filter-btn-search" disabled={loading}>Apply</button>
           </div>
         </form>
-      </div>
+      </CollapsibleSection>
 
       <CollapsibleSection title="Form List" className="ps-table-card">
         <table className="table">

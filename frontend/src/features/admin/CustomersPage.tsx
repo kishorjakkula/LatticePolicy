@@ -724,7 +724,7 @@ export function CustomersPage() {
 
       {!isDetailPage && (
         <>
-          <div className="ps-filter-panel">
+          <CollapsibleSection title="Filters" className="ps-filter-panel">
             <form className="ps-filter-grid" onSubmit={searchCustomers} role="search">
               <div className="ps-filter-col ps-filter-col--wide">
                 <label className="ps-filter-label" htmlFor="cust-filter-q">Search</label>
@@ -749,7 +749,7 @@ export function CustomersPage() {
                 <button type="button" className="btn-secondary" onClick={() => { setSearchFilters({ q: '', status: '', entityType: '' }); void searchCustomers() }}>Clear</button>
               </div>
             </form>
-          </div>
+          </CollapsibleSection>
 
           <CollapsibleSection title="Customer List" className="ps-table-card" style={{ marginTop: 16 }}>
             <table className="table table-sticky-header">

@@ -60,4 +60,24 @@ test.describe('collapsible screen sections', () => {
     await prior.getByRole('button', { name: 'Expand section' }).click()
     await expect(priorPolicy).toHaveValue('PP-12345')
   })
+
+  test('administration side menu collapses to a rail, stays collapsed across pages, and expands again', async ({ page, signInAs }) => {
+    await signInAs(page, 'admin')
+    await page.goto('/admin/forms')
+    const usersLink = page.getByRole('link', { name: 'Users', exact: true })
+    await expect(usersLink).toBeVisible()
+    const contentWidth = async () => (await page.locator('.admin-content').boundingBox())!.width
+    const expandedWidth = await contentWidth()
+
+    await page.getByRole('button', { name: 'Collapse administration menu' }).click()
+    await expect(usersLink).toBeHidden()
+    expect(await contentWidth()).toBeGreaterThan(expandedWidth + 100)
+
+    await page.goto('/admin/users')
+    await expect(page.getByRole('button', { name: 'Expand administration menu' })).toBeVisible()
+    await expect(usersLink).toBeHidden()
+
+    await page.getByRole('button', { name: 'Expand administration menu' }).click()
+    await expect(usersLink).toBeVisible()
+  })
 })

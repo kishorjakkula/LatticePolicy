@@ -27,6 +27,20 @@ expanded again. This is the baseline section pattern for new screens.
 - Search: Filters, and one results section per tab (Results, Quote Results,
   Customer Results).
 
+## Administration Side Menu
+
+`AdminShell` has a toggle that collapses the side menu to a narrow rail so the
+content takes the full width. The choice is stored in `localStorage`
+(`adminSidebarCollapsed`) and applies to every administration page.
+
+## Enforcement
+
+`e2e/ui-section-standards.spec.ts` visits every screen and fails, listing the
+offending elements, when a visible section card (`card`, `ps-table-card`,
+`ps-content-card`, `policy-section-card`, `ps-filter-panel`) is not a
+`CollapsibleSection`. It also clicks every toggle. Add new screens to its
+`SCREENS` list.
+
 ## Behavior Rules
 
 - Sections start expanded (`defaultOpen` can change that per section).
@@ -50,5 +64,6 @@ rail, header, and navigation bar are not sections.
 ## Validation
 
 - `frontend/src/components/__tests__/CollapsibleSection.test.tsx`
-- `e2e/collapsible-sections.spec.ts`
+- `e2e/collapsible-sections.spec.ts`, `e2e/ui-section-standards.spec.ts`
+- `frontend/src/features/admin/__tests__/AdminShell.test.tsx`
 - `npm run test:frontend`, `npm run typecheck`, `npm run test:e2e:isolated`

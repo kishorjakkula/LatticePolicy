@@ -8599,3 +8599,54 @@ code {
   margin-bottom: 0;
   border-bottom: 0;
 }
+
+/* Admin sidebar: collapse to a narrow rail (features/admin/AdminShell.tsx) */
+.ps-admin-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.ps-admin-sidebar-head .ps-admin-sidebar-title {
+  padding: 0;
+}
+
+.ps-admin-sidebar-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #d7dee9);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.ps-admin-sidebar-toggle:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.ps-admin-nav[hidden] {
+  display: none;
+}
+
+.ps-admin-sidebar--collapsed {
+  width: auto;
+  padding: 10px;
+}
+
+.ps-admin-sidebar--collapsed .ps-admin-sidebar-head {
+  padding: 0;
+  justify-content: center;
+}

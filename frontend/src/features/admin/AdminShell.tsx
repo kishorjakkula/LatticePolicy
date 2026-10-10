@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
@@ -6,13 +7,49 @@ function adminMenuClass({ isActive }: { isActive: boolean }) {
   return `ps-admin-nav-link${isActive ? ' ps-admin-nav-link--active' : ''}`
 }
 
+const SIDEBAR_COLLAPSED_KEY = 'adminSidebarCollapsed'
+
+function readSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function AdminShell() {
   const { user } = useAuth()
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
+  const toggleSidebar = () => {
+    setCollapsed((value) => {
+      const next = !value
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0')
+      } catch {
+        // Storage unavailable: the choice just lasts for this page visit.
+      }
+      return next
+    })
+  }
+  const toggleLabel = collapsed ? 'Expand administration menu' : 'Collapse administration menu'
   return (
     <div className="admin-layout">
-      <aside className="ps-admin-sidebar">
-        <div className="ps-admin-sidebar-title">Administration</div>
-        <nav className="ps-admin-nav">
+      <aside className={`ps-admin-sidebar${collapsed ? ' ps-admin-sidebar--collapsed' : ''}`}>
+        <div className="ps-admin-sidebar-head">
+          {!collapsed && <div className="ps-admin-sidebar-title">Administration</div>}
+          <button
+            type="button"
+            className="ps-admin-sidebar-toggle"
+            aria-expanded={!collapsed}
+            aria-controls="admin-sidebar-nav"
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            onClick={toggleSidebar}
+          >
+            {collapsed ? '\u00BB' : '\u00AB'}
+          </button>
+        </div>
+        <nav id="admin-sidebar-nav" className="ps-admin-nav" hidden={collapsed}>
           {hasPermission(user, 'menu.admin.forms.view') && (
             <NavLink to="/admin/forms" className={adminMenuClass}>Forms</NavLink>
           )}
