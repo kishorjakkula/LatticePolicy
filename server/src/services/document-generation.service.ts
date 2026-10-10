@@ -2,7 +2,20 @@ import crypto from 'crypto'
 import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
 import { BadRequestError } from '../errors/domain.errors.js'
-import { renderAndStoreDocument, retrieveAndVerifyStoredDocument } from './document-storage.service.js'
+import { logger } from '../logger.js'
+import {
+  getDocumentStorageAdapter,
+  renderAndStoreDocument,
+  retrieveAndVerifyStoredDocument,
+} from './document-storage.service.js'
+import {
+  DOCX_TEMPLATE_MIME_TYPE,
+  extractDocxPlaceholderTokens,
+  renderDocxTemplate,
+  resolveDocumentTemplateVariables,
+  sha256Bytes,
+  validateDocxPlaceholderTokens,
+} from './document-template-variables.js'
 
 export type PolicyDocumentTransactionType =
   | 'NB'
@@ -67,7 +80,7 @@ export type SelectedPolicyForm = {
 
 export type GeneratedPolicyDocument = {
   documentId: string
-  type: 'POLICY_PACKET'
+  type: 'POLICY_PACKET' | 'POLICY_FORM_DOCUMENT'
   uri: string
   hash: string
   metadata: Record<string, unknown>
@@ -449,6 +462,117 @@ export async function selectPolicyForms(
   return forms.sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code))
 }
 
+// For each selected form sourced from forms_admin that has an uploaded
+// .docx template asset (as opposed to the existing PDF-template path, which
+// this never touches), parses the template's placeholders, confirms they are
+// all recognized catalog tokens (uploads with unrecognized tokens are already
+// rejected at upload time in forms-admin.routes.ts, but this is re-checked
+// defensively in case a template was uploaded before that validation
+// existed), resolves this specific policy's real data, substitutes the
+// placeholders, and stores the filled .docx as a generated document artifact
+// via the same storage adapter + sha256 hash-and-verify model the PDF packet
+// above uses. A form with a PDF template, or no template at all, is
+// completely unaffected: this only ever *adds* documents, never changes the
+// PDF packet path. Any failure for an individual form (unparseable template,
+// render error, storage/verification failure) is logged and that form is
+// skipped rather than failing the whole packet.
+async function buildFilledFormDocuments(
+  q: QueryFn,
+  context: PolicyDocumentContext,
+  forms: SelectedPolicyForm[]
+): Promise<GeneratedPolicyDocument[]> {
+  const candidates = forms.filter((form) => form.source === 'forms_admin' && form.metadata.sourceFormId)
+  if (!candidates.length) return []
+
+  const documents: GeneratedPolicyDocument[] = []
+  for (const form of candidates) {
+    const sourceFormId = String(form.metadata.sourceFormId)
+    try {
+      const assetRes = await q(
+        `SELECT mime_type, content
+           FROM forms_admin_template_assets
+          WHERE tenant_id = $1 AND form_id = $2
+          LIMIT 1`,
+        [context.tenantId, sourceFormId]
+      )
+      if (!assetRes.rowCount) continue
+      const asset = assetRes.rows[0]
+      if (String(asset.mime_type || '').toLowerCase() !== DOCX_TEMPLATE_MIME_TYPE) continue
+
+      const templateContent: Buffer = Buffer.isBuffer(asset.content) ? asset.content : Buffer.from(asset.content)
+      const tokens = extractDocxPlaceholderTokens(templateContent)
+      const { unrecognized } = validateDocxPlaceholderTokens(tokens)
+      if (unrecognized.length) {
+        logger.warn(
+          { formId: sourceFormId, unrecognized },
+          'Skipping form template with unrecognized placeholder token(s) at document-generation time'
+        )
+        continue
+      }
+
+      const variables = await resolveDocumentTemplateVariables(q, {
+        tenantId: context.tenantId,
+        policyId: context.policyId,
+        versionId: context.versionId,
+        policyNumber: context.policyNumber,
+        productCode: context.productCode,
+        state: context.state,
+        effectiveDate: context.effectiveDate,
+        transactionType: context.transactionType,
+        transactionNumber: context.transactionNumber,
+        payload: context.inputSnapshot,
+      })
+      const filled = renderDocxTemplate(templateContent, variables)
+      const documentId = uuidv4()
+      const renderedAt = new Date().toISOString()
+      const { storageUri } = await getDocumentStorageAdapter().store({
+        tenantId: context.tenantId,
+        documentId,
+        fileName: `${documentId}.docx`,
+        contentType: DOCX_TEMPLATE_MIME_TYPE,
+        content: filled,
+      })
+      const contentHash = sha256Bytes(filled)
+      const verified = await retrieveAndVerifyStoredDocument(storageUri, contentHash)
+      if (!verified) {
+        logger.warn(
+          { formId: sourceFormId, policyId: context.policyId },
+          'Filled form document failed verification after storage; skipping'
+        )
+        continue
+      }
+
+      documents.push({
+        documentId,
+        type: 'POLICY_FORM_DOCUMENT',
+        uri: storageUri,
+        hash: contentHash,
+        metadata: {
+          policyId: context.policyId,
+          versionId: context.versionId || null,
+          transactionId: context.transactionId,
+          transactionType: context.transactionType,
+          formId: sourceFormId,
+          code: form.code,
+          title: form.title,
+          edition: form.edition,
+          recognizedTokens: tokens,
+          artifact: {
+            storageUri,
+            contentType: DOCX_TEMPLATE_MIME_TYPE,
+            byteSize: filled.length,
+            storageAdapter: getDocumentStorageAdapter().name,
+            renderedAt,
+          },
+        },
+      })
+    } catch (err) {
+      logger.warn({ err, formId: sourceFormId }, 'Failed to render filled form document from docx template; skipping')
+    }
+  }
+  return documents
+}
+
 export async function buildPolicyDocumentPacket(
   q: QueryFn,
   context: PolicyDocumentContext
@@ -467,7 +591,8 @@ export async function buildPolicyDocumentPacket(
   const documents = await Promise.all(
     buildPacketDocument(context, forms).map((document) => attachRenderedArtifact(context, forms, document))
   )
-  return { forms, documents }
+  const formDocuments = await buildFilledFormDocuments(q, context, forms)
+  return { forms, documents: [...documents, ...formDocuments] }
 }
 
 export async function persistPolicyDocumentPacket(

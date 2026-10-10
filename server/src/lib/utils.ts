@@ -31,6 +31,14 @@ export function sanitizeInlineFileName(value: string): string {
     .slice(0, 180) || 'document.pdf'
 }
 
+export function fileExtensionForContentType(contentType: string): string {
+  const normalized = String(contentType || '').toLowerCase()
+  if (normalized.includes('application/pdf')) return 'pdf'
+  if (normalized.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'docx'
+  if (normalized.includes('text/html')) return 'html'
+  return 'bin'
+}
+
 export function sanitizeText(value: any): string {
   return String(value ?? '').trim()
 }
