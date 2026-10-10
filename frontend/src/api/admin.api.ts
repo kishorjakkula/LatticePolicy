@@ -523,19 +523,28 @@ export type UnderwritingRuleField = {
   allowedOperators: UnderwritingRuleOperator[]
 }
 
+// The CRUD routes behind these calls (uw.routes.ts) use raw SQL, not an ORM
+// model, and return the Postgres row verbatim -- so this response shape is
+// snake_case, matching the `underwriting_rules` table's real columns. This
+// mirrors the established convention for this same route file's sibling
+// endpoint (GET /uw/authority-grants / AuthorityGrantRow in
+// UnderwritingAuthorityPage.tsx), which also returns raw rows rather than a
+// camelCase projection. Request bodies for create/update are a separate,
+// intentionally camelCase shape (see createUnderwritingRule/
+// updateUnderwritingRule above) -- that's what the route handlers parse.
 export type UnderwritingRule = {
-  ruleId: string
-  productCode: string
-  stateCode: string | null
-  fieldPath: string
+  rule_id: string
+  product_code: string
+  state_code: string | null
+  field_path: string
   operator: UnderwritingRuleOperator
-  comparisonValue: UnderwritingRuleComparisonValue
+  comparison_value: UnderwritingRuleComparisonValue
   outcome: UnderwritingRuleOutcome
-  reasonCode: string
-  reasonDescription: string
+  reason_code: string
+  reason_description: string
   active: boolean
-  effectiveDate: string
-  expirationDate: string | null
-  createdAt: string
-  updatedAt: string
+  effective_date: string
+  expiration_date: string | null
+  created_at: string
+  updated_at: string
 }

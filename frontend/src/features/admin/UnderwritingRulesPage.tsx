@@ -101,14 +101,14 @@ function summarizeSeedResult(result: any): string {
       ? `Seeded underwriting rules: ${created} new rule(s) created. Already-present rules were left untouched.`
       : 'Underwriting rules already seeded — nothing new to create.'
   }
-  if (result.summary && typeof result.summary === 'object') {
-    let created = 0
-    for (const value of Object.values(result.summary)) {
-      if (Array.isArray(value)) created += value.length
-      else if (typeof value === 'number') created += value
-    }
+  // Real shape from POST /admin/seed-underwriting-rules: { ok: true, summary: { created: string[], skipped: string[] } }.
+  // Count only `created` here -- summing every key in `summary` (as an earlier
+  // version of this did) would add `skipped`'s length too, so a fully-seeded
+  // tenant re-running this would be told rules were "created" when none were.
+  if (result.summary && typeof result.summary === 'object' && Array.isArray(result.summary.created)) {
+    const created = result.summary.created.length
     return created > 0
-      ? `Seeded underwriting rules: ${created} new record(s) created across products. Already-present records were left untouched.`
+      ? `Seeded underwriting rules: ${created} new rule(s) created. Already-present rules were left untouched.`
       : 'Underwriting rules already seeded — nothing new to create.'
   }
   return 'Seed completed.'
@@ -154,7 +154,7 @@ export function UnderwritingRulesPage() {
   const rulesQuery = useAdminUnderwritingRules({ productCode: selectedProduct })
   // Defensive client-side filter in case the backend doesn't actually filter server-side.
   const rows: UnderwritingRule[] = (rulesQuery.data?.items ?? []).filter(
-    (rule) => !selectedProduct || rule.productCode === selectedProduct
+    (rule) => !selectedProduct || rule.product_code === selectedProduct
   )
 
   const createMutation = useCreateAdminUnderwritingRuleMutation()
@@ -195,24 +195,24 @@ export function UnderwritingRulesPage() {
 
   const startEdit = (rule: UnderwritingRule) => {
     setFormError(null)
-    setEditingRuleId(rule.ruleId)
-    setFieldPath(rule.fieldPath)
+    setEditingRuleId(rule.rule_id)
+    setFieldPath(rule.field_path)
     setOperator(rule.operator)
-    const field = fields.find((f) => f.fieldPath === rule.fieldPath)
+    const field = fields.find((f) => f.fieldPath === rule.field_path)
     if (field?.dataType === 'boolean') {
-      setComparisonValueBool(rule.comparisonValue === true)
+      setComparisonValueBool(rule.comparison_value === true)
       setComparisonValueText('')
-    } else if (Array.isArray(rule.comparisonValue)) {
-      setComparisonValueText(rule.comparisonValue.join(', '))
+    } else if (Array.isArray(rule.comparison_value)) {
+      setComparisonValueText(rule.comparison_value.join(', '))
     } else {
-      setComparisonValueText(String(rule.comparisonValue))
+      setComparisonValueText(String(rule.comparison_value))
     }
     setOutcome(rule.outcome)
-    setReasonCode(rule.reasonCode)
-    setReasonDescription(rule.reasonDescription)
-    setStateCode(rule.stateCode || '')
-    setEffectiveDate(rule.effectiveDate ? rule.effectiveDate.slice(0, 10) : todayIso())
-    setExpirationDate(rule.expirationDate ? rule.expirationDate.slice(0, 10) : '')
+    setReasonCode(rule.reason_code)
+    setReasonDescription(rule.reason_description)
+    setStateCode(rule.state_code || '')
+    setEffectiveDate(rule.effective_date ? rule.effective_date.slice(0, 10) : todayIso())
+    setExpirationDate(rule.expiration_date ? rule.expiration_date.slice(0, 10) : '')
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -246,7 +246,7 @@ export function UnderwritingRulesPage() {
   const onToggleActive = async (rule: UnderwritingRule) => {
     setFormError(null)
     try {
-      await updateMutation.mutateAsync({ ruleId: rule.ruleId, patch: { active: !rule.active } })
+      await updateMutation.mutateAsync({ ruleId: rule.rule_id, patch: { active: !rule.active } })
     } catch (err) {
       setFormError(extractErrorMessage(err))
     }
@@ -476,20 +476,20 @@ export function UnderwritingRulesPage() {
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.ruleId}>
-                <td>{fields.find((f) => f.fieldPath === row.fieldPath)?.label || row.fieldPath}</td>
+              <tr key={row.rule_id}>
+                <td>{fields.find((f) => f.fieldPath === row.field_path)?.label || row.field_path}</td>
                 <td>{humanizeCode(row.operator)}</td>
-                <td>{formatComparisonValue(row.comparisonValue)}</td>
+                <td>{formatComparisonValue(row.comparison_value)}</td>
                 <td>
                   <span className={`badge ${row.outcome === 'Decline' ? 'red' : 'yellow'}`}>{row.outcome}</span>
                 </td>
                 <td>
-                  {row.reasonCode}
-                  {row.reasonDescription ? <div className="muted">{row.reasonDescription}</div> : null}
+                  {row.reason_code}
+                  {row.reason_description ? <div className="muted">{row.reason_description}</div> : null}
                 </td>
-                <td>{row.stateCode || <span className="muted">All</span>}</td>
-                <td>{formatDisplayDate(row.effectiveDate, { fallback: '-' })}</td>
-                <td>{formatDisplayDate(row.expirationDate, { fallback: '-' })}</td>
+                <td>{row.state_code || <span className="muted">All</span>}</td>
+                <td>{formatDisplayDate(row.effective_date, { fallback: '-' })}</td>
+                <td>{formatDisplayDate(row.expiration_date, { fallback: '-' })}</td>
                 <td>
                   <span className={`badge ${row.active ? 'green' : 'gray'}`}>{row.active ? 'Active' : 'Inactive'}</span>
                 </td>

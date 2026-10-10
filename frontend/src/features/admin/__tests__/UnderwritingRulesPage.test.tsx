@@ -60,21 +60,24 @@ const hasPriorViolationField = {
   allowedOperators: ['is_true', 'is_false'],
 }
 
+// Matches the real shape returned by the raw-SQL backend routes (uw.routes.ts),
+// which send the `underwriting_rules` Postgres row verbatim -- snake_case, not
+// a camelCase projection. See the `UnderwritingRule` type in admin.api.ts.
 const existingRule = {
-  ruleId: 'rule-1',
-  productCode: 'personal-auto',
-  stateCode: 'CA',
-  fieldPath: 'driver.age',
+  rule_id: 'rule-1',
+  product_code: 'personal-auto',
+  state_code: 'CA',
+  field_path: 'driver.age',
   operator: 'less_than',
-  comparisonValue: 21,
+  comparison_value: 21,
   outcome: 'Decline',
-  reasonCode: 'YOUNG_DRIVER',
-  reasonDescription: 'Driver under minimum age',
+  reason_code: 'YOUNG_DRIVER',
+  reason_description: 'Driver under minimum age',
   active: true,
-  effectiveDate: '2026-01-01',
-  expirationDate: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
+  effective_date: '2026-01-01',
+  expiration_date: null,
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
 }
 
 describe('UnderwritingRulesPage', () => {
@@ -176,7 +179,7 @@ describe('UnderwritingRulesPage', () => {
 
   it('submits a new rule to the create endpoint', async () => {
     useAdminUnderwritingRulesMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
-    createRuleMutateMock.mockResolvedValue({ ...existingRule, ruleId: 'rule-2' })
+    createRuleMutateMock.mockResolvedValue({ ...existingRule, rule_id: 'rule-2' })
     const user = userEvent.setup()
     render(<UnderwritingRulesPage />)
 
@@ -213,7 +216,8 @@ describe('UnderwritingRulesPage', () => {
   })
 
   it('runs the seed action and shows the result message', async () => {
-    seedRulesMutateMock.mockResolvedValue({ created: [{ ruleId: 'new-1' }, { ruleId: 'new-2' }] })
+    // Real response shape from POST /admin/seed-underwriting-rules.
+    seedRulesMutateMock.mockResolvedValue({ ok: true, summary: { created: ['NEW_RULE_1', 'NEW_RULE_2'], skipped: [] } })
     const user = userEvent.setup()
     render(<UnderwritingRulesPage />)
 
@@ -222,6 +226,18 @@ describe('UnderwritingRulesPage', () => {
     await waitFor(() => {
       expect(seedRulesMutateMock).toHaveBeenCalled()
       expect(screen.getByTestId('seed-result-message')).toHaveTextContent('2 new rule(s) created')
+    })
+  })
+
+  it('reports nothing new when every default rule is already seeded', async () => {
+    seedRulesMutateMock.mockResolvedValue({ ok: true, summary: { created: [], skipped: ['HO-ROOF-AGE'] } })
+    const user = userEvent.setup()
+    render(<UnderwritingRulesPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Seed Default Rules' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('seed-result-message')).toHaveTextContent('already seeded')
     })
   })
 
