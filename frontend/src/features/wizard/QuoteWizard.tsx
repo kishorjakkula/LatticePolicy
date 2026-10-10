@@ -3426,6 +3426,8 @@ export function QuoteWizard() {
         <div className="wizard-stage-card-body">
       {step === 1 && (
         <section>
+          {(isPolicyTransactionMode || isEndorsementMode || isCancellationMode) && (
+          <CollapsibleSection className="wizard-section" title="Transaction Details">
           {isPolicyTransactionMode && (
             <div className="row row-spaced-sm transaction-effective-row">
               <div className="col transaction-effective-col">
@@ -3514,6 +3516,9 @@ export function QuoteWizard() {
               </div>
             </div>
           )}
+          </CollapsibleSection>
+          )}
+          <CollapsibleSection className="wizard-section" title="Company & Agency">
           <div className="row">
             <div className="col uw-company-col">
               <label>Underwriting Company</label>
@@ -3659,6 +3664,8 @@ export function QuoteWizard() {
               />
             </div>
           </div>
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Product & Term">
           <div className="row">
             <div className="col">
               <label>Effective Date</label>
@@ -3779,6 +3786,8 @@ export function QuoteWizard() {
               </select>
             </div>
           </div>
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Prior Insurance">
           <div className="row">
             <div className="col">
               <label>Prior Policy Number</label>
@@ -3812,11 +3821,13 @@ export function QuoteWizard() {
               </select>
             </div>
           </div>
+          </CollapsibleSection>
         </section>
       )}
 
       {step === 2 && (
         <section>
+          <CollapsibleSection className="wizard-section" title="Qualification Questions">
           {!q.productCode ? (
             <div className="muted">Select a product in Step 1 to continue.</div>
           ) : (
@@ -3894,14 +3905,14 @@ export function QuoteWizard() {
               </div>
             )
           )}
+          </CollapsibleSection>
         </section>
       )}
 
       {step === 3 && (
         <section>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <CollapsibleSection className="wizard-section">
             <h3 style={{ margin: 0 }}>Primary Named Insured</h3>
-          </div>
           {primaryInsuredErrors.map((message) => (
             <div key={`primary-insured-error-${message}`} className="error">{message}</div>
           ))}
@@ -4077,9 +4088,9 @@ export function QuoteWizard() {
             </table>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 8 }}>
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section">
             <h3 style={{ margin: 0 }}>Secondary Named Insured</h3>
-          </div>
           {secondaryInsuredErrors.map((message) => (
             <div key={`secondary-insured-error-${message}`} className="error">{message}</div>
           ))}
@@ -4167,6 +4178,8 @@ export function QuoteWizard() {
             </table>
           </div>
 
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section">
           <div className="insureds-subsection-header">
             <h3 style={{ margin: 0 }}>Additional Named Insureds</h3>
             {!isViewOnly && (
@@ -4270,6 +4283,7 @@ export function QuoteWizard() {
               </table>
             </div>
           )}
+          </CollapsibleSection>
           {contactDetailPopupOpen && (
             <div className="modal-overlay" role="dialog" aria-modal="true" onClick={clearCustomerContactView}>
               <div className="modal-panel modal-panel-lg" onClick={(event) => event.stopPropagation()}>
@@ -4359,6 +4373,7 @@ export function QuoteWizard() {
 
       {step === 4 && (
         <section>
+          <CollapsibleSection className="wizard-section" title="Risk Details">
           {!q.productCode ? (
             <div className="muted">Select a product in Step 1 to continue.</div>
           ) : q.productCode === 'personal-auto' ? (
@@ -4384,11 +4399,13 @@ export function QuoteWizard() {
               onValidate={(errs) => setFieldErrors(errs)}
             />
           )}
+          </CollapsibleSection>
         </section>
       )}
 
       {step === 5 && (
         <section>
+          <CollapsibleSection className="wizard-section" title="Coverage Selection">
           {!q.productCode ? (
             <div className="muted">Select a product in Step 1 to continue.</div>
           ) : (
@@ -4399,6 +4416,7 @@ export function QuoteWizard() {
               disabled={isCancellationMode || isViewOnly}
               onChange={(c) => setQ(prev => ({ ...prev, coverages: c }))} />
           )}
+          </CollapsibleSection>
         </section>
       )}
 
@@ -4590,6 +4608,7 @@ export function QuoteWizard() {
             <div className="card quote-decision-card">
               {(quoteResp || visibleUnderwriting || visiblePremium) && (
                 <>
+                  <CollapsibleSection className="wizard-section">
                   <h3>Underwriting</h3>
                   <div className="kvline"><span className="muted">Decision</span><span>{visibleUnderwriting?.decision || 'Eligible'}</span></div>
                   {Array.isArray(quoteResp?.underwriting?.reasons) && quoteResp.underwriting.reasons.length > 0 && (
@@ -4614,6 +4633,8 @@ export function QuoteWizard() {
                       )}
                     </div>
                   )}
+                  </CollapsibleSection>
+                  <CollapsibleSection className="wizard-section">
                   <h3>Premium</h3>
                   {visiblePremium?.calcTrace?.source && (
                     <>
@@ -4758,6 +4779,7 @@ export function QuoteWizard() {
                       </button>
                     </div>
                   )}
+                  </CollapsibleSection>
                 </>
               )}
               {!visiblePremium && wizardMode === 'reinstate' && (
@@ -5335,7 +5357,7 @@ function AutoRiskEditor({
       {vehicles.map((vehicle: any, index: number) => {
         const vehicleSummary = [vehicle?.year, vehicle?.make, vehicle?.model, vehicle?.trim].filter(Boolean).join(' ')
         return (
-        <div key={`vehicle-${index}`} className="card auto-risk-vehicle-card">
+        <CollapsibleSection key={`vehicle-${index}`} className="card auto-risk-vehicle-card">
           <div className="auto-risk-vehicle-card-head">
             <div>
               <h4 className="auto-risk-vehicle-title">{`Vehicle ${index + 1}`}</h4>
@@ -5563,7 +5585,7 @@ function AutoRiskEditor({
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
       )})}
     </div>
   )

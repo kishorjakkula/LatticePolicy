@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { Link } from 'react-router-dom'
 import { adminApi } from '../../api/client'
 import { ActionButton } from '../../components/ActionButton'
@@ -115,23 +116,23 @@ export function InsuredsPage() {
         <h1 className="ps-page-title">Insureds</h1>
       </div>
 
-      <section>
+      <CollapsibleSection as="section">
         <h3 className="ps-content-card-title">Primary Named Insured</h3>
         <div className="ps-form-grid">
           <NameFields prefix={pPrefix} setPrefix={setPPrefix} firstName={pFirst} setFirstName={setPFirst} lastName={pLast} setLastName={setPLast} displayName={pDisplay} setDisplayName={setPDisplay} />
         </div>
         <AddressFields address={pAddress} setAddress={setPAddress} />
-      </section>
+      </CollapsibleSection>
 
-      <section>
+      <CollapsibleSection as="section">
         <h3 className="ps-content-card-title">Secondary Named Insured</h3>
         <div className="ps-form-grid">
           <NameFields prefix={sPrefix} setPrefix={setSPrefix} firstName={sFirst} setFirstName={setSFirst} lastName={sLast} setLastName={setSLast} displayName={sDisplay} setDisplayName={setSDisplay} />
         </div>
         <AddressFields address={sAddress} setAddress={setSAddress} />
-      </section>
+      </CollapsibleSection>
 
-      <section>
+      <CollapsibleSection as="section">
         <h3 className="ps-content-card-title">Additional Named Insureds</h3>
         <div className="ps-filter-grid" style={{ gridTemplateColumns: '1fr auto', marginBottom: 12 }}>
           <div className="ps-filter-col">
@@ -173,11 +174,11 @@ export function InsuredsPage() {
           </div>
         )}
 
-        <div className="ps-content-card" style={{ marginTop: 16 }}>
+        <CollapsibleSection className="ps-content-card" style={{ marginTop: 16 }}>
           <h4 className="ps-content-card-title">Add New Contact</h4>
           <CreateCustomerForm onCreate={createCustomerAndAdd} />
-        </div>
-      </section>
+        </CollapsibleSection>
+      </CollapsibleSection>
     </div>
   )
 }

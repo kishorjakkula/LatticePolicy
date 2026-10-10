@@ -2,7 +2,7 @@ import React, { Children, isValidElement, useId, useState } from 'react'
 
 // Header wrappers the screens already use. When a section's first child is one
 // of these (or a bare h2-h4) it becomes the always-visible header row.
-const HEADER_CLASS = /\b(panel-header|policy-section-header|policy-actions-header|ps-content-card-title|card-head|section-title)\b/
+const HEADER_CLASS = /\b(panel-header|policy-section-header|policy-actions-header|ps-content-card-title|card-head|section-title|insureds-subsection-header|auto-risk-vehicle-card-head)\b/
 const HEADING_TAGS = new Set(['h2', 'h3', 'h4'])
 
 type Props = Omit<React.HTMLAttributes<HTMLElement>, 'title'> & {

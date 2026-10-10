@@ -1358,6 +1358,7 @@ export function SearchPage() {
             </CollapsibleSection>
           </div>
           {mode === "quotes" && (
+            <CollapsibleSection title="Quote Results" className="ps-table-card">
             <table className="table table-sticky-header policy-search-table">
               <thead>
                 <tr>
@@ -1399,8 +1400,10 @@ export function SearchPage() {
                 )}
               </tbody>
             </table>
+            </CollapsibleSection>
           )}
           {mode === "customers" && (
+            <CollapsibleSection title="Customer Results" className="ps-table-card">
             <table className="table table-sticky-header policy-search-table">
               <thead>
                 <tr>
@@ -1457,6 +1460,7 @@ export function SearchPage() {
                 )}
               </tbody>
             </table>
+            </CollapsibleSection>
           )}
           <Pagination
             page={page}

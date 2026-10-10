@@ -19,6 +19,13 @@ expanded again. This is the baseline section pattern for new screens.
   customer portal, rating workbench, UW queue, placements, and the Quote Wizard
   sub-cards now use it. `as="section" | "form"` keeps the original element.
 - Styles are at the end of `frontend/src/styles.css`.
+- Quote Wizard steps (new business and endorse/cancel/renew transactions) are
+  split into sections with the `wizard-section` class: Transaction Details
+  (transaction modes only), Company & Agency, Product & Term, Prior Insurance,
+  Qualification Questions, the three named-insured groups, Risk Details (each
+  vehicle is also collapsible), Coverage Selection, Underwriting, and Premium.
+- Search: Filters, and one results section per tab (Results, Quote Results,
+  Customer Results).
 
 ## Behavior Rules
 
@@ -37,8 +44,8 @@ expanded again. This is the baseline section pattern for new screens.
 Page hero/header cards, KPI tiles, alerts and loading/error placeholders,
 modals, the login page, wireframe pages, whole-page wrapper cards, inline
 create bars, and cards that already contain a native `<details>` collapsible
-(policy as-of panel, AI insights, timeline ledger). Quote Wizard steps
-themselves are not collapsible; only their sub-cards are.
+(policy as-of panel, AI insights, timeline ledger). The wizard's workflow
+rail, header, and navigation bar are not sections.
 
 ## Validation
 

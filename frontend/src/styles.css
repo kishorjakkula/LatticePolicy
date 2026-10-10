@@ -8586,3 +8586,16 @@ code {
 .ps-table-card.is-collapsed > .collapsible-section-header {
   padding-bottom: 12px;
 }
+
+/* Sections inside a Quote Wizard step: separated by a rule, not a card. */
+.wizard-section {
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: 0;
+}
