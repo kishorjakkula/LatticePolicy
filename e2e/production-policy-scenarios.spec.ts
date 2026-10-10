@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/fixtures'
 import { apiJson, createIssuedPolicy, installAuthState, loginApi } from './support/api'
 
 test.describe('production policy critical paths', () => {

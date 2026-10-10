@@ -27,8 +27,43 @@ env:
   TEST_FRONTEND_URL: ${{ vars.TEST_FRONTEND_URL }}
 
 jobs:
+  e2e:
+    name: Playwright E2E (pre-deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Full suite against a disposable stack built from the commit being deployed.
+      - name: Run full Playwright suite
+        run: npm run test:e2e:isolated
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pre-deploy-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
   deploy:
     name: Build, Push, Deploy
+    needs: e2e
     runs-on: ubuntu-latest
     environment: test
     steps:
@@ -150,3 +185,9 @@ jobs:
       - name: Smoke test frontend
         run: |
           curl --fail --retry 6 --retry-delay 10 --retry-all-errors "$TEST_FRONTEND_URL"
+
+  post-deploy-e2e:
+    name: Post-deploy Playwright
+    needs: deploy
+    uses: ./.github/workflows/e2e-post-deploy.yml
+    secrets: inherit

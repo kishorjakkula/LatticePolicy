@@ -30,7 +30,12 @@ Required permissions usually include:
 - `AZURE_CONTAINER_APP_MIGRATION_JOB` (optional one-off migration job)
 - `VITE_API_BASE_URL` (public API URL compiled into the frontend image)
 - `TEST_API_HEALTH_URL` (optional smoke-test URL, for example `https://api.example.com/health`)
-- `TEST_FRONTEND_URL` (optional smoke-test URL, for example `https://app.example.com`)
+- `TEST_FRONTEND_URL` (smoke-test and Playwright UI URL, for example `https://app.example.com`)
+- `E2E_TENANT_ID` (tenant slug the post-deploy Playwright smoke tests sign in to)
+
+Post-deploy Playwright also needs the secret `E2E_PASSWORD`: the password of the
+`admin` and `agent1` test users in that tenant. Use a test environment only;
+never point it at production credentials.
 
 ## 3) Configure Container Apps runtime settings
 
@@ -71,7 +76,9 @@ If the audience is very small, add Azure Front Door WAF, Application Gateway WAF
 - The workflow pushes both images to ACR.
 - If `AZURE_CONTAINER_APP_MIGRATION_JOB` is configured, the workflow starts it before updating services.
 - The workflow updates API and frontend Container Apps to the new images.
-- If smoke-test URLs are configured, the workflow checks them after deployment.
+- The workflow checks the smoke-test URLs after deployment.
+- Before deploying, the workflow runs the full Playwright suite against a disposable Docker stack built from the same commit; a failure stops the deploy.
+- After a successful deploy, `e2e-post-deploy.yml` runs the `@smoke` Playwright tests against the deployed environment (`TEST_FRONTEND_URL`, `VITE_API_BASE_URL`). They sign in as `admin` and `agent1`, seed idempotent reference data, and create one quote and two policies per run. The same workflow can be run by hand from the Actions tab.
 
 ## 6) Recommended hardening
 

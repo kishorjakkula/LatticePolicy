@@ -16,6 +16,8 @@ interface PolicyRowProps {
   onToggle: (id: string) => void
   onContextMenu: (e: React.MouseEvent, policy: any) => void
   onNavigate: (path: string) => void
+  /** Column keys (data-col) the user has hidden via the Columns menu. */
+  hiddenColumns?: Set<string>
 }
 
 export const PolicyRow = React.memo(function PolicyRow({
@@ -24,7 +26,9 @@ export const PolicyRow = React.memo(function PolicyRow({
   onToggle,
   onContextMenu,
   onNavigate,
+  hiddenColumns,
 }: PolicyRowProps) {
+  const show = (key: string) => !hiddenColumns?.has(key)
   const policyId: string = p.policyId
   const workflowStatus = derivePolicyWorkflowStatus(p.internalStatus || p.status, p.term)
   const insuredName = p.insuredName || p.customer?.name || ''
@@ -53,33 +57,47 @@ export const PolicyRow = React.memo(function PolicyRow({
           {p.policyNumber || policyId}
         </button>
       </td>
-      <td data-col="insured" data-label="Insured Name" className="ps-col-primary">
-        {insuredName || '\u2014'}
-      </td>
-      <td data-col="product" data-label="Product" className="ps-col-secondary">
-        {p.productCode || '\u2014'}
-      </td>
-      <td data-col="dates" data-label={'Eff \u2192 Exp'} className="ps-col-dates">
-        <span className="ps-date-eff">
-          {formatDisplayDate(p.term?.effectiveDate, { fallback: '\u2014' })}
-        </span>
-        <span className="ps-date-arrow" aria-hidden="true">{' \u2192 '}</span>
-        <span className="ps-date-exp ps-col-dim">
-          {formatDisplayDate(p.term?.expirationDate, { fallback: '\u2014' })}
-        </span>
-      </td>
-      <td data-col="created" data-label="Created" className="ps-col-secondary">
-        {formatDisplayDate(createdDate, { fallback: '\u2014' })}
-      </td>
-      <td data-col="updated" data-label="Updated" className="ps-col-secondary">
-        {formatDisplayDate(updatedDate, { fallback: '\u2014' })}
-      </td>
-      <td data-col="premium" data-label="Premium" className="ps-col-premium">
-        {formatPremium(p.premium?.total?.amount ?? p.annualPremium ?? p.totalPremium)}
-      </td>
-      <td data-col="status" data-label="Status">
-        <StatusBadge status={workflowStatus} />
-      </td>
+      {show("insured") && (
+        <td data-col="insured" data-label="Insured Name" className="ps-col-primary">
+          {insuredName || '\u2014'}
+        </td>
+      )}
+      {show("product") && (
+        <td data-col="product" data-label="Product" className="ps-col-secondary">
+          {p.productCode || '\u2014'}
+        </td>
+      )}
+      {show("dates") && (
+        <td data-col="dates" data-label={'Eff \u2192 Exp'} className="ps-col-dates">
+          <span className="ps-date-eff">
+            {formatDisplayDate(p.term?.effectiveDate, { fallback: '\u2014' })}
+          </span>
+          <span className="ps-date-arrow" aria-hidden="true">{' \u2192 '}</span>
+          <span className="ps-date-exp ps-col-dim">
+            {formatDisplayDate(p.term?.expirationDate, { fallback: '\u2014' })}
+          </span>
+        </td>
+      )}
+      {show("created") && (
+        <td data-col="created" data-label="Created" className="ps-col-secondary">
+          {formatDisplayDate(createdDate, { fallback: '\u2014' })}
+        </td>
+      )}
+      {show("updated") && (
+        <td data-col="updated" data-label="Updated" className="ps-col-secondary">
+          {formatDisplayDate(updatedDate, { fallback: '\u2014' })}
+        </td>
+      )}
+      {show("premium") && (
+        <td data-col="premium" data-label="Premium" className="ps-col-premium">
+          {formatPremium(p.premium?.total?.amount ?? p.annualPremium ?? p.totalPremium)}
+        </td>
+      )}
+      {show("status") && (
+        <td data-col="status" data-label="Status">
+          <StatusBadge status={workflowStatus} />
+        </td>
+      )}
     </tr>
   )
 })

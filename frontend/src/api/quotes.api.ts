@@ -43,3 +43,16 @@ export const exportQuotesCsv = async (params: Record<string,string|number|undefi
   }
   return await res.blob()
 }
+
+// Customer lookup/creation for the Quote Wizard's Insureds step. These hit the
+// wizard-scoped /v1/customers endpoints (page.wizard.view) rather than the
+// admin customer API, so producer roles without admin permissions can use them.
+export const quoteIntakeApi = {
+  searchCustomers: (opts: { q: string; limit?: number }) => {
+    const params = new URLSearchParams({ q: opts.q })
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    return request<any[]>('GET', `/v1/customers/search?${params.toString()}`)
+  },
+  getCustomer: (idOrKey: string) => request<any>('GET', `/v1/customers/${encodeURIComponent(idOrKey)}`),
+  createCustomer: (payload: any) => request<any>('POST', '/v1/customers', payload),
+}

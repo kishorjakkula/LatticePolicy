@@ -91,7 +91,7 @@ jobs:
         run: npm run test:integration --workspace=server
 
   e2e:
-    name: Playwright E2E Smoke
+    name: Playwright E2E
     runs-on: ubuntu-latest
 
     steps:
@@ -111,8 +111,10 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run Docker E2E smoke
-        run: npm run test:e2e:docker
+      # Isolated stack: own ports/volumes and TRUST_PROXY=1, so the full suite's
+      # per-test client IPs keep it clear of the login and API rate limiters.
+      - name: Run Docker E2E suite
+        run: npm run test:e2e:isolated
 
       - name: Upload Playwright report
         if: failure()

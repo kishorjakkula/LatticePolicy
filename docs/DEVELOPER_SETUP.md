@@ -257,6 +257,9 @@ manual setup.
 | `npm run test` | Run frontend and server tests |
 | `npm run test:integration` | Run Docker-backed PostgreSQL migration integration tests |
 | `npm run test:e2e` | Run Playwright tests against an already-running local stack |
+| `npm run test:e2e:isolated` | Run the full Playwright suite against a disposable stack on its own ports and volumes |
+| `npm run test:e2e:smoke` | Run only the `@smoke` Playwright tests against an already-running stack |
+| `npm run deploy:local` | Rebuild and restart the local demo stack, run the smoke tests against it, then run the full suite against a disposable copy of the same build |
 | `npm run test:e2e:docker` | Reset Docker Compose volumes, build/start the stack, wait for API/UI readiness, and run Playwright |
 | `npm run typecheck` | Run TypeScript checks across workspaces |
 | `npm run smoke --workspace=server` | Run API smoke checks |

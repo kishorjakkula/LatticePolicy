@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, apiDetails, adminApi } from '../../api/client'
+import { api, apiDetails } from '../../api/client'
+import { quoteIntakeApi } from '../../api/quotes.api'
 import {
   useUnderwritingCompanies,
   useReferenceAgencies,
@@ -873,6 +874,7 @@ export function QuoteWizard() {
   const [primarySearchQuery, setPrimarySearchQuery] = useState('')
   const [primarySearchResults, setPrimarySearchResults] = useState<any[]>([])
   const [primarySearchLoading, setPrimarySearchLoading] = useState(false)
+  const [primarySearchError, setPrimarySearchError] = useState<string | null>(null)
   const [primarySelecting, setPrimarySelecting] = useState(false)
   const [showCreatePrimaryCustomer, setShowCreatePrimaryCustomer] = useState(false)
   const [createPrimaryCustomerForm, setCreatePrimaryCustomerForm] = useState({ firstName: '', lastName: '', dob: '', email: '', phone: '' })
@@ -938,7 +940,8 @@ export function QuoteWizard() {
   const canViewCustomerClassic = !!hasPermission(user, 'admin.customers.read')
   const canViewCustomerDetails = canViewCustomerInAdmin || canViewCustomerClassic
   const canEditCustomerInAdmin = !!(canViewCustomerInAdmin && (hasPermission(user, 'admin.customers.manage') || hasPermission(user, 'admin.customers.contact.manage')))
-  const canCreateCustomer = !!hasPermission(user, 'admin.customers.manage')
+  // Anyone who can use the wizard may create the insured through the quote-intake API.
+  const canCreateCustomer = !!(hasPermission(user, 'page.wizard.view') || hasPermission(user, 'admin.customers.manage'))
   const hoDefaultsApplied = useRef(false)
   const customerPrefillAppliedRef = useRef('')
   const ratedPayloadSnapshot = useRef<string>('')
@@ -991,7 +994,7 @@ export function QuoteWizard() {
         let lookupError: any = null
         for (const key of lookupKeys) {
           try {
-            details = await adminApi.getCustomer(key)
+            details = await quoteIntakeApi.getCustomer(key)
             if (details) break
           } catch (err) {
             lookupError = err
@@ -2001,10 +2004,13 @@ export function QuoteWizard() {
       setQualificationErrors(errs)
       if (Object.keys(errs).length > 0) return
     }
-    if (step === 3 && target > step) {
+    // A cancellation shows the insured and risk read-only: nothing on those steps
+    // can be corrected there, so their completeness must not block the cancel.
+    // (Policies created through the API or an import may lack wizard-only fields.)
+    if (step === 3 && target > step && !isCancellationMode) {
       if (!validateCurrentInsureds()) return
     }
-    if (step === 4 && target > step) {
+    if (step === 4 && target > step && !isCancellationMode) {
       const errs = q.productCode === 'personal-auto'
         ? validatePersonalAutoVehicles(q.risks)
         : validateFields(riskFields, q)
@@ -2059,12 +2065,15 @@ export function QuoteWizard() {
       return
     }
     setPrimarySearchLoading(true)
+    setPrimarySearchError(null)
     try {
-      const results = await adminApi.searchCustomers({ q: query, limit: 20 })
+      const results = await quoteIntakeApi.searchCustomers({ q: query, limit: 20 })
       setPrimarySearchResults(results || [])
-    } catch (err) {
+    } catch (err: any) {
       console.error('Customer search failed:', err)
       setPrimarySearchResults([])
+      // A failed lookup must not read as "no such customer".
+      setPrimarySearchError(err?.message ? `Customer search failed: ${err.message}` : 'Customer search failed. Please try again.')
     } finally {
       setPrimarySearchLoading(false)
     }
@@ -2378,7 +2387,7 @@ export function QuoteWizard() {
     }
     setContactDetailLoading(true)
     try {
-      const details = await adminApi.getCustomer(lookup)
+      const details = await quoteIntakeApi.getCustomer(lookup)
       if (details) {
         setContactDetailRecord(details)
         syncInsuredFromContactDetail(details, lookup)
@@ -2428,7 +2437,7 @@ export function QuoteWizard() {
       const lookupKey = summaryMapped.customerId || summaryMapped.customerKey
       let mapped = summaryMapped
       if (lookupKey) {
-        const details = await adminApi.getCustomer(lookupKey)
+        const details = await quoteIntakeApi.getCustomer(lookupKey)
         mapped = buildInsuredFromCustomerDetails(details, customer)
       }
       applyPrimarySelection(mapped)
@@ -2464,7 +2473,7 @@ export function QuoteWizard() {
       const contactPoints: any[] = []
       if (email) contactPoints.push({ contactType: 'EMAIL', value: email, preferred: true, emailConsent: true })
       if (phone) contactPoints.push({ contactType: 'PHONE', value: phone, preferred: !email })
-      const created = await adminApi.createCustomer({
+      const created = await quoteIntakeApi.createCustomer({
         entityType: 'INDIVIDUAL',
         status: 'ACTIVE',
         identity: { person: { firstName, lastName, dob } },
@@ -2487,7 +2496,7 @@ export function QuoteWizard() {
     }
     setSecondarySearchLoading(true)
     try {
-      const results = await adminApi.searchCustomers({ q: query, limit: 20 })
+      const results = await quoteIntakeApi.searchCustomers({ q: query, limit: 20 })
       const filtered = (results || []).filter((item: any) => !isSameInsuredCandidate(item, insureds?.primary || {}))
       setSecondarySearchResults(filtered)
     } catch (err) {
@@ -2529,7 +2538,7 @@ export function QuoteWizard() {
       const lookupKey = summaryMapped.customerId || summaryMapped.customerKey
       let mapped = summaryMapped
       if (lookupKey) {
-        const details = await adminApi.getCustomer(lookupKey)
+        const details = await quoteIntakeApi.getCustomer(lookupKey)
         mapped = buildInsuredFromCustomerDetails(details, customer)
       }
       setInsureds(prev => ({
@@ -2599,7 +2608,7 @@ export function QuoteWizard() {
     }
     setAdditionalSearchLoading(true)
     try {
-      const results = await adminApi.searchCustomers({ q: query, limit: 20 })
+      const results = await quoteIntakeApi.searchCustomers({ q: query, limit: 20 })
       const filtered = (results || []).filter((item: any) => !isAlreadySelectedInInsureds(item, insureds))
       setAdditionalSearchResults(filtered)
     } catch (err) {
@@ -2646,7 +2655,7 @@ export function QuoteWizard() {
       const lookupKey = summaryMapped.customerId || summaryMapped.customerKey
       let mapped = summaryMapped
       if (lookupKey) {
-        const details = await adminApi.getCustomer(lookupKey)
+        const details = await quoteIntakeApi.getCustomer(lookupKey)
         mapped = buildInsuredFromCustomerDetails(details, customer)
       }
       applyAdditionalSelection(mapped)
@@ -2673,20 +2682,22 @@ export function QuoteWizard() {
       return
     }
     const resolvedCompany = resolveUnderwritingCompanyConfig(q, underwritingConfigurations)
-    if (!resolvedCompany) {
+    // Policy transactions lock the underwriting company, so a policy that was
+    // issued without one (API or import) is re-rated as stored instead of
+    // demanding a selection the user has no way to make.
+    if (!resolvedCompany && !lockCoreProductFields) {
       setError('Select an underwriting company before rating premium.')
       return
     }
-    if (!validateCurrentInsureds({ returnToStep: true })) {
+    // Insureds are read-only on a cancellation (see attemptStepChange).
+    if (!isCancellationMode && !validateCurrentInsureds({ returnToStep: true })) {
       setError('Resolve insured validation before rating premium.')
       return
     }
-    const rateState: QuoteState = {
-      ...q,
-      underwritingCompanyId: resolvedCompany.companyId,
-      underwritingCompanyName: resolvedCompany.name
-    }
-    if (q.underwritingCompanyId !== resolvedCompany.companyId || q.underwritingCompanyName !== resolvedCompany.name) {
+    const rateState: QuoteState = resolvedCompany
+      ? { ...q, underwritingCompanyId: resolvedCompany.companyId, underwritingCompanyName: resolvedCompany.name }
+      : q
+    if (resolvedCompany && (q.underwritingCompanyId !== resolvedCompany.companyId || q.underwritingCompanyName !== resolvedCompany.name)) {
       setQ((prev) => ({
         ...prev,
         underwritingCompanyId: resolvedCompany.companyId,
@@ -3936,7 +3947,8 @@ export function QuoteWizard() {
           )}
           {primarySearchLoading && <div className="muted">Searching primary insureds...</div>}
           {primarySelecting && <div className="muted">Loading selected insured details...</div>}
-          {!primarySearchLoading && primarySearchQuery.trim().length > 1 && primarySearchResults.length === 0 && !isViewOnly && (
+          {primarySearchError && <div className="error" role="alert" style={{ marginBottom: 16 }}>{primarySearchError}</div>}
+          {!primarySearchLoading && !primarySearchError && primarySearchQuery.trim().length > 1 && primarySearchResults.length === 0 && !isViewOnly && (
             <div className="muted" style={{ marginBottom: 16 }}>
               No matching customers found.
               {canCreateCustomer && !showCreatePrimaryCustomer && (

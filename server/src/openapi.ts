@@ -153,6 +153,9 @@ export const routeDefs: RouteDef[] = [
   { method: 'post', path: '/v1/admin/forms/preview', tag: 'Admin - Forms', summary: 'Preview form attachment rules (admin)' },
   { method: 'post', path: '/v1/admin/forms/test-expression', tag: 'Admin - Forms', summary: 'Test trigger expression' },
 
+  { method: 'get', path: '/v1/customers/search', tag: 'Quotes', summary: 'Search customers for quote intake (wizard users)' },
+  { method: 'post', path: '/v1/customers', tag: 'Quotes', summary: 'Create a customer during quote intake (wizard users)' },
+  { method: 'get', path: '/v1/customers/{idOrKey}', tag: 'Quotes', summary: 'Get a customer for quote intake (wizard users)' },
   { method: 'get', path: '/v1/admin/customers/settings', tag: 'Admin - Customers', summary: 'Get customer settings' },
   { method: 'patch', path: '/v1/admin/customers/settings', tag: 'Admin - Customers', summary: 'Update customer settings' },
   { method: 'post', path: '/v1/admin/customers/seed-samples', tag: 'Admin - Customers', summary: 'Seed sample customers' },

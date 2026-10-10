@@ -182,6 +182,7 @@ npm run test:frontend
 npm run test
 npm run security:audit
 npm run test:e2e
+npm run test:e2e:isolated
 npm run test:e2e:docker
 npm run typecheck
 ```
@@ -215,9 +216,77 @@ Playwright runs against the local Docker Compose ports by default:
 - API: `E2E_API_BASE_URL=http://localhost:3300`
 - Tenant: `E2E_TENANT_ID=sample-carrier`
 
-The Docker E2E runner resets the Compose volumes before startup, waits for a
-database-backed API health response, then waits for the frontend before running
-Playwright. Use it when you need a clean full-stack validation path.
+`npm run test:e2e:isolated` is the recommended way to run the full suite and
+is what CI runs. It starts `docker-compose.e2e.yml` (project
+`latticepolicy-e2e`, UI `:5174`, API `:3301`, throwaway volumes), waits for a
+database-backed health response, runs Playwright, and removes the stack. It
+can run next to the local demo stack without touching demo data. Pass spec
+paths or Playwright flags through, and set `E2E_KEEP_STACK=1` to leave the
+stack up for debugging.
+
+`npm run test:e2e:docker` is the older runner. It tears down the **default**
+Compose project and deletes `latticepolicy_pgdata` / `latticepolicy_redisdata`,
+so it wipes local demo data, and it does not set `TRUST_PROXY`, so the full
+suite will hit the login (20 / 15 min) and API (600 / 15 min) rate limiters.
+Use it only for a small subset of specs on a machine with no demo data to keep.
+
+Plain `npm run test:e2e` runs against whatever is on `:5173` / `:3300`. The
+suite creates policies, customers, users, and referrals, so do not point it at
+a stack whose data you want to keep clean.
+
+### Playwright after every deployment
+
+- **Local Docker:** `npm run deploy:local` rebuilds and restarts the demo
+  stack, runs the `@smoke` tests against it, then runs the full suite against a
+  disposable copy of the same build. `DEPLOY_SKIP_FULL_E2E=1` stops after the
+  smoke tests.
+- **GitHub deploy workflows** (`deploy-aws-ecs.yml`,
+  `deploy-azure-container-apps.yml`): the full suite runs against a disposable
+  stack before the deploy job and blocks it on failure; after the deploy,
+  `e2e-post-deploy.yml` runs the `@smoke` tests against the deployed
+  environment. It needs the `E2E_TENANT_ID` variable and `E2E_PASSWORD` secret.
+
+Only the `@smoke` subset runs against a live environment. The full suite
+writes tenant-wide underwriting rules and authority grants and makes more
+requests than the per-IP API rate limit (600 / 15 min) allows from one runner,
+so it always runs on a disposable stack. Tag a test `{ tag: '@smoke' }` only if
+it is safe to repeat on shared data: no tenant-wide configuration, and no
+dependence on freshly seeded names.
+
+### E2E suite layout
+
+| Spec | Covers |
+| --- | --- |
+| `auth-route-access`, `auth-session` | UI login, bad credentials, unknown tenant, sign-out, unauthenticated redirects |
+| `role-access-matrix` | Route guards per role; API 401/403, tenancy, API-docs and health access |
+| `quote-wizard` | New business in the browser: product -> qualification -> insured -> risk -> coverages -> rate -> bind -> issue; step validation; draft save/resume |
+| `policy-lifecycle`, `production-policy-scenarios` | Policy view, endorsement, cancellation, abandon, reinstatement, renewal, audit and as-of panels |
+| `multi-product` | Quote -> bind -> issue and search for homeowners, cyber, commercial auto, professional liability |
+| `underwriting-rules` | Admin-authored Refer/Decline rules, referral approval, validation, permissions |
+| `underwriting-authority` | Authority grants gating bind above a premium limit, revoke, validation |
+| `uw-referrals`, `pre-bind-checks` | Referral queue decisions; internal-consistency referral on prior non-payment cancellation |
+| `customer-portal` | Customer-safe projection, cross-customer isolation, portal summary and documents |
+| `dashboard-search`, `workflows` | Dashboard KPIs, quick lookup, filters, customers tab, CSV export API, sort/page-size URL state, mobile nav |
+| `forms-management` | Seeded forms, draft form creation, Word template upload, template variable reference |
+| `admin-users-security`, `admin-customers`, `admin-reference-config`, `admin-workflows` | Users, roles, customers and PII reveal, underwriting companies, tenant, compliance, notification templates, agency onboarding, operations dashboard, reinsurance, exposure, bordereaux, import, jobs |
+| `placements-rating` | Placement market workflow; rating workbench shell for the actuary role |
+
+Shared helpers live in `e2e/support/`: `fixtures.ts` (per-test synthetic client
+IP, per-worker cached sessions via `sessionFor` / `signInAs`), `api.ts` (API
+setup and negative-path helpers), `wizard.ts` (wizard field and step helpers),
+and `products.ts` (one clean risk per product line). `e2e/global-setup.ts`
+seeds the idempotent reference data the Quote Wizard depends on.
+
+Conventions for new specs:
+
+- Import `test` / `expect` from `./support/fixtures`, not `@playwright/test`.
+- Use `sessionFor(user)` or `signInAs(page, user)` instead of logging in per test.
+- Tenant-wide configuration (underwriting rules, authority grants) must be
+  scoped to a product/state no other spec uses and deactivated in `finally`.
+- Use `isoDate(offset)` rather than literal dates so terms do not expire.
+- A test that documents a known product defect is written with the correct
+  expectation and marked `test.fixme` with a comment naming the defect; remove
+  the marker in the change that fixes it. The suite currently has none.
 
 Use `npx playwright install chromium` before the first run on a new machine.
 

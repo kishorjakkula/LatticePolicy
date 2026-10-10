@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   applyTenantDatePreferences,
   formatDisplayDate,
@@ -68,5 +68,33 @@ describe('dateDisplay', () => {
     expect(formatDisplayDateTime('2026-02-03T14:30:00.000Z', { includeTime: false })).toBe('2026-02-03')
     expect(formatDisplayDateTime('not-a-date', { fallback: 'fallback' })).toBe('not-a-date')
     expect(formatDisplayDate('', { fallback: 'fallback' })).toBe('fallback')
+  })
+
+  describe('DATE columns serialized as UTC-midnight timestamps', () => {
+    const originalTz = process.env.TZ
+
+    afterEach(() => {
+      process.env.TZ = originalTz
+    })
+
+    // Regression: west of UTC, "2026-10-10T00:00:00.000Z" is still Oct 9 local
+    // time, so effective dates rendered one day early.
+    it.each(['America/New_York', 'America/Los_Angeles', 'UTC', 'Asia/Kolkata'])('keeps the calendar date in %s', (tz) => {
+      process.env.TZ = tz
+      expect(formatDisplayDate('2026-10-10T00:00:00.000Z')).toBe('10-10-2026')
+      expect(formatDisplayDate('2026-10-10T00:00:00Z')).toBe('10-10-2026')
+      expect(formatDisplayDate('2026-01-01T00:00:00.000Z')).toBe('01-01-2026')
+      expect(formatDisplayDate('2026-10-10')).toBe('10-10-2026')
+    })
+
+    it('renders a UTC-midnight value as a date even when a time was requested', () => {
+      process.env.TZ = 'America/New_York'
+      expect(formatDisplayDateTime('2026-10-10T00:00:00.000Z', { includeTime: true })).toBe('10-10-2026')
+    })
+
+    it('still converts real instants to local time', () => {
+      process.env.TZ = 'America/New_York'
+      expect(formatDisplayDate('2026-10-10T02:30:00.000Z')).toBe('10-09-2026')
+    })
   })
 })
