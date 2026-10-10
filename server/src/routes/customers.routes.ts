@@ -4005,7 +4005,19 @@ customerIntakeRoutes.post('/', requirePermission('page.wizard.view'), async (req
   const db = getDb()
   if (!db) return res.status(503).json({ code: 'DB_REQUIRED', message: 'Database mode required' })
   try {
-    const payload = normalizeCustomerInput(req.body || {})
+    // Intake creates a new insured, not an admin customer mutation. Keep the
+    // accepted sections explicit; external identifiers can reassign existing
+    // records, and collection IDs can hit the sync helpers' UPDATE branches.
+    const body = req.body || {}
+    const payload = normalizeCustomerInput({
+      entityType: body.entityType,
+      status: body.status,
+      identity: body.identity,
+      contactPoints: body.contactPoints,
+      addresses: body.addresses
+    })
+    for (const contact of payload.contactPoints) contact.contactPointId = undefined
+    for (const address of payload.addresses) address.addressId = undefined
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
       // Duplicate override (createAnyway) stays an admin-only decision.

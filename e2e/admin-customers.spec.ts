@@ -3,6 +3,31 @@ import { apiJson, apiStatus, createCustomer, createPortalUserForPolicy, uniqueNa
 import { fieldByLabel } from './support/wizard'
 
 test.describe('customer administration', () => {
+  test('agent intake cannot overwrite another customer through collection IDs', async ({ request, sessionFor }) => {
+    const admin = await sessionFor('admin')
+    const agent = await sessionFor('agent1')
+    const existing = await createCustomer(request, admin.token, `Original ${uniqueName('customer')}`)
+    const before = await apiJson<any>(request, 'GET', `/api/v1/customers/${existing.customerKey}`, { token: agent.token })
+    expect(before.contactPoints.length).toBeGreaterThan(0)
+    expect(before.addresses.length).toBeGreaterThan(0)
+    const created = await apiJson<any>(request, 'POST', '/api/v1/customers', {
+      token: agent.token,
+      expectedStatus: 201,
+      data: {
+        entityType: 'INDIVIDUAL',
+        identity: { person: { firstName: 'Fresh', lastName: uniqueName('insured'), ssnLast4: '9865' } },
+        contactPoints: [{ ...before.contactPoints[0], value: `${uniqueName('fresh')}@example.com` }],
+        addresses: [{ ...before.addresses[0], line1: '99 Fresh Street' }],
+      },
+    })
+    expect(created.contactPoints[0].contactPointId).not.toBe(before.contactPoints[0].contactPointId)
+    expect(created.addresses[0].addressId).not.toBe(before.addresses[0].addressId)
+    expect(created.addresses[0].line1).toBe('99 Fresh Street')
+    const after = await apiJson<any>(request, 'GET', `/api/v1/admin/customers/${existing.customerKey}`, { token: admin.token })
+    expect(after.contactPoints).toEqual(before.contactPoints)
+    expect(after.addresses).toEqual(before.addresses)
+  })
+
   test('creates a customer through the admin form and finds it in the list', async ({ page, signInAs }) => {
     const lastName = uniqueName('Cust').replace(/[^a-zA-Z0-9]/g, '')
     await signInAs(page, 'admin')

@@ -84,6 +84,75 @@ describe('quote-intake customer routes', () => {
     expect(res.status).toBe(404)
   })
 
+  it('creates fresh contacts and addresses without overwriting supplied existing IDs', async () => {
+    withDatabase()
+    const contactId = '22222222-2222-4222-a222-222222222222'
+    const addressId = '33333333-3333-4333-a333-333333333333'
+    const contacts = new Map([[contactId, 'original@example.com']])
+    const addresses = new Map([[addressId, 'Original address']])
+    const writes: Array<{ sql: string; values: any[] }> = []
+    vi.mocked(toRawQuery).mockReturnValue((async (sql: string, values: any[] = []) => {
+      if (/^\s*INSERT INTO customer_contact_points\s/.test(sql)) {
+        contacts.set(values[0], values[5])
+        writes.push({ sql, values })
+      }
+      if (/^\s*INSERT INTO customer_addresses\s/.test(sql)) {
+        addresses.set(values[0], values[4])
+        writes.push({ sql, values })
+      }
+      return { rows: [], rowCount: 0 }
+    }) as any)
+    const res = await request(buildApp(WIZARD_USER)).post('/api/v1/customers')
+      .set('X-Tenant', 'sample-carrier').send({
+        entityType: 'INDIVIDUAL',
+        identity: { person: { firstName: 'New', lastName: 'Insured', ssnLast4: '1234' } },
+        contactPoints: [{ contactPointId: contactId, contactType: 'EMAIL', value: 'new@example.com' }],
+        addresses: [{ addressId, addressType: 'residence', line1: 'New address' }],
+      })
+    expect(res.status, JSON.stringify(res.body)).toBe(201)
+    expect(contacts.get(contactId)).toBe('original@example.com')
+    expect(addresses.get(addressId)).toBe('Original address')
+    expect([...contacts.values()]).toContain('new@example.com')
+    expect([...addresses.values()]).toContain('New address')
+    expect(writes).toHaveLength(2)
+    for (const { values } of writes) {
+      expect(values[0]).not.toBe(contactId)
+      expect(values[0]).not.toBe(addressId)
+      expect(values[1]).toBe('sample-carrier')
+      expect(values[2]).toBe(writes[0].values[2])
+    }
+  })
+
+  it('ignores admin-only collections and compliance during intake creation', async () => {
+    withDatabase()
+    const writes: Array<{ sql: string; values: any[] }> = []
+    vi.mocked(toRawQuery).mockReturnValue((async (sql: string, values: any[] = []) => {
+      if (/^\s*INSERT/.test(sql)) writes.push({ sql, values })
+      return { rows: [], rowCount: 0 }
+    }) as any)
+    const res = await request(buildApp(WIZARD_USER)).post('/api/v1/customers')
+      .set('X-Tenant', 'sample-carrier').send({
+        entityType: 'INDIVIDUAL',
+        identity: { person: { firstName: 'New', lastName: 'Insured', ssnLast4: '1234' } },
+        contactPoints: [{ contactType: 'EMAIL', value: 'new@example.com' }],
+        externalIdentifiers: [{ sourceSystem: 'CRM', externalId: 'existing-customer' }],
+        relationships: [{ relationshipId: CUSTOMER.id, relatedCustomerId: AGENT.id, relationshipType: 'SPOUSE' }],
+        notes: [{ noteId: CUSTOMER.id, noteText: 'Admin note' }],
+        attachments: [{ attachmentId: CUSTOMER.id, documentId: 'existing-document' }],
+        compliance: { kycStatus: 'VERIFIED', sanctionsStatus: 'CLEAR' },
+        metadata: { privileged: true },
+      })
+    expect(res.status, JSON.stringify(res.body)).toBe(201)
+    for (const table of ['customer_external_identifiers', 'customer_relationships', 'customer_notes', 'customer_attachments']) {
+      expect(writes.some(({ sql }) => sql.includes(`INSERT INTO ${table}`)), table).toBe(false)
+    }
+    const compliance = writes.find(({ sql }) => sql.includes('INSERT INTO customer_compliance'))!
+    expect(compliance.values[2]).toBeNull() // kyc_status
+    expect(compliance.values[5]).toBeNull() // sanctions_status
+    const customer = writes.find(({ sql }) => /INSERT INTO customers\s/.test(sql))!
+    expect(JSON.parse(customer.values[7])).toEqual({})
+  })
+
   it.each([
     ['get', '/api/v1/customers/search?q=Smith'],
     ['get', '/api/v1/customers/CUST-2026-000001'],

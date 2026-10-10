@@ -81,6 +81,19 @@ a unit or route test and a Playwright regression test.
   `page.wizard.view` (agent, underwriter, admin). Customer and actuary roles
   remain 403, and sensitive identity fields stay masked exactly as in the admin
   read. PII reveal remains admin-only.
+- PR #357 review found that caller-supplied contact/address IDs could reach
+  shared persistence upserts and overwrite another customer's collections.
+  Intake now accepts only entity type, status, identity, contacts, and addresses,
+  and discards contact/address IDs so persistence generates fresh IDs. Admin
+  collections (external identifiers, relationships, notes, attachments),
+  compliance, and metadata are ignored; external-identifier upserts can otherwise
+  reassign an existing identifier to the newly created customer.
+  Admin create/update behavior is unchanged.
+- Regression coverage in `customer-intake-routes.test.ts` first reproduced the
+  contact overwrite, then verified fresh contacts/addresses and rejection of
+  admin-only sections. `admin-customers.spec.ts` verifies against PostgreSQL
+  that an agent can create a distinct insured using existing collection IDs
+  without changing the original customer's contacts or addresses.
 
 ## Coverage Gaps That Remain
 
@@ -100,3 +113,10 @@ a unit or route test and a Playwright regression test.
 - `npm run typecheck`
 - `npm run test:e2e:isolated`: 94 passed, none skipped, on a fresh stack
 - Full suite repeated twice more on the reused database: 188 passed
+
+### PR review fix validation
+
+- `npm exec --workspace=server -- vitest run src/__tests__/customer-intake-routes.test.ts`: 11 passed
+- `npm run test:server`: 425 passed
+- `npm run typecheck`, `npm run build`, `git diff --check`: passed
+- `npm run test:e2e:isolated`: 95 passed, including the PostgreSQL overwrite regression
