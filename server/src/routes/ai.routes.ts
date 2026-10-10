@@ -37,7 +37,7 @@ aiRoutes.post('/ai/quotes/insights', requirePermission('page.wizard.view'), asyn
   try {
     const aiMlConfig = await loadTenantAiMlConfig(tenantId)
     const premium = req.body?.premium || rate(tenantId, payload)
-    const underwriting = req.body?.underwriting || evaluateUW(tenantId, payload)
+    const underwriting = req.body?.underwriting || (await evaluateUW(tenantId, payload))
     const aiInsights = inferQuoteAiInsights(aiMlConfig, {
       payload,
       premium,

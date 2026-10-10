@@ -5,6 +5,7 @@ import { withTenantTx, getDb, toRawQuery } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { rate } from '../rating.js'
 import { evaluateUW } from '../uw.js'
+import { loadTenantOverrides } from '../products.js'
 import { formsAdminRoutes, ensureDefaultFormRows } from '../formsAdmin.js'
 import { customerAdminRoutes } from '../customers.js'
 import { complianceAdminRoutes } from './compliance-admin.routes.js'
@@ -877,7 +878,7 @@ adminRoutes.post('/seed', requirePermission('admin.security.manage'), async (req
         const exp = new Date(eff + 'T00:00:00Z'); exp.setUTCMonth(exp.getUTCMonth() + months)
         const expStr = exp.toISOString().slice(0,10)
         const premium = rate(tenantId, s.payload)
-        const uw = evaluateUW(tenantId, s.payload)
+        const uw = await evaluateUW(tenantId, s.payload)
         seedStep = `insert policy ${productCode}`
         await q('INSERT INTO policies (tenant_id, policy_id, policy_number, product_code, status, term_effective_date, term_expiration_date) VALUES ($1,$2,$3,$4,$5,$6,$7)',
           [tenantId, policyId, policyNumber, productCode, 'Issued', eff, expStr])
@@ -1128,6 +1129,140 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
   } catch (e: any) {
     return res.status(500).json({ code: 'SEED_FAILED', message: `${seedStep}: ${String(e?.message || e)}` })
   }
+})
+
+// Idempotent conversion of today's hand-coded per-product underwriting
+// checks (uw.service.ts's evaluateUwFallback) into real `underwriting_rules`
+// rows. Only products whose current fallback is fully representable by the
+// generic operator model are seeded. Partially representable products stay
+// on the fallback so this convenience action can never silently remove an
+// existing underwriting protection.
+const UNDERWRITING_RULE_SEEDS: Array<{
+  productCode: string
+  fieldPath: string
+  operator: string
+  comparisonValue: unknown
+  outcome: 'Refer' | 'Decline'
+  reasonCode: string
+  reasonDescription: string
+}> = [
+  // personal-auto
+  { productCode: 'personal-auto', fieldPath: 'uwAnswers.driverAge', operator: 'less_than', comparisonValue: 16, outcome: 'Decline', reasonCode: 'PA-AGE-UNDER-16', reasonDescription: 'Driver age under 16 (decline)' },
+  { productCode: 'personal-auto', fieldPath: 'uwAnswers.driverAge', operator: 'less_than', comparisonValue: 18, outcome: 'Refer', reasonCode: 'PA-AGE-UNDER-18', reasonDescription: 'Driver age under 18 (refer)' },
+  { productCode: 'personal-auto', fieldPath: 'risks[0].annualMiles', operator: 'greater_than', comparisonValue: 35000, outcome: 'Refer', reasonCode: 'PA-ANNUAL-MILES-35K', reasonDescription: 'Annual miles > 35k (refer)' },
+  { productCode: 'personal-auto', fieldPath: 'risks[0].usage', operator: 'in', comparisonValue: ['rideshare', 'commercial'], outcome: 'Refer', reasonCode: 'PA-USAGE-COMMERCIAL', reasonDescription: 'Commercial/rideshare use (refer)' },
+
+  // commercial-auto
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].vehicleCount', operator: 'greater_than', comparisonValue: 150, outcome: 'Decline', reasonCode: 'CA-FLEET-150', reasonDescription: 'Fleet size > 150 vehicles (decline)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].vehicleCount', operator: 'greater_than', comparisonValue: 50, outcome: 'Refer', reasonCode: 'CA-FLEET-50', reasonDescription: 'Fleet size > 50 vehicles (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].radiusClass', operator: 'equals', comparisonValue: 'long-haul', outcome: 'Refer', reasonCode: 'CA-RADIUS-LONGHAUL', reasonDescription: 'Long-haul operations (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].vehicleType', operator: 'equals', comparisonValue: 'tractor-trailer', outcome: 'Refer', reasonCode: 'CA-VEHICLE-TRACTOR', reasonDescription: 'Tractor-trailer exposure requires underwriting review (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].vehicleType', operator: 'equals', comparisonValue: 'dump-truck', outcome: 'Refer', reasonCode: 'CA-VEHICLE-HEAVY', reasonDescription: 'Heavy commercial vehicle exposure (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].gvwClass', operator: 'equals', comparisonValue: 'heavy', outcome: 'Refer', reasonCode: 'CA-GVW-HEAVY', reasonDescription: 'Heavy commercial vehicle exposure (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].annualMileage', operator: 'greater_than', comparisonValue: 100000, outcome: 'Refer', reasonCode: 'CA-MILEAGE-100K', reasonDescription: 'Average annual mileage > 100,000 (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].priorLossesCount', operator: 'greater_than_or_equal', comparisonValue: 6, outcome: 'Decline', reasonCode: 'CA-LOSSES-6', reasonDescription: '6+ prior commercial auto losses (decline)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].priorLossesCount', operator: 'greater_than_or_equal', comparisonValue: 3, outcome: 'Refer', reasonCode: 'CA-LOSSES-3', reasonDescription: 'Multiple prior commercial auto losses (refer)' },
+  { productCode: 'commercial-auto', fieldPath: 'risks[0].yearsInBusiness', operator: 'less_than', comparisonValue: 1, outcome: 'Refer', reasonCode: 'CA-NEW-VENTURE', reasonDescription: 'New venture < 1 year in business (refer)' },
+
+  // homeowners
+  { productCode: 'homeowners', fieldPath: 'risks[0].roofAgeYears', operator: 'greater_than', comparisonValue: 30, outcome: 'Decline', reasonCode: 'HO-ROOF-30', reasonDescription: 'Roof age > 30 (decline)' },
+  { productCode: 'homeowners', fieldPath: 'risks[0].roofAgeYears', operator: 'greater_than_or_equal', comparisonValue: 20, outcome: 'Refer', reasonCode: 'HO-ROOF-20-30', reasonDescription: 'Roof age 20-30 (refer)' },
+  { productCode: 'homeowners', fieldPath: 'risks[0].protectionClass', operator: 'greater_than_or_equal', comparisonValue: 9, outcome: 'Decline', reasonCode: 'HO-PC-9-10', reasonDescription: 'Protection class 9-10 (decline)' },
+  { productCode: 'homeowners', fieldPath: 'risks[0].protectionClass', operator: 'greater_than_or_equal', comparisonValue: 7, outcome: 'Refer', reasonCode: 'HO-PC-7-8', reasonDescription: 'Protection class 7-8 (refer)' },
+
+  // cyber
+  { productCode: 'cyber', fieldPath: 'risks[0].priorIncidents', operator: 'greater_than_or_equal', comparisonValue: 3, outcome: 'Decline', reasonCode: 'CYB-INCIDENTS-3', reasonDescription: '3+ prior cyber incidents (decline)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].priorIncidents', operator: 'greater_than', comparisonValue: 0, outcome: 'Refer', reasonCode: 'CYB-INCIDENTS-1', reasonDescription: 'Prior cyber incident history (refer)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].mfaEnabled', operator: 'is_false', comparisonValue: true, outcome: 'Refer', reasonCode: 'CYB-MFA-NOT-ENABLED', reasonDescription: 'MFA not fully enabled (refer)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].backups', operator: 'equals', comparisonValue: 'none', outcome: 'Decline', reasonCode: 'CYB-BACKUPS-NONE', reasonDescription: 'No backup controls declared (decline)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].backups', operator: 'equals', comparisonValue: 'monthly', outcome: 'Refer', reasonCode: 'CYB-BACKUPS-MONTHLY', reasonDescription: 'Infrequent backup controls (refer)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].annualRevenue', operator: 'greater_than', comparisonValue: 100000000, outcome: 'Refer', reasonCode: 'CYB-REVENUE-100M', reasonDescription: 'Large revenue profile > $100M (refer)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].employeeCount', operator: 'greater_than', comparisonValue: 5000, outcome: 'Refer', reasonCode: 'CYB-EMPLOYEES-5000', reasonDescription: 'Large workforce > 5,000 (refer)' },
+  { productCode: 'cyber', fieldPath: 'risks[0].recordsCount', operator: 'greater_than', comparisonValue: 5000000, outcome: 'Refer', reasonCode: 'CYB-RECORDS-5M', reasonDescription: 'Very high sensitive records count (refer)' },
+
+  // professional-liability
+  { productCode: 'professional-liability', fieldPath: 'risks[0].priorClaimsCount', operator: 'greater_than_or_equal', comparisonValue: 4, outcome: 'Decline', reasonCode: 'PL-CLAIMS-4', reasonDescription: '4+ prior professional liability claims (decline)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].priorClaimsCount', operator: 'greater_than_or_equal', comparisonValue: 2, outcome: 'Refer', reasonCode: 'PL-CLAIMS-2', reasonDescription: 'Multiple prior professional liability claims (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].yearsInBusiness', operator: 'less_than', comparisonValue: 1, outcome: 'Refer', reasonCode: 'PL-NEW-VENTURE', reasonDescription: 'Startup or new venture with less than 1 year operations (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].annualRevenue', operator: 'greater_than', comparisonValue: 50000000, outcome: 'Refer', reasonCode: 'PL-REVENUE-50M', reasonDescription: 'Revenue profile > $50M (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].subcontractorPct', operator: 'greater_than', comparisonValue: 75, outcome: 'Refer', reasonCode: 'PL-SUBCONTRACTOR-75', reasonDescription: 'Subcontracted work exceeds 75% of revenue (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].writtenContracts', operator: 'is_false', comparisonValue: true, outcome: 'Refer', reasonCode: 'PL-NO-WRITTEN-CONTRACTS', reasonDescription: 'Written engagement contracts not consistently used (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].qualityControl', operator: 'equals', comparisonValue: 'limited', outcome: 'Refer', reasonCode: 'PL-QC-LIMITED', reasonDescription: 'Limited QA / peer review controls (refer)' },
+  { productCode: 'professional-liability', fieldPath: 'risks[0].retroactiveYears', operator: 'less_than', comparisonValue: 1, outcome: 'Refer', reasonCode: 'PL-NO-RETRO', reasonDescription: 'No prior acts / retroactive coverage history (refer)' },
+]
+
+const FULLY_REPRESENTABLE_SEED_PRODUCTS = new Set(['homeowners', 'cyber'])
+
+// POST /admin/seed-underwriting-rules
+// Idempotent (SELECT-before-INSERT, safe to call repeatedly) conversion of
+// the fully representable evaluateUwFallback checks into real
+// underwriting_rules rows for the calling tenant. Products with compound
+// or format-based checks are intentionally left on the fallback.
+//
+// Also migrates the legacy tenants/<id>/config.yaml
+// `overrides.underwriting.rules` mechanism (the HO-ROOF-AGE override that
+// uw.service.ts used to read directly) into a real, tenant-editable row:
+// if this tenant's config has that override configured, an equivalent
+// 'HO-ROOF-AGE' row is seeded for homeowners. That legacy code path has
+// been removed from uw.service.ts entirely -- this is the one-time
+// migration of its effect into the new system; the YAML fallback remains
+// active until homeowners has configured database rules.
+adminRoutes.post('/seed-underwriting-rules', requirePermission('admin.underwriting_rules.manage'), async (req, res) => {
+  const tenantId = req.tenant!.tenantId
+  const actor = req.user?.username || req.user?.id || 'system'
+  const db = getDb()
+  if (!db) return res.status(400).json({ code: 'NO_DB', message: 'Seeding requires DB' })
+
+  const seeds = UNDERWRITING_RULE_SEEDS.filter((seed) =>
+    FULLY_REPRESENTABLE_SEED_PRODUCTS.has(seed.productCode)
+  )
+  try {
+    const tenantCfg = loadTenantOverrides(tenantId)
+    const legacyRules = tenantCfg?.overrides?.underwriting?.rules || []
+    for (const legacyRule of legacyRules) {
+      if (legacyRule?.id === 'HO-ROOF-AGE') {
+        seeds.push({
+          productCode: 'homeowners',
+          fieldPath: 'risks[0].roofAgeYears',
+          operator: 'greater_than',
+          comparisonValue: 25,
+          outcome: 'Refer',
+          reasonCode: 'HO-ROOF-AGE',
+          reasonDescription: 'Roof age > 25 (refer)',
+        })
+      }
+    }
+  } catch {
+    // No tenant config / override present -- nothing extra to migrate.
+  }
+
+  const summary = { created: [] as string[], skipped: [] as string[] }
+  await withTenantTx(tenantId, async (innerDb) => {
+    const q = toRawQuery(innerDb)
+    for (const seed of seeds) {
+      const existing = await q(
+        `SELECT 1 FROM underwriting_rules WHERE tenant_id=$1 AND product_code=$2 AND reason_code=$3 LIMIT 1`,
+        [tenantId, seed.productCode, seed.reasonCode]
+      )
+      if ((existing as any).rowCount > 0) {
+        summary.skipped.push(seed.reasonCode)
+        continue
+      }
+      await q(
+        `INSERT INTO underwriting_rules
+           (tenant_id, product_code, state_code, field_path, operator, comparison_value, outcome,
+            reason_code, reason_description, active, effective_date, created_by, updated_by)
+         VALUES ($1,$2,NULL,$3,$4,$5::jsonb,$6,$7,$8,true,CURRENT_DATE,$9,$9)`,
+        [
+          tenantId, seed.productCode, seed.fieldPath, seed.operator, JSON.stringify(seed.comparisonValue),
+          seed.outcome, seed.reasonCode, seed.reasonDescription, actor,
+        ]
+      )
+      summary.created.push(seed.reasonCode)
+    }
+  })
+
+  return res.json({ ok: true, summary })
 })
 
 function mapUnderwritingCompanyRow(row: any) {

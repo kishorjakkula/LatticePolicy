@@ -367,7 +367,7 @@ transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.v
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
     const prem = rate(tenantId, payload)
-    const uw = evaluateUW(tenantId, payload)
+    const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {
       throw new BadRequestError(
         'UW_DECLINED',
@@ -452,7 +452,7 @@ transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.vie
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
     const prem = rate(tenantId, payload)
-    const uw = evaluateUW(tenantId, payload)
+    const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {
       throw new BadRequestError(
         'UW_DECLINED',
@@ -511,7 +511,7 @@ transactionRoutes.post('/policies/:id/renew/preview', requirePermission('page.po
     const nextExp = addMonths(nextEff, termMonths)
     const payload = { ...(policy as any).payload, effectiveDate: nextEff, termMonths }
     const premium = rate(tenantId, payload)
-    const underwriting = evaluateUW(tenantId, payload)
+    const underwriting = await evaluateUW(tenantId, payload)
     return res.json({
       underwriting,
       premium,

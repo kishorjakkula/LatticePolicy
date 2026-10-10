@@ -157,7 +157,7 @@ export async function createOrRateQuote(
   }
 
   const premium = rate(tenantId, body)
-  const uw = evaluateUW(tenantId, body)
+  const uw = await evaluateUW(tenantId, body)
   const aiMlConfig = await loadTenantAiMlConfig(tenantId)
   const aiInsights = inferQuoteAiInsights(aiMlConfig, {
     payload: body,

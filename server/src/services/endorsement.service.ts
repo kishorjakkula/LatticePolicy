@@ -640,7 +640,7 @@ export async function previewEndorsement(
     overridePayload,
     new Date().toISOString()
   )
-  const underwriting = evaluateUW(tenantId, computation.nextPayload)
+  const underwriting = await evaluateUW(tenantId, computation.nextPayload)
   const currency = policyField(policyRow, 'currencyCode', 'currency_code') || computation.newStateAtEffective?.currency || 'USD'
   const factor = proRataFactor(effectiveDate, termEffective, termExpiration)
   const endorsementPremium = buildEndorsementPremiumDelta({
@@ -757,7 +757,7 @@ export async function executeEndorsement(
   endorsementPremium.fullDelta = round2(endorsementPremium.fullNew - endorsementPremium.fullOld)
   const fullNew = endorsementPremium.fullNew
   const delta = endorsementPremium.totalDelta
-  const uw = evaluateUW(tenantId, newPayload)
+  const uw = await evaluateUW(tenantId, newPayload)
   const authority = await resolveAuthorityDecision(q, {
     tenantId, actorId: actor?.id || null, roles: actor?.roles || [],
     producerId: newPayload?.producer?.producerId || newPayload?.producer?.producerKey || null,

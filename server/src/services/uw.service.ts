@@ -1,11 +1,187 @@
+import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { loadTenantOverrides } from '../products.js'
+import { resolveFieldValue } from './underwriting-rule-fields.js'
 
 export type UWDecision = { decision: 'Eligible'|'Refer'|'Decline'; reasons: string[] }
 
-export function evaluateUW(tenantId: string, payload: any): UWDecision {
+/**
+ * Evaluates underwriting eligibility for a submission.
+ *
+ * Mirrors the "published/configured data takes over, hardcoded logic stays
+ * as the fallback" pattern already used by rating.service.ts's
+ * `rateWithPublishedModelOrFallback`: if the tenant has any active
+ * `underwriting_rules` rows configured for this product (and matching
+ * state), those rows are the *entire* decision -- not an addition on top of
+ * the hardcoded checks. Otherwise, today's hand-coded per-product function
+ * runs completely unchanged. This means a tenant/product with zero
+ * configured rules sees zero behavior change from before this engine
+ * existed.
+ */
+export async function evaluateUW(tenantId: string, payload: any): Promise<UWDecision> {
+  const product = payload?.productCode as string
+  const configured = await evaluateUwRules(tenantId, product, payload)
+  if (configured) return configured
+  return evaluateUwFallback(tenantId, product, payload)
+}
+
+/**
+ * Looks up active, effective-dated `underwriting_rules` rows for
+ * (tenantId, productCode[, stateCode]) and evaluates each one's condition
+ * against `payload`. Returns `null` when nothing is configured (zero
+ * matching rows) -- signaling the caller to fall back to the hardcoded
+ * per-product function -- rather than `Eligible`, since silently treating
+ * "nothing configured" as "approved" would remove today's protections for
+ * every unconfigured product.
+ *
+ * When rows exist, every rule whose condition evaluates true contributes
+ * its outcome and reason; the final decision is the max severity across all
+ * firing rules (Decline > Refer > Eligible), matching the existing
+ * escalation-only `maxDecision` semantics used by the hardcoded functions.
+ * A configured ruleset where no rule's condition fires legitimately
+ * produces `Eligible` with no reasons -- that is the tenant's own data
+ * saying "nothing applies here", not a signal to fall back.
+ */
+export async function evaluateUwRules(
+  tenantId: string,
+  productCode: string,
+  payload: any
+): Promise<UWDecision | null> {
+  if (!tenantId || !productCode) return null
+  if (!getDb()) return null
+
+  const stateCode = normalizeStateCode(payload?.state)
+  const effectiveDate = normalizeEffectiveDate(payload?.effectiveDate)
+
+  let rows: any[]
+  try {
+    rows = await withTenantTx(tenantId, async (innerDb) => {
+      const q = toRawQuery(innerDb)
+      const result = await q(
+        `SELECT field_path, operator, comparison_value, outcome, reason_code, reason_description
+           FROM underwriting_rules
+          WHERE tenant_id = $1
+            AND product_code = $2
+            AND active = true
+            AND (state_code IS NULL OR state_code = $3)
+            AND effective_date <= $4::date
+            AND (expiration_date IS NULL OR expiration_date >= $4::date)`,
+        [tenantId, productCode, stateCode, effectiveDate]
+      )
+      return (result as any).rows || []
+    })
+  } catch (err: any) {
+    // Table not created yet (pre-migration) -- behave exactly as "nothing configured".
+    if (err?.code === '42P01') return null
+    throw err
+  }
+
+  if (!rows.length) return null
+
+  let decision: 'Eligible' | 'Refer' | 'Decline' = 'Eligible'
+  const reasons: string[] = []
+  for (const rule of rows) {
+    if (evaluateRuleCondition(payload, rule)) {
+      reasons.push(String(rule.reason_description))
+      decision = maxDecision(decision, rule.outcome)
+    }
+  }
+  return { decision, reasons }
+}
+
+function normalizeStateCode(value: unknown): string | null {
+  const s = String(value || '').trim().toUpperCase()
+  return s.length === 2 ? s : null
+}
+
+function normalizeEffectiveDate(value: unknown): string {
+  const candidate = String(value || '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(candidate)
+    ? candidate
+    : new Date().toISOString().slice(0, 10)
+}
+
+function evaluateRuleCondition(payload: any, rule: { field_path: string; operator: string; comparison_value: unknown }): boolean {
+  const fieldValue = resolveFieldValue(payload, rule.field_path)
+  return applyOperator(fieldValue, rule.operator, rule.comparison_value)
+}
+
+function coerceBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (value === 1) return true
+    if (value === 0) return false
+    return undefined
+  }
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    if (v === 'true' || v === 'yes' || v === '1') return true
+    if (v === 'false' || v === 'no' || v === '0' || v === '') return false
+  }
+  return undefined
+}
+
+function normalizeComparable(value: unknown): string | number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') return value
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return String(value).trim().toLowerCase()
+}
+
+function applyOperator(fieldValue: unknown, operator: string, comparisonValue: unknown): boolean {
+  // A missing field never satisfies a comparison -- except `is_false`, which
+  // (matching the hardcoded checks it replaces, e.g. MFA/written-contracts)
+  // treats "not affirmatively true" as the referral-worthy condition.
+  if (fieldValue === undefined) return operator === 'is_false'
+
+  switch (operator) {
+    case 'is_true':
+      return coerceBoolean(fieldValue) === true
+    case 'is_false':
+      return coerceBoolean(fieldValue) !== true
+    case 'equals':
+    case 'not_equals': {
+      const a = normalizeComparable(fieldValue)
+      const b = normalizeComparable(comparisonValue)
+      const eq = a !== null && b !== null && a === b
+      return operator === 'equals' ? eq : !eq
+    }
+    case 'in':
+    case 'not_in': {
+      const list = Array.isArray(comparisonValue) ? comparisonValue : [comparisonValue]
+      const a = normalizeComparable(fieldValue)
+      const isIn = a !== null && list.some((item) => normalizeComparable(item) === a)
+      return operator === 'in' ? isIn : !isIn
+    }
+    case 'greater_than':
+    case 'greater_than_or_equal':
+    case 'less_than':
+    case 'less_than_or_equal': {
+      const a = Number(fieldValue)
+      const b = Number(comparisonValue)
+      if (Number.isNaN(a) || Number.isNaN(b)) return false
+      if (operator === 'greater_than') return a > b
+      if (operator === 'greater_than_or_equal') return a >= b
+      if (operator === 'less_than') return a < b
+      return a <= b
+    }
+    default:
+      return false
+  }
+}
+
+/**
+ * The original, hand-coded per-product underwriting logic. Runs unchanged
+ * (byte-identical decisions/reasons) for any tenant/product combination with
+ * zero configured `underwriting_rules` rows -- see
+ * uw.service.test.ts's zero-rows regression coverage.
+ *
+ * The one-off tenant config.yaml `overrides.underwriting.rules` mechanism
+ * remains active on this fallback path until an administrator explicitly
+ * migrates the product to database-authored rules.
+ */
+function evaluateUwFallback(tenantId: string, product: string, payload: any): UWDecision {
   const reasons: string[] = []
   let decision: 'Eligible'|'Refer'|'Decline' = 'Eligible'
-  const product = payload?.productCode as string
 
   if (product === 'personal-auto') {
     const age = Number(payload?.uwAnswers?.driverAge ?? payload?.risks?.[0]?.driverAge)
@@ -183,7 +359,10 @@ export function evaluateUW(tenantId: string, payload: any): UWDecision {
     }
   }
 
-  // Tenant overrides: simple known rule id (e.g., HO-ROOF-AGE refer if roofAgeYears > 25)
+  // Preserve legacy tenant overrides until an administrator explicitly
+  // migrates that product to database-authored rules. Removing this fallback
+  // at deployment time would silently change underwriting behavior for a
+  // tenant whose rules table is still empty.
   try {
     const tenantCfg = loadTenantOverrides(tenantId)
     const rules = tenantCfg?.overrides?.underwriting?.rules || []
