@@ -481,20 +481,7 @@ export const adminApi = {
       expirationDate: string | null
     }>
   ) => request<UnderwritingRule>('PATCH', `/v1/admin/underwriting-rules/${encodeURIComponent(ruleId)}`, patch),
-  // Seeding admin-authored underwriting rules with the real default rule set. The dedicated
-  // endpoint may not exist yet on every backend — fall back to the general reference-data seed
-  // (which is documented to fold this seeding in) when the specific one 404s.
-  seedUnderwritingRules: async (): Promise<any> => {
-    try {
-      return await request<any>('POST', '/v1/admin/seed-underwriting-rules', {})
-    } catch (err: any) {
-      const message = String(err?.message || '')
-      if (message.includes('404')) {
-        return request<any>('POST', '/v1/admin/seed-reference-data', {})
-      }
-      throw err
-    }
-  }
+  seedUnderwritingRules: () => request<any>('POST', '/v1/admin/seed-underwriting-rules', {})
 }
 
 export type UnderwritingRuleDataType = 'number' | 'string' | 'boolean'

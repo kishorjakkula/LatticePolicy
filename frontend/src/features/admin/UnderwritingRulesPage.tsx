@@ -162,8 +162,16 @@ export function UnderwritingRulesPage() {
   const seedMutation = useSeedAdminUnderwritingRulesMutation()
 
   const configuredRuleCount = rows.length
-  const activeRuleCount = useMemo(() => rows.filter((r) => r.active).length, [rows])
-  const rulesEngineActive = configuredRuleCount > 0
+  const asOf = todayIso()
+  const activeRuleCount = useMemo(
+    () => rows.filter((rule) =>
+      rule.active &&
+      rule.effective_date.slice(0, 10) <= asOf &&
+      (!rule.expiration_date || rule.expiration_date.slice(0, 10) >= asOf)
+    ).length,
+    [rows, asOf]
+  )
+  const rulesEngineActive = activeRuleCount > 0
 
   const resetForm = () => {
     setEditingRuleId(null)
@@ -278,11 +286,13 @@ export function UnderwritingRulesPage() {
             the built-in underwriting logic for that product.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <button type="button" onClick={onSeed} disabled={seeding} className="btn-secondary">
-            Seed Default Rules
-          </button>
-        </div>
+        {canManage && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <button type="button" onClick={onSeed} disabled={seeding} className="btn-secondary">
+              Seed Default Rules
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="ps-content-card">
@@ -315,8 +325,8 @@ export function UnderwritingRulesPage() {
               <div>
                 <strong>Admin-authored rules are ACTIVE for {productLabel(selectedProduct)}.</strong>
                 <div className="muted">
-                  {configuredRuleCount} rule(s) configured ({activeRuleCount} active). These rules now fully replace
-                  the built-in underwriting logic for this product.
+                  {configuredRuleCount} rule(s) configured ({activeRuleCount} currently active). Matching rules
+                  replace the built-in logic for their state and effective-date scope.
                 </div>
               </div>
             </div>
@@ -330,10 +340,10 @@ export function UnderwritingRulesPage() {
           >
             <div className="policy-bound-alert-row">
               <div>
-                <strong>No admin-authored rules configured for {productLabel(selectedProduct)}.</strong>
+                <strong>No admin-authored rules are currently active for {productLabel(selectedProduct)}.</strong>
                 <div className="muted">
-                  Underwriting decisions for this product still use the built-in default logic. Add a rule below,
-                  or seed the default rule set, to switch this product onto the rules engine.
+                  Underwriting decisions use the built-in default logic where no active rule matches. Add a rule
+                  below, or seed supported defaults, to activate the rules engine for a matching scope.
                 </div>
               </div>
             </div>

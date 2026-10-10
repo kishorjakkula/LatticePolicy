@@ -117,6 +117,17 @@ describe('UnderwritingRulesPage', () => {
     expect(screen.queryByTestId('rules-engine-on-notice')).not.toBeInTheDocument()
   })
 
+  it('uses the fallback banner when configured rules are inactive', () => {
+    useAdminUnderwritingRulesMock.mockReturnValue({
+      data: { items: [{ ...existingRule, active: false }] },
+      isLoading: false,
+      error: null,
+    })
+    render(<UnderwritingRulesPage />)
+    expect(screen.getByTestId('rules-engine-off-banner')).toBeInTheDocument()
+    expect(screen.queryByTestId('rules-engine-on-notice')).not.toBeInTheDocument()
+  })
+
   it('narrows the operator dropdown to the selected field\'s allowed operators', async () => {
     useAdminUnderwritingRulesMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null })
     const user = userEvent.setup()
@@ -247,5 +258,6 @@ describe('UnderwritingRulesPage', () => {
 
     expect(screen.queryByText(/New rule/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Deactivate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Seed Default Rules' })).not.toBeInTheDocument()
   })
 })
