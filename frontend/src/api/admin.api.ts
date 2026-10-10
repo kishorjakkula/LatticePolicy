@@ -420,6 +420,11 @@ export const adminApi = {
   },
   deleteFormTemplateAsset: (id: string, reason?: string) =>
     request<any>('DELETE', `/v1/admin/forms/${id}/output/template`, { reason }),
+  getFormTemplateVariables: () =>
+    request<{ variables: Array<{ token: string; label: string; description: string; group: string }> }>(
+      'GET',
+      '/v1/admin/forms/template-variables'
+    ),
   updateFormOutput: (id: string, payload: any) => request<any>('PUT', `/v1/admin/forms/${id}/output`, payload),
   getFormDelivery: (id: string) => request<any>('GET', `/v1/admin/forms/${id}/delivery`),
   updateFormDelivery: (id: string, payload: any) => request<any>('PUT', `/v1/admin/forms/${id}/delivery`, payload),

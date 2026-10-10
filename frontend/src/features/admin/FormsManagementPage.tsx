@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { apiAdmin as api } from '../../api/client'
-import { useForms, useForm } from '../../api/hooks'
+import { useForms, useForm, useFormTemplateVariables } from '../../api/hooks'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate } from '../../shared/dateDisplay'
@@ -29,6 +29,12 @@ type FormSortKey =
   | 'jurisdictionCount'
   | 'createdAt'
   | 'updatedAt'
+
+type TemplateVariable = { token: string; label: string; description: string; group: string }
+
+type TemplateUploadResult =
+  | { kind: 'success'; fileName: string; recognizedTokens: string[] }
+  | { kind: 'rejected'; fileName: string; message: string; badTokens: string[] }
 
 type FormDetail = {
   form: any
@@ -69,6 +75,7 @@ export function FormsManagementPage() {
   const [previewItems, setPreviewItems] = useState<any[]>([])
   const [templateAsset, setTemplateAsset] = useState<any | null>(null)
   const [templateFile, setTemplateFile] = useState<File | null>(null)
+  const [templateUploadResult, setTemplateUploadResult] = useState<TemplateUploadResult | null>(null)
 
   const [formDraft, setFormDraft] = useState({ ...EMPTY_FORM_DRAFT })
   const [jurisdictionDraft, setJurisdictionDraft] = useState({ stateCode: '', regulatoryStatus: 'Pending', approvalTrackingId: '', effectiveDate: '', sunsetDate: '', hasStateExceptions: false, notes: '' })
@@ -93,6 +100,10 @@ export function FormsManagementPage() {
 
   const { data: detailRaw, refetch: refetchDetail } = useForm(selectedFormId)
   const detail: FormDetail | undefined = detailRaw as FormDetail | undefined
+
+  const { data: templateVariablesData, isLoading: templateVariablesLoading } = useFormTemplateVariables()
+  const templateVariables: TemplateVariable[] = (templateVariablesData as any)?.variables ?? []
+  const templateVariableGroups = useMemo(() => groupTemplateVariables(templateVariables), [templateVariables])
 
   const selectedSummary = useMemo(() => items.find((item) => item.formId === selectedFormId) || null, [items, selectedFormId])
   const sortedItems = useMemo(() => {
@@ -175,6 +186,7 @@ export function FormsManagementPage() {
   }
 
   useEffect(() => {
+    setTemplateUploadResult(null)
     void loadFormSideData(selectedFormId)
   }, [selectedFormId])
 
@@ -191,6 +203,7 @@ export function FormsManagementPage() {
     setPreviewItems([])
     setTemplateAsset(null)
     setTemplateFile(null)
+    setTemplateUploadResult(null)
     setFormDraft({ ...EMPTY_FORM_DRAFT })
     setJurisdictionDraft({ stateCode: '', regulatoryStatus: 'Pending', approvalTrackingId: '', effectiveDate: '', sunsetDate: '', hasStateExceptions: false, notes: '' })
     setApplicabilityDraft({ lineOfBusiness: 'personal-auto', productCode: 'personal-auto', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
@@ -363,25 +376,40 @@ export function FormsManagementPage() {
     }
   }
 
-  const uploadTemplatePdf = async () => {
+  const uploadTemplateFile = async () => {
     if (!selectedFormId || !templateFile) return
-    if (!templateFile.name.toLowerCase().endsWith('.pdf')) {
-      setError('Only PDF files are supported.')
+    const fileName = templateFile.name
+    const lowerName = fileName.toLowerCase()
+    const isDocx = lowerName.endsWith('.docx')
+    if (!lowerName.endsWith('.pdf') && !isDocx) {
+      setError('Only PDF or Word (.docx) files are supported.')
       return
     }
     try {
       setError(null)
+      setTemplateUploadResult(null)
       let reason = ''
       if (detail?.form?.workflowStatus === 'Approved' && detail?.form?.editLock) {
         reason = (prompt('Reason for template change on approved form') || '').trim()
         if (!reason) return
       }
-      await api.uploadFormTemplateAsset(selectedFormId, templateFile, reason || undefined)
+      const response = await api.uploadFormTemplateAsset(selectedFormId, templateFile, reason || undefined)
       setTemplateFile(null)
+      if (isDocx) {
+        const recognizedTokens = Array.isArray((response as any)?.recognizedTokens)
+          ? (response as any).recognizedTokens.map((t: any) => String(t))
+          : []
+        setTemplateUploadResult({ kind: 'success', fileName, recognizedTokens })
+      }
       void refetchDetail()
       void loadFormSideData(selectedFormId)
     } catch (e: any) {
-      setError(e.message || String(e))
+      if (isDocx) {
+        const parsed = parseTemplateValidationError(e)
+        setTemplateUploadResult({ kind: 'rejected', fileName, message: parsed.message, badTokens: parsed.badTokens })
+      } else {
+        setError(e.message || String(e))
+      }
     }
   }
 
@@ -396,6 +424,7 @@ export function FormsManagementPage() {
       await api.deleteFormTemplateAsset(selectedFormId, reason || undefined)
       setTemplateAsset(null)
       setTemplateFile(null)
+      setTemplateUploadResult(null)
       void refetchDetail()
     } catch (e: any) {
       setError(e.message || String(e))
@@ -670,9 +699,52 @@ export function FormsManagementPage() {
 
         {section === 'output' && <>
           <div className="row"><div className="col"><label>Template Source</label><input value={outputDraft.templateSource} onChange={(e) => setOutputDraft((prev) => ({ ...prev, templateSource: e.target.value }))} /></div><div className="col"><label>Template URI</label><input value={outputDraft.templateUri} onChange={(e) => setOutputDraft((prev) => ({ ...prev, templateUri: e.target.value }))} /></div><div className="col"><label>Output Format</label><input value={outputDraft.outputFormat} onChange={(e) => setOutputDraft((prev) => ({ ...prev, outputFormat: e.target.value }))} /></div><div className="col"><label>Packet Placement</label><input value={outputDraft.packetPlacement} onChange={(e) => setOutputDraft((prev) => ({ ...prev, packetPlacement: e.target.value }))} /></div></div>
-          <div className="row"><div className="col"><label>Upload Template PDF</label><input type="file" accept=".pdf,application/pdf" onChange={(e) => setTemplateFile(e.target.files?.[0] || null)} /></div><div className="col"><label>Current Template File</label><div className="muted" style={{ marginTop: 10 }}>{templateAsset ? `${templateAsset.fileName} (${formatBytes(templateAsset.sizeBytes)})` : 'No uploaded file'}</div></div></div>
+          <div className="row"><div className="col"><label>Upload Template (PDF or Word .docx)</label><input type="file" accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => { setTemplateFile(e.target.files?.[0] || null); setTemplateUploadResult(null) }} /></div><div className="col"><label>Current Template File</label><div className="muted" style={{ marginTop: 10 }}>{templateAsset ? `${templateAsset.fileName} (${formatBytes(templateAsset.sizeBytes)})` : 'No uploaded file'}</div></div></div>
+          {templateUploadResult?.kind === 'success' && (
+            <p className="success" role="status">
+              Template "{templateUploadResult.fileName}" uploaded.{' '}
+              {templateUploadResult.recognizedTokens.length > 0
+                ? `Recognized variables: ${templateUploadResult.recognizedTokens.map((t) => `{{${t}}}`).join(', ')}`
+                : 'No {{variable}} placeholders were found in this template.'}
+            </p>
+          )}
+          {templateUploadResult?.kind === 'rejected' && (
+            <p className="error" role="alert">
+              Template "{templateUploadResult.fileName}" was rejected: {templateUploadResult.message}
+              {templateUploadResult.badTokens.length > 0 && (
+                <> Unrecognized placeholder(s): {templateUploadResult.badTokens.map((t) => `{{${t}}}`).join(', ')}.</>
+              )}
+            </p>
+          )}
+          <details className="policy-collapsible" style={{ marginTop: 8 }}>
+            <summary className="policy-collapsible-summary">Template Variable Reference ({templateVariables.length})</summary>
+            <div className="policy-collapsible-body">
+              <p className="muted" style={{ marginTop: 0 }}>
+                Use these <code>{'{{token}}'}</code> placeholders in a Word (.docx) template. Each will be replaced with the policy's actual data when the document is generated.
+              </p>
+              {templateVariablesLoading && <p className="muted">Loading variable catalog...</p>}
+              {!templateVariablesLoading && templateVariables.length === 0 && <p className="muted">No template variables available.</p>}
+              {templateVariableGroups.map((group) => (
+                <div key={group.group} style={{ marginTop: 12 }}>
+                  <div className="muted" style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.05em', marginBottom: 6 }}>{group.group}</div>
+                  <table className="table">
+                    <thead><tr><th>Token</th><th>Label</th><th>Description</th></tr></thead>
+                    <tbody>
+                      {group.items.map((item) => (
+                        <tr key={item.token}>
+                          <td><code>{`{{${item.token}}}`}</code></td>
+                          <td>{item.label}</td>
+                          <td>{item.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </details>
           <div className="row"><div className="col"><label>Delivery Methods (CSV)</label><input value={deliveryDraft.deliveryMethodsText} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, deliveryMethodsText: e.target.value }))} /></div><div className="col"><label>Visibility (CSV)</label><input value={deliveryDraft.visibilityText} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, visibilityText: e.target.value }))} /></div><div className="col"><label>Ack Required</label><select value={deliveryDraft.acknowledgementRequired ? 'true' : 'false'} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, acknowledgementRequired: e.target.value === 'true' }))}><option value="false">No</option><option value="true">Yes</option></select></div><div className="col"><label>E-sign Required</label><select value={deliveryDraft.esignRequired ? 'true' : 'false'} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, esignRequired: e.target.value === 'true' }))}><option value="false">No</option><option value="true">Yes</option></select></div></div>
-          <div className="toolbar-actions" style={{ marginTop: 12 }}><button type="button" onClick={saveOutputAndDelivery} disabled={!selectedFormId || !canEdit}>Save Output + Delivery</button><button type="button" className="btn-secondary" onClick={uploadTemplatePdf} disabled={!selectedFormId || !templateFile || !canEdit}>Upload PDF</button><button type="button" className="btn-secondary" onClick={removeTemplatePdf} disabled={!selectedFormId || !templateAsset || !canEdit}>Remove PDF</button><button type="button" className="btn-secondary" onClick={viewDocument} disabled={!selectedFormId}>View Document</button></div>
+          <div className="toolbar-actions" style={{ marginTop: 12 }}><button type="button" onClick={saveOutputAndDelivery} disabled={!selectedFormId || !canEdit}>Save Output + Delivery</button><button type="button" className="btn-secondary" onClick={uploadTemplateFile} disabled={!selectedFormId || !templateFile || !canEdit}>Upload Template</button><button type="button" className="btn-secondary" onClick={removeTemplatePdf} disabled={!selectedFormId || !templateAsset || !canEdit}>Remove Template</button><button type="button" className="btn-secondary" onClick={viewDocument} disabled={!selectedFormId}>View Document</button></div>
         </>}
 
         {section === 'security' && <>
@@ -737,6 +809,64 @@ function labelForSection(key: SectionKey): string {
   if (key === 'security') return 'Security'
   if (key === 'audit') return 'Audit'
   return 'Packet Preview'
+}
+
+function groupTemplateVariables(variables: TemplateVariable[]): Array<{ group: string; items: TemplateVariable[] }> {
+  const order: string[] = []
+  const byGroup = new Map<string, TemplateVariable[]>()
+  for (const variable of variables) {
+    const groupName = variable.group || 'Other'
+    if (!byGroup.has(groupName)) {
+      byGroup.set(groupName, [])
+      order.push(groupName)
+    }
+    byGroup.get(groupName)!.push(variable)
+  }
+  return order.map((groupName) => ({ group: groupName, items: byGroup.get(groupName) || [] }))
+}
+
+const TEMPLATE_BAD_TOKEN_KEYS = [
+  'badTokens',
+  'unrecognizedTokens',
+  'unrecognizedPlaceholders',
+  'unknownTokens',
+  'invalidTokens',
+  'invalidPlaceholders',
+  'unsupportedTokens'
+]
+
+function parseTemplateValidationError(e: any): { message: string; badTokens: string[] } {
+  const raw = String(e?.message || e || 'Template upload failed.')
+  let message = raw
+  let badTokens: string[] = []
+
+  const jsonStart = raw.indexOf('{')
+  const jsonEnd = raw.lastIndexOf('}')
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    const jsonText = raw.slice(jsonStart, jsonEnd + 1)
+    try {
+      const parsed = JSON.parse(jsonText)
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.message === 'string' && parsed.message.trim()) {
+          message = parsed.message
+        }
+        for (const key of TEMPLATE_BAD_TOKEN_KEYS) {
+          const value = (parsed as any)[key]
+          if (Array.isArray(value) && value.length > 0) {
+            badTokens = value.map((item: any) => String(item))
+            break
+          }
+        }
+        if (badTokens.length === 0 && Array.isArray((parsed as any).tokens) && (parsed as any).tokens.every((item: any) => typeof item === 'string')) {
+          badTokens = (parsed as any).tokens.map((item: any) => String(item))
+        }
+      }
+    } catch {
+      // Response body wasn't JSON (or wasn't fully captured in the error text) - fall back to the raw message.
+    }
+  }
+
+  return { message, badTokens }
 }
 
 function toCsv(values: any[]): string {
