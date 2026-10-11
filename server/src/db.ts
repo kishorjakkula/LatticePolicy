@@ -67,6 +67,15 @@ export async function initDb() {
   await ensureMigrationTable()
   await runMigrations()
   await assertTenantRlsRoleUsable()
+  const schema = await getSchemaStatus()
+  if (schema.schemaAhead) {
+    // Allowed on purpose: redeploying the previous image is the documented
+    // fast rollback path. Make it visible so it is never a silent state.
+    logger.warn(
+      { appliedVersion: schema.appliedVersion, releaseVersion: schema.releaseVersion },
+      'Database schema is newer than this release; running as an application-only rollback'
+    )
+  }
 }
 
 /** Non-owner role tenant transactions switch into so RLS policies apply (migration 058). */
@@ -139,6 +148,36 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   PRIMARY KEY (tenant_id, version)
 )`)
   await pool.query('ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS name text')
+}
+
+export type SchemaStatus = {
+  /** Highest migration version recorded in this database, or null in in-memory mode. */
+  appliedVersion: number | null
+  /** Highest migration version shipped with this build. */
+  releaseVersion: number | null
+  /**
+   * True when the database has migrations this build does not know about,
+   * which is what an application-only rollback onto a newer schema looks like.
+   */
+  schemaAhead: boolean
+}
+
+function latestMigrationFileVersion(): number | null {
+  if (!fs.existsSync(MIGRATIONS_DIR)) return null
+  const versions = fs.readdirSync(MIGRATIONS_DIR)
+    .filter(file => /^\d+_.+\.sql$/i.test(file))
+    .map(file => parseInt(file.split('_')[0], 10))
+    .filter(version => !Number.isNaN(version))
+  return versions.length ? Math.max(...versions) : null
+}
+
+export async function getSchemaStatus(): Promise<SchemaStatus> {
+  const releaseVersion = latestMigrationFileVersion()
+  if (!pool) return { appliedVersion: null, releaseVersion, schemaAhead: false }
+  const result = await pool.query('SELECT MAX(version)::int AS version FROM schema_migrations WHERE tenant_id = $1', ['system'])
+  const appliedVersion = result.rows[0]?.version ?? null
+  const schemaAhead = appliedVersion != null && releaseVersion != null && appliedVersion > releaseVersion
+  return { appliedVersion, releaseVersion, schemaAhead }
 }
 
 const MIGRATION_LOCK_ID = 734_284_921

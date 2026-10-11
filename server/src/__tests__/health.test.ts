@@ -6,6 +6,7 @@ import express from 'express'
 vi.mock('../db.js', () => ({
   getDb: vi.fn(() => null),
   initDb: vi.fn(() => Promise.resolve()),
+  getSchemaStatus: vi.fn(),
   withTenantTx: vi.fn()
 }))
 vi.mock('../cache.js', () => ({
@@ -43,8 +44,30 @@ vi.mock('../openapi.js', () => ({
 }))
 
 import { createApp } from '../app.js'
-import { getDb } from '../db.js'
+import { getDb, getSchemaStatus } from '../db.js'
 import { getCache } from '../cache.js'
+
+describe('GET /version', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('reports the release version and schema level without authentication', async () => {
+    vi.mocked(getSchemaStatus).mockResolvedValue({ appliedVersion: 58, releaseVersion: 58, schemaAhead: false })
+    const res = await request(createApp()).get('/version')
+    expect(res.status).toBe(200)
+    expect(res.body.version).toMatch(/^\d+\.\d+\.\d+/)
+    expect(res.body).toHaveProperty('commit')
+    expect(res.body.schema).toEqual({ appliedVersion: 58, releaseVersion: 58, schemaAhead: false })
+  })
+
+  it('still answers when the schema level cannot be read', async () => {
+    vi.mocked(getSchemaStatus).mockRejectedValue(new Error('connection refused'))
+    const res = await request(createApp()).get('/version')
+    expect(res.status).toBe(200)
+    expect(res.body.schema).toEqual({ appliedVersion: null, releaseVersion: null, schemaAhead: false })
+  })
+})
 
 describe('GET /health', () => {
   beforeEach(() => {

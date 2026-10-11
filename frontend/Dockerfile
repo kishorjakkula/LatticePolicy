@@ -21,5 +21,9 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Rewrites /runtime-config.js from LATTICE_* env vars at container start, so
+# one published image can be pointed at any carrier stack.
+COPY frontend/docker-entrypoint.d/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

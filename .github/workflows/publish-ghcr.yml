@@ -102,6 +102,8 @@ jobs:
           context: .
           file: server/Dockerfile
           push: true
+          build-args: |
+            BUILD_COMMIT=${{ steps.checkout.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.checkout.outputs.sha }}

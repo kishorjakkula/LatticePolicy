@@ -23,6 +23,9 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+# Commit this image was built from; reported by GET /version.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN apk upgrade --no-cache libcrypto3 libssl3
 
 # System Chromium + the shared libraries it needs to actually run headless on

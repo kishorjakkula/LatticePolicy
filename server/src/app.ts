@@ -9,7 +9,8 @@ import { ssoRoutes } from './routes/sso.routes.js'
 import { routes } from './routes/index.js'
 import { httpLogger, logger } from './logger.js'
 import { getCache } from './cache.js'
-import { getDb } from './db.js'
+import { getDb, getSchemaStatus, type SchemaStatus } from './db.js'
+import { getBuildInfo } from './version.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
@@ -144,6 +145,16 @@ export function createApp() {
     try { const cache = getCache(); if (cache) { await cache.ping(); cacheOk = true } } catch {}
     const status = dbOk ? 'ok' : 'degraded'
     res.status(dbOk ? 200 : 503).json({ status, db: dbOk, cache: cacheOk, ts: new Date().toISOString() })
+  })
+
+  // Unauthenticated on purpose, like /health: upgrade tooling and the carrier
+  // registry need the running release and schema level. No tenant or
+  // configuration detail is exposed.
+  app.get('/version', async (_req, res) => {
+    const build = getBuildInfo()
+    let schema: SchemaStatus = { appliedVersion: null, releaseVersion: null, schemaAhead: false }
+    try { schema = await getSchemaStatus() } catch {}
+    res.json({ version: build.version, commit: build.commit, schema })
   })
 
   app.post('/auth/login', loginLimiter, handleLogin)
