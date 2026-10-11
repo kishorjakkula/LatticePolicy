@@ -218,27 +218,31 @@ complianceAdminRoutes.post('/ofac/sdn-list/import', async (req, res) => {
     throw new BadRequestError('INVALID_INPUT', 'entries array is required')
   }
 
-  const pool = getDb()!
-  const q = (text: string, params?: any[]) => pool.query(text, params)
-  let imported = 0
-  for (const entry of entries) {
-    const name = String(entry?.name || '').trim()
-    if (!name) continue
-    const aliases = Array.isArray(entry?.aliases) ? entry.aliases : []
-    await q(
-      `INSERT INTO ofac_sdn_list (name, normalized_name, aliases, address, country, list_type, updated_at)
-       VALUES ($1,$2,$3::jsonb,$4,$5,$6,now())`,
-      [
-        name,
-        normalizeOfacName(name),
-        JSON.stringify(aliases),
-        entry?.address || null,
-        entry?.country || null,
-        entry?.listType || 'SDN'
-      ]
-    )
-    imported += 1
-  }
+  // Runs in the caller's tenant transaction so the import is all-or-nothing
+  // and never touches the shared pool directly.
+  const imported = await withTenantTx(req.tenant!.tenantId, async (db) => {
+    const q = toRawQuery(db)
+    let count = 0
+    for (const entry of entries) {
+      const name = String(entry?.name || '').trim()
+      if (!name) continue
+      const aliases = Array.isArray(entry?.aliases) ? entry.aliases : []
+      await q(
+        `INSERT INTO ofac_sdn_list (name, normalized_name, aliases, address, country, list_type, updated_at)
+         VALUES ($1,$2,$3::jsonb,$4,$5,$6,now())`,
+        [
+          name,
+          normalizeOfacName(name),
+          JSON.stringify(aliases),
+          entry?.address || null,
+          entry?.country || null,
+          entry?.listType || 'SDN'
+        ]
+      )
+      count += 1
+    }
+    return count
+  })
   res.status(201).json({ imported })
 })
 

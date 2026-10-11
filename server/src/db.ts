@@ -5,7 +5,8 @@ import { Pool, type PoolClient } from 'pg'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from './schema.js'
 import { logger } from './logger.js'
-import { assertDeploymentConfig } from './config.js'
+import { assertDeploymentConfig, getPinnedTenantId } from './config.js'
+import { BadRequestError, ForbiddenError } from './errors/domain.errors.js'
 
 let pool: Pool | null = null
 
@@ -39,12 +40,9 @@ export function toRawQuery(db: DrizzleDB): (text: string, params?: any[]) => Pro
   if (client && typeof client.query === 'function' && client.constructor?.name === 'Client') {
     return (text: string, params?: any[]) => client.query(text, params)
   }
-  // Fallback: use the module-level pool (loses the per-request tenant setting,
-  // so only safe for read-only or pre-filtered queries).
-  return async (text: string, params?: any[]) => {
-    if (!pool) throw new Error('DB not initialized')
-    return pool.query(text, params)
-  }
+  // No transaction-bound client: refuse rather than fall back to the shared
+  // pool, which would run the query outside any tenant scope.
+  throw new Error('toRawQuery requires a tenant-scoped transaction (use withTenantTx)')
 }
 
 export function getDb(): Pool | null {
@@ -70,7 +68,21 @@ export async function initDb() {
   await runMigrations()
 }
 
+/**
+ * Fails closed on a missing tenant id and, when this stack is pinned to one
+ * carrier (CARRIER_TENANT_ID), on any other tenant id. Request-edge checks in
+ * tenancy.ts/auth.ts give callers a clean response first; this is the backstop
+ * for every other path (jobs, workers, config loaders).
+ */
+export function assertTenantServed(tenantId: string): void {
+  const requested = String(tenantId || '').trim()
+  if (!requested) throw new BadRequestError('TENANT_REQUIRED', 'Tenant context is required')
+  const pinned = getPinnedTenantId()
+  if (pinned && requested !== pinned) throw new ForbiddenError('TENANT_NOT_SERVED')
+}
+
 export async function withTenantTx<T>(tenantId: string, fn: (db: DrizzleDB) => Promise<T>): Promise<T> {
+  assertTenantServed(tenantId)
   if (!pool) throw new Error('DB not initialized')
   const client = await pool.connect()
   try {

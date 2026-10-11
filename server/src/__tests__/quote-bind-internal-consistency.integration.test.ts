@@ -1,9 +1,14 @@
 import crypto from 'node:crypto'
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeDb, getDb, initDb } from '../db.js'
+import { closeDb, getDb, initDb, withTenantTx } from '../db.js'
 import { createOrRateQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
 import { decideReferral } from '../services/uw-referral.service.js'
+
+// Services that take a db handle run inside a tenant transaction, as the routes do.
+function decideReferralTx(tenant: string, referralId: string, input: Parameters<typeof decideReferral>[3]) {
+  return withTenantTx(tenant, (db) => decideReferral(db, tenant, referralId, input))
+}
 
 // Task B integration coverage: the internal-record consistency check wired
 // into bindQuote (server/src/services/quote-bind.service.ts). Mirrors the
@@ -197,7 +202,7 @@ describe('internal-record consistency check at bind', () => {
     )
     const referralId = referralRow.rows[0].referral_id
 
-    const decided = await decideReferral({} as any, tenantId, referralId, {
+    const decided = await decideReferralTx(tenantId, referralId, {
       decision: 'Approved',
       reason: 'Confirmed with insured; approved with updated premium basis',
       decidedBy: UW_USER_ID,

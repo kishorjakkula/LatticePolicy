@@ -39,6 +39,17 @@ export function isManagedDeployment(): boolean {
   return process.env.NODE_ENV === 'production' || MANAGED_DEPLOYMENT_ENVS.some((value) => value === deploymentEnv)
 }
 
+/**
+ * When CARRIER_TENANT_ID is set, this stack serves exactly one carrier:
+ * every other tenant id is rejected at the request edge, at login, in
+ * background workers, and in withTenantTx. Unset keeps the legacy
+ * multi-tenant behavior used by local/demo environments.
+ */
+export function getPinnedTenantId(): string | null {
+  const value = String(process.env.CARRIER_TENANT_ID || '').trim()
+  return value || null
+}
+
 export function isTruthyEnv(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 }

@@ -197,6 +197,26 @@ describe('job queue framework', () => {
     expect(events.some((e: any) => e.event_type === 'checkpointed')).toBe(true)
   })
 
+  it('a tenant-scoped claim only claims that tenant\'s runs', async () => {
+    const pool = getDb()!
+    const keyA = `test:scoped-claim:a:${suffix()}`
+    const keyB = `test:scoped-claim:b:${suffix()}`
+    await enqueueJob({ tenantId: tenantA, jobCode: 'async_outbox_delivery_retry', idempotencyKey: keyA })
+    await enqueueJob({ tenantId: tenantB, jobCode: 'async_outbox_delivery_retry', idempotencyKey: keyB })
+
+    const batch = await claimDueRuns(pool, 500, 'worker-scoped', 60, tenantB)
+
+    expect(batch.length).toBeGreaterThanOrEqual(1)
+    expect(batch.every((run) => run.tenant_id === tenantB)).toBe(true)
+    expect(batch.some((run) => (run as any).idempotency_key === keyB)).toBe(true)
+
+    const other = await pool.query(
+      'SELECT status FROM job_runs WHERE tenant_id = $1 AND idempotency_key = $2',
+      [tenantA, keyA]
+    )
+    expect(other.rows[0].status).toBe('Queued')
+  })
+
   it('completes a run and marks it Succeeded', async () => {
     const pool = getDb()!
     const key = `test:complete:${suffix()}`

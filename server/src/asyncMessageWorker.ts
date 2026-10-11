@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import { and, eq, sql } from 'drizzle-orm'
 import { createDrizzleDb, getDb } from './db.js'
+import { getPinnedTenantId } from './config.js'
 import { asyncMessageOutbox } from './schema.js'
 import { logger } from './logger.js'
 
@@ -63,7 +64,7 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
     if (stopped || running) return
     running = true
     try {
-      const batch = await claimOutboxRows(db, config.batchSize)
+      const batch = await claimOutboxRows(db, config.batchSize, getPinnedTenantId() ?? undefined)
       if (batch.length === 0) {
         schedule(config.pollMs)
         return

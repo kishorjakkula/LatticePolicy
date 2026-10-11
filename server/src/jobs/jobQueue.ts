@@ -82,11 +82,15 @@ export async function claimDueRuns(
   pool: Pool,
   limit: number,
   workerId: string,
-  lockSeconds: number
+  lockSeconds: number,
+  tenantId?: string
 ): Promise<JobRunRow[]> {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const params: any[] = [limit, workerId, lockSeconds]
+    const tenantFilter = tenantId ? 'AND tenant_id = $4' : ''
+    if (tenantId) params.push(tenantId)
     const result = await client.query<JobRunRow>(
       `
         WITH candidate AS (
@@ -95,6 +99,7 @@ export async function claimDueRuns(
           WHERE status IN ('Queued', 'Retry')
             AND next_attempt_at <= now()
             AND attempts < max_attempts
+            ${tenantFilter}
           ORDER BY next_attempt_at ASC, created_at ASC
           LIMIT $1
           FOR UPDATE SKIP LOCKED
@@ -110,7 +115,7 @@ export async function claimDueRuns(
         WHERE runs.run_id = candidate.run_id
         RETURNING runs.*
       `,
-      [limit, workerId, lockSeconds]
+      params
     )
     await client.query('COMMIT')
     return result.rows

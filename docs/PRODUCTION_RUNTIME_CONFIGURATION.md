@@ -44,6 +44,11 @@ Additional guarded settings:
   in the comma-separated `DEMO_ALLOWED_EMAILS` list.
 - `SSO_STATE_SECRET` is optional and otherwise derives from `JWT_SECRET`; set a
   separate secret explicitly when enabling OIDC SSO.
+- `CARRIER_TENANT_ID` pins the stack to one carrier. Set it on every
+  single-carrier deployment: requests, logins, SSO routes, and background
+  workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is
+  optional today so existing shared deployments keep working; see
+  `docs/MULTITENANCY.md`.
 
 The API does not currently provide public self-registration or domain-based
 demo allowlisting. Use exact entries in `DEMO_ALLOWED_EMAILS`, provision users

@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { eq, and, sql, inArray, getTableColumns } from 'drizzle-orm'
 import { createDrizzleDb, getDb, withTenantTx, type DrizzleDB } from '../db.js'
+import { getPinnedTenantId } from '../config.js'
 import { isUuidLike } from '../lib/utils.js'
 import { tenants, users, userRoles, customers } from '../schema.js'
 import { recordFailedAttempt, clearLockoutState, validatePasswordPolicy } from '../lib/password-policy.js'
@@ -434,6 +435,10 @@ export async function deleteUser(tenantId: string, id: string) {
 export async function ensureDefaults() {
   const pool = getDb()
   if (!pool) return
+  // Demo seed data belongs to the sample tenant only; a stack pinned to a
+  // real carrier must not create it.
+  const pinnedTenantId = getPinnedTenantId()
+  if (pinnedTenantId && pinnedTenantId !== 'sample-carrier') return
   await withTenantTx('sample-carrier', async (db) => {
     await db
       .insert(tenants)
