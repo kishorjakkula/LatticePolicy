@@ -42,11 +42,16 @@ certification remains a separate gate. Issue links and original findings are in
 ## Validation and limitations
 
 Local validation: 529 server, 211 frontend, 126 PostgreSQL integration,
-133 Playwright regression, and nine deployment/pilot adapter tests passed.
+133 Playwright regression, and ten deployment/pilot adapter tests passed.
 Typecheck, architecture boundaries, dependency policy checks and Docker builds
 passed. An initial browser cancellation timeout passed on a nine-test lifecycle
 rerun and the full 133-test rerun. The bounded pilot workload completed 200
 requests without errors; all ten generated documents returned readable content.
+The three pilot browser scenarios passed. The local drill restored the database
+and ten document hashes in 9.9 seconds, verified upgrade and both rollback modes,
+retained an accepted transaction through failed migration, and verified worker
+failure/recovery alerts. Host readiness checks after Docker restarts refresh
+stale health connections without automatically retrying transaction writes.
 Fresh SHA-matched pilot acceptance, browser and recovery evidence is required by
 `pilot:handoff` and recorded under `.pilot/evidence/` and in the PR.
 No external customer data, approval, HTTPS endpoint, SLA, remote backup, or

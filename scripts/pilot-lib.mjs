@@ -26,6 +26,18 @@ export async function call(method, endpoint, { token, data, tenant = profile.ten
 export async function login() {
   return call('POST', '/auth/login', { data: { tenantId: profile.tenantId, ...credentials() } })
 }
+export async function waitForApi(timeoutMs = 120000) {
+  const deadline = Date.now() + timeoutMs
+  do {
+    try {
+      const response = await fetch(`${profile.apiUrl}/health`, { signal: AbortSignal.timeout(5000), headers: { Connection: 'close' } })
+      const health = await response.json()
+      if (response.ok && health.db && health.cache) return
+    } catch { /* A restarted Docker API can invalidate an idle HTTP socket. */ }
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  } while (Date.now() < deadline)
+  throw new Error('Pilot API did not become healthy from the host')
+}
 export function date(offset = 0) {
   const d = new Date(); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10)
 }

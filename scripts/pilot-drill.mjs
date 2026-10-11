@@ -3,7 +3,7 @@ import path from 'node:path'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { call, evidence, homeownersPayload, login, pilotRoot, profile } from './pilot-lib.mjs'
+import { call, evidence, homeownersPayload, login, pilotRoot, profile, waitForApi } from './pilot-lib.mjs'
 
 assert(profile.synthetic && profile.tenantId === 'acme-pilot', 'Recovery drill is restricted to the synthetic pilot')
 const kit = path.join(pilotRoot, 'kit'), stack = path.join(kit, 'stack.sh'), envFile = path.join(kit, 'carrier.env')
@@ -14,6 +14,7 @@ const run = args => execFileSync('sh', [stack, ...args], { encoding: 'utf8', std
 const begin = performance.now()
 const backup = run(['backup', 'acceptance']).trim()
 const restorePoint = new Date().toISOString()
+await waitForApi()
 const { token } = await login()
 const postBackup = await call('POST', '/api/v1/quotes', { token, data: homeownersPayload('afterbackup') })
 // Remove all generated artifacts on this disposable pilot only, then prove
@@ -22,6 +23,7 @@ execFileSync('docker', [...compose, 'run', '--rm', '-T', '--no-deps', 'api', 'no
   "const fs=require('fs');for(const n of fs.readdirSync('/data/documents'))fs.rmSync('/data/documents/'+n,{recursive:true,force:true})"], { stdio: 'pipe' })
 const recoveryStart = performance.now()
 run(['restore', backup]); run(['up'])
+await waitForApi()
 const recoverySeconds = (performance.now() - recoveryStart) / 1000
 const restored = await login()
 await call('GET', `/api/v1/quotes/${postBackup.quoteId}`, { token: restored.token, expected: [404] })
@@ -40,8 +42,10 @@ for (const image of ['latticepolicy-pilot-api', 'latticepolicy-pilot-ui']) {
   execFileSync('docker', ['tag', `${image}:${release.tag}`, `${image}:${next}`])
 }
 run(['upgrade', next])
+await waitForApi()
 await verifyDocuments()
 run(['rollback', '--keep-data'])
+await waitForApi()
 const build = path.join(pilotRoot, 'failure-image')
 fs.mkdirSync(build, { recursive: true })
 fs.writeFileSync(path.join(build, 'Dockerfile'), `FROM latticepolicy-pilot-api:${release.tag}\nCOPY migrate.js /app/server/dist/migrate.js\n`)
@@ -51,6 +55,7 @@ execFileSync('docker', ['tag', `latticepolicy-pilot-ui:${release.tag}`, `lattice
 const accepted = await call('POST', '/api/v1/quotes', { token: restored.token, data: homeownersPayload('beforefailedmigration') })
 const failure = spawnSync('sh', [stack, 'upgrade', bad], { encoding: 'utf8' })
 assert.notEqual(failure.status, 0, 'Injected failure must fail the upgrade')
+await waitForApi()
 assert.match(fs.readFileSync(envFile, 'utf8'), new RegExp(`LATTICE_VERSION=${release.tag}`))
 await call('GET', `/api/v1/quotes/${accepted.quoteId}`, { token: restored.token })
 await verifyDocuments()
