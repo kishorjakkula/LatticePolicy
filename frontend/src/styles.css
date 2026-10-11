@@ -3112,6 +3112,14 @@ button:focus-visible {
   max-width: 100%;
 }
 
+.dynamic-group + .dynamic-group {
+  margin-top: 18px;
+}
+
+.dynamic-group > h4 {
+  margin: 0 0 8px;
+}
+
 .dynamic-grid {
   flex-wrap: wrap;
 }

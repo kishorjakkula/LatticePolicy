@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from '../uuid.js'
+import { getProductCapabilities } from './product-registry.js'
 
 export type UnderwritingCompanyRecord = {
   companyId: string
@@ -36,6 +37,8 @@ export function normalizeCompanyName(value: any): string {
 export function normalizeCompanyProductCode(value: any): string {
   const normalized = String(value || '').trim().toLowerCase()
   if (normalized === 'personal-auto' || normalized === 'commercial-auto' || normalized === 'homeowners' || normalized === 'cyber' || normalized === 'professional-liability') return normalized
+  // A product added by the carrier pack can have underwriting companies too.
+  if (normalized && getProductCapabilities(normalized)) return normalized
   return ''
 }
 

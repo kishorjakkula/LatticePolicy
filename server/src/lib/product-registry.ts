@@ -5,8 +5,12 @@ import type { ProductCapabilityDescriptor, ProductTransactionCapability } from '
 import { BadRequestError, NotFoundError } from '../errors/domain.errors.js'
 import { carrierPackEnabledProducts, carrierPackProductsDir, getActiveCarrierPack, PACK_SLUG_PATTERN } from './carrier-pack.js'
 
-/** Adapters rating.service.ts can execute, plus the explicit "not quotable" marker. */
-export const RATING_ADAPTERS = ['personal-auto', 'commercial-auto', 'cyber', 'professional-liability', 'homeowners', 'unsupported'] as const
+/**
+ * Adapters rating.service.ts can execute, plus the explicit "not quotable"
+ * marker. `rate-table` prices a product entirely from its rates.yaml
+ * (lib/rating-table.ts) and is what a carrier pack product should use.
+ */
+export const RATING_ADAPTERS = ['rate-table', 'personal-auto', 'commercial-auto', 'cyber', 'professional-liability', 'homeowners', 'unsupported'] as const
 
 const allowedTransactions = new Set<ProductTransactionCapability>([
   'quote', 'bind', 'issue', 'endorse', 'cancel', 'reinstate', 'rewrite', 'renew', 'nonRenew',

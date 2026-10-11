@@ -3,9 +3,8 @@ version: 1.0.0
 capabilities:
   label: Condo Unit-Owners
   riskLabel: Condo Unit
-  # Reuses the framework's homeowners rating steps with this product's own
-  # factor tables (rates.yaml).
-  ratingAdapter: homeowners
+  # Priced entirely from this product's rates.yaml; no rating code involved.
+  ratingAdapter: rate-table
   formsMode: catalog
   supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
   riskKinds:
@@ -28,6 +27,8 @@ coverages:
     name: Building Property (Unit Improvements)
     selectable: true
     limitType: value
+    defaultLimit: 100000
+    deductibles: [500, 1000, 2500, 5000]
   - code: C
     name: Personal Property
     selectable: true
@@ -50,9 +51,9 @@ coverages:
     name: Loss Assessment
     selectable: true
     limits: [1000, 10000, 25000, 50000]
-deductibles:
-  allPeril: [500, 1000, 2500, 5000]
 ratingKeys:
   - construction
   - protectionClass
   - roofAgeYears
+  - floorLevel
+  - occupancy

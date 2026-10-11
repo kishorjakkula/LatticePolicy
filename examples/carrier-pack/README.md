@@ -24,8 +24,12 @@ This example is for a carrier `acme-mutual`. Copy it as a starting point.
   not have.
 - **New fields** on that product: `floorLevel`, `masterPolicyDeductible`, and
   `associationName`.
-- **Its own rate tables**, applied by the framework's homeowners rating steps
-  (`ratingAdapter: homeowners`).
+- **Its own rating**, defined entirely in `rates.yaml`
+  (`ratingAdapter: rate-table`): a term factor, six rating factors including
+  one on the new `floorLevel` field and one on state, a pricing method per
+  coverage, deductible factors, a minimum premium, fees, and tax.
+- **Its own quote form**: the fields file sets each field's label, type,
+  option list, help text, section, and order.
 - **Which products the carrier sells** (`enabledProducts`): two core products
   plus the new one. Core products not listed are not offered.
 - **A tuned core product**: different personal-auto driver age factors.
@@ -34,10 +38,58 @@ This example is for a carrier `acme-mutual`. Copy it as a starting point.
 
 - `carrier` must equal the stack's `CARRIER_TENANT_ID`.
 - A pack adds products under new codes. It cannot replace a core product.
-- `ratingAdapter` must be one the release provides, or `unsupported` for a
-  product that is not quotable yet.
+- `ratingAdapter: rate-table` prices the product from its own `rates.yaml`.
+  `unsupported` marks a product that is not quotable yet.
 - Every product in `enabledProducts` and every `fields/<code>.json` must name
   a core product or one in the pack.
+
+## Rating a product from tables
+
+```yaml
+rating:
+  basePremium: 180                # optional; needed by shareOfBase
+  termFactors: { 6: 0.55, 12: 1 } # optional, by term in months
+  factors:                        # multiplied together
+    - name: Construction
+      field: construction         # a field on the risk
+      table: { frame: 1.05, masonry: 0.90 }
+      default: 1                  # used when no entry matches
+    - name: Protection class
+      field: protectionClass
+      ranges: { '1-4': 0.92, '5-8': 1.00, '9-10': 1.20 }
+    - name: State
+      path: state                 # anywhere on the quote
+      table: { TX: 1.10 }
+  coverages:                      # one pricing method per coverage
+    A: { rate: 1.35, ratePer: 1000 }           # per 1,000 of limit
+    E: { byLimit: { 100000: 40, 300000: 55 } } # premium per limit option
+    F: { flat: 12, applyFactors: false }       # fixed amount, no factors
+    default: { shareOfBase: 0.05 }             # anything not listed
+  minimumPremium: 150
+fees: { policy: 25 }
+taxes: { rate: 0.02 }
+```
+
+- Bands are written `1-4`, `9+`, `<25`, `<=10`, `>5`, or `>=65`.
+- A factor with no matching entry uses its `default`, or 1. Add
+  `required: true` to reject the quote instead.
+- A coverage can carry `deductibleFactors`, keyed by deductible.
+- A coverage whose limit is a percent of another coverage is rated on the
+  resulting amount.
+- Every quote records the factors and methods used in its calculation trace.
+- A rating workbook published for the product in the rating workbench takes
+  over from these tables, as it does for core products.
+
+## Coverages and the quote form
+
+- A coverage with `limits` or `percentOptions` gets a drop-down. A coverage
+  with `limitType: value` gets a free-form amount, starting from
+  `defaultLimit`. A coverage's own `deductibles` list gets a drop-down.
+- `fields/<code>.json` drives the risk step: `label`, `type` (`string`,
+  `int`, `number`, `bool`, `enum`, `date`), `enum` options, `required`,
+  `help`, and `ui.group` / `ui.order` for sections and ordering.
+- Before the product can be quoted it needs, in the admin screens, an
+  underwriting company that writes it and a state eligibility record.
 
 ## Checking a pack
 

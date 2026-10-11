@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { validateCarrierPack, assertCarrierPackValid } from '../carrier-pack-validator.js'
 import { getActiveCarrierPack } from '../carrier-pack.js'
 import { getProductCapabilities, listProductCapabilities, resolveProductPackDir } from '../product-registry.js'
-import { loadFieldMeta, loadProductConfig, loadProductRates, loadTenantOverrides } from '../products.js'
+import { buildRiskFields, loadFieldMeta, loadProductConfig, loadProductRates, loadTenantOverrides } from '../products.js'
 import { rate } from '../../services/rating.service.js'
 
 const EXAMPLE_PACK = path.resolve(__dirname, '../../../../examples/carrier-pack')
@@ -160,11 +160,27 @@ describe('carrier pack', () => {
       )
     })
 
+    it('reports rating problems in a rate-table product with the file they are in', () => {
+      const dir = copyOfExamplePack()
+      const ratesPath = path.join(dir, 'products/condo-unit-owners/rates.yaml')
+      fs.writeFileSync(ratesPath, fs.readFileSync(ratesPath, 'utf8')
+        .replace("        500000: 68\n", '')
+        .replace('      field: floorLevel', '      field: floorNumber'))
+
+      const validation = validateCarrierPack(dir)
+      expect(validation.errors.map((issue) => `${issue.file}: ${issue.message}`)).toEqual([
+        'products/condo-unit-owners/rates.yaml: rating.coverages.E: no premium for limit 500000, which the product offers',
+      ])
+      expect(validation.warnings.map((issue) => `${issue.file}: ${issue.message}`)).toContain(
+        "products/condo-unit-owners/rates.yaml: rating.factors[4] (Floor level): reads field 'floorNumber', which the product does not define"
+      )
+    })
+
     it('warns about, but loads, files outside the format and products that cannot be quoted', () => {
       const dir = copyOfExamplePack()
       write(dir, 'notes.txt', 'scratch')
       const coveragePath = path.join(dir, 'products/condo-unit-owners/coverage.yaml')
-      fs.writeFileSync(coveragePath, fs.readFileSync(coveragePath, 'utf8').replace('ratingAdapter: homeowners', 'ratingAdapter: unsupported'))
+      fs.writeFileSync(coveragePath, fs.readFileSync(coveragePath, 'utf8').replace('ratingAdapter: rate-table', 'ratingAdapter: unsupported'))
 
       const validation = validateCarrierPack(dir)
       expect(validation.ok).toBe(true)
@@ -201,7 +217,7 @@ describe('carrier pack', () => {
       ])
       expect(getProductCapabilities('condo-unit-owners')).toMatchObject({
         label: 'Condo Unit-Owners',
-        ratingAdapter: 'homeowners',
+        ratingAdapter: 'rate-table',
         defaultRisk: { floorLevel: 1 },
       })
       // A core product the carrier did not enable is not offered on this stack.
@@ -212,7 +228,7 @@ describe('carrier pack', () => {
     it('loads the added product, its rates, and its fields from the pack', () => {
       const config = loadProductConfig('condo-unit-owners')
       expect(config.coverages.map((coverage: any) => coverage.code)).toContain('LOSS_ASSESS')
-      expect(loadProductRates('condo-unit-owners').rates.constructionFactors).toEqual({ frame: 1.05, masonry: 0.9, other: 1.1 })
+      expect((loadProductRates('condo-unit-owners').rates as any).rating.factors[0]).toMatchObject({ name: 'Construction', table: { frame: 1.05, masonry: 0.9, other: 1.1 } })
 
       const fields = loadFieldMeta('condo-unit-owners', 'acme-mutual')
       expect(fields.map((field: any) => field.path)).toEqual(expect.arrayContaining([
@@ -226,24 +242,45 @@ describe('carrier pack', () => {
       expect(loadTenantOverrides('acme-mutual').overrides.rating.driverAgeFactors['<25']).toBe(1.3)
       // Another tenant on the same process still reads the repository's files.
       expect(loadTenantOverrides('sample-carrier').overrides.rating.driverAgeFactors['<25']).toBe(1.25)
-      expect(loadFieldMeta('condo-unit-owners', 'sample-carrier').map((field: any) => field.path)).not.toContain('risks.0.floorLevel')
+      expect(loadFieldMeta('condo-unit-owners', 'sample-carrier').map((field: any) => field.path)).not.toContain('risks.0.associationName')
     })
 
-    it('rates the added product with its own factor tables', () => {
-      const quote = (productCode: string) => rate('acme-mutual', {
-        productCode,
-        risks: [{ type: 'dwelling', construction: 'masonry', protectionClass: 3, roofAgeYears: 5 }],
-        coverages: [{ code: 'A', limit: 150000 }, { code: 'E', limit: 300000 }],
+    it('rates the added product from its own rates file, with no rating code', () => {
+      const result = rate('acme-mutual', {
+        productCode: 'condo-unit-owners',
+        state: 'TX',
+        termMonths: 12,
+        risks: [{ type: 'dwelling', construction: 'masonry', protectionClass: 3, roofAgeYears: 5, floorLevel: 4, occupancy: 'OwnerOccupied' }],
+        coverages: [{ code: 'A', selected: true, limit: 150000, deductible: 2500 }, { code: 'LOSS_ASSESS', selected: true, limit: 10000 }],
       })
-      const condo = quote('condo-unit-owners')
-      const homeowners = quote('homeowners')
+      // A: 150 x 1.35 x 0.883476 (factors) x 0.90 (deductible) = 161.01; LOSS_ASSESS: 22 flat for the limit.
+      expect(result.byCoverage.map((item: any) => [item.code, item.amount.amount])).toEqual([['A', 161.01], ['LOSS_ASSESS', 22]])
+      expect(result.fees.amount).toBe(25)
+      expect(result.total.amount).toBe(211.67) // 183.01 + 25 + 3.66 tax
+      expect(result.calcTrace.source).toBe('rate-table')
+    })
 
-      expect(condo.fees.amount).toBe(25)
-      expect(homeowners.fees.amount).toBe(35)
-      expect(condo.byCoverage.length).toBe(2)
-      // Same rating steps, different tables: masonry 0.90 x class 0.92 against 0.95 x 0.95.
-      const coverageTotal = (result: any) => result.byCoverage.reduce((sum: number, item: any) => sum + item.amount.amount, 0)
-      expect(coverageTotal(condo) / coverageTotal(homeowners)).toBeCloseTo((0.9 * 0.92) / (0.95 * 0.95), 2)
+    it('builds the quote form from the pack field definitions', () => {
+      const fields = buildRiskFields('condo-unit-owners', loadProductConfig('condo-unit-owners'), 'acme-mutual')
+      expect(fields.map((field) => field.key)).toEqual([
+        'address', 'floorLevel', 'squareFeet', 'yearBuilt', 'construction', 'roofAgeYears', 'protectionClass', 'occupancy', 'masterPolicyDeductible', 'associationName',
+      ])
+      expect(fields.find((field) => field.key === 'floorLevel')).toEqual({
+        key: 'floorLevel', label: 'Floor Level', type: 'number', path: 'risks.0.floorLevel', required: true, help: 'Enter the floor the unit is on', group: 'Unit',
+      })
+      expect(fields.find((field) => field.key === 'construction')).toMatchObject({
+        label: 'Building Construction', type: 'select', options: ['frame', 'masonry', 'other'], group: 'Building',
+      })
+      expect(fields.find((field) => field.key === 'masterPolicyDeductible')?.help).toMatch(/association policy/)
+    })
+
+    it('keeps core product forms and the generic fallback as they were', () => {
+      const homeowners = loadProductConfig('homeowners')
+      expect(buildRiskFields('homeowners', homeowners, 'acme-mutual')).toEqual(buildRiskFields('homeowners', homeowners))
+      // Without the pack's carrier, a pack product still gets the generic form from its rating keys.
+      const generic = buildRiskFields('condo-unit-owners', loadProductConfig('condo-unit-owners'))
+      expect(generic.map((field) => field.key)).toEqual(['construction', 'protectionClass', 'roofAgeYears', 'floorLevel', 'occupancy'])
+      expect(generic.every((field) => field.group === undefined)).toBe(true)
     })
 
     it('leaves core product rating untouched for a tenant without the pack', () => {

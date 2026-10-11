@@ -31,7 +31,7 @@ productsRoutes.get('/products/:code/form', requireProductAccess, (req, res, next
     const code = routeParam(req.params.code).toLowerCase()
     requireProductCapabilities(code)
     const cfg = loadProductConfig(code)
-    const fields = buildRiskFields(code, cfg)
+    const fields = buildRiskFields(code, cfg, req.tenant?.tenantId)
     return res.json({ fields })
   } catch (err) {
     next(err)

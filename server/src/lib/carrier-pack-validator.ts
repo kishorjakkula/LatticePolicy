@@ -9,6 +9,7 @@ import {
   type CarrierPackManifest,
 } from './carrier-pack.js'
 import { RATING_ADAPTERS, parseProductDescriptor, resolveCoreProductsDir } from './product-registry.js'
+import { validateRateTable } from './rating-table.js'
 
 export type CarrierPackIssue = {
   /** Path inside the pack the issue is about, for example products/condo/coverage.yaml. */
@@ -110,6 +111,9 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
   const coreProductsDir = options.coreProductsDir || resolveCoreProductsDir()
   const coreCodes = new Set(listDirectories(coreProductsDir))
   const packProducts: string[] = []
+  // rate-table products are checked after fields/ is read, so a factor that
+  // reads an undefined field can be reported.
+  const rateTableProducts: Array<{ code: string; coverage: any; rates: any }> = []
   for (const code of listDirectories(path.join(dir, 'products'))) {
     const base = `products/${code}`
     if (!PACK_SLUG_PATTERN.test(code)) {
@@ -121,6 +125,8 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
       continue
     }
 
+    let coverageValue: any = null
+    let usesRateTable = false
     const coveragePath = path.join(dir, 'products', code, 'coverage.yaml')
     if (!fs.existsSync(coveragePath)) {
       error(`${base}/coverage.yaml`, 'missing')
@@ -129,8 +135,10 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
       if (coverage.error) {
         error(`${base}/coverage.yaml`, `not valid YAML: ${coverage.error}`)
       } else {
+        coverageValue = coverage.value
         try {
           const descriptor = parseProductDescriptor(coverage.value, code)
+          usesRateTable = descriptor.ratingAdapter === 'rate-table'
           if (!(RATING_ADAPTERS as readonly string[]).includes(descriptor.ratingAdapter)) {
             error(`${base}/coverage.yaml`, `ratingAdapter '${descriptor.ratingAdapter}' is not available in this release; use one of: ${RATING_ADAPTERS.join(', ')}`)
           } else if (descriptor.ratingAdapter === 'unsupported') {
@@ -153,6 +161,7 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
       if (rates.error) error(`${base}/rates.yaml`, `not valid YAML: ${rates.error}`)
       else if (!rates.value || typeof rates.value !== 'object' || Array.isArray(rates.value)) error(`${base}/rates.yaml`, 'must be a YAML mapping')
       else if (String(rates.value.product || '').trim().toLowerCase() !== code) error(`${base}/rates.yaml`, `must declare product: ${code}`)
+      else if (usesRateTable) rateTableProducts.push({ code, coverage: coverageValue, rates: rates.value })
     }
     packProducts.push(code)
   }
@@ -191,6 +200,7 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
   }
 
   // --- fields/ ----------------------------------------------------------------
+  const fieldPathsByProduct = new Map<string, string[]>()
   const fieldsDir = path.join(dir, 'fields')
   if (fs.existsSync(fieldsDir)) {
     for (const file of fs.readdirSync(fieldsDir).sort()) {
@@ -217,6 +227,7 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
         continue
       }
       const seen = new Set<string>()
+      fieldPathsByProduct.set(code, parsed.map((field: any) => (typeof field?.path === 'string' ? field.path.trim() : '')).filter(Boolean))
       parsed.forEach((field: any, index: number) => {
         const where = `field ${index + 1}`
         const fieldPath = typeof field?.path === 'string' ? field.path.trim() : ''
@@ -230,6 +241,20 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
           error(rel, `${where} (${fieldPath}): an enum field needs a non-empty enum list`)
         }
       })
+    }
+  }
+
+  // --- rate-table rating --------------------------------------------------------
+  for (const product of rateTableProducts) {
+    const defaultRisk = product.coverage?.capabilities?.defaultRisk
+    const fieldNames = new Set<string>(defaultRisk && typeof defaultRisk === 'object' ? Object.keys(defaultRisk) : [])
+    for (const fieldPath of fieldPathsByProduct.get(product.code) || []) {
+      const match = /^risks\.0\.(.+)$/.exec(fieldPath)
+      if (match) fieldNames.add(match[1])
+    }
+    for (const issue of validateRateTable(product.rates, product.coverage, Array.from(fieldNames))) {
+      if (issue.level === 'error') error(`products/${product.code}/rates.yaml`, issue.message)
+      else warning(`products/${product.code}/rates.yaml`, issue.message)
     }
   }
 
@@ -253,6 +278,10 @@ function validateCoverages(coverage: any, file: string, error: (file: string, me
     if (item.limits != null && !isNumberList(item.limits)) error(file, `${where}: limits must be a non-empty list of numbers`)
     if (item.deductibles != null && !isNumberList(item.deductibles)) error(file, `${where}: deductibles must be a non-empty list of numbers`)
     if (item.percentOptions != null && !isNumberList(item.percentOptions)) error(file, `${where}: percentOptions must be a non-empty list of numbers`)
+    if (item.limitType != null && item.limitType !== 'value') error(file, `${where}: limitType must be 'value' (a free-form amount) when set`)
+    if (item.defaultLimit != null && !(typeof item.defaultLimit === 'number' && Number.isFinite(item.defaultLimit) && item.defaultLimit > 0)) {
+      error(file, `${where}: defaultLimit must be a number above 0`)
+    }
     if (item.limitAsPercentOf != null && !codes.has(String(item.limitAsPercentOf))) {
       error(file, `${where}: limitAsPercentOf refers to '${item.limitAsPercentOf}', which is not a coverage in this product`)
     }

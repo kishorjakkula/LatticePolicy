@@ -1,12 +1,12 @@
 [
-  {"path": "risks.0.address", "type": "string", "required": true, "ui": {"group": "Unit", "order": 110}},
-  {"path": "risks.0.floorLevel", "type": "int", "required": true, "validation": {"message": "Enter the floor the unit is on"}, "ui": {"group": "Unit", "order": 120}},
-  {"path": "risks.0.squareFeet", "type": "int", "required": false, "ui": {"group": "Unit", "order": 130}},
-  {"path": "risks.0.yearBuilt", "type": "int", "required": true, "ui": {"group": "Building", "order": 210}},
-  {"path": "risks.0.construction", "type": "enum", "enum": ["frame", "masonry", "other"], "required": true, "ui": {"group": "Building", "order": 220}},
-  {"path": "risks.0.roofAgeYears", "type": "int", "required": true, "ui": {"group": "Building", "order": 230}},
-  {"path": "risks.0.protectionClass", "type": "int", "required": false, "ui": {"group": "Building", "order": 240}},
-  {"path": "risks.0.occupancy", "type": "enum", "enum": ["OwnerOccupied", "TenantOccupied", "Seasonal"], "required": true, "ui": {"group": "Occupancy", "order": 310}},
-  {"path": "risks.0.masterPolicyDeductible", "type": "int", "required": false, "visibleTo": ["Agent", "Underwriter"], "ui": {"group": "Association", "order": 410}},
-  {"path": "risks.0.associationName", "type": "string", "required": false, "ui": {"group": "Association", "order": 420}}
+  {"path": "risks.0.address", "label": "Unit Address", "type": "string", "required": true, "ui": {"group": "Unit", "order": 110}},
+  {"path": "risks.0.floorLevel", "label": "Floor Level", "type": "int", "required": true, "validation": {"message": "Enter the floor the unit is on"}, "ui": {"group": "Unit", "order": 120}},
+  {"path": "risks.0.squareFeet", "label": "Unit Square Feet", "type": "int", "required": false, "ui": {"group": "Unit", "order": 130}},
+  {"path": "risks.0.yearBuilt", "label": "Year Built", "type": "int", "required": true, "ui": {"group": "Building", "order": 210}},
+  {"path": "risks.0.construction", "label": "Building Construction", "type": "enum", "enum": ["frame", "masonry", "other"], "required": true, "ui": {"group": "Building", "order": 220}},
+  {"path": "risks.0.roofAgeYears", "label": "Roof Age (years)", "type": "int", "required": true, "ui": {"group": "Building", "order": 230}},
+  {"path": "risks.0.protectionClass", "label": "Protection Class", "type": "int", "required": false, "ui": {"group": "Building", "order": 240}},
+  {"path": "risks.0.occupancy", "label": "Occupancy", "type": "enum", "enum": ["OwnerOccupied", "TenantOccupied", "Seasonal"], "required": true, "ui": {"group": "Occupancy", "order": 310}},
+  {"path": "risks.0.masterPolicyDeductible", "label": "Association Master Policy Deductible", "type": "int", "required": false, "visibleTo": ["Agent", "Underwriter"], "ui": {"group": "Association", "order": 410}, "help": "Deductible on the association policy that could be assessed to the unit owner"},
+  {"path": "risks.0.associationName", "label": "Association Name", "type": "string", "required": false, "ui": {"group": "Association", "order": 420}}
 ]

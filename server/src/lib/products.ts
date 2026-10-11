@@ -129,9 +129,47 @@ export type FormField = {
   required?: boolean
   options?: any[]
   help?: string
+  /** Section heading the field is shown under, when the product defines one. */
+  group?: string
 }
 
-export function buildRiskFields(productCode: ProductCode, cfg: any): FormField[] {
+function humanizeFieldKey(key: string): string {
+  return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())
+}
+
+/**
+ * Risk form built from a carrier pack's field metadata (fields/<code>.json):
+ * the carrier's own labels, option lists, required flags, grouping and order.
+ */
+function riskFieldsFromFieldMeta(meta: any[]): FormField[] {
+  return meta
+    .filter((field) => typeof field?.path === 'string' && /^risks\.0\.[^.]+$/.test(field.path))
+    .map((field, index) => ({ field, index }))
+    .sort((left, right) => {
+      const leftOrder = Number(left.field?.ui?.order)
+      const rightOrder = Number(right.field?.ui?.order)
+      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) return leftOrder - rightOrder
+      return left.index - right.index
+    })
+    .map(({ field }) => {
+      const key = String(field.path).split('.').pop() as string
+      const out: FormField = {
+        key,
+        label: typeof field.label === 'string' && field.label.trim() ? field.label.trim() : humanizeFieldKey(key),
+        type: field.type === 'enum' || field.type === 'bool' ? 'select' : field.type === 'int' || field.type === 'number' ? 'number' : 'text',
+        path: field.path,
+        required: field.required === true,
+      }
+      if (field.type === 'enum' && Array.isArray(field.enum)) out.options = field.enum
+      if (field.type === 'bool') out.options = ['true', 'false']
+      const help = typeof field.help === 'string' && field.help.trim() ? field.help.trim() : field?.validation?.message
+      if (typeof help === 'string' && help.trim()) out.help = help.trim()
+      if (typeof field?.ui?.group === 'string' && field.ui.group.trim()) out.group = field.ui.group.trim()
+      return out
+    })
+}
+
+export function buildRiskFields(productCode: ProductCode, cfg: any, tenantId?: string): FormField[] {
   const keys: string[] = Array.isArray(cfg?.ratingKeys) ? cfg.ratingKeys : []
   const out: FormField[] = []
   const add = (f: FormField) => out.push(f)
@@ -263,6 +301,19 @@ export function buildRiskFields(productCode: ProductCode, cfg: any): FormField[]
       })
     }
     if (keys.includes('retroactiveYears')) add({ key: 'retroactiveYears', label: 'Years of Prior Acts / Retroactive Coverage', type: 'number', path: 'risks.0.retroactiveYears', required: true })
+  }
+  // A product the carrier pack defines fields for gets exactly that form.
+  if (!out.length && tenantId) {
+    const pack = carrierPackFor(tenantId)
+    const metaPath = pack ? carrierPackFieldMetaPath(pack, productCode) : null
+    if (metaPath && fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8').replace(/^\uFEFF/, ''))
+        if (Array.isArray(meta)) out.push(...riskFieldsFromFieldMeta(meta))
+      } catch {
+        // fall through to the generic form below
+      }
+    }
   }
   if (!out.length) {
     const defaults = getProductCapabilities(productCode)?.defaultRisk || {}

@@ -1,4 +1,5 @@
-import { mergeRates, loadProductRates, loadTenantOverrides, Rates } from '../products.js'
+import { mergeRates, loadProductConfig, loadProductRates, loadTenantOverrides, Rates } from '../products.js'
+import { rateFromRateTable } from '../lib/rating-table.js'
 import { getPublishedRatingModelForProduct } from '../ratingModelRegistry.js'
 import { round2 } from '../lib/date.utils.js'
 import { requireProductCapability } from '../lib/product-registry.js'
@@ -23,7 +24,10 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
   const rates = mergeRates(pack.rates, tenant)
 
   let fallback: () => PremiumResult
-  if (descriptor.ratingAdapter === 'personal-auto') {
+  if (descriptor.ratingAdapter === 'rate-table') {
+    // Priced entirely from the product's own rates.yaml; no product-specific code.
+    fallback = () => rateFromRateTable(payload, rates, loadProductConfig(product))
+  } else if (descriptor.ratingAdapter === 'personal-auto') {
     fallback = () => rateAuto(payload, rates)
   } else if (descriptor.ratingAdapter === 'commercial-auto') {
     fallback = () => rateCommercialAuto(payload, rates)
