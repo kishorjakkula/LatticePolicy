@@ -1,3 +1,4 @@
+import { brandingSchema, carrierBrandingSettings, saveCarrierBranding } from '../services/carrier-branding.service.js'
 import { Router } from 'express'
 import { requirePermission } from '../auth.js'
 import { createUser, deleteUser, listByTenant, updateUser } from '../users.js'
@@ -88,6 +89,18 @@ const DUPLICATE_UW_COMPANY_MESSAGE =
 const memoryTenantNames = new Map<string, string>()
 
 adminRoutes.use(requirePermission('menu.admin.view'))
+
+adminRoutes.get('/branding', requirePermission('admin.tenant.read'), async (req, res, next) => {
+  try { res.json(await carrierBrandingSettings(req.tenant!.tenantId)) } catch (err) { next(err) }
+})
+adminRoutes.patch('/branding', requirePermission('admin.tenant.manage'), async (req, res, next) => {
+  const parsed = brandingSchema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ code: 'INVALID_BRANDING', message: parsed.error.issues.map(i => i.message).join('; ') })
+  try {
+    await saveCarrierBranding(req.tenant!.tenantId, parsed.data)
+    res.json(parsed.data)
+  } catch (err) { next(err) }
+})
 mountRouter(adminRoutes, '/forms', requirePermission('admin.forms.read'), formsAdminRoutes)
 mountRouter(adminRoutes, '/customers', requirePermission('admin.customers.read'), customerAdminRoutes)
 mountRouter(adminRoutes, '/onboarding', requirePermission('admin.onboarding.read'), onboardingAdminRoutes)

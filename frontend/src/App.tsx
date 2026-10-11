@@ -12,7 +12,7 @@ import { useGlobalSearch } from './hooks/useGlobalSearch'
 import { useMobileNav } from './hooks/useMobileNav'
 import { useMobileTableLabels } from './hooks/useMobileTableLabels'
 import { RequireAuth, RequireAdmin, RequirePermission, RequireCustomerIdentity, AdminIndexRedirect, HomeRedirect, hasCustomerIdentity } from './components/RouteGuards'
-import latticePolicyLogo from './assets/lattice-policy-logo.svg'
+import { CarrierBrand } from './tenant/carrierBranding'
 import { authHeaders, tenantId } from './api/request'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
@@ -165,7 +165,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="topbar-brand">
-            <img src={latticePolicyLogo} alt="LatticePolicy" className="topbar-logo" />
+            <CarrierBrand className="topbar-logo" />
           </div>
 
           {/* Mobile hamburger toggle */}

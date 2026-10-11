@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { percentile, homeownersPayload, profile, waitForApi, isPilotCompanyEnabled } from './pilot-lib.mjs'
+import { percentile, homeownersPayload, profile, waitForApi, isPilotCompanyEnabled, prepare } from './pilot-lib.mjs'
 test('nearest-rank percentile keeps the slow tail and rejects absent evidence', () => {
   assert.equal(percentile([3, 1, 100, 2], .95), 100)
   assert.throws(() => percentile([], .95))
@@ -32,4 +32,24 @@ test('pilot activates only Homeowners underwriting configurations in approved ju
   assert.equal(isPilotCompanyEnabled({ productCode: 'homeowners', country: 'US', state: 'CA' }), false)
   assert.equal(isPilotCompanyEnabled({ productCode: 'cyber', country: 'US', state: 'ALL' }), false)
   assert.equal(isPilotCompanyEnabled({ productCode: 'homeowners', country: 'CA', state: 'ALL' }), false)
+})
+
+test('pilot setup supplies branding once and preserves administrator changes', async t => {
+  const original = globalThis.fetch
+  t.after(() => { globalThis.fetch = original })
+  const calls = []
+  let configured = false
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    const body = url.endsWith('/admin/branding') && options.method === 'GET' ? { configured } : []
+    return { status: url.endsWith('/compliance/eligibility') ? 201 : 200, json: async () => body }
+  }
+  await prepare('synthetic-token')
+  const saved = calls.find(c => c.url.endsWith('/admin/branding') && c.options.method === 'PATCH')
+  const brand = JSON.parse(saved.options.body)
+  assert.equal(brand.name, profile.name)
+  assert.match(brand.logoDataUrl, /^data:image\/png;base64,/)
+  calls.length = 0; configured = true
+  await prepare('synthetic-token')
+  assert.equal(calls.some(c => c.url.endsWith('/admin/branding') && c.options.method === 'PATCH'), false)
 })

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { config } from '../../config'
-import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
+import { CarrierBrand } from '../../tenant/carrierBranding'
 import { getDefaultPermissionsForRoles } from '../../auth/permissions'
 
 export function LoginPage() {
@@ -137,7 +137,7 @@ export function LoginPage() {
     <section className="login-shell">
       <div className="login-stage">
         <div className="login-brand login-brand--center">
-          <img src={latticePolicyLogo} alt="LatticePolicy" className="login-brand-logo" />
+          <CarrierBrand id={tenantId} className="login-brand-logo" />
         </div>
         <div className="card login-card">
         <h2 className="login-title">Sign in to your account</h2>
