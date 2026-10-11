@@ -43,8 +43,31 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | UI | Separate application and image. |
 | Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time: the wizard renders a carrier pack screen with it and the API enforces the same rules when a quote is rated. `packages/types` remains types only. |
 | Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Not yet behind an interface. |
-| Batch jobs | Worker loop started inside the API process (`JOB_WORKER_ENABLED`). Handlers import core code and the database directly. |
-| Asynchronous messaging | `async_message_outbox`, written by notifications only, dispatched in-process to one webhook (`ASYNC_PUSH_*`). |
+| Batch jobs | Runs as its own process (`LATTICE_ROLE=worker`, or `node server/dist/worker.js`); the deployment kit runs it as the `worker` service. Handlers still import core code and the database directly, so it shares the release image. |
+| Asynchronous messaging | `async_message_outbox`, written by notifications only. Delivered by its own process (`LATTICE_ROLE=dispatcher`, or `node server/dist/dispatcher.js`) to one webhook (`ASYNC_PUSH_*`). |
+
+## Process Roles
+
+One release image runs as any of four roles, chosen by `LATTICE_ROLE`:
+
+| Role | Serves | Runs |
+| --- | --- | --- |
+| `all` (default) | Full API | Job worker and dispatcher, each obeying its own switch (`JOB_WORKER_ENABLED`, `ASYNC_PUSH_ENABLED`). This is how every deployment ran before roles existed. |
+| `api` | Full API | No background loops. |
+| `worker` | `/health`, `/version` only | Job scheduler and worker, regardless of `JOB_WORKER_ENABLED`. |
+| `dispatcher` | `/health`, `/version` only | Outbox delivery, regardless of `ASYNC_PUSH_ENABLED`. |
+
+- `planProcess` in `server/src/config.ts` is the single definition of what
+  each role starts; `server/src/index.ts` follows it.
+- A worker or dispatcher exits at startup without a database.
+- Every role validates the carrier pack and applies pending migrations at
+  startup (migrations are serialized by an advisory lock).
+- `GET /version` reports the role.
+- Known limit: the published rating model cache is in process memory and is
+  refreshed only in the process that publishes a workbook. No job rates a
+  policy today, so the worker is unaffected, but any process that rates must
+  either be the API or get cache invalidation first. This also applies to
+  running more than one API replica.
 
 ## Shared Runtime Packages
 
@@ -71,7 +94,7 @@ copy it in both Dockerfiles; and add it to `build:packages` and
 ## Build Order
 
 1. Packaging foundation (done): shared runtime packages.
-2. Process split: API, worker, and dispatcher start commands and kit services.
+2. Process split (done): API, worker, and dispatcher roles and kit services.
 3. Rating port: one interface, asynchronous callers, in-process behavior
    unchanged, with proof that premiums are identical.
 4. Rating service: standalone application, API contract, own storage, and a

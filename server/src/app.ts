@@ -15,8 +15,52 @@ import { getActiveCarrierPack } from './lib/carrier-pack.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
-import { getAllowedOrigins, isManagedDeployment, isTruthyEnv } from './config.js'
+import { getAllowedOrigins, isManagedDeployment, isTruthyEnv, getProcessRole } from './config.js'
 import { validateMutationEnvelope } from './contracts.js'
+
+/**
+ * /health and /version, with no login: load balancers, upgrade tooling, and
+ * the carrier registry need them. Shared by the API and by the probe-only
+ * server a worker or dispatcher process runs.
+ */
+export function registerProbeRoutes(app: express.Express) {
+  app.get('/health', async (_req, res) => {
+    const db = getDb()
+    let dbOk = false
+    let cacheOk = false
+    try { if (db) { await db.query('SELECT 1'); dbOk = true } } catch {}
+    try { const cache = getCache(); if (cache) { await cache.ping(); cacheOk = true } } catch {}
+    const status = dbOk ? 'ok' : 'degraded'
+    res.status(dbOk ? 200 : 503).json({ status, db: dbOk, cache: cacheOk, ts: new Date().toISOString() })
+  })
+
+  // Unauthenticated on purpose, like /health: upgrade tooling and the carrier
+  // registry need the running release and schema level. No tenant or
+  // configuration detail is exposed.
+  app.get('/version', async (_req, res) => {
+    const build = getBuildInfo()
+    let schema: SchemaStatus = { appliedVersion: null, releaseVersion: null, schemaAhead: false }
+    try { schema = await getSchemaStatus() } catch {}
+    // Pack version only; the carrier it belongs to is not disclosed here.
+    const pack = getActiveCarrierPack()
+    res.json({
+      version: build.version,
+      commit: build.commit,
+      role: getProcessRole(),
+      schema,
+      carrierPack: pack ? { version: pack.manifest.version, packFormat: pack.manifest.packFormat } : null
+    })
+  })
+}
+
+/** HTTP surface of a worker or dispatcher process: probes only, no API. */
+export function createProbeApp() {
+  const app = express()
+  app.disable('x-powered-by')
+  registerProbeRoutes(app)
+  app.use((_req, res) => res.status(404).json({ code: 'NOT_FOUND', message: 'This process serves /health and /version only' }))
+  return app
+}
 
 export function createApp() {
   const app = express()
@@ -138,32 +182,7 @@ export function createApp() {
     next()
   })
 
-  app.get('/health', async (_req, res) => {
-    const db = getDb()
-    let dbOk = false
-    let cacheOk = false
-    try { if (db) { await db.query('SELECT 1'); dbOk = true } } catch {}
-    try { const cache = getCache(); if (cache) { await cache.ping(); cacheOk = true } } catch {}
-    const status = dbOk ? 'ok' : 'degraded'
-    res.status(dbOk ? 200 : 503).json({ status, db: dbOk, cache: cacheOk, ts: new Date().toISOString() })
-  })
-
-  // Unauthenticated on purpose, like /health: upgrade tooling and the carrier
-  // registry need the running release and schema level. No tenant or
-  // configuration detail is exposed.
-  app.get('/version', async (_req, res) => {
-    const build = getBuildInfo()
-    let schema: SchemaStatus = { appliedVersion: null, releaseVersion: null, schemaAhead: false }
-    try { schema = await getSchemaStatus() } catch {}
-    // Pack version only; the carrier it belongs to is not disclosed here.
-    const pack = getActiveCarrierPack()
-    res.json({
-      version: build.version,
-      commit: build.commit,
-      schema,
-      carrierPack: pack ? { version: pack.manifest.version, packFormat: pack.manifest.packFormat } : null
-    })
-  })
+  registerProbeRoutes(app)
 
   app.post('/auth/login', loginLimiter, handleLogin)
   app.post('/auth/mfa/verify', authLimiter, handleMfaVerify)

@@ -17,7 +17,8 @@ interface JobWorkerConfig {
 
 export type StopJobWorker = () => void
 
-export function startJobWorker(): StopJobWorker {
+/** `force` starts the loop regardless of JOB_WORKER_ENABLED; a dedicated worker process uses it. */
+export function startJobWorker(options: { force?: boolean } = {}): StopJobWorker {
   const db = getDb()
   if (!db) {
     logger.info('[jobs] Worker disabled: database not initialized')
@@ -25,7 +26,7 @@ export function startJobWorker(): StopJobWorker {
   }
 
   const config = loadConfig()
-  if (!config.enabled) {
+  if (!config.enabled && !options.force) {
     logger.info('[jobs] Worker disabled by JOB_WORKER_ENABLED')
     return () => {}
   }

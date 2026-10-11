@@ -44,6 +44,9 @@ Additional guarded settings:
   in the comma-separated `DEMO_ALLOWED_EMAILS` list.
 - `SSO_STATE_SECRET` is optional and otherwise derives from `JWT_SECRET`; set a
   separate secret explicitly when enabling OIDC SSO.
+- `LATTICE_ROLE` selects what the process does: `all` (default: API plus the
+  background loops that are switched on), `api`, `worker` (batch jobs), or
+  `dispatcher` (outbox delivery). See `docs/MODULES.md`.
 - `CARRIER_TENANT_ID` pins the stack to one carrier. Set it on every
   single-carrier deployment: requests, logins, SSO routes, and background
   workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is

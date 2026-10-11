@@ -1,7 +1,7 @@
 # Carrier Stack Deployment Kit
 
-Runs one carrier on its own full stack: API, UI, PostgreSQL, Redis, and
-document storage. The same kit is used when the platform owner hosts a carrier
+Runs one carrier on its own full stack: API, batch worker, message dispatcher,
+UI, PostgreSQL, Redis, and document storage. The same kit is used when the platform owner hosts a carrier
 and when a carrier hosts the stack in its own environment.
 
 - One stack serves exactly one carrier (`CARRIER_TENANT_ID`). Every other
@@ -26,13 +26,30 @@ database or an orchestrator, keep the same images and settings and follow
 
 | File | Purpose |
 | --- | --- |
-| `docker-compose.yml` | The five services and three data volumes. |
+| `docker-compose.yml` | The seven services and three data volumes. |
 | `carrier.env.example` | Template for the per-carrier settings file. |
 | `stack.sh` | Provision, bootstrap, backup, restore, upgrade, and rollback. |
 | `no-pack/` | Empty placeholder mounted when no carrier pack is configured. |
 
 `carrier.env`, `backups/`, and `.stack-state.*` are created at run time and
 are ignored by git.
+
+## Services
+
+| Service | What it does |
+| --- | --- |
+| `api` | Serves the API. Runs no background work. |
+| `worker` | Runs scheduled and queued batch jobs. |
+| `dispatcher` | Delivers outbox messages to `ASYNC_PUSH_WEBHOOK_URL`, or writes them to its log when that is empty. |
+| `frontend` | Serves the UI. |
+| `db`, `cache` | PostgreSQL and Redis. |
+
+`api`, `worker`, and `dispatcher` are the same release image started with
+different commands, so they always run the same release. Each can be
+restarted on its own, for example
+`docker compose -p lattice-<tenant-id> restart worker`. `stack.sh` stops all
+of them before a restore or an upgrade so nothing writes to the database
+while it is being replaced.
 
 ## First install
 

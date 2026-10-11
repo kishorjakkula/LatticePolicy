@@ -133,6 +133,11 @@ check_pack() {
   LATTICE_VERSION="$release" compose run --rm -T --no-deps api node server/dist/validateCarrierPack.js /carrier-pack
 }
 
+# Every service that runs the release image, plus the UI.
+stop_app_services() {
+  compose stop api worker dispatcher frontend
+}
+
 run_migrations() {
   start_data_services
   compose run --rm -T --no-deps api node server/dist/migrate.js
@@ -193,6 +198,8 @@ cmd_status() {
   echo "release:  $(get_env LATTICE_VERSION) (configured)"
   echo "version:  $(api_get /version || echo 'API not reachable')"
   echo "health:   $(api_get /health || echo 'API not reachable')"
+  echo "services:"
+  compose ps --format '  {{.Service}}: {{.State}}' 2>/dev/null || true
 }
 
 # Writes <prefix>.dump (database) and <prefix>.documents.tgz, prints the prefix.
@@ -220,7 +227,8 @@ cmd_restore() {
   db_name="$(get_env DB_NAME)"
 
   echo "Restoring $(get_env CARRIER_TENANT_ID) from $prefix (this replaces current data)..."
-  compose stop api frontend >/dev/null 2>&1 || true
+  # Nothing may write to the database while it is being replaced.
+  stop_app_services >/dev/null 2>&1 || true
   start_data_services
   # The restricted RLS role is cluster-wide and referenced by the dump's grants.
   compose exec -T db psql -v ON_ERROR_STOP=1 -U "$db_user" -d postgres -c \
@@ -255,7 +263,7 @@ cmd_upgrade() {
   echo "Backup: $backup"
 
   set_env LATTICE_VERSION "$target"
-  if pull_images && compose stop api frontend && run_migrations && compose up -d \
+  if pull_images && stop_app_services && run_migrations && compose up -d \
      && wait_for_api && verify_running_version && ! schema_is_ahead; then
     echo "Upgrade to $target complete."
     cmd_status

@@ -37,7 +37,8 @@ const DEFAULT_MAX_BACKOFF_SECONDS = 600
 
 export type StopAsyncMessageWorker = () => void
 
-export function startAsyncMessageWorker(): StopAsyncMessageWorker {
+/** `force` starts the loop regardless of ASYNC_PUSH_ENABLED; a dedicated dispatcher process uses it. */
+export function startAsyncMessageWorker(options: { force?: boolean } = {}): StopAsyncMessageWorker {
   const db = getDb()
   if (!db) {
     logger.info('[async-push] Worker disabled: database not initialized')
@@ -45,7 +46,7 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
   }
 
   const config = loadConfig()
-  if (!config.enabled) {
+  if (!config.enabled && !options.force) {
     logger.info('[async-push] Worker disabled by ASYNC_PUSH_ENABLED')
     return () => {}
   }

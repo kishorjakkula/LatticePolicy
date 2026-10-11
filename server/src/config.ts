@@ -60,6 +60,51 @@ export function isTenantRlsEnforced(): boolean {
   return isTruthyEnv(process.env.TENANT_RLS_ENFORCED)
 }
 
+/**
+ * What this process does. One release image runs as any of these, chosen by
+ * LATTICE_ROLE (or by the worker.js / dispatcher.js start commands):
+ *
+ *   all         API plus whichever background loops are switched on (default;
+ *               how every existing deployment runs)
+ *   api         the HTTP API only
+ *   worker      scheduled and queued batch jobs only
+ *   dispatcher  delivery of outbox messages only
+ */
+export const PROCESS_ROLES = ['all', 'api', 'worker', 'dispatcher'] as const
+export type ProcessRole = (typeof PROCESS_ROLES)[number]
+
+export function getProcessRole(): ProcessRole {
+  const value = String(process.env.LATTICE_ROLE || '').trim().toLowerCase()
+  if (!value) return 'all'
+  if (!(PROCESS_ROLES as readonly string[]).includes(value)) {
+    throw new Error(`LATTICE_ROLE must be one of ${PROCESS_ROLES.join(', ')}; got '${value}'`)
+  }
+  return value as ProcessRole
+}
+
+export type ProcessPlan = {
+  role: ProcessRole
+  /** Serve the full API, or only /health and /version for probes. */
+  http: 'api' | 'probe'
+  jobWorker: boolean
+  dispatcher: boolean
+  /** A dedicated background process cannot do anything without the database. */
+  requiresDatabase: boolean
+}
+
+/**
+ * Which parts start for a role. In the `all` role the loops keep obeying their
+ * own switches (JOB_WORKER_ENABLED, ASYNC_PUSH_ENABLED) exactly as before. A
+ * dedicated worker or dispatcher exists to run its loop, so the switch for it
+ * is ignored there.
+ */
+export function planProcess(role: ProcessRole): ProcessPlan {
+  if (role === 'api') return { role, http: 'api', jobWorker: false, dispatcher: false, requiresDatabase: false }
+  if (role === 'worker') return { role, http: 'probe', jobWorker: true, dispatcher: false, requiresDatabase: true }
+  if (role === 'dispatcher') return { role, http: 'probe', jobWorker: false, dispatcher: true, requiresDatabase: true }
+  return { role, http: 'api', jobWorker: true, dispatcher: true, requiresDatabase: false }
+}
+
 export function isTruthyEnv(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 }
