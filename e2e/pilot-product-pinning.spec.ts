@@ -16,7 +16,7 @@ test('mandatory fields appear on button click in the pilot wizard', async ({ pag
   await page.goto('/wizard')
   await page.getByRole('button', { name: /^Continue to/ }).click()
   await expect(page.getByRole('main')).toContainText(/required|select.*company/i)
-  await selectProduct(page, { productCode: 'homeowners', state: 'TX' })
+  await selectProduct(page, { company: 'Sample Carrier Property', productCode: 'homeowners', state: 'TX' })
   await continueToStep(page, 2)
   await page.getByRole('button', { name: /^Continue to/ }).click()
   await expect(page.getByRole('main')).toContainText(/required|answer/i)
@@ -54,6 +54,7 @@ test('endorsement retains base controls, original additive fields, and a null or
   const payload = () => ({
     ...productQuotePayload(productLine('homeowners'), { name: `${uniqueName('Pilot').replace(/[^a-zA-Z0-9]/g, '')} Holder`, effectiveDate: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10) }),
     underwritingCompanyName: 'Sample Carrier Property',
+    qualificationAnswers: Object.fromEntries(['noPropertyClaims5Years', 'roofMaintained', 'noBusinessOnPremises', 'noVacancyOver30Days', 'protectiveDevicesInstalled'].map(k => [k, 'yes'])),
     uwAnswers: Object.fromEntries(['noPropertyClaims5Years', 'roofMaintained', 'noBusinessOnPremises', 'noVacancyOver30Days', 'protectiveDevicesInstalled'].map(k => [k, true])),
     coverages: [{ code: 'A', selected: true, limit: 300000, deductible: 1000 }],
   })
@@ -75,6 +76,11 @@ test('endorsement retains base controls, original additive fields, and a null or
     fs.writeFileSync(screenPath, screen.replace('Pilot extras', 'Changed extras'))
     await signInAs(page, username)
     for (const [policy, withScreen] of [[additive, true], [absent, false]] as const) {
+      const newBusinessRequests: string[] = []
+      const observe = (request: import('@playwright/test').Request) => {
+        if (request.method() === 'POST' && request.url().endsWith('/api/v1/quotes')) newBusinessRequests.push(request.url())
+      }
+      page.on('request', observe)
       await page.goto(`/policies/${policy.policyId}`)
       await page.getByRole('button', { name: 'Endorse', exact: true }).click()
       await walkTransactionWizardToIssue(page, async step => {
@@ -84,7 +90,7 @@ test('endorsement retains base controls, original additive fields, and a null or
         if (withScreen) {
           await expect(page.getByText('Pilot extras', { exact: true })).toBeVisible()
           await expect(page.getByText('Changed extras', { exact: true })).toHaveCount(0)
-          await page.getByLabel('Pilot note', { exact: true }).fill('Endorsed note')
+          await page.getByRole('textbox', { name: /^Pilot note/ }).fill('Endorsed note')
         } else await expect(page.getByText('Changed extras', { exact: true })).toHaveCount(0)
         await fieldByLabel(page, 'Roof Age (years)').fill('6')
       })
@@ -93,6 +99,8 @@ test('endorsement retains base controls, original additive fields, and a null or
       const stored = await apiJson<any>(request, 'GET', `/api/v1/policies/${policy.policyId}/full`, { token: auth.token })
       expect(stored.risks[0].roofAgeYears).toBe(6)
       if (withScreen) expect(stored.risks[0].pilotNote).toBe('Endorsed note')
+      expect(newBusinessRequests).toEqual([])
+      page.off('request', observe)
     }
   } finally {
     for (const [p, contents] of originals) if (contents) fs.writeFileSync(p, contents); else fs.rmSync(p, { force: true })

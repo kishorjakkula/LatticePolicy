@@ -2754,36 +2754,24 @@ export function QuoteWizard() {
     try {
       const payload: any = buildQuotePayload(rateState)
       if (draft?.quoteId) payload.quoteId = draft.quoteId
-      const resp = await api.createQuote(payload)
-      let ratedResponse: any = resp
-      let previewWarning: string | null = null
+      let resp: any
       if (wizardMode === 'endorse') {
         const policyIdForPreview = policyContext?.policyId || boundPolicy?.policyId || policyIdParam
-        if (policyIdForPreview) {
-          try {
-            const preview = await api.endorsePreview(policyIdForPreview, {
-              effectiveDate: transactionEffectiveDate || q.effectiveDate,
-              payload
-            })
-            setEndorsementPreview(preview)
-            ratedResponse = {
-              ...resp,
-              underwriting: preview?.underwriting || resp?.underwriting,
-              premium: preview?.premium || resp?.premium,
-              retroAdjustment: preview?.retroAdjustment || null,
-              timeline: preview?.timeline || null,
-              fullTerm: preview?.fullTerm || null
-            }
-          } catch (previewErr: any) {
-            setEndorsementPreview(null)
-            previewWarning = `Rated premium, but OOS timeline preview failed: ${previewErr?.message || String(previewErr)}`
-          }
-        } else {
-          setEndorsementPreview(null)
-        }
+        if (!policyIdForPreview) throw new Error('Select a policy before rating an endorsement.')
+        // The policy preview loads its pinned definition and rules. Creating a
+        // new-business quote first incorrectly applies today's carrier screen.
+        setEndorsementPreview(null)
+        const preview = await api.endorsePreview(policyIdForPreview, {
+          effectiveDate: transactionEffectiveDate || q.effectiveDate,
+          payload
+        })
+        setEndorsementPreview(preview)
+        resp = { ...preview, quoteId: draft?.quoteId || '', quoteNumber: draft?.quoteNumber || '', status: 'Rated', progressStep: 7 }
       } else {
         setEndorsementPreview(null)
+        resp = await api.createQuote(payload)
       }
+      const ratedResponse = resp
       setQuoteResp(ratedResponse)
       if (wizardMode === 'quote') {
         setQuoteDocumentModel(buildQuoteSummaryModel(ratedResponse))
@@ -2807,7 +2795,6 @@ export function QuoteWizard() {
         params.set('quoteId', nextDraft.quoteId)
         setSearchParams(params, { replace: true })
       }
-      if (previewWarning) setError(previewWarning)
     } catch (e: any) {
       setError(e.message || String(e))
     } finally { setAction(null) }

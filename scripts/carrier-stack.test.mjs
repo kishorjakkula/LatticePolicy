@@ -74,6 +74,9 @@ test('standalone backup pauses writers and returns a complete archive pair', t =
   assert(fs.statSync(`${r.stdout.trim()}.dump`).size > 0)
   assert(fs.statSync(`${r.stdout.trim()}.documents.tgz`).size > 0)
   assert(f.calls().some(x => x.includes('up') && x.includes('api')))
+  const calls = f.calls()
+  const resumed = calls.findIndex(x => x.includes('up') && x.includes('api'))
+  assert(calls.slice(resumed + 1).some(x => x.includes('wget') && x.at(-1).endsWith('/health')))
 })
 
 test('restore rejects a missing document archive before stopping or replacing data', t => {

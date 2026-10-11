@@ -11,12 +11,15 @@ certification remains a separate gate. Issue links and original findings are in
 ## Changes
 
 - #360/#361: policy form responses retain core controls from the pinned config,
-  append additive fields once, preserve a null original screen, and fail closed
+  render additive fields once through the configured screen, preserve a null original screen, and fail closed
   for product/snapshot mismatch. New business still uses today's screen.
+  Endorsement rating calls the pinned policy preview directly, avoiding a
+  preliminary new-business quote validated against today's required fields.
 - #362: standalone backups pause all writers and resume prior services. Upgrades
   keep writers stopped from the backup recovery point through migration.
   Failed backup resumes the old release; incomplete document archives are
   rejected before restore changes data.
+  Backup completion waits for a resumed API to become healthy before returning.
 - #363–#369: reproducible pilot images, source/image manifest, synthetic standards,
   API and browser acceptance, bounded concurrency workload, restore and upgrade
   drill, local monitor/backup schedule, and redacted handoff tooling.
@@ -38,8 +41,14 @@ certification remains a separate gate. Issue links and original findings are in
 
 ## Validation and limitations
 
-Validation results will be recorded after the Docker acceptance run. Initial
-pinning integration: 4 passed. Deployment recovery adapter: 7 passed.
+Local validation: 529 server, 211 frontend, 126 PostgreSQL integration,
+133 Playwright regression, and nine deployment/pilot adapter tests passed.
+Typecheck, architecture boundaries, dependency policy checks and Docker builds
+passed. An initial browser cancellation timeout passed on a nine-test lifecycle
+rerun and the full 133-test rerun. The bounded pilot workload completed 200
+requests without errors; all ten generated documents returned readable content.
+Fresh SHA-matched pilot acceptance, browser and recovery evidence is required by
+`pilot:handoff` and recorded under `.pilot/evidence/` and in the PR.
 No external customer data, approval, HTTPS endpoint, SLA, remote backup, or
 external integration is claimed. Secrets and generated evidence stay in the
 ignored `.pilot/` directory. Production issue completion must distinguish these

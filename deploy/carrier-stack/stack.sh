@@ -139,12 +139,15 @@ stop_app_services() {
 }
 
 running_app_services() {
-  compose ps --status running --services | awk '/^(api|worker|dispatcher|frontend)$/ { print }'
+  compose ps --status running --services | awk '/^(api|worker|dispatcher|frontend)$/ { print }' | tr '\n' ' '
 }
 
 resume_services() {
   # Values come only from the fixed allowlist above, not from operator input.
-  if [ -n "$1" ]; then compose up -d $1; fi
+  if [ -n "$1" ]; then
+    compose up -d $1
+    case " $1 " in *" api "*) wait_for_api || die "resumed API did not become healthy" ;; esac
+  fi
 }
 
 run_migrations() {
