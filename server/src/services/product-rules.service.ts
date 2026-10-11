@@ -3,6 +3,7 @@ import { getProductCapabilities } from '../lib/product-registry.js'
 import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
 import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-screen.js'
 import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { loadCarrierTables } from '../lib/carrier-tables.js'
 
 /**
  * Rules a carrier pack defines for a product (required fields, conditional
@@ -22,11 +23,13 @@ export function productRuleViolations(tenantId: string, payload: any): ScreenVio
   // A pinned payload is checked against the rules of the product version it
   // was written on, not rules added since.
   const snapshot = getLoadedSnapshot(snapshotIdOf(payload))
-  if (snapshot) return snapshot.definition.screen ? checkQuoteAgainstScreen(snapshot.definition.screen, payload) : []
+  if (snapshot) {
+    return snapshot.definition.screen ? checkQuoteAgainstScreen(snapshot.definition.screen, payload, snapshot.definition.tables || {}) : []
+  }
   const code = String(payload?.productCode || '').trim().toLowerCase()
   if (!code || !getProductCapabilities(code)) return []
   const screen = loadRiskScreen(code, loadProductConfig(code), tenantId)
-  return screen ? checkQuoteAgainstScreen(screen, payload) : []
+  return screen ? checkQuoteAgainstScreen(screen, payload, loadCarrierTables(tenantId)) : []
 }
 
 export function assertProductRules(tenantId: string, payload: any, transaction: RuledTransaction): void {

@@ -16,6 +16,7 @@ This example is for a carrier `acme-mutual`. Copy it as a starting point.
 | `products/<code>/coverage.yaml` | A product the carrier adds: coverages, limits, deductibles, capabilities. Same contract as `docs/PRODUCT_PACK_CONTRACT.md`. |
 | `products/<code>/rates.yaml` | That product's rate and factor tables. |
 | `fields/<code>.json` | Field metadata for a product (core or added): type, validation, visibility, grouping, order. Optional. |
+| `tables/<name>.yaml` | A lookup or reference table: option lists, rating factors, and values for rules. Optional. |
 | `screens/<code>.yaml` | The risk step for a product: sections or tabs, columns, widgets, and rules for when fields show, are required, and are valid. Optional. |
 
 ## What this example shows
@@ -91,6 +92,69 @@ taxes: { rate: 0.02 }
   `help`, and `ui.group` / `ui.order` for sections and ordering.
 - Before the product can be quoted it needs, in the admin screens, an
   underwriting company that writes it and a state eligibility record.
+
+## Lookup tables
+
+A table is a file under `tables/` with named columns and one key column:
+
+```yaml
+table: roof-types
+key: code                       # the column that identifies a row
+columns: [code, name, factor]
+rows:
+  - [asphalt, Asphalt shingle, 1.00]
+  - { code: metal, name: Standing-seam metal, factor: 0.94 }
+```
+
+It can be used in three places:
+
+- **Option list for a field** (`fields/<code>.json`):
+  `"optionsFrom": {"table": "roof-types", "value": "code", "label": "name"}`.
+  The value is stored; the label is shown.
+- **Rating factor** (`rates.yaml`): `fromTable: roof-types` with
+  `value: factor`. The field's value is matched on the table's key column.
+- **Rule** (`screens/<code>.yaml`):
+  `lookup('schedule-limits', quote.state, 'scheduleMax')`. A missing table,
+  row, or column gives an empty value, so guard with `isSet(...)`.
+
+Tables a screen's rules read are sent to the browser with the screen, so keep
+those small. Tables used only for rating or option lists are not sent.
+
+## Lists of items on a risk
+
+A field of type `list` holds repeating items, such as scheduled valuables,
+additional locations, or drivers. Its columns are defined with it:
+
+```json
+{"path": "risks.0.scheduledItems", "label": "Scheduled Items", "type": "list", "maxItems": 20,
+ "item": [
+   {"key": "description", "label": "Description", "type": "string", "required": true},
+   {"key": "category", "label": "Category", "type": "enum", "enum": ["jewelry", "art"]},
+   {"key": "value", "label": "Insured Value", "type": "number", "required": true}
+ ]}
+```
+
+- **On screen** it is a grid with one row per item and Add and Remove
+  buttons. `minItems` and `maxItems` bound its size; `requiredWhen` makes at
+  least one item necessary.
+- **Rules** can check every item (`each: scheduledItems`, with `item.<column>`
+  in the rule) or the whole list (`count(risk.scheduledItems)`,
+  `sum(risk.scheduledItems, 'value')`).
+- **Rating** can price a coverage per item:
+
+```yaml
+SCHEDULED:
+  perItem:
+    list: scheduledItems
+    amount: value        # item column holding the insured amount
+    rate: 1.20
+    ratePer: 100
+    factors:             # read from the item
+      - { name: Category, field: category, table: { jewelry: 1.50 }, default: 1 }
+```
+
+Items are stored with the policy, so they are versioned, endorsed, and
+renewed like the rest of the risk.
 
 ## Designing the risk screen
 
@@ -195,6 +259,7 @@ start on an invalid pack.
 
 ## Not in the pack format yet
 
-Custom tables, lists of risks, coverage triggers, rating workbooks, form
-templates, screens for steps other than the risk step, and layering a carrier
-product over a core product are planned additions to the format.
+Standalone business tables (records with their own screens, not tied to a
+policy), more than one risk per policy, coverage triggers, rating workbooks,
+form templates, screens for steps other than the risk step, and layering a
+carrier product over a core product are planned additions to the format.

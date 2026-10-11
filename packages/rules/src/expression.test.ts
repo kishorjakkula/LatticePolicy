@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ExpressionError, compileExpression, evaluateCondition, evaluateExpression, isTruthy } from './expression.js'
+import { ExpressionError, TABLES_CONTEXT_KEY, compileExpression, evaluateCondition, evaluateExpression, isTruthy } from './expression.js'
 
 const context = {
   risk: { floorLevel: 4, hasElevator: 'false', squareFeet: '1100', rooms: 0, occupancy: 'OwnerOccupied', associationName: '  ', tags: ['corner', 'renovated'] },
@@ -128,5 +128,43 @@ describe('expression language', () => {
     expect(() => compileExpression('risk["name"]')).toThrow(ExpressionError)
     expect(() => compileExpression('a = 1')).toThrow(ExpressionError)
     expect(() => compileExpression('a; b')).toThrow(ExpressionError)
+  })
+})
+
+describe('lists and lookup tables in expressions', () => {
+  const tables = {
+    territory: { key: 'zip', rows: [{ zip: '78701', name: 'Austin Core', factor: 1.1 }, { zip: 78702, name: 'Austin East', factor: 1.05 }] },
+  }
+  const withTables = {
+    risk: { zip: 78701, scheduledItems: [{ description: 'Ring', value: 5000 }, { description: 'Painting', value: '12000' }, { description: 'No value' }] },
+    [TABLES_CONTEXT_KEY]: tables,
+  }
+  const value = (source: string) => evaluateExpression(source, withTables)
+
+  it('counts and totals the items of a list', () => {
+    expect(value('count(risk.scheduledItems)')).toBe(3)
+    expect(value("sum(risk.scheduledItems, 'value')")).toBe(17000)
+    expect(value("sum(risk.scheduledItems, 'value') <= 20000 && count(risk.scheduledItems) < 5")).toBe(true)
+    expect(value('count(risk.notAList)')).toBe(0)
+    expect(value("sum(risk.notAList, 'value')")).toBe(0)
+  })
+
+  it('looks a value up in a carrier table, matching numbers and numeric text', () => {
+    expect(value("lookup('territory', risk.zip, 'factor')")).toBe(1.1)
+    expect(value("lookup('territory', '78702', 'name')")).toBe('Austin East')
+    expect(value("lookup('territory', risk.zip, 'factor') > 1")).toBe(true)
+  })
+
+  it('returns null for an unknown table, key, or column', () => {
+    expect(value("lookup('nowhere', risk.zip, 'factor')")).toBeNull()
+    expect(value("lookup('territory', 99999, 'factor')")).toBeNull()
+    expect(value("lookup('territory', risk.zip, 'surcharge')")).toBeNull()
+    expect(value("lookup('territory', risk.missing, 'factor')")).toBeNull()
+    expect(evaluateExpression("lookup('territory', 78701, 'factor')", { risk: {} })).toBeNull()
+  })
+
+  it('does not let a rule read the tables except through lookup()', () => {
+    expect(() => compileExpression('$tables.territory')).toThrow(ExpressionError)
+    expect(evaluateExpression('tables', withTables)).toBeNull()
   })
 })

@@ -174,7 +174,7 @@ describe('product version pinning (database path)', () => {
   })
 
   it('serves the wizard the screen of the product version a policy term was written on', async () => {
-    // Runs after the first test, so the pack is at 1.1.0 with five validation rules.
+    // Runs after the first test, so the pack is at 1.1.0 with seven validation rules.
     const low = quotePayload()
     low.risks[0].floorLevel = 3
     const quote = await createOrRateQuote({} as any, tenantId, low, null, 'integration-test')
@@ -197,18 +197,18 @@ describe('product version pinning (database path)', () => {
       .expect(200)
 
     const current = await form('')
-    expect(current.body.screen.validations).toHaveLength(6)
+    expect(current.body.screen.validations).toHaveLength(8)
     expect(current.body.screen.sections.map((section: any) => section.title)).toContain('Homeowners Association')
 
     const pinned = await form(`?policyId=${bound.policyId}`)
-    expect(pinned.body.screen.validations).toHaveLength(5)
+    expect(pinned.body.screen.validations).toHaveLength(7)
     expect(pinned.body.screen.sections.map((section: any) => section.title)).toContain('Association')
     expect(pinned.body.productSnapshotId).toBe(quote.premium.calcTrace.productSnapshotId)
     expect(pinned.body.fields.find((field: any) => field.key === 'floorLevel')).toMatchObject({ label: 'Floor Level', type: 'number', required: true, group: 'Unit' })
 
     // An unknown or malformed policy id falls back to the current screen rather than failing.
-    expect((await form('?policyId=not-a-uuid')).body.screen.validations).toHaveLength(6)
-    expect((await form('?policyId=00000000-0000-4000-8000-000000000000')).body.screen.validations).toHaveLength(6)
+    expect((await form('?policyId=not-a-uuid')).body.screen.validations).toHaveLength(8)
+    expect((await form('?policyId=00000000-0000-4000-8000-000000000000')).body.screen.validations).toHaveLength(8)
   })
 
   it('refuses to rate a policy whose product version cannot be found rather than use today\'s rates', async () => {

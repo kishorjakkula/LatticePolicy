@@ -11,6 +11,8 @@ import {
 import { RATING_ADAPTERS, parseProductDescriptor, resolveCoreProductsDir } from './product-registry.js'
 import { validateRateTable } from './rating-table.js'
 import { buildProductScreen } from './product-screen.js'
+import { readPackTables } from './carrier-tables.js'
+import type { LookupTable } from '@lattice-policy/rules'
 import { buildRiskFields } from './products.js'
 
 export type CarrierPackIssue = {
@@ -37,8 +39,8 @@ export type CarrierPackValidationOptions = {
 }
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
-const FIELD_TYPES = new Set(['string', 'int', 'number', 'bool', 'enum', 'date'])
-const TOP_LEVEL_ENTRIES = new Set(['pack.yaml', 'config.yaml', 'products', 'fields', 'screens', 'README.md'])
+const FIELD_TYPES = new Set(['string', 'int', 'number', 'bool', 'enum', 'date', 'list'])
+const TOP_LEVEL_ENTRIES = new Set(['pack.yaml', 'config.yaml', 'products', 'fields', 'screens', 'tables', 'README.md'])
 
 function listDirectories(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
@@ -201,6 +203,24 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
     }
   }
 
+  // --- tables/ ----------------------------------------------------------------
+  const tables: Record<string, LookupTable> = {}
+  if (manifest) {
+    for (const entry of readPackTables({ dir, manifest })) {
+      for (const issue of entry.issues) {
+        if (issue.level === 'error') error(`tables/${entry.file}`, issue.message)
+        else warning(`tables/${entry.file}`, issue.message)
+      }
+      if (entry.table) tables[entry.name] = entry.table
+    }
+  }
+  const tablesDir = path.join(dir, 'tables')
+  if (fs.existsSync(tablesDir)) {
+    for (const file of fs.readdirSync(tablesDir)) {
+      if (!file.endsWith('.yaml')) warning(`tables/${file}`, 'only <table-name>.yaml files are read from tables/')
+    }
+  }
+
   // --- fields/ ----------------------------------------------------------------
   const fieldPathsByProduct = new Map<string, string[]>()
   const fieldMetaByProduct = new Map<string, any[]>()
@@ -241,8 +261,8 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
         if (!FIELD_TYPES.has(String(field.type))) {
           error(rel, `${where} (${fieldPath}): type must be one of ${Array.from(FIELD_TYPES).join(', ')}`)
         }
-        if (field.type === 'enum' && !(Array.isArray(field.enum) && field.enum.length > 0)) {
-          error(rel, `${where} (${fieldPath}): an enum field needs a non-empty enum list`)
+        if (field.type === 'enum' && !(Array.isArray(field.enum) && field.enum.length > 0) && field.optionsFrom == null) {
+          error(rel, `${where} (${fieldPath}): an enum field needs a non-empty enum list or optionsFrom a table`)
         }
       })
     }
@@ -273,10 +293,19 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
         const coreConfig = readYaml(path.join(coreProductsDir, code, 'coverage.yaml'))
         reserved = coreConfig.error ? [] : buildRiskFields(code, coreConfig.value).map((field) => field.key)
       }
-      for (const issue of buildProductScreen(code, fieldMetaByProduct.get(code) || [], parsed.value, reserved).issues) {
+      for (const issue of buildProductScreen(code, fieldMetaByProduct.get(code) || [], parsed.value, reserved, tables).issues) {
         if (issue.level === 'error') error(rel, issue.message)
         else warning(rel, issue.message)
       }
+    }
+  }
+  // A pack product with fields but no screen file gets a screen derived from
+  // the fields; list columns and table options still have to be valid.
+  for (const code of packProducts) {
+    if (!fieldMetaByProduct.has(code) || fs.existsSync(path.join(screensDir, `${code}.yaml`))) continue
+    for (const issue of buildProductScreen(code, fieldMetaByProduct.get(code) || [], undefined, [], tables).issues) {
+      if (issue.level === 'error') error(`fields/${code}.json`, issue.message)
+      else warning(`fields/${code}.json`, issue.message)
     }
   }
 
@@ -288,7 +317,13 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
       const match = /^risks\.0\.(.+)$/.exec(fieldPath)
       if (match) fieldNames.add(match[1])
     }
-    for (const issue of validateRateTable(product.rates, product.coverage, Array.from(fieldNames))) {
+    // Columns of each list field, for per-item pricing.
+    const listColumns: Record<string, string[]> = {}
+    for (const field of fieldMetaByProduct.get(product.code) || []) {
+      const match = typeof field?.path === 'string' ? /^risks\.0\.(.+)$/.exec(field.path.trim()) : null
+      if (match && field.type === 'list' && Array.isArray(field.item)) listColumns[match[1]] = field.item.map((column: any) => String(column?.key || ''))
+    }
+    for (const issue of validateRateTable(product.rates, product.coverage, Array.from(fieldNames), { tables, listColumns })) {
       if (issue.level === 'error') error(`products/${product.code}/rates.yaml`, issue.message)
       else warning(`products/${product.code}/rates.yaml`, issue.message)
     }

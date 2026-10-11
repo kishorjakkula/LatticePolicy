@@ -2,11 +2,16 @@ import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { parseRange, rateFromRateTable, validateRateTable } from '../rating-table.js'
+import { parseRange, rateFromRateTable, tablesUsedByRates, validateRateTable } from '../rating-table.js'
+import { readPackTables } from '../carrier-tables.js'
 
 const PACK_PRODUCT = path.resolve(__dirname, '../../../../examples/carrier-pack/products/condo-unit-owners')
 const rates = YAML.parse(fs.readFileSync(path.join(PACK_PRODUCT, 'rates.yaml'), 'utf8'))
 const productConfig = YAML.parse(fs.readFileSync(path.join(PACK_PRODUCT, 'coverage.yaml'), 'utf8'))
+const tables = Object.fromEntries(
+  readPackTables({ dir: path.resolve(PACK_PRODUCT, '../..'), manifest: { packFormat: 1, carrier: 'acme-mutual', version: '1.0.0' } }).map((entry) => [entry.name, entry.table!])
+)
+const packOptions = { tables, listColumns: { scheduledItems: ['description', 'category', 'value'] } }
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
@@ -142,8 +147,8 @@ describe('rate-table rating', () => {
 
 describe('rate-table validation', () => {
   it('accepts the example product with no errors or warnings', () => {
-    const fields = ['construction', 'protectionClass', 'roofAgeYears', 'floorLevel', 'occupancy']
-    expect(validateRateTable(rates, productConfig, fields)).toEqual([])
+    const fields = ['construction', 'protectionClass', 'roofAgeYears', 'roofType', 'floorLevel', 'occupancy']
+    expect(validateRateTable(rates, productConfig, fields, packOptions)).toEqual([])
   })
 
   it('requires a rating section', () => {
@@ -158,10 +163,10 @@ describe('rate-table validation', () => {
       { name: 'Bands', field: 'protectionClass', ranges: { low: 0.9, '5-8': 'one' } },
       { name: 'Unknown field', field: 'hairColour', table: { red: 1 } },
     ]
-    const issues = validateRateTable(bad, productConfig, ['construction', 'protectionClass'])
+    const issues = validateRateTable(bad, productConfig, ['construction', 'protectionClass'], packOptions)
     expect(messages(issues, 'error')).toEqual(expect.arrayContaining([
       'rating.factors[1] (Both): set exactly one of field (a risk field) or path (anywhere on the quote)',
-      'rating.factors[2] (Neither): set exactly one of table or ranges',
+      'rating.factors[2] (Neither): set exactly one of table, ranges, or fromTable',
       "rating.factors[3] (Bands): 'low' is not a band; use forms like 1-4, 9+, <25, <=10, >5, >=65",
       "rating.factors[3] (Bands): factor for '5-8' must be a number of 0 or more",
     ]))
@@ -178,14 +183,90 @@ describe('rate-table validation', () => {
     bad.rating.coverages.FLOOD = { flat: 10 }
     bad.taxes.rate = 2
 
-    const issues = validateRateTable(bad, productConfig)
+    const issues = validateRateTable(bad, productConfig, [], packOptions)
     expect(messages(issues, 'error')).toEqual(expect.arrayContaining([
       "rating.coverages: coverage 'C' has no pricing and there is no default",
       'rating.coverages.E: no premium for limit 500000, which the product offers',
-      'rating.coverages.F: set exactly one pricing method (rate, byLimit, flat, or shareOfBase)',
+      'rating.coverages.F: set exactly one pricing method (rate, byLimit, flat, shareOfBase, or perItem)',
       'rating.coverages.D: shareOfBase needs rating.basePremium',
       'taxes.rate must be a fraction between 0 and 1',
     ]))
     expect(messages(issues, 'warning')).toContain("rating.coverages.FLOOD: 'FLOOD' is not a coverage of this product")
+  })
+})
+
+describe('rate-table rating with carrier tables and lists', () => {
+  const scheduled = [
+    { description: 'Ring', category: 'jewelry', value: 5000 },
+    { description: 'Painting', category: 'art', value: '12000' },
+    { description: 'Bike', category: 'other', value: 800 },
+  ]
+
+  it('reads a factor from a carrier lookup table', () => {
+    const base = rateFromRateTable(quote(), rates, productConfig, tables)
+    const metal = rateFromRateTable(quote({ risks: [{ ...quote().risks[0], roofType: 'metal' }] }), rates, productConfig, tables)
+    // No roof type entered: the factor falls to its default of 1 and the premium is unchanged.
+    expect(base.total.amount).toBe(337.35)
+    expect(base.calcTrace.factors).toContainEqual({ name: 'Roof type', source: 'risks.0.roofType', value: null, factor: 1, matched: false })
+    // Metal roof 0.94: 0.883476 x 0.94 = 0.830467.
+    expect(metal.calcTrace.factorProduct).toBe(0.830467)
+    expect(metal.calcTrace.factors).toContainEqual({ name: 'Roof type', source: 'risks.0.roofType', value: 'metal', factor: 0.94, matched: true })
+    expect(premiums(metal).A).toBe(151.35) // 202.50 x 0.830467 x 0.90
+  })
+
+  it('prices a coverage per item of a list, with item-level factors', () => {
+    const result = rateFromRateTable(
+      quote({ risks: [{ ...quote().risks[0], scheduledItems: scheduled }], coverages: [{ code: 'SCHEDULED', selected: true }] }),
+      rates,
+      productConfig,
+      tables
+    )
+    // 5,000 jewelry: 50 x 1.20 x 1.50 = 90.00; 12,000 art: 120 x 1.20 x 1.20 = 172.80; 800 other: 8 x 1.20 x 1 = 9.60.
+    expect(premiums(result)).toEqual({ SCHEDULED: 272.4 })
+    expect(result.calcTrace.coverages).toEqual([{
+      code: 'SCHEDULED', method: 'perItem', limit: null, applyFactors: false, deductibleFactor: null, premium: 272.4,
+      items: [
+        { item: 1, amount: 5000, factor: 1.5, premium: 90 },
+        { item: 2, amount: 12000, factor: 1.2, premium: 172.8 },
+        { item: 3, amount: 800, factor: 1, premium: 9.6 },
+      ],
+    }])
+  })
+
+  it('prices an empty list at nothing and refuses an item with no amount', () => {
+    const none = rateFromRateTable(quote({ coverages: [{ code: 'SCHEDULED', selected: true }] }), rates, productConfig, tables)
+    expect(premiums(none)).toEqual({ SCHEDULED: 0, MIN_PREMIUM: 150 })
+    expect(() => rateFromRateTable(
+      quote({ risks: [{ ...quote().risks[0], scheduledItems: [{ description: 'Mystery', category: 'art' }] }], coverages: [{ code: 'SCHEDULED', selected: true }] }),
+      rates,
+      productConfig,
+      tables
+    )).toThrowError(expect.objectContaining({ code: 'RATING_ITEM_AMOUNT_REQUIRED' }))
+  })
+
+  it('names the tables a configuration reads', () => {
+    expect(tablesUsedByRates(rates)).toEqual(['roof-types'])
+    expect(tablesUsedByRates({ rating: { coverages: { X: { perItem: { factors: [{ fromTable: 'item-classes' }] } } } } })).toEqual(['item-classes'])
+    expect(tablesUsedByRates({})).toEqual([])
+  })
+
+  it('reports table and list mistakes in the configuration', () => {
+    const bad = clone(rates)
+    bad.rating.factors[3] = { name: 'Roof type', field: 'roofType', fromTable: 'roof-kinds', value: 'factor' }
+    bad.rating.factors.push({ name: 'Bad column', field: 'roofType', fromTable: 'roof-types', value: 'name' })
+    bad.rating.coverages.SCHEDULED.perItem.list = 'valuables'
+    expect(messages(validateRateTable(bad, productConfig, [], packOptions), 'error')).toEqual(expect.arrayContaining([
+      "rating.factors[4] (Roof type): lookup table 'roof-kinds' is not in the pack",
+      "rating.factors[8] (Bad column): 'roof-types' row asphalt has no usable name",
+      "rating.coverages.SCHEDULED: perItem.list 'valuables' is not a list field of the product",
+    ]))
+
+    const badItem = clone(rates)
+    badItem.rating.coverages.SCHEDULED.perItem.amount = 'worth'
+    badItem.rating.coverages.SCHEDULED.perItem.factors[0].field = 'colour'
+    expect(messages(validateRateTable(badItem, productConfig, [], packOptions), 'error')).toEqual(expect.arrayContaining([
+      "rating.coverages.SCHEDULED: perItem.amount 'worth' is not a column of scheduledItems",
+      "rating.coverages.SCHEDULED.perItem.factors[1] (Category): 'colour' is not a column of scheduledItems",
+    ]))
   })
 })

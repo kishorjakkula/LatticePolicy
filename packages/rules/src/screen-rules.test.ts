@@ -53,8 +53,9 @@ describe('screen rules', () => {
         A: { selected: true, limit: 150000, deductible: '2500', percent: null },
         E: { selected: false, limit: null, deductible: null, percent: null },
       },
+      $tables: {},
     })
-    expect(buildScreenContext(undefined)).toEqual({ risk: {}, quote: { state: null, termMonths: null, effectiveDate: null, productCode: null }, applicant: {}, coverages: {} })
+    expect(buildScreenContext(undefined)).toEqual({ risk: {}, quote: { state: null, termMonths: null, effectiveDate: null, productCode: null }, applicant: {}, coverages: {}, $tables: {} })
   })
 
   it('passes a complete, consistent quote', () => {
@@ -123,5 +124,71 @@ describe('screen rules', () => {
   it('keeps a more basic problem over a validation message on the same field', () => {
     const state = evaluateScreen(screen, quote({ address: 'x', floorLevel: 'twelve', buildingFloors: 10 }))
     expect(state.errors).toEqual({ floorLevel: 'Enter a number' })
+  })
+})
+
+describe('list fields', () => {
+  const listScreen: ProductScreen = {
+    layout: 'sections',
+    sections: [{
+      title: 'Schedule',
+      fields: [
+        field('hasSchedule', { dataType: 'bool', widget: 'checkbox' }),
+        field('scheduledItems', {
+          dataType: 'list', widget: 'table', visibleWhen: 'risk.hasSchedule', requiredWhen: 'risk.hasSchedule', maxItems: 3,
+          item: [
+            { key: 'description', label: 'Description', dataType: 'string', required: true },
+            { key: 'category', label: 'Category', dataType: 'enum', options: ['jewelry', 'art'] },
+            { key: 'value', label: 'Value', dataType: 'number', required: true },
+          ],
+        }),
+      ],
+    }],
+    validations: [
+      { each: 'scheduledItems', rule: 'item.value >= 500', field: 'value', message: 'Schedule items worth 500 or more' },
+      { each: 'scheduledItems', rule: "!(item.category == 'art' && item.value > 20000)", message: 'Art above 20,000 needs an appraisal' },
+      { rule: "sum(risk.scheduledItems, 'value') <= lookup('limits', quote.state, 'scheduleMax')", when: 'risk.hasSchedule', field: 'scheduledItems', message: 'Schedule exceeds the state maximum' },
+    ],
+  }
+  const tables = { limits: { key: 'state', rows: [{ state: 'TX', scheduleMax: 50000 }] } }
+  const check = (risk: Record<string, unknown>) => evaluateScreen(listScreen, quote(risk), tables)
+
+  it('accepts a valid schedule and ignores a hidden one', () => {
+    expect(check({ hasSchedule: true, scheduledItems: [{ description: 'Ring', category: 'jewelry', value: 5000 }] }).errors).toEqual({})
+    // Hidden: nothing about the list is reported, even with bad content.
+    expect(check({ hasSchedule: false, scheduledItems: [{ value: 'x' }] }).errors).toEqual({})
+  })
+
+  it('requires items when the list is required and limits how many', () => {
+    expect(check({ hasSchedule: true }).errors).toEqual({ scheduledItems: 'Add at least one' })
+    expect(check({ hasSchedule: true, scheduledItems: [] }).errors).toEqual({ scheduledItems: 'Add at least one' })
+    const four = Array.from({ length: 4 }, (_, index) => ({ description: `Item ${index}`, value: 1000 }))
+    expect(check({ hasSchedule: true, scheduledItems: four }).errors).toEqual({ scheduledItems: 'No more than 3 allowed' })
+    expect(check({ hasSchedule: true, scheduledItems: 'ring' }).errors).toEqual({ scheduledItems: 'Enter a list of items' })
+  })
+
+  it('reports each problem against the item and column it is in', () => {
+    const state = check({
+      hasSchedule: true,
+      scheduledItems: [
+        { description: '', category: 'boat', value: 'lots' },
+        { description: 'Small', category: 'jewelry', value: 100 },
+        { description: 'Big canvas', category: 'art', value: 25000 },
+      ],
+    })
+    expect(state.errors).toEqual({
+      'scheduledItems.0.description': 'Required',
+      'scheduledItems.0.category': 'Choose one of the listed options',
+      'scheduledItems.0.value': 'Enter a number',
+      'scheduledItems.1.value': 'Schedule items worth 500 or more',
+      'scheduledItems.2': 'Art above 20,000 needs an appraisal',
+    })
+  })
+
+  it('applies a rule over the whole list using a lookup table', () => {
+    const items = [{ description: 'A', value: 30000 }, { description: 'B', value: 25000 }]
+    expect(check({ hasSchedule: true, scheduledItems: items }).errors).toEqual({ scheduledItems: 'Schedule exceeds the state maximum' })
+    // Without the table the limit is unknown, so the comparison cannot pass.
+    expect(evaluateScreen(listScreen, quote({ hasSchedule: true, scheduledItems: items })).errors).toEqual({ scheduledItems: 'Schedule exceeds the state maximum' })
   })
 })

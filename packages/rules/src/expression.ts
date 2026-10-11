@@ -14,6 +14,10 @@
  * Operators  || && !   == != < <= > >=   in, not in   + - * /   ( )
  * Functions  isSet isEmpty len min max abs round lower upper contains
  *            startsWith number
+ *            count(list)              number of items in a list
+ *            sum(list, 'field')       total of a field across a list's items
+ *            lookup('table', key, 'column')
+ *                                     a value from a lookup table, or null
  *
  * Form controls hand back text, so comparisons are forgiving in two specific
  * ways: 'true'/'false' compare equal to the booleans, and numeric text
@@ -299,7 +303,43 @@ function numbers(args: unknown[]): number[] | null {
   return out.some((value) => value === null) ? null : (out as number[])
 }
 
-const FUNCTIONS: Record<string, { min: number; max: number; run: (args: unknown[]) => unknown }> = {
+/** Lookup tables a context can carry under this name, for lookup(). */
+export const TABLES_CONTEXT_KEY = '$tables'
+
+export type LookupTable = {
+  /** Column whose value identifies a row. */
+  key: string
+  rows: Array<Record<string, unknown>>
+}
+
+function lookupValue(context: Record<string, unknown>, tableName: unknown, key: unknown, column: unknown): unknown {
+  const tables = context[TABLES_CONTEXT_KEY]
+  if (!tables || typeof tables !== 'object' || typeof tableName !== 'string' || typeof column !== 'string') return null
+  if (!Object.prototype.hasOwnProperty.call(tables, tableName)) return null
+  const table = (tables as Record<string, LookupTable>)[tableName]
+  if (!table || !Array.isArray(table.rows) || isBlank(key)) return null
+  const row = table.rows.find((candidate) => looseEquals(candidate?.[table.key], key))
+  if (!row || !Object.prototype.hasOwnProperty.call(row, column)) return null
+  const value = row[column]
+  return value === undefined ? null : value
+}
+
+const FUNCTIONS: Record<string, { min: number; max: number; run: (args: unknown[], context: Record<string, unknown>) => unknown }> = {
+  count: { min: 1, max: 1, run: ([value]) => (Array.isArray(value) ? value.length : 0) },
+  sum: {
+    min: 2,
+    max: 2,
+    run: ([list, field]) => {
+      if (!Array.isArray(list) || typeof field !== 'string') return 0
+      let total = 0
+      for (const item of list) {
+        const value = item && typeof item === 'object' && Object.prototype.hasOwnProperty.call(item, field) ? toNumber((item as any)[field]) : null
+        if (value !== null) total += value
+      }
+      return total
+    },
+  },
+  lookup: { min: 3, max: 3, run: ([tableName, key, column], context) => lookupValue(context, tableName, key, column) },
   isSet: { min: 1, max: 1, run: ([value]) => !isBlank(value) },
   isEmpty: { min: 1, max: 1, run: ([value]) => isBlank(value) },
   len: { min: 1, max: 1, run: ([value]) => (typeof value === 'string' || Array.isArray(value) ? value.length : 0) },
@@ -358,7 +398,7 @@ function run(node: Node, context: Record<string, unknown>): unknown {
       return n === null ? null : -n
     }
     case 'call':
-      return FUNCTIONS[node.name].run(node.args.map((arg) => run(arg, context)))
+      return FUNCTIONS[node.name].run(node.args.map((arg) => run(arg, context)), context)
     case 'binary': {
       if (node.op === '&&') return isTruthy(run(node.left, context)) && isTruthy(run(node.right, context))
       if (node.op === '||') return isTruthy(run(node.left, context)) || isTruthy(run(node.right, context))

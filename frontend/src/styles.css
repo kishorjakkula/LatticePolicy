@@ -3212,6 +3212,58 @@ button:focus-visible {
   font-size: 0.75em;
 }
 
+.cfg-list {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.cfg-list-empty {
+  margin: 0;
+}
+
+.cfg-list-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.cfg-list-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfg-list-table th {
+  text-align: left;
+  padding: 0 8px 6px 0;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cfg-list-table td {
+  padding: 0 8px 8px 0;
+  vertical-align: top;
+  min-width: 140px;
+}
+
+.cfg-list-table td.cfg-list-actions {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.cfg-list-limit {
+  margin-left: 10px;
+}
+
+.cfg-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .cfg-grid {
     grid-template-columns: minmax(0, 1fr);

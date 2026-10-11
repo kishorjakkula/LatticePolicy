@@ -6,6 +6,8 @@ import { isUuidLike, routeParam } from '../lib/utils.js'
 import { getDb } from '../db.js'
 import { loadPolicyContext } from '../persistence.js'
 import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { loadCarrierTables } from '../lib/carrier-tables.js'
+import { tablesUsedByScreen } from '../lib/product-screen.js'
 
 export const productsRoutes = Router()
 const requireProductAccess = requirePermission(['page.wizard.view', 'page.policy.view'])
@@ -55,13 +57,14 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
             ...(section.title ? { group: section.title } : {}),
           }))
         )
-        return res.json({ fields: pinnedFields, screen: pinnedScreen, productSnapshotId: snapshot.id })
+        return res.json({ fields: pinnedFields, screen: pinnedScreen, tables: snapshot.definition.tables || {}, productSnapshotId: snapshot.id })
       }
     }
     const fields = buildRiskFields(code, cfg, req.tenant?.tenantId)
     // Present only when the carrier pack defines a screen for this product.
     const screen = loadRiskScreen(code, cfg, req.tenant?.tenantId)
-    return res.json(screen ? { fields, screen } : { fields })
+    // The wizard applies the screen's rules itself, so it needs the lookup tables those rules read.
+    return res.json(screen ? { fields, screen, tables: tablesUsedByScreen(screen, loadCarrierTables(req.tenant?.tenantId)) } : { fields })
   } catch (err) {
     next(err)
   }

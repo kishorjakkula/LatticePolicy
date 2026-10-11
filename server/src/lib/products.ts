@@ -159,7 +159,7 @@ function humanizeFieldKey(key: string): string {
  */
 function riskFieldsFromFieldMeta(meta: any[]): FormField[] {
   return meta
-    .filter((field) => typeof field?.path === 'string' && /^risks\.0\.[^.]+$/.test(field.path))
+    .filter((field) => typeof field?.path === 'string' && /^risks\.0\.[^.]+$/.test(field.path) && field.type !== 'list')
     .map((field, index) => ({ field, index }))
     .sort((left, right) => {
       const leftOrder = Number(left.field?.ui?.order)

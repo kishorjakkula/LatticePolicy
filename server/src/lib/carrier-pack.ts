@@ -15,6 +15,7 @@ import YAML from 'yaml'
  *   products/<code>/rates.yaml
  *   fields/<code>.json                 field metadata per product (optional)
  *   screens/<code>.yaml                risk screen layout and rules (optional)
+ *   tables/<name>.yaml                 lookup and reference tables (optional)
  *
  * With CARRIER_PACK_DIR unset nothing here applies and products, overrides
  * and field metadata load from the repository as before.

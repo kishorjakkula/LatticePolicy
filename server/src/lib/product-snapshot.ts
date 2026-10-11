@@ -1,11 +1,14 @@
 import crypto from 'crypto'
-import type { ProductScreen } from '@lattice-policy/rules'
+import type { LookupTable, ProductScreen } from '@lattice-policy/rules'
 import { getDb, toRawQuery, withTenantTx } from '../db.js'
 import { getBuildInfo } from '../version.js'
 import { carrierPackFor } from './carrier-pack.js'
 import { getProductCapabilities } from './product-registry.js'
 import { loadProductConfig, loadProductRates, loadRiskScreen, loadTenantOverrides, mergeRates } from './products.js'
 import { getPublishedRatingModelForProduct } from './rating-model-registry.js'
+import { loadCarrierTables } from './carrier-tables.js'
+import { tablesUsedByScreen } from './product-screen.js'
+import { tablesUsedByRates } from './rating-table.js'
 
 /**
  * The product definition a policy term is written on: its rates (with the
@@ -24,6 +27,8 @@ export type ProductDefinition = {
   rates: any
   config: any
   screen: ProductScreen | null
+  /** The carrier lookup tables this product's rating and rules read. */
+  tables?: Record<string, LookupTable>
   /** The published rating workbook in force for the product and state, if any. */
   publishedModel: any | null
 }
@@ -73,11 +78,19 @@ export function currentProductDefinition(tenantId: string, productCode: string, 
   if (!descriptor) return null
   const config = loadProductConfig(code)
   const publishedModel = getPublishedRatingModelForProduct(tenantId, code, stateCode)
+  const rates = mergeRates(loadProductRates(code).rates, loadTenantOverrides(tenantId))
+  const screen = loadRiskScreen(code, config, tenantId)
+  // Only the tables this product reads, so an unrelated table change does not
+  // make a new version of every product.
+  const allTables = loadCarrierTables(tenantId)
+  const tables: Record<string, LookupTable> = screen ? tablesUsedByScreen(screen, allTables) : {}
+  for (const name of tablesUsedByRates(rates)) if (allTables[name]) tables[name] = allTables[name]
   return {
     ratingAdapter: descriptor.ratingAdapter,
-    rates: mergeRates(loadProductRates(code).rates, loadTenantOverrides(tenantId)),
+    rates,
     config,
-    screen: loadRiskScreen(code, config, tenantId),
+    screen,
+    ...(Object.keys(tables).length ? { tables } : {}),
     // Timestamps on the registry row are not part of the definition.
     publishedModel: publishedModel
       ? { modelId: publishedModel.modelId, modelCode: publishedModel.modelCode, versionId: publishedModel.versionId, versionLabel: publishedModel.versionLabel, stateCode: publishedModel.stateCode, workbookJson: publishedModel.workbookJson }

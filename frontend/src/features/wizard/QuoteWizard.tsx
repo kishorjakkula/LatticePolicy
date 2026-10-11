@@ -25,7 +25,7 @@ import { validateInsureds } from './insuredValidation'
 import { deriveWizardTransactionStatus } from '../policies/statusModel'
 import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
-import type { ProductScreen } from '@lattice-policy/rules'
+import type { LookupTable, ProductScreen } from '@lattice-policy/rules'
 import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
@@ -855,6 +855,8 @@ export function QuoteWizard() {
   // pack product, or extra sections under a core product's built-in step.
   const [riskScreen, setRiskScreen] = useState<ProductScreen | null>(null)
   const [riskScreenChecked, setRiskScreenChecked] = useState(false)
+  // Lookup tables the screen's rules read, sent with the screen.
+  const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -1900,9 +1902,11 @@ export function QuoteWizard() {
       const form = await api.getProductForm(code, midTerm && policyIdParam ? policyIdParam : undefined)
       setRiskFields(form?.fields || [])
       setRiskScreen(form?.screen || null)
+      setRiskTables(form?.tables || {})
     } catch {
       setRiskFields([])
       setRiskScreen(null)
+      setRiskTables({})
     }
     setRiskScreenChecked(false)
   }
@@ -2040,7 +2044,7 @@ export function QuoteWizard() {
       const builtInErrs = q.productCode === 'personal-auto'
         ? validatePersonalAutoVehicles(q.risks)
         : riskScreen && !isCoreProductCode(q.productCode) ? {} : validateFields(riskFields, q)
-      const errs = riskScreen ? { ...builtInErrs, ...screenErrors(riskScreen, q) } : builtInErrs
+      const errs = riskScreen ? { ...builtInErrs, ...screenErrors(riskScreen, q, riskTables) } : builtInErrs
       setRiskScreenChecked(true)
       setFieldErrors(errs)
       if (Object.keys(errs).length > 0) return
@@ -4431,6 +4435,7 @@ export function QuoteWizard() {
             <ConfiguredRiskForm
               screen={riskScreen}
               value={q}
+              tables={riskTables}
               disabled={isCancellationMode || isViewOnly}
               showAllErrors={riskScreenChecked}
               onChange={(path, val) => {
@@ -4600,7 +4605,7 @@ export function QuoteWizard() {
                 </>
               ) : !isCoreProductCode(q.productCode) ? (
                 // A product added by a carrier pack: summarise the fields its own screen shows.
-                riskScreen ? <ConfiguredRiskSummary screen={riskScreen} value={q} /> : (
+                riskScreen ? <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} /> : (
                   <>
                     {riskFields.length === 0 && <div className="muted">No risk details defined for this product.</div>}
                     {riskFields.map((field) => {
@@ -4629,7 +4634,7 @@ export function QuoteWizard() {
                 </>
               )}
               {/* Fields a carrier pack adds to a core product's screen. */}
-              {q.productCode && isCoreProductCode(q.productCode) && riskScreen && <ConfiguredRiskSummary screen={riskScreen} value={q} />}
+              {q.productCode && isCoreProductCode(q.productCode) && riskScreen && <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} />}
             </CollapsibleSection>
 
             <CollapsibleSection className="card">

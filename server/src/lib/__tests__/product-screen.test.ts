@@ -3,13 +3,19 @@ import os from 'os'
 import path from 'path'
 import YAML from 'yaml'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { buildProductScreen, checkQuoteAgainstScreen, loadProductScreen } from '../product-screen.js'
+import { buildProductScreen, checkQuoteAgainstScreen, loadProductScreen, tablesUsedByScreen } from '../product-screen.js'
 import { buildRiskFields, loadProductConfig, loadRiskScreen } from '../products.js'
 import { validateCarrierPack } from '../carrier-pack-validator.js'
+import { readPackTables } from '../carrier-tables.js'
 
 const EXAMPLE_PACK = path.resolve(__dirname, '../../../../examples/carrier-pack')
 const meta = JSON.parse(fs.readFileSync(path.join(EXAMPLE_PACK, 'fields/condo-unit-owners.json'), 'utf8'))
 const screenFile = YAML.parse(fs.readFileSync(path.join(EXAMPLE_PACK, 'screens/condo-unit-owners.yaml'), 'utf8'))
+const tables = Object.fromEntries(
+  readPackTables({ dir: EXAMPLE_PACK, manifest: { packFormat: 1, carrier: 'acme-mutual', version: '1.0.0' } }).map((entry) => [entry.name, entry.table!])
+)
+/** The example product's screen, built the way the pack loader does. */
+const build = (file: unknown, reserved: string[] = []) => buildProductScreen('condo-unit-owners', meta, file, reserved, tables)
 
 const tempDirs: string[] = []
 function copyOfExamplePack(): string {
@@ -43,11 +49,11 @@ describe('product screen', () => {
 
   describe('building a screen from pack files', () => {
     it('resolves the example screen: tabs, columns, widgets, and conditions', () => {
-      const { screen, issues } = buildProductScreen('condo-unit-owners', meta, screenFile)
+      const { screen, issues } = build(screenFile)
       expect(issues).toEqual([])
       expect(screen?.layout).toBe('tabs')
       expect(screen?.sections.map((section) => [section.title, section.columns, section.fields.length])).toEqual([
-        ['Unit', 3, 5], ['Building', 4, 7], ['Association', 2, 2], ['Loss assessment', undefined, 1],
+        ['Unit', 3, 5], ['Building', 4, 8], ['Association', 2, 2], ['Loss assessment', undefined, 1], ['Scheduled items', 1, 1],
       ])
       const unit = screen!.sections[0].fields
       expect(unit[0]).toEqual({
@@ -60,14 +66,14 @@ describe('product screen', () => {
       })
       expect(screen!.sections[1].fields.find((field) => field.key === 'hasElevator')).toMatchObject({ dataType: 'bool', widget: 'checkbox' })
       expect(screen!.sections[3].visibleWhen).toBe('coverages.LOSS_ASSESS.selected')
-      expect(screen!.validations).toHaveLength(4)
+      expect(screen!.validations).toHaveLength(6)
     })
 
     it('derives a screen from the fields file alone: a section per group, in order', () => {
-      const { screen, issues } = buildProductScreen('condo-unit-owners', meta, undefined)
+      const { screen, issues } = build(undefined)
       expect(issues).toEqual([])
       expect(screen?.layout).toBe('sections')
-      expect(screen?.sections.map((section) => section.title)).toEqual(['Unit', 'Building', 'Occupancy', 'Association'])
+      expect(screen?.sections.map((section) => section.title)).toEqual(['Unit', 'Building', 'Occupancy', 'Association', 'Schedule'])
       expect(screen?.sections[0].fields.map((field) => field.key)).toEqual(['address', 'floorLevel', 'squareFeet', 'monthlyRent'])
       expect(screen?.validations).toEqual([])
     })
@@ -89,7 +95,7 @@ describe('product screen', () => {
       delete bad.risk.sections[2].title
       bad.risk.sections.push({ title: 'Empty', fields: [] })
 
-      expect(errors(buildProductScreen('condo-unit-owners', meta, bad))).toEqual(expect.arrayContaining([
+      expect(errors(build(bad))).toEqual(expect.arrayContaining([
         'must declare product: condo-unit-owners',
         "risk.layout: must be 'sections' or 'tabs'",
         'risk.sections[1] (Unit): columns must be a whole number from 1 to 4',
@@ -97,10 +103,10 @@ describe('product screen', () => {
         "risk.sections[1] (Unit).fields[7] (penthouseLevel): 'penthouseLevel' is not defined in fields/condo-unit-owners.json",
         "risk.sections[1] (Unit).fields[8] (squareFeet): 'squareFeet' is placed more than once",
         'risk.sections[1] (Unit).fields[9] (yearBuilt): span must be a whole number from 1 to 4',
-        "risk.sections[2] (Building).fields[7] (construction): 'construction' is placed more than once",
-        "risk.sections[2] (Building).fields[4] (buildingFloors): widget 'textarea' does not fit a int field; use number or currency",
-        'risk.sections[2] (Building).fields[8]: name the field to show, as a name or as field: <name>',
-        'risk.sections[5] (Empty): fields must be a non-empty list',
+        "risk.sections[2] (Building).fields[8] (construction): 'construction' is placed more than once",
+        "risk.sections[2] (Building).fields[5] (buildingFloors): widget 'textarea' does not fit a int field; use number or currency",
+        'risk.sections[2] (Building).fields[9]: name the field to show, as a name or as field: <name>',
+        'risk.sections[6] (Empty): fields must be a non-empty list',
       ]))
     })
 
@@ -114,7 +120,7 @@ describe('product screen', () => {
       delete bad.risk.validations[2].message
       bad.risk.validations[3].when = 'risk.rentControl == true'
 
-      const result = buildProductScreen('condo-unit-owners', meta, bad)
+      const result = build(bad)
       expect(errors(result)).toEqual(expect.arrayContaining([
         'risk.sections[1] (Unit).visibleWhen: expression ends unexpectedly (at character 18)',
         "risk.sections[1] (Unit).fields[5] (monthlyRent).visibleWhen: 'policy.premium' is not available; start names with risk, quote, applicant, coverages",
@@ -133,10 +139,10 @@ describe('product screen', () => {
       const partial = clone(screenFile)
       partial.risk.sections = [partial.risk.sections[2]]
       partial.risk.validations = []
-      const warnings = buildProductScreen('condo-unit-owners', meta, partial).issues.map((issue) => issue.message)
+      const warnings = build(partial).issues.map((issue) => issue.message)
       expect(warnings).toContain("field 'floorLevel' is defined but not placed on the screen, so it cannot be entered")
 
-      const overCore = buildProductScreen('condo-unit-owners', meta, screenFile, ['construction', 'yearBuilt'])
+      const overCore = build(screenFile, ['construction', 'yearBuilt'])
       expect(errors(overCore)).toEqual(expect.arrayContaining([
         "risk.sections[2] (Building).fields[1] (yearBuilt): 'yearBuilt' is already on this product's built-in screen",
         "risk.sections[2] (Building).fields[2] (construction): 'construction' is already on this product's built-in screen",
@@ -145,9 +151,9 @@ describe('product screen', () => {
   })
 
   describe('checking a quote', () => {
-    const { screen } = buildProductScreen('condo-unit-owners', meta, screenFile)
+    const { screen } = build(screenFile)
     const check = (risk: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
-      checkQuoteAgainstScreen(screen!, { productCode: 'condo-unit-owners', state: 'TX', risks: [risk], coverages: [], ...extra })
+      checkQuoteAgainstScreen(screen!, { productCode: 'condo-unit-owners', state: 'TX', risks: [risk], coverages: [], ...extra }, tables)
 
     it('accepts a complete quote', () => {
       expect(check(completeRisk)).toEqual([])
@@ -189,7 +195,7 @@ describe('product screen', () => {
       expect(loadRiskScreen('condo-unit-owners', cfg, undefined)).toBeNull()
       // Core products keep their built-in screen: no pack screen is returned.
       expect(loadRiskScreen('homeowners', loadProductConfig('homeowners'), 'acme-mutual')).toBeNull()
-      expect(loadProductScreen('condo-unit-owners', 'acme-mutual')?.sections).toHaveLength(4)
+      expect(loadProductScreen('condo-unit-owners', 'acme-mutual')?.sections).toHaveLength(5)
     })
 
     it('lets a pack add a section of its own fields to a core product screen', () => {
@@ -241,9 +247,82 @@ describe('product screen', () => {
       const validation = validateCarrierPack(dir)
       expect(validation.errors.map((issue) => `${issue.file}: ${issue.message}`)).toEqual([
         "screens/boat.yaml: 'boat' is neither a core product nor in this pack",
-        'screens/condo-unit-owners.yaml: risk.sections[2] (Building).fields[7] (elevatorCount).visibleWhen: expression ends unexpectedly (at character 20)',
+        'screens/condo-unit-owners.yaml: risk.sections[2] (Building).fields[8] (elevatorCount).visibleWhen: expression ends unexpectedly (at character 20)',
       ])
       expect(validation.warnings.map((issue) => `${issue.file}: ${issue.message}`)).toContain('screens/notes.txt: only <product-code>.yaml files are read from screens/')
     })
+  })
+})
+
+describe('product screen: lookup tables and list fields', () => {
+  const { screen } = build(screenFile)
+
+  it('takes option lists and their labels from a carrier table', () => {
+    const roofType = screen!.sections[1].fields.find((field) => field.key === 'roofType')
+    expect(roofType).toMatchObject({
+      dataType: 'enum',
+      widget: 'select',
+      options: ['asphalt', 'metal', 'tile', 'flat'],
+      optionLabels: { asphalt: 'Asphalt shingle', metal: 'Standing-seam metal', tile: 'Clay or concrete tile', flat: 'Flat membrane' },
+    })
+  })
+
+  it('defines a list field as a table of typed columns', () => {
+    const schedule = screen!.sections[4].fields[0]
+    expect(schedule).toMatchObject({ key: 'scheduledItems', dataType: 'list', widget: 'table', maxItems: 20, requiredWhen: 'coverages.SCHEDULED.selected' })
+    expect(schedule.item).toEqual([
+      { key: 'description', label: 'Description', dataType: 'string', required: true },
+      { key: 'category', label: 'Category', dataType: 'enum', required: true, options: ['jewelry', 'art', 'electronics', 'other'] },
+      { key: 'value', label: 'Insured Value', dataType: 'number', required: true },
+    ])
+    expect(screen!.validations).toContainEqual({ each: 'scheduledItems', rule: 'item.value >= 500', field: 'value', message: 'Schedule only items worth 500 or more' })
+    expect(Object.keys(tablesUsedByScreen(screen!, tables))).toEqual(['schedule-limits'])
+  })
+
+  it('reports mistakes in tables, options, lists, and per-item rules', () => {
+    const badMeta = JSON.parse(JSON.stringify(meta))
+    badMeta.find((field: any) => field.path === 'risks.0.roofType').optionsFrom = { table: 'roof-kinds', value: 'code' }
+    const list = badMeta.find((field: any) => field.path === 'risks.0.scheduledItems')
+    list.item.push({ key: 'value', type: 'number' }, { key: 'weight', type: 'heavy' }, { key: 'condition', type: 'enum' })
+    list.maxItems = -1
+    const badScreen = JSON.parse(JSON.stringify(screenFile))
+    badScreen.risk.validations[0].rule = 'item.weight > 0'
+    badScreen.risk.validations[0].field = 'weight'
+    badScreen.risk.validations[1].rule = "sum(risk.scheduledItems, 'value') <= lookup('schedule-caps', quote.state, 'scheduleMax')"
+    badScreen.risk.validations.push({ each: 'floorLevel', rule: 'item.value > 0', message: 'x' })
+
+    const messages = buildProductScreen('condo-unit-owners', badMeta, badScreen, [], tables).issues.filter((issue) => issue.level === 'error').map((issue) => issue.message)
+    expect(messages).toEqual(expect.arrayContaining([
+      "risk.sections[2] (Building).fields[4] (roofType): optionsFrom: table 'roof-kinds' is not in the pack",
+      'risk.sections[5] (Scheduled items).fields[1] (scheduledItems): item[4] (value): key is defined more than once',
+      'risk.sections[5] (Scheduled items).fields[1] (scheduledItems): item[5] (weight): type must be one of string, int, number, bool, enum, date',
+      'risk.sections[5] (Scheduled items).fields[1] (scheduledItems): item[6] (condition): an enum column needs enum or optionsFrom',
+      'risk.sections[5] (Scheduled items).fields[1] (scheduledItems): maxItems must be a whole number of 0 or more',
+      'risk.validations[1].rule: item.weight is not a column of the list',
+      "risk.validations[1]: field 'weight' is not a column of list 'scheduledItems'",
+      "risk.validations[2].rule: lookup table 'schedule-caps' is not in the pack",
+      "risk.validations[7]: each 'floorLevel' is not a list field placed on the screen",
+    ]))
+  })
+
+  it('checks a quote\'s list against the item rules and the state limit from a table', () => {
+    const check = (items: unknown, state = 'TX') => checkQuoteAgainstScreen(
+      screen!,
+      { productCode: 'condo-unit-owners', state, risks: [{ ...completeRisk, scheduledItems: items }], coverages: [{ code: 'SCHEDULED', selected: true }] },
+      tables
+    )
+    expect(check([{ description: 'Ring', category: 'jewelry', value: 5000 }])).toEqual([])
+    expect(check(undefined)).toEqual([{ path: '/risks/0/scheduledItems', keyword: 'screen', message: 'Scheduled Items: Add at least one' }])
+    expect(check([{ description: '', category: 'boat', value: 100 }])).toEqual([
+      { path: '/risks/0/scheduledItems/0/description', keyword: 'screen', message: 'Scheduled Items item 1, Description: Required' },
+      { path: '/risks/0/scheduledItems/0/category', keyword: 'screen', message: 'Scheduled Items item 1, Category: Choose one of the listed options' },
+      { path: '/risks/0/scheduledItems/0/value', keyword: 'screen', message: 'Scheduled Items item 1, Insured Value: Schedule only items worth 500 or more' },
+    ])
+    // 30,000 is within the Texas limit of 50,000 and over the Florida limit of 25,000.
+    const large = [{ description: 'Painting', category: 'art', value: 30000 }]
+    expect(check(large, 'TX')).toEqual([])
+    expect(check(large, 'FL')).toEqual([{ path: '/risks/0/scheduledItems', keyword: 'screen', message: 'Scheduled Items: Scheduled items exceed the maximum for this state' }])
+    // No limit is on file for Nevada, so the rule's guard keeps it out of the way.
+    expect(check(large, 'NV')).toEqual([])
   })
 })

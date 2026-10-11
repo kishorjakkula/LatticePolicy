@@ -178,3 +178,106 @@ describe('ConfiguredRiskSummary', () => {
     ])
   })
 })
+
+describe('ConfiguredRiskForm: list fields and lookup tables', () => {
+  const listScreen: ProductScreen = {
+    layout: 'sections',
+    sections: [{
+      title: 'Schedule',
+      columns: 2,
+      fields: [
+        field('roofType', 'Roof Type', { dataType: 'enum', widget: 'select', options: ['asphalt', 'metal'], optionLabels: { asphalt: 'Asphalt shingle', metal: 'Standing-seam metal' } }),
+        field('scheduledItems', 'Scheduled Items', {
+          dataType: 'list', widget: 'table', maxItems: 2,
+          item: [
+            { key: 'description', label: 'Description', dataType: 'string', required: true },
+            { key: 'category', label: 'Category', dataType: 'enum', options: ['jewelry', 'art'] },
+            { key: 'value', label: 'Insured Value', dataType: 'number', required: true },
+          ],
+        }),
+      ],
+    }],
+    validations: [
+      { each: 'scheduledItems', rule: 'item.value >= 500', field: 'value', message: 'Schedule only items worth 500 or more' },
+      { rule: "sum(risk.scheduledItems, 'value') <= lookup('schedule-limits', quote.state, 'scheduleMax')", field: 'scheduledItems', message: 'Scheduled items exceed the maximum for this state' },
+    ],
+  }
+  const tables = { 'schedule-limits': { key: 'state', rows: [{ state: 'TX', scheduleMax: 50000 }] } }
+
+  function ListHarness({ initial, showAllErrors = false, onQuote }: { initial: any; showAllErrors?: boolean; onQuote?: (quote: any) => void }) {
+    const [quote, setQuote] = useState(initial)
+    return (
+      <ConfiguredRiskForm
+        screen={listScreen}
+        value={quote}
+        tables={tables}
+        showAllErrors={showAllErrors}
+        onChange={(path, value) => {
+          const next = { ...quote, risks: quote.risks.map((risk: any) => ({ ...risk })) }
+          setByPath(next, path, value)
+          setQuote(next)
+          onQuote?.(next)
+        }}
+      />
+    )
+  }
+
+  it('shows the carrier table\'s labels for options and stores the option value', () => {
+    const onQuote = vi.fn()
+    render(<ListHarness initial={{ state: 'TX', risks: [{}] }} onQuote={onQuote} />)
+    const select = view.getByLabelText('Roof Type')
+    expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['Select…', 'Asphalt shingle', 'Standing-seam metal'])
+    fireEvent.change(select, { target: { value: 'metal' } })
+    expect(onQuote).toHaveBeenLastCalledWith(expect.objectContaining({ risks: [expect.objectContaining({ roofType: 'metal' })] }))
+  })
+
+  it('adds, edits, and removes items in a list', () => {
+    const onQuote = vi.fn()
+    render(<ListHarness initial={{ state: 'TX', risks: [{}] }} onQuote={onQuote} />)
+    expect(view.getByText('None added.')).toBeInTheDocument()
+
+    fireEvent.click(view.getByRole('button', { name: 'Add scheduled item' }))
+    expect(view.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Description *', 'Category', 'Insured Value *', 'Remove'])
+    fireEvent.change(view.getByLabelText('Description, item 1'), { target: { value: 'Ring' } })
+    fireEvent.change(view.getByLabelText('Category, item 1'), { target: { value: 'jewelry' } })
+    fireEvent.change(view.getByLabelText('Insured Value, item 1'), { target: { value: '5000' } })
+    expect(onQuote).toHaveBeenLastCalledWith(expect.objectContaining({
+      risks: [expect.objectContaining({ scheduledItems: [{ description: 'Ring', category: 'jewelry', value: 5000 }] })],
+    }))
+
+    fireEvent.click(view.getByRole('button', { name: 'Add scheduled item' }))
+    fireEvent.change(view.getByLabelText('Description, item 2'), { target: { value: 'Painting' } })
+    // The list is full at its maximum of two.
+    expect(view.getByRole('button', { name: 'Add scheduled item' })).toBeDisabled()
+    expect(view.getByText('Maximum of 2 reached.')).toBeInTheDocument()
+
+    fireEvent.click(view.getByRole('button', { name: 'Remove item 1' }))
+    expect(onQuote).toHaveBeenLastCalledWith(expect.objectContaining({
+      risks: [expect.objectContaining({ scheduledItems: [{ description: 'Painting' }] })],
+    }))
+    expect(view.getByLabelText('Description, item 1')).toHaveValue('Painting')
+  })
+
+  it('shows each item problem in its own cell, and the list problem under the list', () => {
+    const items = [{ description: '', category: 'art', value: 100 }, { description: 'Canvas', category: 'art', value: 60000 }]
+    render(<ListHarness initial={{ state: 'TX', risks: [{ scheduledItems: items }] }} showAllErrors />)
+
+    const rows = view.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getAllByRole('alert').map((alert) => alert.textContent)).toEqual(['Required', 'Schedule only items worth 500 or more'])
+    expect(within(rows[1]).queryByRole('alert')).toBeNull()
+    expect(view.getByLabelText('Description, item 1')).toHaveAttribute('aria-invalid', 'true')
+    // 60,100 is over the Texas limit of 50,000 from the lookup table.
+    expect(view.getByText('Scheduled items exceed the maximum for this state')).toBeInTheDocument()
+  })
+
+  it('gives the wizard list problems keyed by item and column', () => {
+    expect(screenErrors(listScreen, { state: 'TX', risks: [{ scheduledItems: [{ description: 'Ring', value: 100 }] }] }, tables)).toEqual({
+      'scheduledItems.0.value': 'Schedule only items worth 500 or more',
+    })
+  })
+
+  it('summarises a list by its size and an option by its label', () => {
+    render(<ConfiguredRiskSummary screen={listScreen} tables={tables} value={{ risks: [{ roofType: 'metal', scheduledItems: [{}, {}] }] }} />)
+    expect(Array.from(document.querySelectorAll('.kvline')).map((row) => row.textContent)).toEqual(['Roof TypeStanding-seam metal', 'Scheduled Items2 items'])
+  })
+})

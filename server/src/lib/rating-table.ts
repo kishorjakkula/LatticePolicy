@@ -1,3 +1,4 @@
+import type { LookupTable } from '@lattice-policy/rules'
 import { round2 } from './date.utils.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 
@@ -20,11 +21,23 @@ import { BadRequestError } from '../errors/domain.errors.js'
  *       - name: State
  *         path: state                  # anywhere on the quote
  *         table: { TX: 1.1 }
+ *       - name: Territory
+ *         field: zip
+ *         fromTable: territory         # a carrier lookup table (tables/territory.yaml)
+ *         value: factor                # column holding the factor; matched on the table's key
  *     coverages:                       # one pricing method per coverage
  *       A: { rate: 1.35, ratePer: 1000 }              # per unit of limit
  *       E: { byLimit: { 100000: 40, 300000: 55 } }    # premium per limit option
  *       F: { flat: 12, applyFactors: false }          # fixed amount
  *       default: { shareOfBase: 0.05 }                # anything not listed
+ *       SCHEDULED:                                    # priced per item of a list field
+ *         perItem:
+ *           list: scheduledItems
+ *           amount: value                             # item column holding the amount
+ *           rate: 1.2
+ *           ratePer: 100
+ *           factors:                                  # read from the item, not the risk
+ *             - { name: Category, field: category, table: { jewelry: 1.5 }, default: 1 }
  *     minimumPremium: 150
  *   fees: { policy: 25 }
  *   taxes: { rate: 0.02 }
@@ -43,8 +56,22 @@ type FactorStep = {
   path?: string
   table?: Record<string, number>
   ranges?: RangeTable
+  /** A carrier lookup table to read the factor from, matched on its key column. */
+  fromTable?: string
+  /** Column of `fromTable` holding the factor. */
+  value?: string
   default?: number
   required?: boolean
+}
+
+type Tables = Record<string, LookupTable>
+
+type PerItemRating = {
+  list: string
+  amount: string
+  rate: number
+  ratePer?: number
+  factors?: FactorStep[]
 }
 
 type CoverageRating = {
@@ -53,11 +80,12 @@ type CoverageRating = {
   byLimit?: Record<string, number>
   flat?: number
   shareOfBase?: number
+  perItem?: PerItemRating
   applyFactors?: boolean
   deductibleFactors?: Record<string, number>
 }
 
-const COVERAGE_METHODS = ['rate', 'byLimit', 'flat', 'shareOfBase'] as const
+const COVERAGE_METHODS = ['rate', 'byLimit', 'flat', 'shareOfBase', 'perItem'] as const
 
 function isPlainObject(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -99,8 +127,15 @@ export function parseRange(label: string): ((value: number) => boolean) | null {
   return null
 }
 
-function lookupFactor(step: FactorStep, rawValue: unknown): number | null {
+function lookupFactor(step: FactorStep, rawValue: unknown, tables: Tables = {}): number | null {
   if (rawValue === undefined || rawValue === null || rawValue === '') return null
+  if (step.fromTable) {
+    const table = tables[step.fromTable]
+    const wanted = String(rawValue).trim().toLowerCase()
+    const row = table?.rows.find((candidate) => String(candidate[table.key] ?? '').trim().toLowerCase() === wanted)
+    const factor = row ? Number(row[String(step.value)]) : NaN
+    return Number.isFinite(factor) ? factor : null
+  }
   if (isPlainObject(step.table)) {
     const wanted = String(rawValue).trim().toLowerCase()
     for (const [key, factor] of Object.entries(step.table)) {
@@ -152,7 +187,7 @@ function ratingError(code: string, message: string, details?: Record<string, unk
   return new BadRequestError(code, message, details)
 }
 
-export function rateFromRateTable(payload: any, rates: any, productConfig: any = {}) {
+export function rateFromRateTable(payload: any, rates: any, productConfig: any = {}, tables: Tables = {}) {
   const productCode = String(payload?.productCode || '').trim().toLowerCase()
   const rating = rates?.rating
   if (!isPlainObject(rating)) {
@@ -176,7 +211,7 @@ export function rateFromRateTable(payload: any, rates: any, productConfig: any =
   for (const step of Array.isArray(rating.factors) ? (rating.factors as FactorStep[]) : []) {
     const source = step.path ? step.path : `risks.0.${step.field}`
     const value = step.path ? getByPath(payload, step.path) : risk?.[String(step.field)]
-    let factor = lookupFactor(step, value)
+    let factor = lookupFactor(step, value, tables)
     let matched = true
     if (factor === null) {
       matched = false
@@ -209,7 +244,33 @@ export function rateFromRateTable(payload: any, rates: any, productConfig: any =
     const limit = effectiveLimit(coverage, selected, productConfig)
     let amount: number
     let method: string
-    if (isFiniteNumber(config.rate)) {
+    let itemTrace: Array<Record<string, unknown>> | undefined
+    if (isPlainObject(config.perItem)) {
+      // One premium per item of a list on the risk (scheduled items and the like).
+      method = 'perItem'
+      const perItem = config.perItem as PerItemRating
+      const items: any[] = Array.isArray(risk?.[perItem.list]) ? risk[perItem.list] : []
+      const per = isFiniteNumber(perItem.ratePer) && perItem.ratePer > 0 ? perItem.ratePer : 1
+      itemTrace = []
+      amount = 0
+      items.forEach((item, index) => {
+        const itemAmount = Number(item?.[perItem.amount])
+        if (!Number.isFinite(itemAmount)) {
+          throw ratingError('RATING_ITEM_AMOUNT_REQUIRED', `Item ${index + 1} of ${perItem.list} needs a ${perItem.amount} to be rated.`, { productCode, coverage: code, list: perItem.list, item: index + 1 })
+        }
+        let itemFactor = 1
+        for (const step of Array.isArray(perItem.factors) ? perItem.factors : []) {
+          const found = lookupFactor(step, item?.[String(step.field)], tables)
+          if (found === null && step.required) {
+            throw ratingError('RATING_FACTOR_NOT_FOUND', `No ${step.name || step.field} rating factor for item ${index + 1} of ${perItem.list}.`, { productCode, coverage: code, list: perItem.list, item: index + 1 })
+          }
+          itemFactor *= found ?? (isFiniteNumber(step.default) ? step.default : 1)
+        }
+        const itemPremium = (itemAmount / per) * perItem.rate * itemFactor
+        amount += itemPremium
+        itemTrace!.push({ item: index + 1, amount: itemAmount, factor: Math.round(itemFactor * 1e6) / 1e6, premium: round2(itemPremium) })
+      })
+    } else if (isFiniteNumber(config.rate)) {
       method = 'rate'
       if (limit === null) throw ratingError('RATING_LIMIT_REQUIRED', `Coverage '${code}' needs a limit to be rated.`, { productCode, coverage: code })
       amount = (limit / (isFiniteNumber(config.ratePer) && config.ratePer > 0 ? config.ratePer : 1)) * config.rate
@@ -252,7 +313,7 @@ export function rateFromRateTable(payload: any, rates: any, productConfig: any =
       percent: coverage?.percent ?? null,
       amount: { amount: premium, currency: 'USD' },
     })
-    coverageTrace.push({ code: code.toUpperCase(), method, limit, applyFactors, deductibleFactor, premium })
+    coverageTrace.push({ code: code.toUpperCase(), method, limit, applyFactors, deductibleFactor, premium, ...(itemTrace ? { items: itemTrace } : {}) })
   }
 
   subtotal = round2(subtotal)
@@ -295,13 +356,46 @@ export function rateFromRateTable(payload: any, rates: any, productConfig: any =
   }
 }
 
+/** A factor takes its values from exactly one of an inline table, bands, or a carrier lookup table. */
+function checkFactorSource(step: any, label: string, tables: Tables, error: (message: string) => void) {
+  const sources = ['table', 'ranges', 'fromTable'].filter((key) => step[key] != null)
+  if (sources.length !== 1) return error(`${label}: set exactly one of table, ranges, or fromTable`)
+  if (sources[0] === 'fromTable') {
+    const table = tables[String(step.fromTable)]
+    if (!table) return error(`${label}: lookup table '${step.fromTable}' is not in the pack`)
+    const column = typeof step.value === 'string' ? step.value : ''
+    if (!column || !Object.prototype.hasOwnProperty.call(table.rows[0] || {}, column)) {
+      return error(`${label}: value must name the column of '${step.fromTable}' that holds the factor`)
+    }
+    table.rows.forEach((row) => {
+      const factor = row[column]
+      if (!isFiniteNumber(factor) || factor < 0) error(`${label}: '${step.fromTable}' row ${String(row[table.key])} has no usable ${column}`)
+    })
+    return
+  }
+  const hasRanges = sources[0] === 'ranges'
+  const entries = hasRanges ? step.ranges : step.table
+  if (!isPlainObject(entries) || Object.keys(entries).length === 0) return error(`${label}: ${sources[0]} must be a non-empty mapping`)
+  for (const [key, factor] of Object.entries(entries)) {
+    if (!isFiniteNumber(factor) || factor < 0) error(`${label}: factor for '${key}' must be a number of 0 or more`)
+    if (hasRanges && !parseRange(key)) error(`${label}: '${key}' is not a band; use forms like 1-4, 9+, <25, <=10, >5, >=65`)
+  }
+}
+
 /**
  * Checks a rate-table configuration before a stack runs with it: structure,
  * numbers, band labels, and that every coverage and every listed limit of the
  * product can actually be priced. `knownFields` are the risk field names the
  * product defines; a factor reading any other field is reported as a warning.
  */
-export function validateRateTable(rates: any, productConfig: any, knownFields: string[] = []): RateTableIssue[] {
+export function validateRateTable(
+  rates: any,
+  productConfig: any,
+  knownFields: string[] = [],
+  options: { tables?: Tables; listColumns?: Record<string, string[]> } = {}
+): RateTableIssue[] {
+  const tables = options.tables || {}
+  const listColumns = options.listColumns || {}
   const issues: RateTableIssue[] = []
   const error = (message: string) => issues.push({ level: 'error', message })
   const warning = (message: string) => issues.push({ level: 'warning', message })
@@ -329,21 +423,7 @@ export function validateRateTable(rates: any, productConfig: any, knownFields: s
     const hasField = typeof step.field === 'string' && step.field.trim()
     const hasPath = typeof step.path === 'string' && step.path.trim()
     if (Boolean(hasField) === Boolean(hasPath)) error(`${label}: set exactly one of field (a risk field) or path (anywhere on the quote)`)
-    const hasTable = step.table != null
-    const hasRanges = step.ranges != null
-    if (hasTable === hasRanges) {
-      error(`${label}: set exactly one of table or ranges`)
-    } else {
-      const entries = hasTable ? step.table : step.ranges
-      if (!isPlainObject(entries) || Object.keys(entries).length === 0) {
-        error(`${label}: ${hasTable ? 'table' : 'ranges'} must be a non-empty mapping`)
-      } else {
-        for (const [key, factor] of Object.entries(entries)) {
-          if (!isFiniteNumber(factor) || factor < 0) error(`${label}: factor for '${key}' must be a number of 0 or more`)
-          if (hasRanges && !parseRange(key)) error(`${label}: '${key}' is not a band; use forms like 1-4, 9+, <25, <=10, >5, >=65`)
-        }
-      }
-    }
+    checkFactorSource(step, label, tables, error)
     if (step.default != null && !(isFiniteNumber(step.default) && step.default >= 0)) error(`${label}: default must be a number of 0 or more`)
     if (hasField && known.size && !known.has(String(step.field).trim())) {
       warning(`${label}: reads field '${step.field}', which the product does not define`)
@@ -367,7 +447,7 @@ export function validateRateTable(rates: any, productConfig: any, knownFields: s
     }
     const methods = COVERAGE_METHODS.filter((method) => config[method] != null)
     if (methods.length !== 1) {
-      error(`${label}: set exactly one pricing method (rate, byLimit, flat, or shareOfBase)`)
+      error(`${label}: set exactly one pricing method (rate, byLimit, flat, shareOfBase, or perItem)`)
       continue
     }
     const method = methods[0]
@@ -376,6 +456,25 @@ export function validateRateTable(rates: any, productConfig: any, knownFields: s
       if (config.ratePer != null && !(isFiniteNumber(config.ratePer) && config.ratePer > 0)) error(`${label}: ratePer must be a number above 0`)
     } else if (method === 'flat') {
       if (!(isFiniteNumber(config.flat) && config.flat >= 0)) error(`${label}: flat must be a number of 0 or more`)
+    } else if (method === 'perItem') {
+      const perItem = config.perItem
+      if (!isPlainObject(perItem)) {
+        error(`${label}: perItem must be a mapping`)
+      } else {
+        const columns = listColumns[String(perItem.list)]
+        if (!columns) error(`${label}: perItem.list '${perItem.list}' is not a list field of the product`)
+        else if (!columns.includes(String(perItem.amount))) error(`${label}: perItem.amount '${perItem.amount}' is not a column of ${perItem.list}`)
+        if (!(isFiniteNumber(perItem.rate) && perItem.rate >= 0)) error(`${label}: perItem.rate must be a number of 0 or more`)
+        if (perItem.ratePer != null && !(isFiniteNumber(perItem.ratePer) && perItem.ratePer > 0)) error(`${label}: perItem.ratePer must be a number above 0`)
+        if (perItem.factors != null && !Array.isArray(perItem.factors)) error(`${label}: perItem.factors must be a list`)
+        ;(Array.isArray(perItem.factors) ? perItem.factors : []).forEach((step: any, index: number) => {
+          const stepLabel = `${label}.perItem.factors[${index + 1}]${step?.name ? ` (${step.name})` : ''}`
+          if (!isPlainObject(step)) return error(`${stepLabel}: must be a mapping`)
+          if (typeof step.field !== 'string' || !step.field.trim()) error(`${stepLabel}: field must name a column of the item`)
+          else if (columns && !columns.includes(step.field.trim())) error(`${stepLabel}: '${step.field}' is not a column of ${perItem.list}`)
+          checkFactorSource(step, stepLabel, tables, error)
+        })
+      }
     } else if (method === 'shareOfBase') {
       if (!(isFiniteNumber(config.shareOfBase) && config.shareOfBase >= 0)) error(`${label}: shareOfBase must be a number of 0 or more`)
       if (!isFiniteNumber(rating.basePremium)) error(`${label}: shareOfBase needs rating.basePremium`)
@@ -418,4 +517,19 @@ export function validateRateTable(rates: any, productConfig: any, knownFields: s
   if (rates?.taxes?.rate != null && !(isFiniteNumber(rates.taxes.rate) && rates.taxes.rate >= 0 && rates.taxes.rate < 1)) error('taxes.rate must be a fraction between 0 and 1')
 
   return issues
+}
+
+/** Names of the carrier lookup tables a rate-table configuration reads. */
+export function tablesUsedByRates(rates: any): string[] {
+  const names = new Set<string>()
+  const scan = (steps: unknown) => {
+    for (const step of Array.isArray(steps) ? steps : []) {
+      if (step && typeof step.fromTable === 'string' && step.fromTable.trim()) names.add(step.fromTable.trim())
+    }
+  }
+  scan(rates?.rating?.factors)
+  for (const coverage of Object.values(isPlainObject(rates?.rating?.coverages) ? rates.rating.coverages : {})) {
+    scan((coverage as any)?.perItem?.factors)
+  }
+  return Array.from(names)
 }

@@ -87,8 +87,8 @@ Carrier Packs (CARRIER_PACK_DIR)
   `examples/carrier-pack/`.
 - Format 1 holds a manifest (`pack.yaml`), `config.yaml` (`enabledProducts`
   and rating, underwriting, and document overrides), added products
-  (`products/<code>/`), field metadata (`fields/<code>.json`), and risk
-  screens (`screens/<code>.yaml`).
+  (`products/<code>/`), field metadata (`fields/<code>.json`), risk
+  screens (`screens/<code>.yaml`), and lookup tables (`tables/<name>.yaml`).
 - The pack applies only to the carrier named in its manifest, which must
   equal `CARRIER_TENANT_ID`. For that carrier it replaces
   `tenants/<tenant>/config.yaml` and `tenants/<tenant>/field_meta.*.json`.

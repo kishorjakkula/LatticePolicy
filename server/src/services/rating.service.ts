@@ -5,6 +5,8 @@ import { round2 } from '../lib/date.utils.js'
 import { requireProductCapability } from '../lib/product-registry.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { loadCarrierTables } from '../lib/carrier-tables.js'
+import type { LookupTable } from '@lattice-policy/rules'
 
 export type QuoteInput = any
 
@@ -38,7 +40,9 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
   let rates: Rates
   let productConfig: () => any
   let publishedModel: any
+  let tables: () => Record<string, LookupTable>
   if (snapshot) {
+    tables = () => snapshot.definition.tables || {}
     ratingAdapter = snapshot.definition.ratingAdapter
     rates = snapshot.definition.rates
     productConfig = () => snapshot.definition.config
@@ -48,13 +52,14 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
     ratingAdapter = descriptor.ratingAdapter
     rates = mergeRates(loadProductRates(product).rates, loadTenantOverrides(tenantId))
     productConfig = () => loadProductConfig(product)
+    tables = () => loadCarrierTables(tenantId)
     publishedModel = tenantId ? getPublishedRatingModelForProduct(tenantId, product, payload?.state) : null
   }
 
   let fallback: () => PremiumResult
   if (ratingAdapter === 'rate-table') {
     // Priced entirely from the product's own rates.yaml; no product-specific code.
-    fallback = () => rateFromRateTable(payload, rates, productConfig())
+    fallback = () => rateFromRateTable(payload, rates, productConfig(), tables())
   } else if (ratingAdapter === 'personal-auto') {
     fallback = () => rateAuto(payload, rates)
   } else if (ratingAdapter === 'commercial-auto') {

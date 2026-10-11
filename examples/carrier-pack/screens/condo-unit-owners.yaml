@@ -27,6 +27,7 @@ risk:
         - yearBuilt
         - construction
         - roofAgeYears
+        - roofType
         - protectionClass
         - buildingFloors
         - hasElevator
@@ -48,7 +49,25 @@ risk:
         - field: specialAssessmentNotes
           widget: textarea
 
+    - title: Scheduled items
+      # A grid with one row per item, shown when the coverage is selected.
+      visibleWhen: coverages.SCHEDULED.selected
+      columns: 1
+      fields:
+        - field: scheduledItems
+          requiredWhen: coverages.SCHEDULED.selected
+
   validations:
+    # Checked once per item of the list.
+    - each: scheduledItems
+      rule: item.value >= 500
+      field: value
+      message: Schedule only items worth 500 or more
+    # The total across the list, against a state limit from a lookup table.
+    - rule: sum(risk.scheduledItems, 'value') <= lookup('schedule-limits', quote.state, 'scheduleMax')
+      when: coverages.SCHEDULED.selected && isSet(lookup('schedule-limits', quote.state, 'scheduleMax'))
+      field: scheduledItems
+      message: Scheduled items exceed the maximum for this state
     - rule: risk.floorLevel <= risk.buildingFloors
       when: isSet(risk.buildingFloors)
       field: floorLevel

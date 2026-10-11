@@ -1,4 +1,4 @@
-import { evaluateCondition } from './expression.js'
+import { TABLES_CONTEXT_KEY, evaluateCondition, type LookupTable } from './expression.js'
 
 /**
  * How a carrier pack screen behaves for a given quote: which sections and
@@ -7,9 +7,22 @@ import { evaluateCondition } from './expression.js'
  * same rules, so a rule cannot be skipped by calling the API directly.
  */
 
-export type ScreenWidget = 'text' | 'textarea' | 'number' | 'currency' | 'select' | 'radio' | 'checkbox' | 'date'
+export type ScreenWidget = 'text' | 'textarea' | 'number' | 'currency' | 'select' | 'radio' | 'checkbox' | 'date' | 'table'
 
-export type ScreenDataType = 'string' | 'int' | 'number' | 'bool' | 'enum' | 'date'
+/** `list` is a repeating group of items under the risk, such as scheduled items. */
+export type ScreenDataType = 'string' | 'int' | 'number' | 'bool' | 'enum' | 'date' | 'list'
+
+/** One column of a list field. */
+export type ScreenItemField = {
+  key: string
+  label: string
+  dataType: Exclude<ScreenDataType, 'list'>
+  required?: boolean
+  options?: Array<string | number>
+  /** Text shown for an option, by option value. */
+  optionLabels?: Record<string, string>
+  help?: string
+}
 
 export type ScreenField = {
   key: string
@@ -20,6 +33,12 @@ export type ScreenField = {
   widget: ScreenWidget
   required?: boolean
   options?: Array<string | number>
+  /** Text shown for an option, by option value. */
+  optionLabels?: Record<string, string>
+  /** Columns of a list field. */
+  item?: ScreenItemField[]
+  minItems?: number
+  maxItems?: number
   help?: string
   placeholder?: string
   readOnly?: boolean
@@ -46,6 +65,11 @@ export type ScreenValidation = {
   field?: string
   /** The rule is only checked while this is true. */
   when?: string
+  /**
+   * A list field: the rule is checked once per item, with `item` naming the
+   * item and `field` naming one of its columns.
+   */
+  each?: string
 }
 
 export type ProductScreen = {
@@ -58,7 +82,10 @@ export type ScreenState = {
   /** Visibility of each section, by position. */
   sections: boolean[]
   fields: Record<string, { visible: boolean; required: boolean }>
-  /** One message per field key that has a problem. */
+  /**
+   * One message per field key that has a problem. A problem inside a list is
+   * keyed `<list>.<index>.<column>`, or `<list>.<index>` for a whole item.
+   */
   errors: Record<string, string>
   /** Problems that belong to the step rather than to one field. */
   formErrors: string[]
@@ -81,8 +108,10 @@ export function getQuoteValue(quote: any, path: string): unknown {
  *   quote.state, quote.termMonths, quote.effectiveDate, quote.productCode
  *   applicant.<field>
  *   coverages.<CODE>.selected / .limit / .deductible / .percent
+ *   item.<column>             inside a per-item validation (`each`)
+ * `tables` are the carrier's lookup tables, read with lookup('name', key, 'column').
  */
-export function buildScreenContext(quote: any): Record<string, unknown> {
+export function buildScreenContext(quote: any, tables?: Record<string, LookupTable>): Record<string, unknown> {
   const coverages: Record<string, unknown> = {}
   for (const item of Array.isArray(quote?.coverages) ? quote.coverages : []) {
     const code = String(item?.code || '').trim()
@@ -105,10 +134,11 @@ export function buildScreenContext(quote: any): Record<string, unknown> {
     },
     applicant: quote?.applicant && typeof quote.applicant === 'object' ? quote.applicant : {},
     coverages,
+    [TABLES_CONTEXT_KEY]: tables || {},
   }
 }
 
-function valueProblem(field: ScreenField, value: unknown): string | null {
+function valueProblem(field: Pick<ScreenField, 'dataType' | 'options'>, value: unknown): string | null {
   if (field.dataType === 'int' || field.dataType === 'number') {
     const numeric = typeof value === 'number' ? value : Number(value)
     if (!Number.isFinite(numeric)) return 'Enter a number'
@@ -122,8 +152,36 @@ function valueProblem(field: ScreenField, value: unknown): string | null {
   return null
 }
 
-export function evaluateScreen(screen: ProductScreen, quote: any): ScreenState {
-  const context = buildScreenContext(quote)
+/** Problems inside a list field: its size, and each item's columns. */
+function listProblems(field: ScreenField, value: unknown, required: boolean, errors: Record<string, string>) {
+  if (value !== undefined && value !== null && !Array.isArray(value)) {
+    errors[field.key] = 'Enter a list of items'
+    return
+  }
+  const items: unknown[] = Array.isArray(value) ? value : []
+  const minimum = Math.max(field.minItems || 0, required ? 1 : 0)
+  if (items.length < minimum) {
+    errors[field.key] = minimum === 1 ? 'Add at least one' : `Add at least ${minimum}`
+  } else if (field.maxItems !== undefined && items.length > field.maxItems) {
+    errors[field.key] = `No more than ${field.maxItems} allowed`
+  }
+  items.forEach((item, index) => {
+    for (const column of field.item || []) {
+      const cell = item && typeof item === 'object' ? (item as Record<string, unknown>)[column.key] : undefined
+      const key = `${field.key}.${index}.${column.key}`
+      if (isBlank(cell)) {
+        if (column.required && column.dataType !== 'bool') errors[key] = 'Required'
+        continue
+      }
+      const problem = valueProblem(column, cell)
+      if (problem) errors[key] = problem
+    }
+  })
+}
+
+export function evaluateScreen(screen: ProductScreen, quote: any, tables?: Record<string, LookupTable>): ScreenState {
+  const context = buildScreenContext(quote, tables)
+  const listFields = new Map<string, ScreenField>()
   const state: ScreenState = { sections: [], fields: {}, errors: {}, formErrors: [] }
 
   for (const section of screen.sections) {
@@ -136,6 +194,11 @@ export function evaluateScreen(screen: ProductScreen, quote: any): ScreenState {
       // A hidden field is not the user's to fix, so it is never reported.
       if (!visible) continue
       const value = getQuoteValue(quote, field.path)
+      if (field.dataType === 'list') {
+        listFields.set(field.key, field)
+        listProblems(field, value, required, state.errors)
+        continue
+      }
       if (isBlank(value)) {
         // An unticked checkbox is an answer, not a blank.
         if (required && field.widget !== 'checkbox') state.errors[field.key] = 'Required'
@@ -147,6 +210,20 @@ export function evaluateScreen(screen: ProductScreen, quote: any): ScreenState {
   }
 
   for (const validation of screen.validations) {
+    if (validation.each) {
+      // Checked once per item of a visible list.
+      const list = listFields.get(validation.each)
+      const items = list ? getQuoteValue(quote, list.path) : null
+      if (!list || !Array.isArray(items)) continue
+      items.forEach((item, index) => {
+        const itemContext = { ...context, item: item && typeof item === 'object' ? item : {}, index }
+        if (!evaluateCondition(validation.when, itemContext, true)) return
+        if (evaluateCondition(validation.rule, itemContext, true)) return
+        const key = validation.field ? `${validation.each}.${index}.${validation.field}` : `${validation.each}.${index}`
+        if (!state.errors[key]) state.errors[key] = validation.message
+      })
+      continue
+    }
     if (!evaluateCondition(validation.when, context, true)) continue
     if (evaluateCondition(validation.rule, context, true)) continue
     const target = validation.field ? state.fields[validation.field] : undefined

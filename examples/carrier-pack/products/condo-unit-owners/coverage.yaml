@@ -51,6 +51,10 @@ coverages:
     name: Loss Assessment
     selectable: true
     limits: [1000, 10000, 25000, 50000]
+  # Priced per item of the scheduledItems list on the risk; it has no limit of its own.
+  - code: SCHEDULED
+    name: Scheduled Personal Property
+    selectable: true
 ratingKeys:
   - construction
   - protectionClass

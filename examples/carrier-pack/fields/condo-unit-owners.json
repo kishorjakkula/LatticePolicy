@@ -13,5 +13,7 @@
   {"path": "risks.0.buildingFloors", "label": "Floors in Building", "type": "int", "ui": {"group": "Building", "order": 250}},
   {"path": "risks.0.hasElevator", "label": "Building Has an Elevator", "type": "bool", "ui": {"group": "Building", "order": 260}},
   {"path": "risks.0.elevatorCount", "label": "Number of Elevators", "type": "int", "ui": {"group": "Building", "order": 270}},
-  {"path": "risks.0.specialAssessmentNotes", "label": "Known or Pending Special Assessments", "type": "string", "ui": {"group": "Association", "order": 430}}
+  {"path": "risks.0.specialAssessmentNotes", "label": "Known or Pending Special Assessments", "type": "string", "ui": {"group": "Association", "order": 430}},
+  {"path": "risks.0.roofType", "label": "Roof Type", "type": "enum", "optionsFrom": {"table": "roof-types", "value": "code", "label": "name"}, "ui": {"group": "Building", "order": 235}},
+  {"path": "risks.0.scheduledItems", "label": "Scheduled Items", "type": "list", "maxItems": 20, "item": [{"key": "description", "label": "Description", "type": "string", "required": true}, {"key": "category", "label": "Category", "type": "enum", "enum": ["jewelry", "art", "electronics", "other"], "required": true}, {"key": "value", "label": "Insured Value", "type": "number", "required": true}], "ui": {"group": "Schedule", "order": 510}}
 ]

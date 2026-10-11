@@ -153,7 +153,7 @@ describe('carrier pack', () => {
         "fields/condo-unit-owners.json: field 2: path 'risks.0.floorLevel' is defined more than once",
         expect.stringMatching(/^fields\/condo-unit-owners\.json: field 2 \(risks\.0\.floorLevel\): type must be one of/),
         'fields/condo-unit-owners.json: field 3: path is required',
-        'fields/condo-unit-owners.json: field 4 (risks.0.view): an enum field needs a non-empty enum list',
+        'fields/condo-unit-owners.json: field 4 (risks.0.view): an enum field needs a non-empty enum list or optionsFrom a table',
       ]))
       expect(validation.warnings.map((issue) => issue.message)).toContain(
         "product 'condo-unit-owners' is in this pack but not in enabledProducts, so it will not be offered"
@@ -172,7 +172,7 @@ describe('carrier pack', () => {
         'products/condo-unit-owners/rates.yaml: rating.coverages.E: no premium for limit 500000, which the product offers',
       ])
       expect(validation.warnings.map((issue) => `${issue.file}: ${issue.message}`)).toContain(
-        "products/condo-unit-owners/rates.yaml: rating.factors[4] (Floor level): reads field 'floorNumber', which the product does not define"
+        "products/condo-unit-owners/rates.yaml: rating.factors[5] (Floor level): reads field 'floorNumber', which the product does not define"
       )
     })
 
@@ -263,7 +263,7 @@ describe('carrier pack', () => {
     it('builds the quote form from the pack field definitions', () => {
       const fields = buildRiskFields('condo-unit-owners', loadProductConfig('condo-unit-owners'), 'acme-mutual')
       expect(fields.map((field) => field.key)).toEqual([
-        'address', 'floorLevel', 'squareFeet', 'monthlyRent', 'yearBuilt', 'construction', 'roofAgeYears', 'protectionClass',
+        'address', 'floorLevel', 'squareFeet', 'monthlyRent', 'yearBuilt', 'construction', 'roofAgeYears', 'roofType', 'protectionClass',
         'buildingFloors', 'hasElevator', 'elevatorCount', 'occupancy', 'masterPolicyDeductible', 'associationName', 'specialAssessmentNotes',
       ])
       expect(fields.find((field) => field.key === 'floorLevel')).toEqual({
