@@ -1,3 +1,4 @@
+import { RadioGroup } from '../../components/RadioGroup'
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, apiDetails } from '../../api/client'
@@ -3878,59 +3879,28 @@ export function QuoteWizard() {
                       key={question.key}
                     >
                       <div className="qualification-label">{question.label}</div>
-                      <div className="qualification-radio-group" role="radiogroup" aria-label={question.label}>
-                        <label className={`qualification-radio ${selectedAnswer === 'yes' ? 'selected' : ''}`}>
-                          <input
-                            type="radio"
-                            name={`qualification-${question.key}`}
-                            value="yes"
-                            checked={selectedAnswer === 'yes'}
-                            onChange={() => {
-                              setQ((prev) => ({
-                                ...prev,
-                                qualificationAnswers: {
-                                  ...prev.qualificationAnswers,
-                                  [question.key]: 'yes'
-                                }
-                              }))
-                              setQualificationErrors((prev) => {
-                                if (!prev[question.key]) return prev
-                                const next = { ...prev }
-                                delete next[question.key]
-                                return next
-                              })
-                            }}
-                            disabled={!qualificationEditable || isCancellationMode || isViewOnly}
-                          />
-                          <span>Yes</span>
-                        </label>
-                        <label className={`qualification-radio ${selectedAnswer === 'no' ? 'selected' : ''}`}>
-                          <input
-                            type="radio"
-                            name={`qualification-${question.key}`}
-                            value="no"
-                            checked={selectedAnswer === 'no'}
-                            onChange={() => {
-                              setQ((prev) => ({
-                                ...prev,
-                                qualificationAnswers: {
-                                  ...prev.qualificationAnswers,
-                                  [question.key]: 'no'
-                                }
-                              }))
-                              setQualificationErrors((prev) => {
-                                if (!prev[question.key]) return prev
-                                const next = { ...prev }
-                                delete next[question.key]
-                                return next
-                              })
-                            }}
-                            disabled={!qualificationEditable || isCancellationMode || isViewOnly}
-                          />
-                          <span>No</span>
-                        </label>
-                      </div>
-                      {qualificationErrors[question.key] && <div className="error qualification-error">{qualificationErrors[question.key]}</div>}
+                      <RadioGroup
+                        className="qualification-radio-group"
+                        layout="binary"
+                        name={`qualification-${question.key}`}
+                        ariaLabel={question.label}
+                        required={question.required}
+                        invalid={Boolean(qualificationErrors[question.key])}
+                        describedBy={qualificationErrors[question.key] ? `qualification-${question.key}-error` : undefined}
+                        options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] as const}
+                        value={selectedAnswer}
+                        onChange={(answer) => {
+                          setQ((prev) => ({ ...prev, qualificationAnswers: { ...prev.qualificationAnswers, [question.key]: answer } }))
+                          setQualificationErrors((prev) => {
+                            if (!prev[question.key]) return prev
+                            const next = { ...prev }
+                            delete next[question.key]
+                            return next
+                          })
+                        }}
+                        disabled={!qualificationEditable || isCancellationMode || isViewOnly}
+                      />
+                      {qualificationErrors[question.key] && <div id={`qualification-${question.key}-error`} className="error qualification-error">{qualificationErrors[question.key]}</div>}
                     </div>
                   )
                 })}

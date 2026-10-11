@@ -22,6 +22,9 @@ database or an orchestrator, keep the same images and settings and follow
   `LATTICE_PULL=0`.
 - HTTPS termination in front of the API and UI ports for any non-trial use.
 
+API and UI ports bind to `127.0.0.1` by default. Place the HTTPS proxy on the
+host or explicitly configure `HOST_BIND` for the intended network interface.
+
 ## Files
 
 | File | Purpose |
@@ -142,6 +145,10 @@ sh stack.sh up
 - Copy backups off the host and apply your own retention. Schedule `backup`
   with cron or your scheduler; nothing is scheduled by the kit.
 - Test a restore on a non-production host before relying on it.
+- Backups pause API, worker, dispatcher, and UI for the entire database/document
+  pair, then resume only the services that were previously running. Expect a
+  maintenance pause. Failed backups resume those services without advancing the
+  release. Restore requires both a database dump and a readable document archive.
 
 ## Taking a release
 
@@ -151,7 +158,8 @@ sh stack.sh upgrade v0.4.0
 
 `upgrade` does this, in order:
 
-1. Takes a backup labelled `pre-<version>`.
+1. Pulls/checks the target images and carrier pack, stops all writers, and
+   takes a consistent backup labelled `pre-<version>`.
 2. Records the current release and that backup.
 3. Pulls the new images, stops the API and UI, and applies migrations.
 4. Starts the new release and waits for it to report healthy, on the expected

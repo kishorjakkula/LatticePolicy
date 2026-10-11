@@ -32,6 +32,9 @@ jobs:
       - name: Check module boundaries
         run: npm run check:architecture
 
+      - name: Test carrier deployment recovery ordering and pilot metrics
+        run: node --test scripts/carrier-stack.test.mjs scripts/pilot-lib.test.mjs
+
       - name: Test shared packages
         run: npm run test:packages
 

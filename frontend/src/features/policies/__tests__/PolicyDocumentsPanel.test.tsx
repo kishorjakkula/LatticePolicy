@@ -28,8 +28,17 @@ describe('PolicyDocumentsPanel', () => {
       vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url')
       vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     }
-    vi.spyOn(window, 'open').mockImplementation(() => null)
+    vi.spyOn(window, 'open').mockImplementation(() => ({ opener: null, location: { href: '' }, close: vi.fn() }) as unknown as Window)
     vi.spyOn(window, 'alert').mockImplementation(() => {})
+  })
+
+  it('does not request content when the browser blocks the reserved tab', async () => {
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ documentId: 'doc-1', type: 'POLICY_PACKET' }] }, isLoading: false, error: null } as any)
+    vi.mocked(window.open).mockReturnValue(null)
+    render(<PolicyDocumentsPanel policyId="policy-1" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(mockDownload).not.toHaveBeenCalled()
+    expect(window.alert).toHaveBeenCalledWith('Allow pop-ups to open policy documents.')
   })
 
   it('shows a loading state', () => {

@@ -7,6 +7,7 @@ import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuoteDetailed } from '../contracts.js'
 import { productRuleViolations } from './product-rules.service.js'
+import { requireProductCapability } from '../lib/product-registry.js'
 import { pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
@@ -120,6 +121,8 @@ export async function createOrRateQuote(
       errors: validation.errors,
     })
   }
+
+  requireProductCapability(String(body?.productCode || ''), 'quote')
 
   // Pin the quote to the product as it is defined now. The policy bound from
   // it keeps that definition for the whole term.

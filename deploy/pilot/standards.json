@@ -1,0 +1,25 @@
+{
+  "name": "Acme Mutual Pilot",
+  "synthetic": true,
+  "tenantId": "acme-pilot",
+  "product": "homeowners",
+  "jurisdictions": ["TX"],
+  "apiUrl": "http://localhost:3310",
+  "uiUrl": "http://localhost:5180",
+  "concurrency": 10,
+  "loadDurationSeconds": 60,
+  "searchP95Ms": 2000,
+  "ratingP95Ms": 5000,
+  "documentP95Ms": 10000,
+  "maxErrorRate": 0.01,
+  "recoveryPointMinutes": 15,
+  "recoveryTimeMinutes": 30,
+  "backupIntervalMinutes": 15,
+  "backupRetentionDays": 7,
+  "support": {
+    "businessApprover": "Pilot owner (repository maintainer)",
+    "technicalOwner": "Pilot operator (repository maintainer)",
+    "hours": "Supervised demonstration sessions",
+    "escalation": "Stop acceptance and use the pilot recovery runbook"
+  }
+}

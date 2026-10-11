@@ -13,7 +13,7 @@ import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
 import { csvEscape, fileExtensionForContentType, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 import { requirePermission, hasPermission } from '../auth.js'
-import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument } from '../services/document-storage.service.js'
+import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument, retrieveStoredDocument, storeRatingWorksheet } from '../services/document-storage.service.js'
 
 // ── local helpers (in-memory fallback only) ──────────────────────────────────
 
@@ -454,7 +454,7 @@ policyRoutes.get(
           documentId: String(row.document_id),
           versionId: row.version_id || null,
           type: String(row.type),
-          displayName: `${String(row.type)} ${metadata.transactionNumber || ''}`.trim(),
+          displayName: `${String(row.type)}${metadata.transactionType ? ` (${metadata.transactionType})` : ''} ${metadata.transactionNumber || metadata.snapshot?.context?.transactionNumber || ''}`.trim(),
           transactionType: metadata.transactionType || null,
           transactionNumber: metadata.transactionNumber || null,
           forms: Array.isArray(metadata.forms) ? metadata.forms : [],
@@ -607,12 +607,37 @@ policyRoutes.get(
       if (!access.isInternal && metadata.customerSafe !== true) {
         return res.status(403).json({ code: 'FORBIDDEN', message: 'Document is not customer-safe' })
       }
-      const artifact = toMetadataObject(metadata.artifact)
+      let artifact = toMetadataObject(metadata.artifact)
+      // Legacy worksheets had a snapshot but no artifact or content hash.
+      if (!artifact.storageUri && row.type === 'RATING_WORKSHEET' && metadata.snapshot && String(row.hash || '').startsWith('rating:')) {
+        artifact = await storeRatingWorksheet({ tenantId, documentId, metadata })
+        row.hash = artifact.contentHash
+        await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+          `UPDATE documents SET hash=$4, integrity_status='VERIFIED', metadata=$5::jsonb
+            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+          [tenantId, policyId, documentId, row.hash, JSON.stringify({ ...metadata, artifact })]
+        ))
+      }
       const storageUri = artifact.storageUri
       if (!storageUri) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
-      const content = row.hash
-        ? await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash))
-        : null
+      let content = row.hash ? await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash)) : null
+      let recoveredContent = false
+      // Recover missing packet files from their original metadata only if the bytes
+      // match the recorded hash. Existing corrupt files must still fail integrity.
+      if (!content && row.type === 'POLICY_PACKET' && row.hash && !(await retrieveStoredDocument(String(storageUri)))) {
+        const recovered = await regenerateAndVerifyDocument({ tenantId, documentId, metadata: metadata as any, expectedHash: String(row.hash) })
+        if (recovered) {
+          content = await retrieveAndVerifyStoredDocument(recovered.storageUri, String(row.hash))
+          recoveredContent = Boolean(content)
+        }
+      }
+      if (!content && row.type === 'RATING_WORKSHEET' && metadata.snapshot && row.hash && !(await retrieveStoredDocument(String(storageUri)))) {
+        const recovered = await storeRatingWorksheet({ tenantId, documentId, metadata })
+        if (recovered.contentHash === String(row.hash)) {
+          content = await retrieveAndVerifyStoredDocument(recovered.storageUri, String(row.hash))
+          recoveredContent = Boolean(content)
+        }
+      }
       if (!content) {
         await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
           `UPDATE documents SET integrity_status='FAILED'
@@ -621,6 +646,11 @@ policyRoutes.get(
         ))
         return res.status(409).json({ code: 'ARTIFACT_INTEGRITY_FAILED' })
       }
+
+      if (recoveredContent) await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
+        `UPDATE documents SET integrity_status='VERIFIED' WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
+        [tenantId, policyId, documentId]
+      ))
 
       const resolvedContentType = String(artifact.contentType || 'application/octet-stream')
       const fileExtension = fileExtensionForContentType(resolvedContentType)

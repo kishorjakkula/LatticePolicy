@@ -448,3 +448,13 @@ export async function regenerateAndVerifyDocument(params: {
   const artifact = await renderAndStoreDocument(params)
   return artifact.contentHash === params.expectedHash ? artifact : null
 }
+
+
+/** Stored worksheet content comes from the immutable rating snapshot, never current rates. */
+export async function storeRatingWorksheet(params: { tenantId: string; documentId: string; metadata: any }): Promise<StoredDocumentDescriptor> {
+  const context = params.metadata.snapshot?.context || {}
+  const content = Buffer.from(`<!doctype html><html><head><meta charset="utf-8"><title>Rating worksheet</title></head><body><h1>Rating worksheet</h1><p>Policy: ${escapeHtml(context.policyNumber)} · Transaction: ${escapeHtml(context.transactionNumber)}</p><pre>${escapeHtml(JSON.stringify(params.metadata.snapshot, null, 2))}</pre></body></html>`)
+  const contentType = 'text/html; charset=utf-8'
+  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: `${params.documentId}.html`, contentType, content })
+  return { storageUri, contentType, byteSize: content.length, contentHash: sha256Bytes(content), storageAdapter: getDocumentStorageAdapter().name, renderedAt: new Date().toISOString() }
+}

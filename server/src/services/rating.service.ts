@@ -2,7 +2,7 @@ import { mergeRates, loadProductConfig, loadProductRates, loadTenantOverrides, R
 import { rateFromRateTable } from '../lib/rating-table.js'
 import { getPublishedRatingModelForProduct } from '../ratingModelRegistry.js'
 import { round2 } from '../lib/date.utils.js'
-import { requireProductCapability } from '../lib/product-registry.js'
+import { requireInstalledProductCapabilities } from '../lib/product-registry.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
@@ -38,7 +38,9 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
     productConfig = () => snapshot.definition.config
     publishedModel = snapshot.definition.publishedModel
   } else {
-    const descriptor = requireProductCapability(product, 'quote')
+    // Servicing legacy policies also rates installed products closed to sales.
+    // Quote/bind/renew/rewrite enforce sales availability at their entry points.
+    const descriptor = requireInstalledProductCapabilities(product)
     ratingAdapter = descriptor.ratingAdapter
     rates = mergeRates(loadProductRates(product).rates, loadTenantOverrides(tenantId))
     productConfig = () => loadProductConfig(product)

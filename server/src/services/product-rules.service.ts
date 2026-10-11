@@ -1,5 +1,5 @@
 import { ValidationError } from '../errors/domain.errors.js'
-import { getProductCapabilities } from '../lib/product-registry.js'
+import { getInstalledProductCapabilities } from '../lib/product-registry.js'
 import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
 import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-screen.js'
 import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
@@ -27,7 +27,7 @@ export function productRuleViolations(tenantId: string, payload: any): ScreenVio
     return snapshot.definition.screen ? checkQuoteAgainstScreen(snapshot.definition.screen, payload, snapshot.definition.tables || {}) : []
   }
   const code = String(payload?.productCode || '').trim().toLowerCase()
-  if (!code || !getProductCapabilities(code)) return []
+  if (!code || !getInstalledProductCapabilities(code)) return []
   const screen = loadRiskScreen(code, loadProductConfig(code), tenantId)
   return screen ? checkQuoteAgainstScreen(screen, payload, loadCarrierTables(tenantId)) : []
 }

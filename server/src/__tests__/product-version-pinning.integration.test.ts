@@ -222,4 +222,62 @@ describe('product version pinning (database path)', () => {
     await expect(tx((db) => previewEndorsement(db, tenantId, bound.policyId, { effectiveDate: '2026-10-01', payload })))
       .rejects.toMatchObject({ code: 'PRODUCT_VERSION_NOT_LOADED' })
   })
+
+  it('keeps core base fields alongside the original additive screen and pins an absent screen', async () => {
+    const fieldsPath = path.join(packDir, 'fields/homeowners.json')
+    const screenPath = path.join(packDir, 'screens/homeowners.yaml')
+    const fields = [{ path: 'risks.0.customerNote', type: 'string', required: true, ui: { label: 'Customer note' } }]
+    fs.writeFileSync(fieldsPath, JSON.stringify(fields))
+    const screen = 'product: homeowners\nrisk:\n  sections:\n    - title: Carrier extras\n      fields: [customerNote]\n'
+    const configPath = path.join(packDir, 'config.yaml')
+    const config = fs.readFileSync(configPath, 'utf8')
+    fs.writeFileSync(configPath, 'enabledProducts: [homeowners, condo-unit-owners]\n')
+    await getDb()!.query(`INSERT INTO product_state_eligibility (tenant_id, product_code, state_code, admitted, surplus_lines, status)
+      VALUES ($1,'homeowners','TX',true,false,'ACTIVE') ON CONFLICT DO NOTHING`, [tenantId])
+    const payload = {
+      ...quotePayload(), productCode: 'homeowners',
+      risks: [{ type: 'dwelling', address: '10 Original Ln', construction: 'frame', yearBuilt: 2000,
+        protectionClass: 3, roofAgeYears: 5, squareFeet: 1500, customerNote: 'Original note' }],
+      coverages: [{ code: 'A', selected: true, limit: 300000, deductible: 1000 }],
+    }
+    const app = createApp()
+    const username = `core-pin-${Date.now()}`
+    await createUser({ username, password: 'password', tenantId, roles: ['admin'] })
+    const login = await request(app).post('/auth/login').send({ tenantId, username, password: 'password' }).expect(200)
+    const form = (policyId?: string) => request(app).get(`/api/v1/products/homeowners/form${policyId ? `?policyId=${policyId}` : ''}`)
+      .set('Authorization', `Bearer ${login.body.token}`).set('X-Tenant', tenantId).expect(200)
+    const writePolicy = async () => {
+      const quote = await createOrRateQuote({} as any, tenantId, payload, null, 'integration-test')
+      const bound = await bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)
+      await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
+      return bound.policyId
+    }
+    try {
+      // No custom screen when this term starts, even though field metadata exists.
+      const noScreenPolicy = await writePolicy()
+      fs.writeFileSync(screenPath, screen)
+      const additivePolicy = await writePolicy()
+      fs.writeFileSync(screenPath, screen.replace('Carrier extras', 'New extras'))
+      clearProductSnapshotCache()
+      const absent = await form(noScreenPolicy)
+      expect(absent.body.screen).toBeNull()
+      expect(absent.body.fields.map((f: any) => f.key)).toContain('address')
+      const pinned = await form(additivePolicy)
+      expect(pinned.body.screen.sections[0].title).toBe('Carrier extras')
+      expect(pinned.body.fields.map((f: any) => f.key)).toEqual(expect.arrayContaining(['address', 'yearBuilt', 'construction', 'customerNote']))
+      expect(new Set(pinned.body.fields.map((f: any) => f.path)).size).toBe(pinned.body.fields.length)
+      expect((await form()).body.screen.sections[0].title).toBe('New extras')
+      const changed = await latestPayload(noScreenPolicy)
+      delete changed.risks[0].customerNote
+      await expect(tx((db) => previewEndorsement(db, tenantId, noScreenPolicy, { effectiveDate: '2026-10-01', payload: changed }))).resolves.toBeDefined()
+      const wrongProduct = await request(app).get(`/api/v1/products/condo-unit-owners/form?policyId=${additivePolicy}`)
+        .set('Authorization', `Bearer ${login.body.token}`).set('X-Tenant', tenantId)
+      expect(wrongProduct.status).toBe(400)
+      expect(wrongProduct.body.code).toBe('PRODUCT_VERSION_NOT_LOADED')
+    } finally {
+      fs.writeFileSync(configPath, config)
+      fs.rmSync(fieldsPath, { force: true })
+      fs.rmSync(screenPath, { force: true })
+    }
+  })
 })

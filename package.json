@@ -53,7 +53,14 @@
     "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
     "check:import-templates": "node scripts/check-import-templates.mjs",
     "check:architecture": "node --test scripts/check-module-boundaries.test.mjs && node scripts/check-module-boundaries.mjs",
-    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
+    "test:carrier-stack": "node --test scripts/carrier-stack.test.mjs scripts/pilot-lib.test.mjs",
+    "pilot:up": "node scripts/pilot-up.mjs",
+    "pilot:check": "node scripts/pilot-check.mjs",
+    "pilot:browser": "node scripts/pilot-browser.mjs",
+    "pilot:drill": "node scripts/pilot-drill.mjs",
+    "pilot:monitor": "node scripts/pilot-monitor.mjs",
+    "pilot:handoff": "node scripts/pilot-handoff.mjs"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "4.64.0",

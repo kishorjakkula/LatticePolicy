@@ -62,7 +62,7 @@ services:
       - documents:/data/documents
       - ${CARRIER_PACK_PATH:-./no-pack}:/carrier-pack:ro
     ports:
-      - "${API_PORT:-3300}:3000"
+      - "${HOST_BIND:-127.0.0.1}:${API_PORT:-3300}:3000"
     depends_on: &app-depends-on
       db:
         condition: service_healthy
@@ -110,7 +110,7 @@ services:
       LATTICE_USE_MOCK: "0"
       LATTICE_SHOW_DEMO_CREDENTIALS: "0"
     ports:
-      - "${UI_PORT:-8080}:80"
+      - "${HOST_BIND:-127.0.0.1}:${UI_PORT:-8080}:80"
     depends_on:
       - api
 

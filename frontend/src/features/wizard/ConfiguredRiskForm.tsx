@@ -1,3 +1,4 @@
+import { RadioGroup } from '../../components/RadioGroup'
 import { useId, useMemo, useState } from 'react'
 import { evaluateScreen, getQuoteValue, type LookupTable, type ProductScreen, type ScreenField, type ScreenItemField, type ScreenState } from '@lattice-policy/rules'
 
@@ -95,21 +96,20 @@ function FieldControl({ field, id, value, required, invalid, disabled, onChange,
       : (field.options || []).map((option) => ({ value: option, label: optionLabel(field, option) }))
     const current = field.dataType === 'bool' ? toBoolean(value) : value
     return (
-      <div className="cfg-radios" role="radiogroup" aria-labelledby={`${id}-label`} aria-describedby={`${id}-note`}>
-        {options.map((option) => (
-          <label key={String(option.value)} className="cfg-check">
-            <input
-              type="radio"
-              name={id}
-              disabled={common.disabled}
-              checked={String(current) === String(option.value)}
-              onChange={() => onChange(option.value)}
-              onBlur={onBlur}
-            />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
+      <RadioGroup
+        className="cfg-radios"
+        layout={field.dataType === 'bool' ? 'binary' : 'choices'}
+        name={id}
+        labelledBy={`${id}-label`}
+        describedBy={`${id}-note`}
+        required={required}
+        invalid={invalid}
+        options={options}
+        value={current}
+        disabled={common.disabled}
+        onChange={onChange}
+        onBlur={onBlur}
+      />
     )
   }
 

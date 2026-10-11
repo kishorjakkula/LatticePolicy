@@ -1,0 +1,37 @@
+name: Synthetic Carrier Pilot Acceptance
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run pilot:up
+      - run: npm run pilot:check
+      - run: npm run pilot:browser
+      - run: npm run pilot:drill
+      - run: npm run pilot:monitor -- --once
+      - run: npm run pilot:handoff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: synthetic-pilot-evidence
+          path: |
+            .pilot/evidence/
+            .pilot/playwright-report/
+            .pilot/handoff/
+          if-no-files-found: ignore
+      - name: Stop pilot
+        if: always()
+        run: test ! -f .pilot/kit/carrier.env || sh .pilot/kit/stack.sh down

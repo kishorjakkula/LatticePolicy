@@ -1,13 +1,17 @@
 import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
-import { getProductCapabilities, resolveProductPackDir } from './product-registry.js'
+import { getInstalledProductCapabilities, resolveProductPackDir } from './product-registry.js'
 import type { ProductScreen } from '@lattice-policy/rules'
 import { carrierPackFieldMetaPath, carrierPackFor, loadCarrierPackConfig } from './carrier-pack.js'
 import { loadProductScreen } from './product-screen.js'
 
 /** Products whose risk screens are built into the framework. */
 const CORE_PRODUCT_CODES = new Set(['personal-auto', 'commercial-auto', 'homeowners', 'cyber', 'professional-liability'])
+
+export function hasBuiltInRiskFields(productCode: string): boolean {
+  return CORE_PRODUCT_CODES.has(productCode)
+}
 
 /**
  * The risk screen a carrier pack defines for a product, or null. For a core
@@ -332,7 +336,7 @@ export function buildRiskFields(productCode: ProductCode, cfg: any, tenantId?: s
     }
   }
   if (!out.length) {
-    const defaults = getProductCapabilities(productCode)?.defaultRisk || {}
+    const defaults = getInstalledProductCapabilities(productCode)?.defaultRisk || {}
     for (const key of keys) {
       const defaultValue = defaults[key]
       const label = key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())
@@ -415,7 +419,7 @@ export function loadFieldMeta(productCode: ProductCode, tenantId: string): any[]
     ]
   }
   const cfg = loadProductConfig(productCode)
-  const defaults = getProductCapabilities(productCode)?.defaultRisk || {}
+  const defaults = getInstalledProductCapabilities(productCode)?.defaultRisk || {}
   return (Array.isArray(cfg?.ratingKeys) ? cfg.ratingKeys : []).map((key: string, index: number) => ({
     path: `risks.0.${key}`,
     type: typeof defaults[key] === 'number' ? 'number' : typeof defaults[key] === 'boolean' ? 'bool' : 'string',

@@ -1,3 +1,4 @@
+import { auditRadioControls } from './support/radio-standard'
 import type { Page } from '@playwright/test'
 import { createWizardReadyPolicy } from './support/api'
 import { expect, test } from './support/fixtures'
@@ -79,6 +80,7 @@ async function auditScreen(page: Page) {
   await page.waitForLoadState('networkidle')
   expect(await nonCollapsibleSections(page), 'section cards that are not collapsible').toEqual([])
   await exerciseToggles(page)
+  await auditRadioControls(page)
 }
 
 test.describe('UI standard: every screen section is collapsible', () => {

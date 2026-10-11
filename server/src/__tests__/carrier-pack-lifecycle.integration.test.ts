@@ -1,4 +1,6 @@
 import path from 'node:path'
+import fs from 'node:fs'
+import os from 'node:os'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb, initDb, withTenantTx } from '../db.js'
 import { createOrRateQuote } from '../services/quote.service.js'
@@ -14,6 +16,7 @@ const tenantId = 'acme-mutual'
 const productCode = 'condo-unit-owners'
 const actor = { id: null, username: 'integration-test', roles: ['admin'], permissions: ['uw.referrals.decide'] }
 const originalPackDir = process.env.CARRIER_PACK_DIR
+let packDir = ''
 
 const risk = {
   type: 'dwelling', address: '1 Main St #4, Austin TX', construction: 'masonry', protectionClass: 3, roofAgeYears: 5,
@@ -49,8 +52,10 @@ async function latestPayload(policyId: string) {
   return JSON.parse(JSON.stringify(result.rows[0].payload))
 }
 
-async function issuedPolicy() {
+async function issuedPolicy(legacy = false) {
   const quote = await createOrRateQuote({} as any, tenantId, quotePayload(), null, 'integration-test')
+  // Model a quote written before snapshot pinning without rewriting immutable policy history.
+  if (legacy) await getDb()!.query("UPDATE quotes SET payload = payload - 'productSnapshot' WHERE tenant_id=$1 AND quote_id=$2", [tenantId, quote.quoteId])
   const bound = await bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)
   await tx((db) => issuePolicy(db, tenantId, bound.policyId, {}, actor))
   return { quote, policyId: bound.policyId }
@@ -67,7 +72,9 @@ const rulesNotMet = (transaction: string, paths: string[]) => ({
 
 describe('carrier pack product across the policy lifecycle (database path)', () => {
   beforeAll(async () => {
-    process.env.CARRIER_PACK_DIR = path.resolve(__dirname, '../../../examples/carrier-pack')
+    packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'carrier-lifecycle-'))
+    fs.cpSync(path.resolve(__dirname, '../../../examples/carrier-pack'), packDir, { recursive: true })
+    process.env.CARRIER_PACK_DIR = packDir
     await initDb()
     const pool = getDb()!
     await pool.query(
@@ -87,6 +94,7 @@ describe('carrier pack product across the policy lifecycle (database path)', () 
     if (originalPackDir === undefined) delete process.env.CARRIER_PACK_DIR
     else process.env.CARRIER_PACK_DIR = originalPackDir
     await closeDb()
+    fs.rmSync(packDir, { recursive: true, force: true })
   })
 
   it('quotes with the pack rating and rejects a quote that breaks the pack rules', async () => {
@@ -144,6 +152,34 @@ describe('carrier pack product across the policy lifecycle (database path)', () 
       .rejects.toMatchObject(rulesNotMet('reinstatement', ['/risks/0/floorLevel']))
     const reinstated = await tx((db) => reinstatePolicy(db, tenantId, policyId, { effectiveDate: '2026-12-10', reason: 'paid' }, actor))
     expect(reinstated.transactionType).toBe('Reinstate')
+  })
+
+  it('services pinned and legacy policies after the product is closed to new business', async () => {
+    const pinned = await issuedPolicy()
+    const legacy = await issuedPolicy(true)
+    const configPath = path.join(packDir, 'config.yaml')
+    const originalConfig = fs.readFileSync(configPath, 'utf8')
+    try {
+      fs.writeFileSync(configPath, 'enabledProducts: [personal-auto]\n')
+      await expect(createOrRateQuote({} as any, tenantId, quotePayload(), null, 'integration-test'))
+        .rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' })
+      for (const { policyId } of [pinned, legacy]) {
+        const changed = await latestPayload(policyId)
+        changed.risks[0].construction = 'frame'
+        const preview = await tx((db) => previewEndorsement(db, tenantId, policyId, { effectiveDate: '2026-10-01', payload: changed }))
+        expect(preview.premium.total.amount).toBeGreaterThan(0)
+        const endorsed = await tx((db) => executeEndorsement(db, tenantId, policyId, { effectiveDate: '2026-10-01', payload: changed }, actor))
+        expect(endorsed.transactionType).toBe('Endorse')
+        const cancelled = await tx((db) => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2026-12-01', reason: 'insured request' }, actor))
+        expect(cancelled.transactionType).toBe('Cancel')
+        const reinstated = await tx((db) => reinstatePolicy(db, tenantId, policyId, { effectiveDate: '2026-12-10', reason: 'paid' }, actor))
+        expect(reinstated.transactionType).toBe('Reinstate')
+        await expect(tx((db) => previewRenewal(db, tenantId, policyId, {})))
+          .rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' })
+      }
+    } finally {
+      fs.writeFileSync(configPath, originalConfig)
+    }
   })
 
   it('renews on the pack rating and rules', async () => {

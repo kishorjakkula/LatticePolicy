@@ -1,3 +1,4 @@
+@import "./styles/radio.css";
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 :root {
@@ -3162,9 +3163,6 @@ button:focus-visible {
 }
 
 .cfg-radios {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 4px;
   padding-top: 8px;
 }
 
@@ -3296,12 +3294,10 @@ button:focus-visible {
   width: 100%;
   max-width: none;
   min-width: 0;
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
   align-items: center;
   gap: 14px;
-  flex-wrap: wrap;
   padding: 10px 0;
   border: 0;
   border-radius: 0;
@@ -3316,7 +3312,7 @@ button:focus-visible {
 .wizard-stage-card-body .qualification-label {
   margin: 0;
   flex: 0 1 auto;
-  min-width: min(100%, 420px);
+  min-width: 0;
   max-width: none;
   color: var(--text);
   font-size: 0.92rem;
@@ -3332,48 +3328,8 @@ button:focus-visible {
   color: #526176;
 }
 
-.wizard-stage-card-body .qualification-radio-group {
-  display: inline-flex;
-  width: auto;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  align-items: center;
-}
-
-.wizard-stage-card-body .qualification-radio {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  text-transform: none;
-  letter-spacing: normal;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.wizard-stage-card-body .qualification-radio.selected {
-  color: var(--accent-strong);
-  font-weight: 700;
-  border: 0;
-  background: transparent;
-}
-
-.wizard-stage-card-body .qualification-radio input[type="radio"] {
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
 .wizard-stage-card-body .qualification-error {
-  flex: 0 0 100%;
+  grid-column: 1 / -1;
   margin-top: 2px;
   font-size: 0.74rem;
 }
@@ -4044,21 +4000,14 @@ code {
   }
 
   .wizard-stage-card-body .qualification-col {
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
     gap: 8px;
     padding: 10px 0;
   }
 
   .wizard-stage-card-body .qualification-col.is-derived {
     padding-left: 14px;
-  }
-
-  .wizard-stage-card-body .qualification-radio-group {
-    justify-content: flex-start;
-    width: auto;
-    flex-wrap: wrap;
   }
 
   .container {
@@ -4134,7 +4083,7 @@ code {
   }
 
   .wizard-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
