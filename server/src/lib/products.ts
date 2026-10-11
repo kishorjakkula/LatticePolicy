@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
-import { getProductCapabilities } from './product-registry.js'
+import { getProductCapabilities, resolveProductPackDir } from './product-registry.js'
+import { carrierPackFieldMetaPath, carrierPackFor, loadCarrierPackConfig } from './carrier-pack.js'
 
 export type ProductCode = string
 
@@ -73,15 +74,26 @@ function resolveRepoRoot(): string {
   return cwd
 }
 
+/**
+ * A product's pack directory: core, or added by the carrier pack. Unknown
+ * codes keep resolving under the repository's products/ folder so a missing
+ * product fails the same way it always has.
+ */
+function productPackDir(productCode: ProductCode): string {
+  return resolveProductPackDir(productCode) || path.join(resolveRepoRoot(), 'products', productCode)
+}
+
 export function loadProductRates(productCode: ProductCode): ProductPack {
-  const baseDir = resolveRepoRoot()
-  const ratesPath = path.join(baseDir, 'products', productCode, 'rates.yaml')
+  const ratesPath = path.join(productPackDir(productCode), 'rates.yaml')
   const content = fs.readFileSync(ratesPath, 'utf8')
   const rates = YAML.parse(content) as any
   return { product: productCode, version: rates.version || '1.0.0', rates }
 }
 
 export function loadTenantOverrides(tenantId: string): any {
+  // The carrier pack is the single source of a pinned carrier's overrides.
+  const pack = carrierPackFor(tenantId)
+  if (pack) return loadCarrierPackConfig(pack)
   const baseDir = resolveRepoRoot()
   const configPath = path.join(baseDir, 'tenants', tenantId, 'config.yaml')
   if (!fs.existsSync(configPath)) return {}
@@ -103,8 +115,7 @@ export function mergeRates(baseRates: Rates, tenantOverrides: any): Rates {
 }
 
 export function loadProductConfig(productCode: ProductCode): any {
-  const baseDir = resolveRepoRoot()
-  const cfgPath = path.join(baseDir, 'products', productCode, 'coverage.yaml')
+  const cfgPath = path.join(productPackDir(productCode), 'coverage.yaml')
   const content = fs.readFileSync(cfgPath, 'utf8')
   const data = YAML.parse(content)
   return data
@@ -270,7 +281,10 @@ export function buildRiskFields(productCode: ProductCode, cfg: any): FormField[]
 
 export function loadFieldMeta(productCode: ProductCode, tenantId: string): any[] {
   const baseDir = resolveRepoRoot()
-  const tenantPath = path.join(baseDir, 'tenants', tenantId, `field_meta.${productCode}.json`)
+  const pack = carrierPackFor(tenantId)
+  const tenantPath = pack
+    ? carrierPackFieldMetaPath(pack, productCode)
+    : path.join(baseDir, 'tenants', tenantId, `field_meta.${productCode}.json`)
   if (fs.existsSync(tenantPath)) {
     try {
       return JSON.parse(fs.readFileSync(tenantPath, 'utf8'))

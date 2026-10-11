@@ -29,6 +29,7 @@ database or an orchestrator, keep the same images and settings and follow
 | `docker-compose.yml` | The five services and three data volumes. |
 | `carrier.env.example` | Template for the per-carrier settings file. |
 | `stack.sh` | Provision, bootstrap, backup, restore, upgrade, and rollback. |
+| `no-pack/` | Empty placeholder mounted when no carrier pack is configured. |
 
 `carrier.env`, `backups/`, and `.stack-state.*` are created at run time and
 are ignored by git.
@@ -79,6 +80,31 @@ localhost origins.
 Several carriers on one host each need their own directory copy or
 `LATTICE_ENV_FILE`, and distinct `API_PORT` and `UI_PORT` values. Each gets its
 own Compose project (`lattice-<tenant-id>`), database, and volumes.
+
+## Carrier pack
+
+A carrier's own products, fields, and overrides live in a carrier pack: a
+directory of config files the carrier keeps in its own repository (format and
+a worked example in `examples/carrier-pack/`). To run a stack with one:
+
+1. Check out the pack on the host at the version you want to run.
+2. Set `CARRIER_PACK_PATH` in `carrier.env` to its absolute path.
+3. `sh stack.sh pack-check`, then `sh stack.sh up`.
+
+The pack is mounted read-only into the API. `up` and `upgrade` check it
+first, and the API itself refuses to start on a pack it cannot load.
+
+```bash
+sh stack.sh pack-check            # against the release you are running
+sh stack.sh pack-check v0.4.0     # against a release you are considering
+```
+
+`upgrade` runs the same check against the new release before anything is
+stopped, backed up, or migrated. If the pack does not fit, the upgrade stops
+and nothing has changed.
+
+To change a pack in production, check out the new pack version at the same
+path and run `sh stack.sh up`. Try it on a staging stack first.
 
 ## Backup and restore
 
@@ -186,6 +212,7 @@ In that setup:
 - No zero-downtime upgrade; the API stops while migrations run.
 - No TLS termination or reverse proxy.
 - No Kubernetes, ECS, or Container Apps templates for a per-carrier stack.
-- Upgrade tooling checks the release and schema level only; it does not yet
-  check a carrier's own product packs and custom fields against the target
-  release.
+- Backups do not include the carrier pack; it is versioned in the carrier's
+  own repository.
+- Loading a new pack version restarts the API. There is no approval step or
+  record of which pack version ran when, beyond `GET /version` and the log.

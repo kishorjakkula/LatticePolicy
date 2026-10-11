@@ -18,6 +18,7 @@
     "smoke:transactions": "node scripts/smoke-transactions.mjs",
     "migrate": "tsx src/migrate.ts",
     "bootstrap:carrier": "tsx src/bootstrapCarrier.ts",
+    "validate:pack": "tsx src/validateCarrierPack.ts",
     "validate:restore": "tsx scripts/validate-restored-db.ts",
     "rehash:pii": "tsx scripts/rehash-sensitive-lookups.ts"
   },

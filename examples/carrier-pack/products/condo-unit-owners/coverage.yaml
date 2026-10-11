@@ -1,0 +1,58 @@
+product: condo-unit-owners
+version: 1.0.0
+capabilities:
+  label: Condo Unit-Owners
+  riskLabel: Condo Unit
+  # Reuses the framework's homeowners rating steps with this product's own
+  # factor tables (rates.yaml).
+  ratingAdapter: homeowners
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    dwelling: HO.Dwelling
+    personalProperty: HO.PersonalProperty
+    liability: HO.LiabilityExposure
+  defaultRisk:
+    type: dwelling
+    address: ''
+    yearBuilt: 2005
+    squareFeet: 1100
+    construction: masonry
+    roofAgeYears: 8
+    occupancy: OwnerOccupied
+    floorLevel: 1
+    masterPolicyDeductible: 10000
+  ui: {}
+coverages:
+  - code: A
+    name: Building Property (Unit Improvements)
+    selectable: true
+    limitType: value
+  - code: C
+    name: Personal Property
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [50, 75, 100]
+  - code: D
+    name: Loss of Use
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [20, 40]
+  - code: E
+    name: Personal Liability
+    selectable: true
+    limits: [100000, 300000, 500000, 1000000]
+  - code: F
+    name: Medical Payments
+    selectable: true
+    limits: [1000, 5000]
+  - code: LOSS_ASSESS
+    name: Loss Assessment
+    selectable: true
+    limits: [1000, 10000, 25000, 50000]
+deductibles:
+  allPeril: [500, 1000, 2500, 5000]
+ratingKeys:
+  - construction
+  - protectionClass
+  - roofAgeYears

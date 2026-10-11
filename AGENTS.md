@@ -28,6 +28,7 @@ area you are changing.
 - `tenants/`: tenant configuration and overrides.
 - `contracts/`: JSON schemas and sample seed data.
 - `deploy/carrier-stack/`: per-carrier stack deployment kit.
+- `examples/carrier-pack/`: example carrier pack (carrier-owned products, fields, overrides).
 - `docs/tasks/`: AI-readable task notes for non-trivial changes.
 
 ## Required Process

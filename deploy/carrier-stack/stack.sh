@@ -5,6 +5,7 @@
 #   sh stack.sh up                           pull images, apply migrations, start
 #   sh stack.sh bootstrap                    create the tenant and its first administrator
 #   sh stack.sh status                       running release, schema level, health
+#   sh stack.sh pack-check [version]         check the carrier pack against a release (default: current)
 #   sh stack.sh backup [label]               database + documents into backups/
 #   sh stack.sh restore <backup-prefix>      replace database + documents from a backup
 #   sh stack.sh upgrade <version>            backup, switch release, migrate, verify
@@ -119,6 +120,19 @@ start_data_services() {
   compose up -d --wait db cache >/dev/null
 }
 
+# Checks the mounted carrier pack with the image of the given release, without
+# starting or changing anything. Succeeds when no pack is configured.
+check_pack() {
+  release="${1:-$(get_env LATTICE_VERSION)}"
+  if [ -z "$(get_env CARRIER_PACK_PATH)" ]; then
+    echo "No carrier pack configured (CARRIER_PACK_PATH is empty)."
+    return 0
+  fi
+  [ -d "$(get_env CARRIER_PACK_PATH)" ] || { echo "carrier pack not found: $(get_env CARRIER_PACK_PATH)" >&2; return 1; }
+  # A value in the shell environment overrides the env file for this one call.
+  LATTICE_VERSION="$release" compose run --rm -T --no-deps api node server/dist/validateCarrierPack.js /carrier-pack
+}
+
 run_migrations() {
   start_data_services
   compose run --rm -T --no-deps api node server/dist/migrate.js
@@ -145,9 +159,15 @@ cmd_init() {
   echo "Store this file with your secrets: backups cannot be read without CUSTOMER_DATA_KEY."
 }
 
+cmd_pack_check() {
+  need_env_file
+  check_pack "${1:-}"
+}
+
 cmd_up() {
   need_env_file
   pull_images
+  check_pack || die "the carrier pack is not valid for release $(get_env LATTICE_VERSION)"
   run_migrations
   compose up -d
   wait_for_api || die "API did not become healthy"
@@ -224,6 +244,12 @@ cmd_upgrade() {
   [ "$target" != "$current" ] || die "already configured for $target"
 
   echo "Upgrading $(get_env CARRIER_TENANT_ID): $current -> $target"
+  # Check the carrier's customisations against the new release before anything
+  # is stopped, backed up, or migrated.
+  if [ "$(get_env LATTICE_PULL)" != "0" ]; then
+    LATTICE_VERSION="$target" compose pull api
+  fi
+  check_pack "$target" || die "the carrier pack does not fit release $target; nothing was changed"
   backup="$(cmd_backup "pre-$target")"
   printf 'PREVIOUS_VERSION=%s\nPREVIOUS_BACKUP=%s\n' "$current" "$backup" > "$(state_file)"
   echo "Backup: $backup"
@@ -290,6 +316,7 @@ case "$command" in
   up) cmd_up ;;
   bootstrap) cmd_bootstrap ;;
   status) cmd_status ;;
+  pack-check) cmd_pack_check "$@" ;;
   backup) cmd_backup "$@" ;;
   restore) cmd_restore "$@" ;;
   upgrade) cmd_upgrade "$@" ;;

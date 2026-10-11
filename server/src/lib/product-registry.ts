@@ -3,12 +3,16 @@ import path from 'path'
 import YAML from 'yaml'
 import type { ProductCapabilityDescriptor, ProductTransactionCapability } from '@lattice-policy/types'
 import { BadRequestError, NotFoundError } from '../errors/domain.errors.js'
+import { carrierPackEnabledProducts, carrierPackProductsDir, getActiveCarrierPack, PACK_SLUG_PATTERN } from './carrier-pack.js'
+
+/** Adapters rating.service.ts can execute, plus the explicit "not quotable" marker. */
+export const RATING_ADAPTERS = ['personal-auto', 'commercial-auto', 'cyber', 'professional-liability', 'homeowners', 'unsupported'] as const
 
 const allowedTransactions = new Set<ProductTransactionCapability>([
   'quote', 'bind', 'issue', 'endorse', 'cancel', 'reinstate', 'rewrite', 'renew', 'nonRenew',
 ])
 
-function resolveProductsDir(): string {
+export function resolveCoreProductsDir(): string {
   const candidates = [path.resolve(process.cwd(), 'products'), path.resolve(process.cwd(), '../products')]
   return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0]
 }
@@ -19,7 +23,7 @@ function readCoverageFile(productDir: string): any {
   return YAML.parse(fs.readFileSync(coveragePath, 'utf8'))
 }
 
-function parseDescriptor(raw: any, directoryCode: string): ProductCapabilityDescriptor {
+export function parseProductDescriptor(raw: any, directoryCode: string): ProductCapabilityDescriptor {
   const code = String(raw?.product || '').trim().toLowerCase()
   if (!code || code !== directoryCode) {
     throw new Error(`Product pack '${directoryCode}' must declare product: ${directoryCode}`)
@@ -50,14 +54,44 @@ function parseDescriptor(raw: any, directoryCode: string): ProductCapabilityDesc
   }
 }
 
-export function listProductCapabilities(): ProductCapabilityDescriptor[] {
-  const productsDir = resolveProductsDir()
+function listProductDirectories(productsDir: string): Array<{ code: string; dir: string }> {
   if (!fs.existsSync(productsDir)) return []
   return fs.readdirSync(productsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => ({ code: entry.name, raw: readCoverageFile(path.join(productsDir, entry.name)) }))
+    .map((entry) => ({ code: entry.name, dir: path.join(productsDir, entry.name) }))
+}
+
+/**
+ * Every product pack directory this stack can see: the core products, then
+ * any the carrier pack adds. A carrier pack cannot replace a core product
+ * (the pack validator rejects the collision), so core wins if one slips by.
+ */
+export function listProductPackDirs(): Array<{ code: string; dir: string; source: 'core' | 'carrier-pack' }> {
+  const core = listProductDirectories(resolveCoreProductsDir()).map((entry) => ({ ...entry, source: 'core' as const }))
+  const pack = getActiveCarrierPack()
+  if (!pack) return core
+  const coreCodes = new Set(core.map((entry) => entry.code))
+  const added = listProductDirectories(carrierPackProductsDir(pack))
+    .filter((entry) => PACK_SLUG_PATTERN.test(entry.code) && !coreCodes.has(entry.code))
+    .map((entry) => ({ ...entry, source: 'carrier-pack' as const }))
+  return [...core, ...added]
+}
+
+/** Directory holding a product's coverage.yaml and rates.yaml, or null when the product is unknown. */
+export function resolveProductPackDir(code: string): string | null {
+  const normalized = String(code || '').trim().toLowerCase()
+  return listProductPackDirs().find((entry) => entry.code === normalized)?.dir || null
+}
+
+export function listProductCapabilities(): ProductCapabilityDescriptor[] {
+  const pack = getActiveCarrierPack()
+  // A carrier pack that lists enabledProducts decides what this stack sells.
+  const enabled = pack ? carrierPackEnabledProducts(pack) : null
+  return listProductPackDirs()
+    .filter((entry) => !enabled || enabled.includes(entry.code))
+    .map((entry) => ({ code: entry.code, raw: readCoverageFile(entry.dir) }))
     .filter((entry) => entry.raw)
-    .map((entry) => parseDescriptor(entry.raw, entry.code))
+    .map((entry) => parseProductDescriptor(entry.raw, entry.code))
     .sort((left, right) => left.label.localeCompare(right.label))
 }
 

@@ -11,6 +11,7 @@ import { httpLogger, logger } from './logger.js'
 import { getCache } from './cache.js'
 import { getDb, getSchemaStatus, type SchemaStatus } from './db.js'
 import { getBuildInfo } from './version.js'
+import { getActiveCarrierPack } from './lib/carrier-pack.js'
 import { buildOpenApiSpec, swaggerUiHtml } from './openapi.js'
 import { AppError } from './errors/domain.errors.js'
 import { idempotencyMiddleware } from './lib/idempotency.js'
@@ -154,7 +155,14 @@ export function createApp() {
     const build = getBuildInfo()
     let schema: SchemaStatus = { appliedVersion: null, releaseVersion: null, schemaAhead: false }
     try { schema = await getSchemaStatus() } catch {}
-    res.json({ version: build.version, commit: build.commit, schema })
+    // Pack version only; the carrier it belongs to is not disclosed here.
+    const pack = getActiveCarrierPack()
+    res.json({
+      version: build.version,
+      commit: build.commit,
+      schema,
+      carrierPack: pack ? { version: pack.manifest.version, packFormat: pack.manifest.packFormat } : null
+    })
   })
 
   app.post('/auth/login', loginLimiter, handleLogin)

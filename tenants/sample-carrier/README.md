@@ -33,6 +33,12 @@ tenant. Use it as the reference example when adding a new tenant.
   (rating/underwriting/documents); see `overrides/README.md` for the current
   scope and rules for what belongs there versus core/product pack files.
 
+## Carrier packs
+
+For a production carrier stack, the same files live in the carrier's own
+repository as a carrier pack (`examples/carrier-pack/`) instead of under
+`tenants/` in this repository. This folder remains the local/demo reference.
+
 ## Adding a new tenant
 
 Copy this folder's structure as a starting point: a `config.yaml` with

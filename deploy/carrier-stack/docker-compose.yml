@@ -45,6 +45,8 @@ services:
       REDIS_URL: redis://cache:6379
       CACHE_ENABLED: "1"
       DOCUMENT_STORAGE_DIR: /data/documents
+      # Set only when a carrier pack is mounted (CARRIER_PACK_PATH in the env file).
+      CARRIER_PACK_DIR: ${CARRIER_PACK_PATH:+/carrier-pack}
       JOB_WORKER_ENABLED: ${JOB_WORKER_ENABLED:-}
       ASYNC_PUSH_ENABLED: ${ASYNC_PUSH_ENABLED:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -54,6 +56,7 @@ services:
       CARRIER_ADMIN_PASSWORD: ${CARRIER_ADMIN_PASSWORD:-}
     volumes:
       - documents:/data/documents
+      - ${CARRIER_PACK_PATH:-./no-pack}:/carrier-pack:ro
     ports:
       - "${API_PORT:-3300}:3000"
     depends_on:

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js'
 import type { RequestHandler } from 'express'
 import { ValidationError } from './errors/domain.errors.js'
+import { getProductCapabilities } from './lib/product-registry.js'
 
 export type ContractName = 'quote.request' | 'data-import-batch.request' | 'reinsurance-treaty.request'
 
@@ -84,7 +85,15 @@ export function validateContract(name: ContractName, obj: unknown): ContractVali
 }
 
 export function validateQuoteDetailed(obj: unknown): ContractValidationResult {
-  return validateContract('quote.request', obj)
+  const result = validateContract('quote.request', obj)
+  if (result.valid) return result
+  // The schema enumerates the core products. A product added by the carrier
+  // pack is just as valid on this stack, so the product registry, not the
+  // fixed list, decides whether a product code is known.
+  const productCode = String((obj as any)?.productCode ?? '').trim().toLowerCase()
+  if (!productCode || !getProductCapabilities(productCode)) return result
+  const errors = result.errors.filter((error) => !(error.path === '/productCode' && error.keyword === 'enum'))
+  return { valid: errors.length === 0, errors }
 }
 
 export function validateQuote(obj: unknown): boolean {

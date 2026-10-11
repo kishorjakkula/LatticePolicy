@@ -79,3 +79,24 @@ Row-Level Security Enforcement (TENANT_RLS_ENFORCED)
 - Every new tenant table needs `ENABLE ROW LEVEL SECURITY` and a
   `tenant_isolation` policy; `tenant-rls-enforcement.integration.test.ts`
   fails if one is missing.
+
+Carrier Packs (CARRIER_PACK_DIR)
+- A carrier's customisations are a versioned directory of config files, the
+  carrier pack, kept in the carrier's own repository and mounted into its
+  stack. `CARRIER_PACK_DIR` names it. Layout and an example:
+  `examples/carrier-pack/`.
+- Format 1 holds a manifest (`pack.yaml`), `config.yaml` (`enabledProducts`
+  and rating, underwriting, and document overrides), added products
+  (`products/<code>/`), and field metadata (`fields/<code>.json`).
+- The pack applies only to the carrier named in its manifest, which must
+  equal `CARRIER_TENANT_ID`. For that carrier it replaces
+  `tenants/<tenant>/config.yaml` and `tenants/<tenant>/field_meta.*.json`.
+- With a pack that lists `enabledProducts`, the stack offers exactly those
+  products. Without a pack, every core product is offered, as before.
+- Startup validates the pack and exits on any error
+  (`server/src/lib/carrier-pack-validator.ts`). `npm run validate:pack
+  --workspace=server -- <dir>` runs the same check from a checkout, and
+  `node server/dist/validateCarrierPack.js <dir>` from a release image.
+- `GET /version` reports the loaded pack version.
+- With `CARRIER_PACK_DIR` unset nothing changes: products, overrides, and
+  field metadata load from the repository.

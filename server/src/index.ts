@@ -6,7 +6,8 @@ import { startJobWorker } from './jobs/worker.js'
 import { logger } from './logger.js'
 import { closeCache, initCache } from './cache.js'
 import { warmPublishedRatingModelCache } from './ratingModelRegistry.js'
-import { assertDeploymentConfig, isManagedDeployment } from './config.js'
+import { assertDeploymentConfig, getPinnedTenantId, isManagedDeployment } from './config.js'
+import { assertCarrierPackValid } from './lib/carrier-pack-validator.js'
 import { closePdfRenderer } from './services/document-storage.service.js'
 
 const app = createApp()
@@ -36,6 +37,22 @@ try {
 }
 
 registerBuiltinJobs()
+
+// A carrier pack this release cannot load must stop the stack before it
+// serves a request, in every environment.
+try {
+  const packValidation = assertCarrierPackValid(getPinnedTenantId())
+  if (packValidation?.manifest) {
+    logger.info(
+      { carrier: packValidation.manifest.carrier, packVersion: packValidation.manifest.version, products: packValidation.products },
+      'Carrier pack loaded'
+    )
+    for (const issue of packValidation.warnings) logger.warn({ file: issue.file }, `Carrier pack: ${issue.message}`)
+  }
+} catch (err) {
+  logger.error({ err: (err as Error)?.message || err }, 'Carrier pack is not valid for this release')
+  process.exit(1)
+}
 
 initDb()
   .then(async () => {

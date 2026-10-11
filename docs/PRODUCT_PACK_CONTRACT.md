@@ -6,6 +6,23 @@ a framework allowlist.
 
 Use `docs/tasks/TEMPLATE-product-pack.md` as the implementation checklist.
 
+## Core Products And Carrier Packs
+
+Core product packs live under `products/` in this repository and ship in the
+API image. A carrier adds its own products without changing the core: the same
+`coverage.yaml` and `rates.yaml` files under `products/<code>/` of its carrier
+pack, loaded from `CARRIER_PACK_DIR`. See `examples/carrier-pack/README.md`
+for the pack layout, and `docs/MULTITENANCY.md` for how a pack is applied.
+
+A carrier pack product:
+
+- uses a new product code (a pack cannot replace a core product);
+- names a `ratingAdapter` the release provides, with its own `rates.yaml`
+  tables, or `unsupported`;
+- uses the risk types the quote contract already defines
+  (`contracts/quote.request.schema.json`); extra fields on a risk are accepted;
+- still needs state eligibility rows before it can be quoted.
+
 ## Required Files
 
 ### `products/<product-code>/coverage.yaml`

@@ -1,0 +1,20 @@
+product: condo-unit-owners
+version: 1.0.0
+base:
+  state: '*'
+constructionFactors:
+  frame: 1.05
+  masonry: 0.90
+  other: 1.10
+protectionClassFactors:
+  '1-4': 0.92
+  '5-8': 1.00
+  '9-10': 1.20
+roofAgeFactors:
+  '0-10': 1.00
+  '11-20': 1.03
+  '21+': 1.08
+fees:
+  policy: 25.00
+taxes:
+  rate: 0.02
