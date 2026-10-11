@@ -91,6 +91,21 @@ describe('document storage service', () => {
     expect(await retrieveStoredDocument(recovered!.storageUri)).toEqual(original)
   })
 
+  it('recovers a branded copy at its recorded path and preserves the original artifact', async () => {
+    const original = Buffer.from('Original issued packet bytes')
+    const { storageUri: originalUri } = await getDocumentStorageAdapter().store({ tenantId: 'test', documentId: 'issued', fileName: 'issued.pdf', contentType: 'application/pdf', content: original })
+    const metadata = { ...baseMetadata, branding: { name: 'Acme', primaryColor: '#155e75', logoDataUrl: null, documentFooter: 'Carrier terms apply.' } }
+    const branded = await renderAndStoreDocument({ tenantId: 'test', documentId: 'issued-carrier-branded', metadata })
+    const recovered = await regenerateAndVerifyDocument({ tenantId: 'test', documentId: 'issued', metadata: { ...metadata, artifact: branded }, expectedHash: branded.contentHash })
+    expect(recovered?.storageUri).toBe(branded.storageUri)
+    expect(await retrieveStoredDocument(originalUri)).toEqual(original)
+    const worksheetMetadata = { branding: metadata.branding, snapshot: { context: { policyNumber: 'HO-123' } } }
+    const worksheet = await storeRatingWorksheet({ tenantId: 'test', documentId: 'worksheet-carrier-branded', metadata: worksheetMetadata })
+    const restoredWorksheet = await storeRatingWorksheet({ tenantId: 'test', documentId: 'worksheet', metadata: { ...worksheetMetadata, artifact: worksheet } })
+    expect(restoredWorksheet.storageUri).toBe(worksheet.storageUri)
+    expect(restoredWorksheet.contentHash).toBe(worksheet.contentHash)
+  })
+
   it('renders real PDF bytes via the shared headless browser, not an HTML stub', async () => {
     const html = renderPolicyPacketHtml(baseMetadata)
     const pdf = await renderHtmlToPdf(html, baseMetadata.generatedAt)

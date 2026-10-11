@@ -25,6 +25,7 @@ export type RenderablePacketForm = {
 
 export type RenderablePacketMetadata = {
   branding?: CarrierBranding
+  artifact?: { storageUri?: string }
   policyId: string
   policyNumber?: string | null
   transactionId: string
@@ -450,6 +451,13 @@ export async function retrieveAndVerifyStoredDocument(
   return sha256Bytes(content) === expectedHash ? content : null
 }
 
+// Recovery must restore the recorded copy, including explicitly rebranded pilot
+// copies, rather than replacing an archived original at the logical document ID.
+function recoveryFileName(metadata: { artifact?: { storageUri?: string } }, documentId: string, extension: string): string {
+  const name = path.posix.basename(metadata.artifact?.storageUri || '')
+  return new RegExp(`^[a-zA-Z0-9_-]+\\.${extension}$`).test(name) ? name : `${documentId}.${extension}`
+}
+
 export async function regenerateAndVerifyDocument(params: {
   tenantId: string
   documentId: string
@@ -468,7 +476,7 @@ export async function regenerateAndVerifyDocument(params: {
   // Never replace stored bytes when verification fails.
   if (sha256Bytes(content) !== params.expectedHash) return null
   const contentType = 'application/pdf'
-  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: `${params.documentId}.pdf`, contentType, content })
+  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: recoveryFileName(params.metadata, params.documentId, 'pdf'), contentType, content })
   return { storageUri, contentType, byteSize: content.length, contentHash: params.expectedHash, storageAdapter: getDocumentStorageAdapter().name, renderedAt: new Date().toISOString() }
 }
 
@@ -482,6 +490,6 @@ export async function storeRatingWorksheet(params: { tenantId: string; documentI
   const legacyHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Rating worksheet</title></head><body><h1>Rating worksheet</h1><p>Policy: ${escapeHtml(context.policyNumber)} · Transaction: ${escapeHtml(context.transactionNumber)}</p><pre>${escapeHtml(JSON.stringify(params.metadata.snapshot, null, 2))}</pre></body></html>`
   const content = Buffer.from(params.metadata.branding ? html : legacyHtml)
   const contentType = 'text/html; charset=utf-8'
-  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: `${params.documentId}.html`, contentType, content })
+  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: recoveryFileName(params.metadata, params.documentId, 'html'), contentType, content })
   return { storageUri, contentType, byteSize: content.length, contentHash: sha256Bytes(content), storageAdapter: getDocumentStorageAdapter().name, renderedAt: new Date().toISOString() }
 }
