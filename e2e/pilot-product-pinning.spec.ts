@@ -14,12 +14,31 @@ const screen = 'product: homeowners\nrisk:\n  sections:\n    - title: Pilot extr
 test('mandatory fields appear on button click in the pilot wizard', async ({ page, signInAs }) => {
   await signInAs(page, username)
   await page.goto('/wizard')
+  await fieldByLabel(page, 'Effective Date').fill('')
   await page.getByRole('button', { name: /^Continue to/ }).click()
   await expect(page.getByRole('main')).toContainText(/required|select.*company/i)
+  await fieldByLabel(page, 'Effective Date').fill(new Date().toISOString().slice(0, 10))
   await selectProduct(page, { company: 'Sample Carrier Property', productCode: 'homeowners', state: 'TX' })
   await continueToStep(page, 2)
   await page.getByRole('button', { name: /^Continue to/ }).click()
   await expect(page.getByRole('main')).toContainText(/required|answer/i)
+})
+
+test('admin activation restricts pilot company and product dropdowns to Homeowners', async ({ page, request, sessionFor, signInAs }) => {
+  const { token } = await sessionFor(username)
+  const all = await apiJson<any[]>(request, 'GET', '/api/v1/admin/underwriting-companies?includeInactive=true', { token })
+  expect(all.some(c => c.productCode !== 'homeowners')).toBe(true)
+  expect(all.filter(c => c.active).every(c => c.productCode === 'homeowners')).toBe(true)
+  const { items } = await apiJson<any>(request, 'GET', '/api/v1/underwriting-companies', { token })
+  expect(items.length).toBeGreaterThan(0)
+  expect(items.every((c: any) => c.productCode === 'homeowners')).toBe(true)
+  await signInAs(page, username)
+  await page.goto('/wizard')
+  const company = fieldByLabel(page, 'Underwriting Company')
+  await expect(company.locator('option')).toHaveCount(new Set(items.map((c: any) => c.name)).size + 1)
+  await company.selectOption({ label: items[0].name })
+  await expect(fieldByLabel(page, 'Product').locator('option[value="homeowners"]')).toHaveCount(1)
+  expect(await fieldByLabel(page, 'Product').locator('option').evaluateAll(options => options.map(o => (o as HTMLOptionElement).value).filter(Boolean))).toEqual(['homeowners'])
 })
 
 test('the accepted pilot policy opens every listed document', async ({ page, context, request, sessionFor, signInAs }) => {
