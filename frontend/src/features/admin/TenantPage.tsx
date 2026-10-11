@@ -307,10 +307,10 @@ export function TenantPage() {
 
   return (
     <div className="ps-admin-page">
-      <CarrierBrandingSettings />
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Tenant</h2></div>
       </div>
+      <CarrierBrandingSettings />
       {error && <p className="error">{error}</p>}
       {seedMsg && <p className="muted">{seedMsg}</p>}
       <div style={{ display:'flex', justifyContent:'flex-end', gap: 8, marginBottom: 8 }}>

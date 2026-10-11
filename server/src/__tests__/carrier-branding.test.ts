@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import express from 'express'
 import request from 'supertest'
@@ -19,6 +20,11 @@ function app(permissions?: string[], userTenant = 'brand-a') {
 describe('carrier branding', () => {
   it('validates logos and colors without allowing network URLs or SVG', () => {
     expect(brandingSchema.safeParse(brand).success).toBe(true)
+    const logo = fs.readFileSync(new URL('../../../deploy/pilot/acme-mutual-logo.png', import.meta.url))
+    expect(brandingSchema.safeParse({ ...brand, logoDataUrl: `data:image/png;base64,${logo.toString('base64')}` }).success).toBe(true)
+    const oversized = Buffer.from(logo)
+    oversized.writeUInt32BE(10000, 16)
+    expect(brandingSchema.safeParse({ ...brand, logoDataUrl: `data:image/png;base64,${oversized.toString('base64')}` }).success).toBe(false)
     for (const logoDataUrl of ['https://example.com/logo.png', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,AAAA']) {
       expect(brandingSchema.safeParse({ ...brand, logoDataUrl }).success).toBe(false)
     }

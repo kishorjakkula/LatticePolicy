@@ -1,3 +1,4 @@
+import { imageSize } from 'image-size'
 import { z } from 'zod'
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
 
@@ -6,10 +7,12 @@ export function isSafeLogo(value: string): boolean {
   const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
   if (!match || match[2].length > 700000) return false
   const bytes = Buffer.from(match[2], 'base64')
-  if (bytes.toString('base64') !== match[2]) return false
-  if (match[1] === 'png') return bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) && bytes.readUInt32BE(16) > 0 && bytes.readUInt32BE(16) <= 4096 && bytes.readUInt32BE(20) > 0 && bytes.readUInt32BE(20) <= 4096
-  if (match[1] === 'jpeg') return bytes.length > 4 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-  return bytes.length > 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+  if (bytes.length > 500000 || bytes.toString('base64') !== match[2]) return false
+  try {
+    const image = imageSize(bytes)
+    const expectedType = match[1] === 'jpeg' ? 'jpg' : match[1]
+    return image.type === expectedType && image.width > 0 && image.height > 0 && image.width <= 4096 && image.height <= 4096
+  } catch { return false }
 }
 export const brandingSchema = z.object({
   name: z.string().trim().min(1).max(100),

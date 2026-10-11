@@ -19,7 +19,7 @@ Pilot administration owns carrier identity instead of displaying the framework l
 
 - Public `/brand` returns only display name, raster logo, primary color and document footer. Tenant pinning and claim/header mismatch checks still apply.
 - `/api/v1/admin/branding` GET requires tenant read permission; PATCH requires tenant manage permission and the admin menu permission.
-- Logos must be embedded PNG/JPEG/WebP with validated signatures, bounded size (500 KB), and bounded PNG dimensions. Reject remote URLs and SVG. Names/footers are escaped in HTML; colors are strict hex.
+- Logos must be embedded PNG/JPEG/WebP with validated signatures, bounded size (500 KB), and bounded dimensions. Reject remote URLs and SVG. Names/footers are escaped in HTML; colors are strict hex.
 - Use the current carrier brand for screen/login and browser quote/transaction previews. Issued server documents store the exact branding used; later edits apply to future documents. Recovery uses the stored snapshot and verifies content hashes before writing.
 - Historical packets without a branding snapshot retain their old rendering contract solely for byte-identical recovery. The framework name is never inserted into new carrier documents. Uploaded regulatory DOCX form content remains authored by the carrier.
 - Synthetic pilot examples can be rebranded with `npm run pilot:rebrand-documents`; setup does not rewrite issued documents automatically. Originals remain archived through their existing immutable storage paths.

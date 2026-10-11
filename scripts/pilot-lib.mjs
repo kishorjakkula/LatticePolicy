@@ -59,7 +59,7 @@ export async function prepare(token) {
   if (!brand.configured) await call('PATCH', '/api/v1/admin/branding', { token, data: {
     name: profile.name, primaryColor: '#155e75',
     logoDataUrl: `data:image/png;base64,${fs.readFileSync(new URL('../deploy/pilot/acme-mutual-logo.png', import.meta.url)).toString('base64')}`,
-    documentFooter: 'Acme Mutual Pilot — Synthetic demonstration only. Coverage is governed by the policy terms and conditions.',
+    documentFooter: 'Acme Mutual Pilot - Synthetic demonstration only. Coverage is governed by the policy terms and conditions.',
   } })
   await call('POST', '/api/v1/admin/seed-reference-data', { token, data: {} })
   const companies = await call('GET', '/api/v1/admin/underwriting-companies?includeInactive=true', { token })

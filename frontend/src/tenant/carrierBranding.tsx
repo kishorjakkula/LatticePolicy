@@ -22,7 +22,10 @@ export function CarrierBrand({ id = tenantId(), className }: { id?: string; clas
   useEffect(() => {
     document.title = `${brand.name} | Policy Administration`
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
-    if (icon && brand.logoDataUrl) { icon.href = brand.logoDataUrl; icon.type = brand.logoDataUrl.slice(5, brand.logoDataUrl.indexOf(';')) }
+    if (icon) {
+      icon.href = brand.logoDataUrl || '/favicon.svg'
+      icon.type = brand.logoDataUrl ? brand.logoDataUrl.slice(5, brand.logoDataUrl.indexOf(';')) : 'image/svg+xml'
+    }
     const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     if (theme) theme.content = brand.primaryColor
     const root = document.documentElement.style
