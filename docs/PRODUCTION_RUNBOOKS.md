@@ -255,6 +255,16 @@ Validation checklist before treating RPO/RTO numbers as real:
 - [ ] Alarms exist for backup job failures (a silently failing backup is
       worse than no backup, because it creates false confidence).
 
+## Per-Carrier Stacks
+
+Production runs one full stack per carrier. `deploy/carrier-stack/` is the
+kit for that model: `stack.sh` provisions a stack, bootstraps the carrier and
+its first administrator, takes and restores backups (database plus
+documents), and performs a release upgrade with a pre-upgrade backup and
+automatic rollback on failure. `GET /version` on the API reports the running
+release, build commit, and schema level, and flags a database whose schema is
+newer than the running release. See `deploy/carrier-stack/README.md`.
+
 ## Follow-Up Automation Needed
 
 This runbook intentionally documents manual/operator-driven procedures where

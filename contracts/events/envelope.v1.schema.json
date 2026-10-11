@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://latticepolicy.dev/contracts/events/envelope.v1.schema.json",
+  "title": "LatticePolicy outbound message envelope, version 1",
+  "description": "Every message LatticePolicy delivers, by webhook or by Kafka, is this envelope. Delivery is at least once: treat messageId as an idempotency key.",
+  "type": "object",
+  "required": ["specVersion", "messageId", "tenantId", "type", "topic", "attempt", "createdAt", "payload"],
+  "properties": {
+    "specVersion": { "const": "1", "description": "Version of this envelope." },
+    "messageId": { "type": "string", "format": "uuid", "description": "Stable across redeliveries of the same message." },
+    "tenantId": { "type": "string", "description": "The carrier the message belongs to." },
+    "type": { "type": "string", "description": "What happened, for example ledger.commission_handoff. Route on this." },
+    "topic": { "type": "string", "description": "Same value as type. Kept for consumers of the original webhook." },
+    "schemaVersion": { "type": ["string", "null"], "description": "Version of the payload contract when the payload declares one, for example commission-handoff.v1." },
+    "attempt": { "type": "integer", "minimum": 1, "description": "Delivery attempt this copy belongs to." },
+    "createdAt": { "type": "string", "format": "date-time", "description": "When the message was recorded, in the same transaction as the change it describes." },
+    "payload": { "description": "The message body. Its shape depends on type." }
+  },
+  "additionalProperties": true
+}

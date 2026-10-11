@@ -27,6 +27,8 @@ import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../li
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { assertProductRules } from './product-rules.service.js'
+import { carryProductPin, ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
@@ -393,6 +395,8 @@ export async function loadPolicyTimelineVersions(
     [tenantId, policyId]
   )
   if (!versionsRes.rowCount) return []
+  // The timeline re-rates stored versions; each needs the product version it is pinned to.
+  await ensureProductSnapshots(tenantId, versionsRes.rows.map((row: any) => row.payload))
 
   const changeRes = await q(
     `SELECT version_id, path, new
@@ -537,6 +541,10 @@ async function computeEndorsementTimeline(
   const changes = overridePayload
     ? diffPayloadPaths(previousPayload || {}, nextPayload || {})
     : bodyChanges
+  // An endorsement stays on the product version the term was written on,
+  // whatever the client sent, and must satisfy that version's rules.
+  carryProductPin(nextPayload, previousPayload)
+  assertProductRules(tenantId, nextPayload, 'endorsement')
   const previousPremium = rate(tenantId, previousPayload)
   const nextPremium = rate(tenantId, nextPayload)
   const hypotheticalVersion: TimelineVersionInput = {

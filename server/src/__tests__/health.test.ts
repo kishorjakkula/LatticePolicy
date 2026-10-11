@@ -6,6 +6,7 @@ import express from 'express'
 vi.mock('../db.js', () => ({
   getDb: vi.fn(() => null),
   initDb: vi.fn(() => Promise.resolve()),
+  getSchemaStatus: vi.fn(),
   withTenantTx: vi.fn()
 }))
 vi.mock('../cache.js', () => ({
@@ -42,9 +43,57 @@ vi.mock('../openapi.js', () => ({
   swaggerUiHtml: vi.fn(() => '<html/>')
 }))
 
-import { createApp } from '../app.js'
-import { getDb } from '../db.js'
+import { createApp, createProbeApp } from '../app.js'
+import { getDb, getSchemaStatus } from '../db.js'
 import { getCache } from '../cache.js'
+
+describe('GET /version', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('reports the release version and schema level without authentication', async () => {
+    vi.mocked(getSchemaStatus).mockResolvedValue({ appliedVersion: 58, releaseVersion: 58, schemaAhead: false })
+    const res = await request(createApp()).get('/version')
+    expect(res.status).toBe(200)
+    expect(res.body.version).toMatch(/^\d+\.\d+\.\d+/)
+    expect(res.body).toHaveProperty('commit')
+    expect(res.body.schema).toEqual({ appliedVersion: 58, releaseVersion: 58, schemaAhead: false })
+  })
+
+  it('still answers when the schema level cannot be read', async () => {
+    vi.mocked(getSchemaStatus).mockRejectedValue(new Error('connection refused'))
+    const res = await request(createApp()).get('/version')
+    expect(res.status).toBe(200)
+    expect(res.body.schema).toEqual({ appliedVersion: null, releaseVersion: null, schemaAhead: false })
+  })
+})
+
+describe('probe-only app for worker and dispatcher processes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('answers /health and /version and nothing else', async () => {
+    vi.mocked(getDb).mockReturnValue({ query: vi.fn().mockResolvedValue({ rows: [] }) } as any)
+    vi.mocked(getCache).mockReturnValue(null)
+    vi.mocked(getSchemaStatus).mockResolvedValue({ appliedVersion: 58, releaseVersion: 58, schemaAhead: false })
+    const app = createProbeApp()
+
+    const health = await request(app).get('/health')
+    expect(health.status).toBe(200)
+    expect(health.body).toMatchObject({ status: 'ok', db: true })
+
+    const version = await request(app).get('/version')
+    expect(version.status).toBe(200)
+    expect(version.body).toMatchObject({ role: 'all', schema: { appliedVersion: 58 } })
+
+    for (const path of ['/api/v1/policies', '/auth/login', '/openapi.json']) {
+      const res = await request(app).post(path).send({})
+      expect(res.status, path).toBe(404)
+    }
+  })
+})
 
 describe('GET /health', () => {
   beforeEach(() => {

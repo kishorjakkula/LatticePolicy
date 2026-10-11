@@ -1,0 +1,5 @@
+# Manifest for a carrier pack. See README.md in this folder.
+packFormat: 1
+carrier: acme-mutual
+version: 1.0.0
+name: Acme Mutual customisations

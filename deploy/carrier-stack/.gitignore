@@ -1,0 +1,5 @@
+carrier.env
+*.env
+!carrier.env.example
+backups/
+.stack-state*

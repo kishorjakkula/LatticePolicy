@@ -6,8 +6,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "build:packages": "npm run build --workspace=@lattice-policy/rules",
+    "predev": "npm run build:packages",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "prebuild": "npm run build:packages",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:contracts": "vitest run src/__tests__/contracts.test.ts src/__tests__/openapi-contract.test.ts",
@@ -17,10 +20,13 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:transactions": "node scripts/smoke-transactions.mjs",
     "migrate": "tsx src/migrate.ts",
+    "bootstrap:carrier": "tsx src/bootstrapCarrier.ts",
+    "validate:pack": "tsx src/validateCarrierPack.ts",
     "validate:restore": "tsx scripts/validate-restored-db.ts",
     "rehash:pii": "tsx scripts/rehash-sensitive-lookups.ts"
   },
   "dependencies": {
+    "@lattice-policy/rules": "file:../packages/rules",
     "@lattice-policy/types": "file:../packages/types",
     "@sentry/node": "^10.75.0",
     "ajv": "^8.20.0",
@@ -35,6 +41,7 @@
     "ioredis": "^6.0.0",
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",

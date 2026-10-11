@@ -6,6 +6,24 @@ a framework allowlist.
 
 Use `docs/tasks/TEMPLATE-product-pack.md` as the implementation checklist.
 
+## Core Products And Carrier Packs
+
+Core product packs live under `products/` in this repository and ship in the
+API image. A carrier adds its own products without changing the core: the same
+`coverage.yaml` and `rates.yaml` files under `products/<code>/` of its carrier
+pack, loaded from `CARRIER_PACK_DIR`. See `examples/carrier-pack/README.md`
+for the pack layout, and `docs/MULTITENANCY.md` for how a pack is applied.
+
+A carrier pack product:
+
+- uses a new product code (a pack cannot replace a core product);
+- uses `ratingAdapter: rate-table`, which prices the product entirely from the
+  `rating` section of its own `rates.yaml` (`server/src/lib/rating-table.ts`;
+  format in `examples/carrier-pack/README.md`), or `unsupported`;
+- uses the risk types the quote contract already defines
+  (`contracts/quote.request.schema.json`); extra fields on a risk are accepted;
+- still needs state eligibility rows before it can be quoted.
+
 ## Required Files
 
 ### `products/<product-code>/coverage.yaml`
@@ -16,7 +34,9 @@ capability descriptor. `product`, `version`, and `capabilities` are required.
 The `capabilities` object contains:
 
 - `label` and `riskLabel` for user-facing metadata;
-- `ratingAdapter`, naming an executable adapter or `unsupported`;
+- `ratingAdapter`, naming an executable adapter or `unsupported`. The
+  product-specific adapters belong to the five core products; a new product
+  uses `rate-table`;
 - `formsMode`, either `catalog` or `none`;
 - `supportedTransactions`, using canonical lifecycle action names;
 - `riskKinds`, mapping payload risk types to persisted risk-unit kinds;

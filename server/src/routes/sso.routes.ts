@@ -1,12 +1,22 @@
 import { Router, type Response } from 'express'
 import jwt from 'jsonwebtoken'
-import { getSsoStateSecret } from '../config.js'
+import { getPinnedTenantId, getSsoStateSecret } from '../config.js'
 import { loadTenantSsoConfig } from '../config/tenant-identity.js'
 import { buildAuthorizationUrl, exchangeCodeForTokens, generateState, mapOidcClaimsToRoles, verifyIdToken } from '../lib/sso.js'
 import { findOrCreateSsoUser } from '../services/user.service.js'
 import { buildAuthUser, issueToken } from '../auth.js'
 
 export const ssoRoutes = Router()
+
+// The tenant arrives as a route param here, which tenancyMiddleware cannot
+// see, so a single-carrier stack rejects other tenants before any SSO work.
+ssoRoutes.param('tenantId', (_req, res, next, value) => {
+  const pinnedTenantId = getPinnedTenantId()
+  if (pinnedTenantId && String(value || '').trim() !== pinnedTenantId) {
+    return res.status(403).json({ code: 'TENANT_NOT_SERVED', message: 'This deployment does not serve the requested tenant' })
+  }
+  next()
+})
 
 type SsoStatePayload = {
   tenantId: string

@@ -12,9 +12,13 @@ COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
+COPY packages/rules/package.json ./packages/rules/package.json
 RUN npm ci --workspace=server
 
 COPY packages/types/src ./packages/types/src
+# Shared runtime package; the server build compiles it first (prebuild script).
+COPY packages/rules/tsconfig.json ./packages/rules/tsconfig.json
+COPY packages/rules/src ./packages/rules/src
 COPY server/tsconfig.json ./server/tsconfig.json
 COPY server/src ./server/src
 WORKDIR /app/server
@@ -23,6 +27,9 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+# Commit this image was built from; reported by GET /version.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN apk upgrade --no-cache libcrypto3 libssl3
 
 # System Chromium + the shared libraries it needs to actually run headless on
@@ -45,11 +52,13 @@ COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
+COPY packages/rules/package.json ./packages/rules/package.json
 RUN npm ci --workspace=server --omit=dev \
     && npm cache clean --force \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=build /app/server/dist ./server/dist
+COPY --from=build /app/packages/rules/dist ./packages/rules/dist
 COPY contracts ./contracts
 COPY products ./products
 COPY tenants ./tenants

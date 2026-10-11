@@ -1,8 +1,13 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeDb, getDb, initDb } from '../db.js'
+import { closeDb, getDb, initDb, withTenantTx } from '../db.js'
 import { createOrRateQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
 import { decideReferral, listReferrals } from '../services/uw-referral.service.js'
+
+// Services that take a db handle run inside a tenant transaction, as the routes do.
+function decideReferralTx(tenant: string, referralId: string, input: Parameters<typeof decideReferral>[3]) {
+  return withTenantTx(tenant, (db) => decideReferral(db, tenant, referralId, input))
+}
 
 const UW_USER_ID = '22222222-2222-4222-a222-222222222222'
 
@@ -85,7 +90,7 @@ describe('underwriting referral workflow', () => {
 
     // A non-underwriter cannot decide the referral directly either.
     await expect(
-      decideReferral({} as any, tenantId, referralId, {
+      decideReferralTx(tenantId, referralId, {
         decision: 'Approved',
         reason: 'not allowed',
         decidedBy: 'agent1',
@@ -94,7 +99,7 @@ describe('underwriting referral workflow', () => {
     ).rejects.toMatchObject({ code: 'REFERRAL_DECISION_FORBIDDEN' })
 
     // An underwriter approves the referral through the decision API.
-    const decided = await decideReferral({} as any, tenantId, referralId, {
+    const decided = await decideReferralTx(tenantId, referralId, {
       decision: 'Approved',
       reason: 'Reviewed driving history, acceptable risk',
       decidedBy: UW_USER_ID,
@@ -106,7 +111,7 @@ describe('underwriting referral workflow', () => {
 
     // Deciding again is rejected — a referral can't be re-decided.
     await expect(
-      decideReferral({} as any, tenantId, referralId, {
+      decideReferralTx(tenantId, referralId, {
         decision: 'Approved',
         reason: 'again',
         decidedBy: UW_USER_ID,
@@ -257,7 +262,7 @@ describe('underwriting referral workflow', () => {
       [tenantId]
     )
 
-    const page = await listReferrals(db! as any, tenantId, { status: 'Open', page: 1, pageSize: 2 })
+    const page = await withTenantTx(tenantId, (txDb) => listReferrals(txDb, tenantId, { status: 'Open', page: 1, pageSize: 2 }))
 
     expect(page.items).toHaveLength(2)
     expect(page.total).toBeGreaterThanOrEqual(3)

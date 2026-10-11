@@ -1,0 +1,84 @@
+product: condo-unit-owners
+# The risk step of the quote wizard for this product. Fields come from
+# fields/condo-unit-owners.json; this file lays them out and says when each
+# one applies. The API enforces the same rules when a quote is rated.
+risk:
+  layout: tabs
+  sections:
+    - title: Unit
+      columns: 3
+      fields:
+        - field: address
+          span: 2
+          placeholder: Street, unit number, city, state, ZIP
+        - floorLevel
+        - squareFeet
+        - field: occupancy
+          widget: radio
+        - field: monthlyRent
+          widget: currency
+          visibleWhen: risk.occupancy == 'TenantOccupied'
+          requiredWhen: risk.occupancy == 'TenantOccupied'
+
+    - title: Building
+      columns: 4
+      help: Details of the building the unit is in.
+      fields:
+        - yearBuilt
+        - construction
+        - roofAgeYears
+        - roofType
+        - protectionClass
+        - buildingFloors
+        - hasElevator
+        - field: elevatorCount
+          visibleWhen: risk.hasElevator
+          requiredWhen: risk.hasElevator
+
+    - title: Association
+      columns: 2
+      fields:
+        - associationName
+        - field: masterPolicyDeductible
+          widget: currency
+
+    - title: Loss assessment
+      # Shown only when the quote carries the Loss Assessment coverage.
+      visibleWhen: coverages.LOSS_ASSESS.selected
+      fields:
+        - field: specialAssessmentNotes
+          widget: textarea
+
+    - title: Scheduled items
+      # A grid with one row per item, shown when the coverage is selected.
+      visibleWhen: coverages.SCHEDULED.selected
+      columns: 1
+      fields:
+        - field: scheduledItems
+          requiredWhen: coverages.SCHEDULED.selected
+
+  validations:
+    # Checked once per item of the list.
+    - each: scheduledItems
+      rule: item.value >= 500
+      field: value
+      message: Schedule only items worth 500 or more
+    # The total across the list, against a state limit from a lookup table.
+    - rule: sum(risk.scheduledItems, 'value') <= lookup('schedule-limits', quote.state, 'scheduleMax')
+      when: coverages.SCHEDULED.selected && isSet(lookup('schedule-limits', quote.state, 'scheduleMax'))
+      field: scheduledItems
+      message: Scheduled items exceed the maximum for this state
+    - rule: risk.floorLevel <= risk.buildingFloors
+      when: isSet(risk.buildingFloors)
+      field: floorLevel
+      message: Floor level cannot be higher than the number of floors in the building
+    - rule: risk.yearBuilt >= 1900 && risk.yearBuilt <= 2030
+      when: isSet(risk.yearBuilt)
+      field: yearBuilt
+      message: Enter a year between 1900 and 2030
+    - rule: "!(risk.floorLevel > 3 && risk.hasElevator != true)"
+      when: isSet(risk.floorLevel) && isSet(risk.buildingFloors)
+      message: A unit above the third floor needs a building with an elevator
+    - rule: risk.monthlyRent >= 300
+      field: monthlyRent
+      message: Monthly rent must be at least 300

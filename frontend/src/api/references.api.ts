@@ -35,7 +35,12 @@ export const getProductConfig = (code: string) => request<any>('GET', `/v1/produ
 
 export const listProducts = () => request<{ items: ProductCapabilityDescriptor[] }>('GET', '/v1/products')
 
-export const getProductForm = (code: string) => request<any>('GET', `/v1/products/${code}/form`)
+/**
+ * Pass the policy id for a mid-term transaction so the screen returned is the
+ * one from the product version that policy term was written on.
+ */
+export const getProductForm = (code: string, policyId?: string) =>
+  request<any>('GET', `/v1/products/${code}/form${policyId ? `?policyId=${encodeURIComponent(policyId)}` : ''}`)
 
 export const previewForms = (payload: any) => request<any[]>('POST', '/v1/forms/preview', payload)
 

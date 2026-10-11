@@ -25,6 +25,8 @@ import { validateInsureds } from './insuredValidation'
 import { deriveWizardTransactionStatus } from '../policies/statusModel'
 import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
+import type { LookupTable, ProductScreen } from '@lattice-policy/rules'
+import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
 import { hasPermission } from '../../auth/permissions'
@@ -592,6 +594,11 @@ function transactionLabel(mode: WizardMode): string {
   return 'Quote'
 }
 
+/** One of the products whose screens are built into the wizard, as opposed to one a carrier pack adds. */
+function isCoreProductCode(value: any): boolean {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PRODUCT_LABELS, value)
+}
+
 function isSupportedProductCode(value: any): value is ProductCode {
   return typeof value === 'string' && value.trim().length > 0
 }
@@ -844,6 +851,12 @@ export function QuoteWizard() {
   const [step, setStep] = useState(1)
   const [cfg, setCfg] = useState<any | null>(null)
   const [riskFields, setRiskFields] = useState<Field[]>([])
+  // Screen a carrier pack defines for the product: the whole risk step for a
+  // pack product, or extra sections under a core product's built-in step.
+  const [riskScreen, setRiskScreen] = useState<ProductScreen | null>(null)
+  const [riskScreenChecked, setRiskScreenChecked] = useState(false)
+  // Lookup tables the screen's rules read, sent with the screen.
+  const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -957,6 +970,7 @@ export function QuoteWizard() {
     if (!q.productCode) {
       setCfg(null)
       setRiskFields([])
+      setRiskScreen(null)
       return
     }
     void loadConfig(q.productCode)
@@ -1881,7 +1895,20 @@ export function QuoteWizard() {
 
   async function loadConfig(code: ProductCode) {
     try { setCfg(await api.getProductConfig(code)) } catch { setCfg(null) }
-    try { const form = await api.getProductForm(code); setRiskFields(form?.fields || []) } catch { setRiskFields([]) }
+    try {
+      // Endorse, cancel, and reinstate stay on the product version the term was
+      // written on; a renewal or rewrite starts a new term on the current one.
+      const midTerm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
+      const form = await api.getProductForm(code, midTerm && policyIdParam ? policyIdParam : undefined)
+      setRiskFields(form?.fields || [])
+      setRiskScreen(form?.screen || null)
+      setRiskTables(form?.tables || {})
+    } catch {
+      setRiskFields([])
+      setRiskScreen(null)
+      setRiskTables({})
+    }
+    setRiskScreenChecked(false)
   }
 
   async function loadQuoteFromServer(quoteId: string) {
@@ -2012,9 +2039,13 @@ export function QuoteWizard() {
       if (!validateCurrentInsureds()) return
     }
     if (step === 4 && target > step && !isCancellationMode) {
-      const errs = q.productCode === 'personal-auto'
+      // A pack product is checked by its own screen rules alone; a core product
+      // keeps its built-in checks and adds the rules for any pack sections.
+      const builtInErrs = q.productCode === 'personal-auto'
         ? validatePersonalAutoVehicles(q.risks)
-        : validateFields(riskFields, q)
+        : riskScreen && !isCoreProductCode(q.productCode) ? {} : validateFields(riskFields, q)
+      const errs = riskScreen ? { ...builtInErrs, ...screenErrors(riskScreen, q, riskTables) } : builtInErrs
+      setRiskScreenChecked(true)
       setFieldErrors(errs)
       if (Object.keys(errs).length > 0) return
     }
@@ -2057,6 +2088,7 @@ export function QuoteWizard() {
     if (!code) {
       setCfg(null)
       setRiskFields([])
+      setRiskScreen(null)
     }
   }
 
@@ -4386,7 +4418,7 @@ export function QuoteWizard() {
                 setFieldErrors(validatePersonalAutoVehicles(nextRisks))
               }}
             />
-          ) : (
+          ) : riskScreen && !isCoreProductCode(q.productCode) ? null : (
             <DynamicRiskForm
               fields={riskFields}
               value={q}
@@ -4397,6 +4429,22 @@ export function QuoteWizard() {
                 setQ(next)
               }}
               onValidate={(errs) => setFieldErrors(errs)}
+            />
+          )}
+          {q.productCode && riskScreen && (
+            <ConfiguredRiskForm
+              screen={riskScreen}
+              value={q}
+              tables={riskTables}
+              disabled={isCancellationMode || isViewOnly}
+              showAllErrors={riskScreenChecked}
+              onChange={(path, val) => {
+                // setByPath writes in place, so copy the risk being edited first.
+                const next = { ...q, risks: (Array.isArray(q.risks) ? q.risks : []).map((risk: any) => ({ ...risk })) }
+                if (next.risks.length === 0) next.risks = [{}]
+                setByPath(next, path, val)
+                setQ(next)
+              }}
             />
           )}
           </CollapsibleSection>
@@ -4555,6 +4603,22 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Years in Business</span><span>{q.risks?.[0]?.yearsInBusiness ?? '-'}</span></div>
                   <div className="kvline"><span className="muted">Prior Losses (3 years)</span><span>{q.risks?.[0]?.priorLossesCount ?? '-'}</span></div>
                 </>
+              ) : !isCoreProductCode(q.productCode) ? (
+                // A product added by a carrier pack: summarise the fields its own screen shows.
+                riskScreen ? <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} /> : (
+                  <>
+                    {riskFields.length === 0 && <div className="muted">No risk details defined for this product.</div>}
+                    {riskFields.map((field) => {
+                      const value = getByPath(q, field.path)
+                      return (
+                        <div className="kvline" key={field.key}>
+                          <span className="muted">{field.label}</span>
+                          <span>{value === undefined || value === null || value === '' ? '-' : String(value)}</span>
+                        </div>
+                      )
+                    })}
+                  </>
+                )
               ) : (
                 <>
                   <div className="kvline"><span className="muted">Industry</span><span>{q.risks?.[0]?.industry || '-'}</span></div>
@@ -4569,6 +4633,8 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Domain</span><span>{q.risks?.[0]?.domain || '-'}</span></div>
                 </>
               )}
+              {/* Fields a carrier pack adds to a core product's screen. */}
+              {q.productCode && isCoreProductCode(q.productCode) && riskScreen && <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} />}
             </CollapsibleSection>
 
             <CollapsibleSection className="card">
@@ -5277,8 +5343,29 @@ function ReviewFooter({
   )
 }
 
-function DynamicRiskForm({ fields, value, onChange, onValidate, disabled }:{ fields: Field[]; value:any; onChange:(path:string, val:any)=>void; onValidate:(errs:Record<string,string>)=>void; disabled?: boolean }) {
+// Exported for tests.
+export function DynamicRiskForm({ fields, value, onChange, onValidate, disabled }:{ fields: Field[]; value:any; onChange:(path:string, val:any)=>void; onValidate:(errs:Record<string,string>)=>void; disabled?: boolean }) {
   useEffect(() => { onValidate(validateFields(fields, value)) }, [fields, value])
+  // A carrier pack can put its fields under section headings; render one grid per section.
+  const groups = fields.reduce<Array<{ name: string; fields: Field[] }>>((acc, field) => {
+    const name = field.group || ''
+    const existing = acc.find((group) => group.name === name)
+    if (existing) existing.fields.push(field)
+    else acc.push({ name, fields: [field] })
+    return acc
+  }, [])
+  if (groups.some((group) => group.name)) {
+    return (
+      <>
+        {groups.map((group) => (
+          <div key={group.name || 'ungrouped'} className="dynamic-group">
+            {group.name && <h4>{group.name}</h4>}
+            <DynamicRiskForm fields={group.fields.map((field) => ({ ...field, group: undefined }))} value={value} onChange={onChange} onValidate={() => {}} disabled={disabled} />
+          </div>
+        ))}
+      </>
+    )
+  }
   return (
     <div className="row dynamic-grid">
       {fields.map(f => (
@@ -5636,6 +5723,8 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
     if (!cov) return null
     const sel: any = { code: cov.code, selected: true }
     if (Array.isArray(cov.limits) && cov.limits.length > 0) sel.limit = cov.limits[0]
+    // A coverage with a free-form limit starts from the product's suggested amount.
+    else if (cov.limitType === 'value' && Number.isFinite(Number(cov.defaultLimit))) sel.limit = Number(cov.defaultLimit)
     if (Array.isArray(cov.deductibles) && cov.deductibles.length > 0) sel.deductible = cov.deductibles[0]
     if (Array.isArray(cov.percentOptions) && cov.percentOptions.length > 0) sel.percent = cov.percentOptions[0]
     return sel
@@ -5687,6 +5776,18 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
                 <select value={String(sel.limit ?? c.limits?.[0] ?? '')} onChange={e=>setField(c.code, 'limit', e.target.value)} disabled={disabled}>
                   {c.limits.map((l: any) => <option key={String(l)} value={String(l)}>{String(l)}</option>)}
                 </select>
+              </div>
+            )}
+            {c.limitType === 'value' && !(Array.isArray(c.limits) && c.limits.length > 0) && selected && (
+              <div className="col">
+                <label>Limit</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={sel.limit ?? ''}
+                  onChange={e => setField(c.code, 'limit', e.target.value === '' ? '' : Number(e.target.value))}
+                  disabled={disabled}
+                />
               </div>
             )}
             {Array.isArray(c.deductibles) && c.deductibles.length > 0 && selected && (

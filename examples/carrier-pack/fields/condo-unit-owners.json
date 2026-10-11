@@ -1,0 +1,19 @@
+[
+  {"path": "risks.0.address", "label": "Unit Address", "type": "string", "required": true, "ui": {"group": "Unit", "order": 110}},
+  {"path": "risks.0.floorLevel", "label": "Floor Level", "type": "int", "required": true, "validation": {"message": "Enter the floor the unit is on"}, "ui": {"group": "Unit", "order": 120}},
+  {"path": "risks.0.squareFeet", "label": "Unit Square Feet", "type": "int", "required": false, "ui": {"group": "Unit", "order": 130}},
+  {"path": "risks.0.yearBuilt", "label": "Year Built", "type": "int", "required": true, "ui": {"group": "Building", "order": 210}},
+  {"path": "risks.0.construction", "label": "Building Construction", "type": "enum", "enum": ["frame", "masonry", "other"], "required": true, "ui": {"group": "Building", "order": 220}},
+  {"path": "risks.0.roofAgeYears", "label": "Roof Age (years)", "type": "int", "required": true, "ui": {"group": "Building", "order": 230}},
+  {"path": "risks.0.protectionClass", "label": "Protection Class", "type": "int", "required": false, "ui": {"group": "Building", "order": 240}},
+  {"path": "risks.0.occupancy", "label": "Occupancy", "type": "enum", "enum": ["OwnerOccupied", "TenantOccupied", "Seasonal"], "required": true, "ui": {"group": "Occupancy", "order": 310}},
+  {"path": "risks.0.masterPolicyDeductible", "label": "Association Master Policy Deductible", "type": "int", "required": false, "visibleTo": ["Agent", "Underwriter"], "ui": {"group": "Association", "order": 410}, "help": "Deductible on the association policy that could be assessed to the unit owner"},
+  {"path": "risks.0.associationName", "label": "Association Name", "type": "string", "required": false, "ui": {"group": "Association", "order": 420}},
+  {"path": "risks.0.monthlyRent", "label": "Monthly Rent", "type": "number", "ui": {"group": "Unit", "order": 140}},
+  {"path": "risks.0.buildingFloors", "label": "Floors in Building", "type": "int", "ui": {"group": "Building", "order": 250}},
+  {"path": "risks.0.hasElevator", "label": "Building Has an Elevator", "type": "bool", "ui": {"group": "Building", "order": 260}},
+  {"path": "risks.0.elevatorCount", "label": "Number of Elevators", "type": "int", "ui": {"group": "Building", "order": 270}},
+  {"path": "risks.0.specialAssessmentNotes", "label": "Known or Pending Special Assessments", "type": "string", "ui": {"group": "Association", "order": 430}},
+  {"path": "risks.0.roofType", "label": "Roof Type", "type": "enum", "optionsFrom": {"table": "roof-types", "value": "code", "label": "name"}, "ui": {"group": "Building", "order": 235}},
+  {"path": "risks.0.scheduledItems", "label": "Scheduled Items", "type": "list", "maxItems": 20, "item": [{"key": "description", "label": "Description", "type": "string", "required": true}, {"key": "category", "label": "Category", "type": "enum", "enum": ["jewelry", "art", "electronics", "other"], "required": true}, {"key": "value", "label": "Insured Value", "type": "number", "required": true}], "ui": {"group": "Schedule", "order": 510}}
+]

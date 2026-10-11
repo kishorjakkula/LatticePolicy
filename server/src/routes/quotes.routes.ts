@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { requirePermission } from '../auth.js'
 import { validate } from '../lib/validate.js'
@@ -46,6 +47,7 @@ quoteRoutes.post(
             details: validation.errors,
           })
         }
+        await pinToCurrentProduct(tenantId, body)
         const premium = rate(tenantId, body)
         const uw = await evaluateUW(tenantId, body)
         const aiMlConfig = await loadTenantAiMlConfig(tenantId)

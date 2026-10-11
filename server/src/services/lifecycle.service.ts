@@ -30,6 +30,8 @@ import {
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { assertProductRules, sameRiskData } from './product-rules.service.js'
+import { carryProductPin, pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { requireProductCapability } from '../lib/product-registry.js'
@@ -316,6 +318,13 @@ export async function cancelPolicy(
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
+  // Mid-term: stays on the product version the term was written on.
+  if (txPayload) carryProductPin(txPayload, ctx.latestPayload)
+  // A plain cancellation is never blocked by product rules. One that also
+  // changes the risk data has to meet them, or it would be a way around them.
+  if (overridePayload && !sameRiskData(overridePayload, ctx.latestPayload)) {
+    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'cancellation')
+  }
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
   // Detect whether this cancellation lands before an already-processed later
@@ -622,6 +631,12 @@ export async function reinstatePolicy(
     : (ctx.latestPayload && typeof ctx.latestPayload === 'object'
         ? JSON.parse(JSON.stringify(ctx.latestPayload))
         : null)
+  if (txPayload) carryProductPin(txPayload, ctx.latestPayload)
+  // Reinstating a policy as it was is always allowed; changing the risk while
+  // doing so has to meet the product's rules like any other change.
+  if (overridePayload && !sameRiskData(overridePayload, ctx.latestPayload)) {
+    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'reinstatement')
+  }
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
   // Detect whether this reinstatement lands before an already-processed later
@@ -849,6 +864,9 @@ export async function renewPolicy(
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
+  // A renewal starts a new term on the product as it is defined now.
+  await pinToCurrentProduct(tenantId, payload)
+  assertProductRules(tenantId, payload, 'renewal')
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)
   const authority = await resolveAuthorityDecision(q, {
@@ -1167,6 +1185,9 @@ export async function rewritePolicy(
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
+  // A rewrite starts a new term on the product as it is defined now.
+  await pinToCurrentProduct(tenantId, payload)
+  assertProductRules(tenantId, payload, 'rewrite')
 
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)
@@ -1478,6 +1499,8 @@ export async function previewRenewal(
   payload.effectiveDate = nextEff
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
+  // Preview what the renewal would be on the product as it is defined now.
+  await pinToCurrentProduct(tenantId, payload)
   const premium = rate(tenantId, payload)
   const underwriting = await evaluateUW(tenantId, payload)
   return { underwriting, premium, nextEffectiveDate: nextEff, nextExpirationDate: nextExp }

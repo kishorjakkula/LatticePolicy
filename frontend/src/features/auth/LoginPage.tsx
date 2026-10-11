@@ -8,7 +8,7 @@ import { getDefaultPermissionsForRoles } from '../../auth/permissions'
 export function LoginPage() {
   const [username, setUsername] = useState(config.showDemoCredentials ? 'agent1' : '')
   const [password, setPassword] = useState(config.showDemoCredentials ? 'password' : '')
-  const [tenantId, setTenantId] = useState(() => localStorage.getItem('tenantId') || 'sample-carrier')
+  const [tenantId, setTenantId] = useState(() => config.carrierTenantId || localStorage.getItem('tenantId') || 'sample-carrier')
   const [mfaStep, setMfaStep] = useState<'credentials' | 'verify' | 'setup'>('credentials')
   const [mfaToken, setMfaToken] = useState('')
   const [otp, setOtp] = useState('')
@@ -145,16 +145,21 @@ export function LoginPage() {
         <form onSubmit={onSubmit}>
           {mfaStep === 'credentials' && (
             <>
-              <label htmlFor="tenant-id">Organization Slug</label>
-              <input
-                id="tenant-id"
-                value={tenantId}
-                onChange={e => {
-                  setTenantId(e.target.value)
-                  resetMfaFlow()
-                }}
-                placeholder="e.g. sample-carrier"
-              />
+              {/* A single-carrier stack has exactly one organization, so there is nothing to choose. */}
+              {!config.carrierTenantId && (
+                <>
+                  <label htmlFor="tenant-id">Organization Slug</label>
+                  <input
+                    id="tenant-id"
+                    value={tenantId}
+                    onChange={e => {
+                      setTenantId(e.target.value)
+                      resetMfaFlow()
+                    }}
+                    placeholder="e.g. sample-carrier"
+                  />
+                </>
+              )}
               <label htmlFor="username">Email / Username</label>
               <input
                 id="username"

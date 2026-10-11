@@ -11,6 +11,10 @@ Use `docs/tasks/TEMPLATE.md` to write an implementation-specific task note
 under `docs/tasks/` when a step below requires carrier-specific decisions or
 follow-up work.
 
+For installing and operating a carrier's own stack (provision, bootstrap,
+backup, upgrade, rollback), use the deployment kit in
+`deploy/carrier-stack/README.md`.
+
 ## Readiness Tiers
 
 Match the `readiness:*` label taxonomy used on GitHub issues

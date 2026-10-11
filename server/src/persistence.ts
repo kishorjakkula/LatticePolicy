@@ -1,4 +1,5 @@
 import { eq, and, desc, sql } from 'drizzle-orm'
+import { ensureProductSnapshots } from './lib/product-snapshot.js'
 import { v4 as uuidv4 } from './uuid.js'
 import type { DrizzleDB } from './db.js'
 import {
@@ -194,6 +195,10 @@ export async function loadPolicyContext(q: DrizzleDB, tenantId: string, policyId
     .where(and(eq(policyVersions.tenantId, tenantId), eq(policyVersions.policyId, policyId as any)))
     .orderBy(desc(policyVersions.processedAt))
     .limit(1)
+
+  // Every transaction starts here; load the product version the term is
+  // pinned to so rating and rule checks can use it.
+  if (latestVersionRows.length) await ensureProductSnapshots(tenantId, [latestVersionRows[0].payload])
 
   return {
     policy: policyRows[0],

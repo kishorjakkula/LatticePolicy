@@ -1,6 +1,10 @@
 import type { Pool } from 'pg'
 import { and, eq, sql } from 'drizzle-orm'
 import { createDrizzleDb, getDb } from './db.js'
+import { getPinnedTenantId } from './config.js'
+import { buildEventEnvelope } from './events/envelope.js'
+import { createEventTransport, getEventTransportName, type EventTransport } from './events/transport.js'
+import { createWebhookTransport } from './events/transports/webhook.js'
 import { asyncMessageOutbox } from './schema.js'
 import { logger } from './logger.js'
 
@@ -36,7 +40,8 @@ const DEFAULT_MAX_BACKOFF_SECONDS = 600
 
 export type StopAsyncMessageWorker = () => void
 
-export function startAsyncMessageWorker(): StopAsyncMessageWorker {
+/** `force` starts the loop regardless of ASYNC_PUSH_ENABLED; a dedicated dispatcher process uses it. */
+export function startAsyncMessageWorker(options: { force?: boolean } = {}): StopAsyncMessageWorker {
   const db = getDb()
   if (!db) {
     logger.info('[async-push] Worker disabled: database not initialized')
@@ -44,7 +49,7 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
   }
 
   const config = loadConfig()
-  if (!config.enabled) {
+  if (!config.enabled && !options.force) {
     logger.info('[async-push] Worker disabled by ASYNC_PUSH_ENABLED')
     return () => {}
   }
@@ -63,7 +68,7 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
     if (stopped || running) return
     running = true
     try {
-      const batch = await claimOutboxRows(db, config.batchSize)
+      const batch = await claimOutboxRows(db, config.batchSize, getPinnedTenantId() ?? undefined)
       if (batch.length === 0) {
         schedule(config.pollMs)
         return
@@ -90,6 +95,7 @@ export function startAsyncMessageWorker(): StopAsyncMessageWorker {
   return () => {
     stopped = true
     if (timer) clearTimeout(timer)
+    void closeEventTransport()
     logger.info('[async-push] Worker stopped')
   }
 }
@@ -109,22 +115,35 @@ export function loadConfig(): AsyncPushConfig {
 }
 
 /** Exported so server/src/jobs/handlers/asyncOutboxDeliveryRetry.ts can reuse the same claim query. */
-export async function claimOutboxRows(pool: Pool, limit: number, tenantId?: string): Promise<AsyncOutboxRow[]> {
+/**
+ * How long a claimed message may stay in Processing before another claim
+ * takes it over. A dispatcher that dies mid-batch leaves its messages in
+ * Processing; without this they would never be delivered. It must be longer
+ * than a batch can take, or a slow batch is delivered twice.
+ */
+export function claimLeaseSeconds(): number {
+  return parsePositiveInt(process.env.ASYNC_PUSH_CLAIM_LEASE_SECONDS, 300)
+}
+
+export async function claimOutboxRows(pool: Pool, limit: number, tenantId?: string, leaseSeconds = claimLeaseSeconds()): Promise<AsyncOutboxRow[]> {
   // This query uses FOR UPDATE SKIP LOCKED with a CTE, which requires raw SQL.
   // We keep it as a raw query via a dedicated client transaction.
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const params: any[] = [PENDING_STATUSES, limit]
-    const tenantFilter = tenantId ? 'AND tenant_id = $3' : ''
+    const params: any[] = [PENDING_STATUSES, limit, leaseSeconds]
+    const tenantFilter = tenantId ? 'AND tenant_id = $4' : ''
     if (tenantId) params.push(tenantId)
     const result = await client.query<AsyncOutboxRow>(
       `
         WITH candidate AS (
           SELECT message_id
           FROM async_message_outbox
-          WHERE status = ANY($1::text[])
-            AND next_attempt_at <= now()
+          WHERE (
+              (status = ANY($1::text[]) AND next_attempt_at <= now())
+              -- Abandoned by a dispatcher that stopped before finishing it.
+              OR (status = 'Processing' AND last_attempt_at < now() - make_interval(secs => $3))
+            )
             AND attempts < max_attempts
             ${tenantFilter}
           ORDER BY next_attempt_at ASC, created_at ASC
@@ -209,52 +228,30 @@ export async function dispatchOutboxRow(pool: Pool, row: AsyncOutboxRow, config:
   }
 }
 
-async function pushMessage(row: AsyncOutboxRow, config: AsyncPushConfig, attemptNumber: number): Promise<void> {
-  const envelope = {
-    messageId: row.message_id,
-    tenantId: row.tenant_id,
-    topic: row.topic,
-    attempt: attemptNumber,
-    createdAt: row.created_at,
-    payload: row.payload
-  }
+let brokerTransport: EventTransport | null = null
 
-  if (!config.webhookUrl) {
-    logger.info({ envelope }, '[async-push] Emitted to stdout')
-    return
+/**
+ * The transport messages go out on. The webhook transport is built from the
+ * dispatcher's own settings; a broker transport holds a connection, so there
+ * is one per process.
+ */
+function transportFor(config: AsyncPushConfig): EventTransport {
+  if (getEventTransportName() === 'webhook') {
+    return createWebhookTransport({ webhookUrl: config.webhookUrl, authHeader: config.authHeader, requestTimeoutMs: config.requestTimeoutMs })
   }
-
-  const abortController = new AbortController()
-  const timeout = setTimeout(() => abortController.abort(), config.requestTimeoutMs)
-  try {
-    const headers: Record<string, string> = {
-      'content-type': 'application/json'
-    }
-    if (config.authHeader) {
-      headers.authorization = config.authHeader
-    }
-
-    const response = await fetch(config.webhookUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(envelope),
-      signal: abortController.signal
-    })
-    if (!response.ok) {
-      const body = (await safeReadBody(response)).trim()
-      throw new Error(`webhook returned ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`)
-    }
-  } finally {
-    clearTimeout(timeout)
-  }
+  if (!brokerTransport) brokerTransport = createEventTransport()
+  return brokerTransport
 }
 
-async function safeReadBody(response: Response): Promise<string> {
-  try {
-    return await response.text()
-  } catch {
-    return ''
-  }
+/** Releases the broker connection, if one was opened. */
+export async function closeEventTransport(): Promise<void> {
+  const transport = brokerTransport
+  brokerTransport = null
+  if (transport) await transport.close()
+}
+
+async function pushMessage(row: AsyncOutboxRow, config: AsyncPushConfig, attemptNumber: number): Promise<void> {
+  await transportFor(config).publish(buildEventEnvelope(row, attemptNumber))
 }
 
 function calculateBackoffSeconds(attempt: number, baseSeconds: number, maxSeconds: number): number {

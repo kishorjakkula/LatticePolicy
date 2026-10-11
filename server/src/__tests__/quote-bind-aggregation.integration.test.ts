@@ -1,8 +1,13 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeDb, getDb, initDb } from '../db.js'
+import { closeDb, getDb, initDb, withTenantTx } from '../db.js'
 import { createOrRateQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
 import { decideReferral } from '../services/uw-referral.service.js'
+
+// Services that take a db handle run inside a tenant transaction, as the routes do.
+function decideReferralTx(tenant: string, referralId: string, input: Parameters<typeof decideReferral>[3]) {
+  return withTenantTx(tenant, (db) => decideReferral(db, tenant, referralId, input))
+}
 
 // Task A integration coverage: the real-time aggregation/catastrophe-exposure
 // appetite check wired into bindQuote (server/src/services/quote-bind.service.ts).
@@ -187,7 +192,7 @@ describe('aggregation/catastrophe-exposure appetite check at bind', () => {
 
     // Underwriter approves the referral through the normal decision API —
     // the same mechanism as every other UW-referral reason.
-    const decided = await decideReferral({} as any, tenantId, referralId, {
+    const decided = await decideReferralTx(tenantId, referralId, {
       decision: 'Approved',
       reason: 'Reviewed accumulation in this territory, acceptable within treaty capacity',
       decidedBy: UW_USER_ID,

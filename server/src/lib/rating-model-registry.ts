@@ -1,5 +1,6 @@
 import { eq, and, desc } from 'drizzle-orm'
 import { createDrizzleDb, getDb, withTenantTx } from '../db.js'
+import { getPinnedTenantId } from '../config.js'
 import { ratingModels, ratingModelVersions, tenants } from '../schema.js'
 
 export type PublishedRatingModelSnapshot = {
@@ -151,7 +152,11 @@ export async function warmPublishedRatingModelCache(): Promise<void> {
   const tenantRows = await db
     .select({ tenantId: tenants.tenantId })
     .from(tenants)
-  const tenantIds = tenantRows.map(row => String(row.tenantId || '')).filter(Boolean)
+  const pinnedTenantId = getPinnedTenantId()
+  const tenantIds = tenantRows
+    .map(row => String(row.tenantId || ''))
+    .filter(Boolean)
+    .filter(tenantId => !pinnedTenantId || tenantId === pinnedTenantId)
   for (const tenantId of tenantIds) {
     try {
       await refreshTenantPublishedRatingModelCache(tenantId)

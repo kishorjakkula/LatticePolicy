@@ -56,11 +56,15 @@ export function calculateNextRunAt(expression: string, scheduledAt: Date, now = 
 export async function runSchedulerTick(
   pool: Pool,
   limit: number,
-  now = new Date()
+  now = new Date(),
+  tenantId?: string
 ): Promise<SchedulerTickResult> {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const dueParams: any[] = [now, limit]
+    const tenantFilter = tenantId ? 'AND schedules.tenant_id = $3' : ''
+    if (tenantId) dueParams.push(tenantId)
     const due = await client.query<DueScheduleRow>(
       `SELECT schedules.schedule_id,
               schedules.tenant_id,
@@ -76,10 +80,11 @@ export async function runSchedulerTick(
          AND definitions.enabled = true
          AND schedules.next_run_at IS NOT NULL
          AND schedules.next_run_at <= $1
+         ${tenantFilter}
        ORDER BY schedules.next_run_at ASC, schedules.created_at ASC
        LIMIT $2
        FOR UPDATE OF schedules SKIP LOCKED`,
-      [now, limit]
+      dueParams
     )
 
     let runsCreated = 0

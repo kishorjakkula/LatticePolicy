@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@lattice-policy/rules": "file:../packages/rules",
     "@lattice-policy/types": "file:../packages/types",
     "@sentry/react": "^10.75.0",
     "@tanstack/react-query": "^5.104.1",

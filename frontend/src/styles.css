@@ -3112,6 +3112,176 @@ button:focus-visible {
   max-width: 100%;
 }
 
+/* Risk screens defined by a carrier pack (ConfiguredRiskForm). */
+.cfg-form {
+  display: grid;
+  gap: 18px;
+}
+
+.cfg-section > h4 {
+  margin: 0 0 4px;
+}
+
+.cfg-section-help {
+  margin: 0 0 10px;
+}
+
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cfg-columns, 2), minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+
+.cfg-field {
+  grid-column: span var(--cfg-span, 1);
+  min-width: 0;
+}
+
+.cfg-required {
+  color: #b42318;
+}
+
+.cfg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.cfg-check input {
+  width: auto;
+}
+
+/* A lone checkbox has no label row above it; line it up with its neighbours' inputs. */
+.cfg-field > .cfg-check {
+  padding-top: 30px;
+}
+
+.cfg-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 4px;
+  padding-top: 8px;
+}
+
+.cfg-currency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cfg-currency input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid #d5dbe6;
+}
+
+.cfg-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cfg-tab-active {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.cfg-tab-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #b42318;
+  color: #fff;
+  font-size: 0.75em;
+}
+
+.cfg-list {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.cfg-list-empty {
+  margin: 0;
+}
+
+.cfg-list-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.cfg-list-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfg-list-table th {
+  text-align: left;
+  padding: 0 8px 6px 0;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cfg-list-table td {
+  padding: 0 8px 8px 0;
+  vertical-align: top;
+  min-width: 140px;
+}
+
+.cfg-list-table td.cfg-list-actions {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.cfg-list-limit {
+  margin-left: 10px;
+}
+
+.cfg-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .cfg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cfg-field {
+    grid-column: auto;
+  }
+}
+
+.dynamic-group + .dynamic-group {
+  margin-top: 18px;
+}
+
+.dynamic-group > h4 {
+  margin: 0 0 8px;
+}
+
 .dynamic-grid {
   flex-wrap: wrap;
 }

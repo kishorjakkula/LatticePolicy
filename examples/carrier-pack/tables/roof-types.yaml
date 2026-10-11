@@ -1,0 +1,9 @@
+# Lookup table: option list for the Roof Type field and its rating factor.
+table: roof-types
+key: code
+columns: [code, name, factor]
+rows:
+  - [asphalt, Asphalt shingle, 1.00]
+  - [metal, Standing-seam metal, 0.94]
+  - [tile, Clay or concrete tile, 0.97]
+  - [flat, Flat membrane, 1.08]

@@ -6,6 +6,8 @@ export type Field = {
   required?: boolean
   options?: any[]
   help?: string
+  /** Section heading the field is shown under, when the product defines one. */
+  group?: string
 }
 
 export function getRiskFields(productCode: 'personal-auto'|'commercial-auto'|'homeowners'|'cyber'|'professional-liability', cfg: any): Field[] {

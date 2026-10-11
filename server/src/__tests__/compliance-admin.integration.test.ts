@@ -55,6 +55,21 @@ describe('compliance admin: eligibility and OFAC review (database path)', () => 
     await closeDb()
   })
 
+  it('imports OFAC SDN entries through the tenant transaction and skips blank names', async () => {
+    const run = suffix()
+    const name = `Sanctioned Importer ${run}`
+    await createUser({ username: `ofac-import-${run}`, password, tenantId, roles: ['admin'] })
+    const token = await login(`ofac-import-${run}`)
+
+    const res = await authReq('post', '/api/v1/admin/compliance/ofac/sdn-list/import', token)
+      .send({ entries: [{ name, aliases: ['S. Importer'], country: 'XX' }, { name: '   ' }] })
+      .expect(201)
+    expect(res.body).toEqual({ imported: 1 })
+
+    const stored = await q('SELECT name, aliases, country, list_type FROM ofac_sdn_list WHERE name = $1', [name])
+    expect(stored.rows).toEqual([{ name, aliases: ['S. Importer'], country: 'XX', list_type: 'SDN' }])
+  })
+
   it('admin can create/update eligibility and it drives quote-time enforcement', async () => {
     const run = suffix()
     const productCode = `test-product-${run}`

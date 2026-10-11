@@ -1,0 +1,7 @@
+# Lookup table: the most that can be scheduled on one policy, by state.
+table: schedule-limits
+key: state
+columns: [state, scheduleMax]
+rows:
+  - { state: TX, scheduleMax: 50000 }
+  - { state: FL, scheduleMax: 25000 }

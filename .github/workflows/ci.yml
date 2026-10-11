@@ -32,6 +32,9 @@ jobs:
       - name: Check module boundaries
         run: npm run check:architecture
 
+      - name: Test shared packages
+        run: npm run test:packages
+
       - name: Build frontend
         env:
           VITE_API_BASE_URL: https://api.example.com

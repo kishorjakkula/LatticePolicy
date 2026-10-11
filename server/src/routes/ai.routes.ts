@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { getDb, type DrizzleDB } from '../db.js'
 import { ok } from '../lib/respond.js'
 import { requirePermission } from '../auth.js'
@@ -36,6 +37,7 @@ aiRoutes.post('/ai/quotes/insights', requirePermission('page.wizard.view'), asyn
   const payload = normalizeQuotePayload(req.body?.payload || req.body || {})
   try {
     const aiMlConfig = await loadTenantAiMlConfig(tenantId)
+    await ensureProductSnapshots(tenantId, [payload])
     const premium = req.body?.premium || rate(tenantId, payload)
     const underwriting = req.body?.underwriting || (await evaluateUW(tenantId, payload))
     const aiInsights = inferQuoteAiInsights(aiMlConfig, {

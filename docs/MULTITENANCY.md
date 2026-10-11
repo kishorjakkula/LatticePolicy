@@ -26,3 +26,78 @@ Versioning and Upgrades
 - Keep extension point contracts backward compatible.
 - Provide migration guides and compatibility matrix per release.
 
+Single-Carrier Stacks (CARRIER_TENANT_ID)
+- The target production model is one full stack per carrier (API, worker, UI,
+  database, cache, storage). Set `CARRIER_TENANT_ID=<tenant id>` on the API to
+  pin a stack to its carrier.
+- When pinned: `tenancyMiddleware` rejects any `X-Tenant`, `?tenant=`, or token
+  tenant other than the pinned one with `403 TENANT_NOT_SERVED`, and resolves
+  requests that name no tenant to the pinned tenant. Login and the
+  `/auth/sso/:tenantId/*` routes apply the same rule.
+- When pinned: the job scheduler, job run claims, async outbox worker, and
+  rating model cache warm-up only touch the pinned tenant's rows, and demo
+  seed users are not created unless the pinned tenant is `sample-carrier`.
+- When unset: tenant resolution is unchanged (header, query, then token).
+- Build the frontend for a pinned stack with `VITE_CARRIER_TENANT_ID` set to
+  the same value; otherwise the UI defaults to `sample-carrier` and the API
+  rejects it. Docker Compose passes `CARRIER_TENANT_ID` to both.
+
+Fail-Closed Rules (all modes)
+- `withTenantTx` rejects an empty tenant id (`TENANT_REQUIRED`) and, when
+  pinned, any other tenant id. It is the backstop behind the request-edge
+  checks; do not open tenant work on the raw pool.
+- `toRawQuery` only accepts a handle created by `withTenantTx`/`req.tx`. It no
+  longer falls back to the shared pool; passing any other handle throws.
+- Login rejects an account whose tenant differs from the tenant being signed
+  into, so one tenant's MFA and local-auth settings are never applied to
+  another tenant's user.
+
+Row-Level Security Enforcement (TENANT_RLS_ENFORCED)
+- Postgres does not apply RLS policies to a table's owner or to a superuser,
+  and the API connects as the owner. With `TENANT_RLS_ENFORCED` off (default)
+  the policies exist but are not evaluated; application-level tenant filters
+  are the effective control.
+- With `TENANT_RLS_ENFORCED=1`, `withTenantTx` runs `SET LOCAL ROLE
+  lattice_tenant_rls` at the start of every tenant transaction. That role is
+  not an owner, cannot bypass RLS, and cannot log in, so every policy applies:
+  an unfiltered query sees only the transaction's tenant and a write for
+  another tenant is rejected. The connection returns to the owner role at
+  COMMIT/ROLLBACK.
+- Migration `058_tenant_rls_enforcement.sql` creates the role, grants it DML
+  on current and future tables, adds parent-scoped policies for `user_roles`,
+  `party_contacts`, `party_licenses`, and `party_roles`, and enables RLS on
+  `auto_vehicles`, `dwellings`, and `short_rate_tables`.
+- If the migration user lacks `CREATEROLE`, the migration still applies but
+  logs a notice. An operator then runs `CREATE ROLE lattice_tenant_rls NOLOGIN
+  NOINHERIT;`, `GRANT lattice_tenant_rls TO <app user>;` and the table and
+  sequence grants from the migration before turning enforcement on. Startup
+  refuses to run with enforcement on when the role is unusable.
+- Still on the owner connection by design: migrations, the cross-tenant
+  claim queries in the job scheduler, job queue, and outbox worker, the
+  username lookup at login, and the rating model cache warm-up. Scope any new
+  raw-pool query by tenant explicitly.
+- Every new tenant table needs `ENABLE ROW LEVEL SECURITY` and a
+  `tenant_isolation` policy; `tenant-rls-enforcement.integration.test.ts`
+  fails if one is missing.
+
+Carrier Packs (CARRIER_PACK_DIR)
+- A carrier's customisations are a versioned directory of config files, the
+  carrier pack, kept in the carrier's own repository and mounted into its
+  stack. `CARRIER_PACK_DIR` names it. Layout and an example:
+  `examples/carrier-pack/`.
+- Format 1 holds a manifest (`pack.yaml`), `config.yaml` (`enabledProducts`
+  and rating, underwriting, and document overrides), added products
+  (`products/<code>/`), field metadata (`fields/<code>.json`), risk
+  screens (`screens/<code>.yaml`), and lookup tables (`tables/<name>.yaml`).
+- The pack applies only to the carrier named in its manifest, which must
+  equal `CARRIER_TENANT_ID`. For that carrier it replaces
+  `tenants/<tenant>/config.yaml` and `tenants/<tenant>/field_meta.*.json`.
+- With a pack that lists `enabledProducts`, the stack offers exactly those
+  products. Without a pack, every core product is offered, as before.
+- Startup validates the pack and exits on any error
+  (`server/src/lib/carrier-pack-validator.ts`). `npm run validate:pack
+  --workspace=server -- <dir>` runs the same check from a checkout, and
+  `node server/dist/validateCarrierPack.js <dir>` from a release image.
+- `GET /version` reports the loaded pack version.
+- With `CARRIER_PACK_DIR` unset nothing changes: products, overrides, and
+  field metadata load from the repository.

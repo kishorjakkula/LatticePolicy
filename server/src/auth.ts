@@ -6,7 +6,7 @@ import { withTenantTx, getDb, toRawQuery } from './db.js'
 import { ensureTenantRbacDefaults, getDefaultPermissionCodesForRoles, resolvePermissionsForRoles } from './rbac.js'
 import { buildOtpAuthUri, generateMfaSecret, normalizeOtpCode, verifyTotpCode } from './mfa.js'
 import { getMemoryTenantMfaRequired } from './tenantSecurity.js'
-import { getDemoLoginName, getJwtSecret, getMfaTokenSecret, isDemoUserAllowed, isManagedDeployment } from './config.js'
+import { getDemoLoginName, getJwtSecret, getMfaTokenSecret, getPinnedTenantId, isDemoUserAllowed, isManagedDeployment } from './config.js'
 import { loadTenantLocalAuthEnabled } from './config/tenant-identity.js'
 import { isLockedOut } from './lib/password-policy.js'
 import { recordFailedLoginAttempt, resetLoginFailureState } from './services/user.service.js'
@@ -232,8 +232,12 @@ function readCookie(header: string, name: string): string {
 export async function handleLogin(req: Request, res: Response) {
   const { username, password, tenantId: bodyTenant, otp } = req.body || {}
   const headerTenant = (req.header('X-Tenant') || '').toString().trim()
-  const tenantId = (bodyTenant || headerTenant)
+  const pinnedTenantId = getPinnedTenantId()
+  const tenantId = (bodyTenant || headerTenant || pinnedTenantId)
   if (!tenantId) return res.status(400).json({ code: 'TENANT_REQUIRED', message: 'Provide tenantId in body or X-Tenant header' })
+  if (pinnedTenantId && tenantId !== pinnedTenantId) {
+    return res.status(403).json({ code: 'TENANT_NOT_SERVED', message: 'This deployment does not serve the requested tenant' })
+  }
   if (!username || !password) return res.status(400).json({ code: 'INVALID_CREDENTIALS' })
   if (!isDemoUserAllowed(username)) return res.status(403).json({ code: 'DEMO_ACCESS_NOT_ALLOWED', message: 'This demo is invite-only' })
   const localAuthEnabled = await loadTenantLocalAuthEnabled(tenantId)
@@ -264,6 +268,10 @@ export async function handleLogin(req: Request, res: Response) {
   // Run user lookup under tenant RLS
   const u = await withTenantTx(tenantId, async () => await findByUsername(username))
   if (!u || u.disabled) return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
+  // Usernames are looked up globally, so confirm the account belongs to the
+  // tenant being signed into; otherwise that tenant's MFA and local-auth
+  // settings would be applied to another tenant's user.
+  if (u.tenantId !== tenantId) return res.status(401).json({ code: 'INVALID_CREDENTIALS' })
   if (u.authProvider === 'oidc') return res.status(401).json({ code: 'SSO_ACCOUNT', message: 'This account signs in through SSO, not username/password' })
   if (isLockedOut({ lockedUntil: u.lockedUntil ?? null })) {
     return res.status(423).json({ code: 'ACCOUNT_LOCKED', message: 'Account temporarily locked after too many failed login attempts. Try again later.' })

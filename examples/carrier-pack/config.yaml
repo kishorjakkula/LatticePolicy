@@ -1,0 +1,14 @@
+# What this carrier sells and how it tunes the framework's products.
+tenantId: acme-mutual
+enabledProducts:
+  - personal-auto
+  - homeowners
+  - condo-unit-owners
+overrides:
+  rating:
+    driverAgeFactors:
+      <25: 1.30
+      25-64: 0.97
+      65+: 1.10
+  documents:
+    templatePack: default

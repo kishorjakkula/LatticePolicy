@@ -1,6 +1,7 @@
 import os from 'node:os'
 import type { Pool } from 'pg'
 import { getDb } from '../db.js'
+import { getPinnedTenantId } from '../config.js'
 import { logger } from '../logger.js'
 import { getJobDefinition } from './registry.js'
 import { claimDueRuns, checkpointRun, completeRun, retryOrDeadLetterRun, type JobRunRow } from './jobQueue.js'
@@ -16,7 +17,8 @@ interface JobWorkerConfig {
 
 export type StopJobWorker = () => void
 
-export function startJobWorker(): StopJobWorker {
+/** `force` starts the loop regardless of JOB_WORKER_ENABLED; a dedicated worker process uses it. */
+export function startJobWorker(options: { force?: boolean } = {}): StopJobWorker {
   const db = getDb()
   if (!db) {
     logger.info('[jobs] Worker disabled: database not initialized')
@@ -24,7 +26,7 @@ export function startJobWorker(): StopJobWorker {
   }
 
   const config = loadConfig()
-  if (!config.enabled) {
+  if (!config.enabled && !options.force) {
     logger.info('[jobs] Worker disabled by JOB_WORKER_ENABLED')
     return () => {}
   }
@@ -72,8 +74,10 @@ export async function runJobWorkerIteration(
   pool: Pool,
   config: Pick<JobWorkerConfig, 'batchSize' | 'workerId' | 'lockSeconds'>
 ): Promise<{ scheduledRunsCreated: number; runs: JobRunRow[] }> {
-  const scheduler = await runSchedulerTick(pool, config.batchSize)
-  const runs = await claimDueRuns(pool, config.batchSize, config.workerId, config.lockSeconds)
+  // A single-carrier stack only schedules and claims its own carrier's work.
+  const tenantId = getPinnedTenantId() ?? undefined
+  const scheduler = await runSchedulerTick(pool, config.batchSize, new Date(), tenantId)
+  const runs = await claimDueRuns(pool, config.batchSize, config.workerId, config.lockSeconds, tenantId)
   for (const run of runs) {
     await executeRun(pool, run)
   }

@@ -6,6 +6,8 @@ import { evaluateUW } from '../uw.js'
 import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuoteDetailed } from '../contracts.js'
+import { productRuleViolations } from './product-rules.service.js'
+import { pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
@@ -116,6 +118,20 @@ export async function createOrRateQuote(
     throw new ValidationError('INVALID_QUOTE', {
       message: 'Quote payload failed contract validation',
       errors: validation.errors,
+    })
+  }
+
+  // Pin the quote to the product as it is defined now. The policy bound from
+  // it keeps that definition for the whole term.
+  await pinToCurrentProduct(tenantId, body)
+
+  // Rules from the carrier pack's screen for this product. The wizard applies
+  // the same rules; enforcing them here means the API cannot be used to skip them.
+  const screenViolations = productRuleViolations(tenantId, body)
+  if (screenViolations.length > 0) {
+    throw new ValidationError('INVALID_QUOTE', {
+      message: 'Quote does not satisfy the rules for this product',
+      errors: screenViolations,
     })
   }
 

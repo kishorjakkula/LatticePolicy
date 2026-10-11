@@ -34,6 +34,12 @@ describe('LoginPage SSO', () => {
     open.mockRestore()
   })
 
+  it('asks for an organization when the stack is not pinned to one carrier', () => {
+    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+
+    expect(screen.getByLabelText('Organization Slug')).toHaveValue('sample-carrier')
+  })
+
   it('does not expose local demo credentials in a client configuration', () => {
     render(<MemoryRouter><LoginPage /></MemoryRouter>)
 

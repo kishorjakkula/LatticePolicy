@@ -197,6 +197,26 @@ describe('job queue framework', () => {
     expect(events.some((e: any) => e.event_type === 'checkpointed')).toBe(true)
   })
 
+  it('a tenant-scoped claim only claims that tenant\'s runs', async () => {
+    const pool = getDb()!
+    const keyA = `test:scoped-claim:a:${suffix()}`
+    const keyB = `test:scoped-claim:b:${suffix()}`
+    await enqueueJob({ tenantId: tenantA, jobCode: 'async_outbox_delivery_retry', idempotencyKey: keyA })
+    await enqueueJob({ tenantId: tenantB, jobCode: 'async_outbox_delivery_retry', idempotencyKey: keyB })
+
+    const batch = await claimDueRuns(pool, 500, 'worker-scoped', 60, tenantB)
+
+    expect(batch.length).toBeGreaterThanOrEqual(1)
+    expect(batch.every((run) => run.tenant_id === tenantB)).toBe(true)
+    expect(batch.some((run) => (run as any).idempotency_key === keyB)).toBe(true)
+
+    const other = await pool.query(
+      'SELECT status FROM job_runs WHERE tenant_id = $1 AND idempotency_key = $2',
+      [tenantA, keyA]
+    )
+    expect(other.rows[0].status).toBe('Queued')
+  })
+
   it('completes a run and marks it Succeeded', async () => {
     const pool = getDb()!
     const key = `test:complete:${suffix()}`
@@ -239,6 +259,33 @@ describe('job queue framework', () => {
     const afterSecondFailure = await fetchRun(claimedOnce.run_id)
     expect(afterSecondFailure.status).toBe('DeadLettered')
     expect(afterSecondFailure.last_error).toContain('still failing')
+  })
+
+  it('takes over a message left in Processing by a dispatcher that stopped, but not one still being worked on', async () => {
+    const pool = getDb()!
+    const tenant = `outbox-lease-${suffix()}`
+    await ensureTenant(tenant)
+    const abandoned = crypto.randomUUID()
+    const inFlight = crypto.randomUUID()
+    const spent = crypto.randomUUID()
+    await pool.query(
+      `INSERT INTO async_message_outbox (tenant_id, source_table, source_id, topic, payload, status, attempts, max_attempts, last_attempt_at)
+       VALUES ($1, 'test_source', $2, 'test.lease', '{}'::jsonb, 'Processing', 0, 8, now() - interval '1 hour'),
+              ($1, 'test_source', $3, 'test.lease', '{}'::jsonb, 'Processing', 0, 8, now()),
+              ($1, 'test_source', $4, 'test.lease', '{}'::jsonb, 'Processing', 8, 8, now() - interval '1 hour')`,
+      [tenant, abandoned, inFlight, spent]
+    )
+
+    const claimed = await claimOutboxRows(pool, 25, tenant, 300)
+    const sources = await pool.query(
+      'SELECT source_id::text AS source_id FROM async_message_outbox WHERE message_id = ANY($1::uuid[])',
+      [claimed.map((row) => row.message_id)]
+    )
+    // Only the abandoned one: the fresh one is within its lease and the third has no attempts left.
+    expect(sources.rows.map((row: any) => row.source_id)).toEqual([abandoned])
+
+    // Claiming renews the lease, so an immediate second claim finds nothing.
+    expect(await claimOutboxRows(pool, 25, tenant, 300)).toEqual([])
   })
 
   it('the async_outbox_delivery_retry handler dispatches a due outbox row end to end', async () => {
