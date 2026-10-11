@@ -99,6 +99,20 @@ export function listProductCapabilities(): ProductCapabilityDescriptor[] {
     .sort((left, right) => left.label.localeCompare(right.label))
 }
 
+/** Installed definitions remain readable for servicing products closed to new business. */
+export function getInstalledProductCapabilities(code: string): ProductCapabilityDescriptor | null {
+  const normalized = String(code || '').trim().toLowerCase()
+  const dir = resolveProductPackDir(normalized)
+  const raw = dir ? readCoverageFile(dir) : null
+  return raw ? parseProductDescriptor(raw, normalized) : null
+}
+
+export function requireInstalledProductCapabilities(code: string): ProductCapabilityDescriptor {
+  const descriptor = getInstalledProductCapabilities(code)
+  if (!descriptor) throw new NotFoundError('PRODUCT_NOT_FOUND', `Product '${code}' was not found.`)
+  return descriptor
+}
+
 export function getProductCapabilities(code: string): ProductCapabilityDescriptor | null {
   const normalized = String(code || '').trim().toLowerCase()
   return listProductCapabilities().find((entry) => entry.code === normalized) || null
@@ -111,7 +125,8 @@ export function requireProductCapabilities(code: string): ProductCapabilityDescr
 }
 
 export function requireProductCapability(code: string, transaction: ProductTransactionCapability): ProductCapabilityDescriptor {
-  const descriptor = requireProductCapabilities(code)
+  const startsBusiness = ['quote', 'bind', 'renew', 'rewrite'].includes(transaction)
+  const descriptor = startsBusiness ? requireProductCapabilities(code) : requireInstalledProductCapabilities(code)
   if (!descriptor.supportedTransactions.includes(transaction)) {
     throw new BadRequestError(
       'PRODUCT_CAPABILITY_UNSUPPORTED',
@@ -124,6 +139,6 @@ export function requireProductCapability(code: string, transaction: ProductTrans
 
 export function mapProductRiskKind(productCode: string | undefined, risk: any): string {
   const riskType = String(risk?.type || '').trim()
-  const descriptor = getProductCapabilities(String(productCode || ''))
+  const descriptor = getInstalledProductCapabilities(String(productCode || ''))
   return descriptor?.riskKinds?.[riskType] || riskType || 'Unknown'
 }

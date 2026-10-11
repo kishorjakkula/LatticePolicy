@@ -1,11 +1,11 @@
 import { Router } from 'express'
-import { loadProductConfig, buildRiskFields, loadFieldMeta, loadRiskScreen } from '../products.js'
-import { listProductCapabilities, requireProductCapabilities } from '../lib/product-registry.js'
+import { loadProductConfig, buildRiskFields, loadFieldMeta, loadRiskScreen, hasBuiltInRiskFields } from '../products.js'
+import { listProductCapabilities, requireInstalledProductCapabilities } from '../lib/product-registry.js'
 import { requirePermission } from '../auth.js'
 import { isUuidLike, routeParam } from '../lib/utils.js'
 import { getDb } from '../db.js'
 import { loadPolicyContext } from '../persistence.js'
-import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
 import { tablesUsedByScreen } from '../lib/product-screen.js'
 
@@ -21,7 +21,7 @@ productsRoutes.get('/products', requireProductAccess, (_req, res) => {
 productsRoutes.get('/products/:code/config', requireProductAccess, (req, res, next) => {
   try {
     const code = routeParam(req.params.code).toLowerCase()
-    requireProductCapabilities(code)
+    requireInstalledProductCapabilities(code)
     const cfg = loadProductConfig(code)
     return res.json(cfg)
   } catch (err) {
@@ -34,7 +34,7 @@ productsRoutes.get('/products/:code/config', requireProductAccess, (req, res, ne
 productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res, next) => {
   try {
     const code = routeParam(req.params.code).toLowerCase()
-    requireProductCapabilities(code)
+    requireInstalledProductCapabilities(code)
     const cfg = loadProductConfig(code)
     // A mid-term transaction (endorse, cancel, reinstate) names its policy so
     // the screen served is the one from the product version that term was
@@ -42,10 +42,10 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
     const policyId = typeof req.query.policyId === 'string' ? req.query.policyId.trim() : ''
     if (policyId && getDb() && isUuidLike(policyId)) {
       const ctx = await req.tx((db) => loadPolicyContext(db, req.tenant!.tenantId, policyId))
-      const snapshot = getLoadedSnapshot(req.tenant!.tenantId, snapshotIdOf(ctx?.latestPayload), code)
-      if (snapshot && snapshot.productCode === code && snapshot.definition.screen) {
+      const snapshot = ctx ? requireLoadedSnapshot(req.tenant!.tenantId, { ...ctx.latestPayload, productCode: code }) : null
+      if (snapshot) {
         const pinnedScreen = snapshot.definition.screen
-        const pinnedFields = pinnedScreen.sections.flatMap((section) =>
+        const pinnedFields = pinnedScreen?.sections.flatMap((section) =>
           section.fields.map((field) => ({
             key: field.key,
             label: field.label,
@@ -56,8 +56,14 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
             ...(field.help ? { help: field.help } : {}),
             ...(section.title ? { group: section.title } : {}),
           }))
-        )
-        return res.json({ fields: pinnedFields, screen: pinnedScreen, tables: snapshot.definition.tables || {}, productSnapshotId: snapshot.id })
+        ) || []
+        // Core screens are additive. Generate their base controls from the
+        // term's config, and never consult current carrier field metadata.
+        // Core products render the additive fields through ConfiguredRiskForm,
+        // so their DynamicRiskForm must contain only the base controls.
+        const fields = hasBuiltInRiskFields(code) || !pinnedScreen
+          ? buildRiskFields(code, snapshot.definition.config) : pinnedFields
+        return res.json({ fields, screen: pinnedScreen, tables: snapshot.definition.tables || {}, productSnapshotId: snapshot.id })
       }
     }
     const fields = buildRiskFields(code, cfg, req.tenant?.tenantId)
@@ -75,7 +81,7 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
 productsRoutes.get('/products/:code/field-meta', requireProductAccess, (req, res, next) => {
   try {
     const code = routeParam(req.params.code).toLowerCase()
-    requireProductCapabilities(code)
+    requireInstalledProductCapabilities(code)
     const tenantId = req.tenant!.tenantId
     const meta = loadFieldMeta(code, tenantId)
     return res.json({ fields: meta })

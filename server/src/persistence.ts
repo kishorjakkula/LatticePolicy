@@ -1,3 +1,4 @@
+import { storeRatingWorksheet } from './services/document-storage.service.js'
 import { eq, and, desc, sql } from 'drizzle-orm'
 import { ensureProductSnapshots } from './lib/product-snapshot.js'
 import { v4 as uuidv4 } from './uuid.js'
@@ -523,6 +524,8 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
   const versionRow = versionRows[0]
   const premiumCurrency = String(versionRow.currency || currency || 'USD')
   const metadata = {
+    transactionNumber: versionRow.transactionNumber || null,
+    transactionType: versionRow.transactionType || null,
     generatedKind: 'RATING_WORKSHEET',
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -570,13 +573,18 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
     .orderBy(desc(documents.createdAt))
     .limit(1)
 
+  const worksheetId = existingDocRows[0]?.documentId || uuidv4()
+  const artifact = await storeRatingWorksheet({ tenantId, documentId: worksheetId, metadata })
+  const storedMetadata = { ...metadata, artifact }
+
   if (existingDocRows.length) {
     await q
       .update(documents)
       .set({
         uri: `generated://rating-worksheet/${transactionId}`,
-        hash: `rating:${ratingId}`,
-        metadata
+        hash: artifact.contentHash,
+        integrityStatus: 'VERIFIED',
+        metadata: storedMetadata
       })
       .where(and(
         eq(documents.tenantId, tenantId),
@@ -587,14 +595,15 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
   }
 
   await q.insert(documents).values({
-    documentId: uuidv4() as any,
+    documentId: worksheetId as any,
     tenantId,
     policyId: policyId as any,
     transactionId: transactionId as any,
     type: 'RATING_WORKSHEET',
     uri: `generated://rating-worksheet/${transactionId}`,
-    hash: `rating:${ratingId}`,
-    metadata,
+    hash: artifact.contentHash,
+    integrityStatus: 'VERIFIED',
+    metadata: storedMetadata,
     createdBy: versionRow.createdBy ?? null
   })
 }

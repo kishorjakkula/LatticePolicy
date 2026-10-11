@@ -1,0 +1,53 @@
+/* Shared by every screen and by carrier-configured forms. */
+.radio-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.radio-group--binary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 132px;
+}
+
+.radio-group .radio-option {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 20px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+.radio-group .radio-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.radio-group .radio-option.selected {
+  color: var(--accent-strong);
+}
+
+.radio-group .radio-option input[type='radio'] {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin: 3px 0;
+  cursor: pointer;
+}
+
+.radio-group .radio-option input:disabled {
+  cursor: default;
+}

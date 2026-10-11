@@ -8,6 +8,7 @@ import {
   closePdfRenderer,
   getDocumentStorageAdapter,
   renderAndStoreDocument,
+  storeRatingWorksheet,
   renderHtmlToPdf,
   renderPolicyPacketHtml,
   retrieveStoredDocument,
@@ -20,6 +21,16 @@ import {
 const PDF_MAGIC = '%PDF-'
 
 describe('document storage service', () => {
+  it('stores a retrievable worksheet from its original snapshot and escapes risk text', async () => {
+    const artifact = await storeRatingWorksheet({ tenantId: 'test-carrier', documentId: 'worksheet-1', metadata: { snapshot: { context: { policyNumber: 'PA-123', transactionNumber: 'NB-123' }, payload: { applicant: '<script>bad()</script>' }, premium: { total: { amount: 123 } } } } })
+    const content = await retrieveAndVerifyStoredDocument(artifact.storageUri, artifact.contentHash)
+    expect(content?.toString()).toContain('Rating worksheet')
+    expect(content?.toString()).toContain('PA-123')
+    expect(content?.toString()).toContain('&lt;script&gt;')
+    expect(content?.toString()).not.toContain('<script>')
+    expect(artifact.contentType).toContain('text/html')
+  })
+
   let tempDir: string
   let originalAdapter: ReturnType<typeof getDocumentStorageAdapter>
 

@@ -138,6 +138,18 @@ stop_app_services() {
   compose stop api worker dispatcher frontend
 }
 
+running_app_services() {
+  compose ps --status running --services | awk '/^(api|worker|dispatcher|frontend)$/ { print }' | tr '\n' ' '
+}
+
+resume_services() {
+  # Values come only from the fixed allowlist above, not from operator input.
+  if [ -n "$1" ]; then
+    compose up -d $1
+    case " $1 " in *" api "*) wait_for_api || die "resumed API did not become healthy" ;; esac
+  fi
+}
+
 run_migrations() {
   start_data_services
   compose run --rm -T --no-deps api node server/dist/migrate.js
@@ -202,19 +214,44 @@ cmd_status() {
   compose ps --format '  {{.Service}}: {{.State}}' 2>/dev/null || true
 }
 
-# Writes <prefix>.dump (database) and <prefix>.documents.tgz, prints the prefix.
-cmd_backup() {
+# All writers must be stopped by the caller. Writes a complete backup pair;
+# an incomplete pair is never returned as a usable recovery point.
+create_backup() {
   need_env_file
   label="${1:-manual}"
+  echo "$label" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._-]*$' || { echo 'invalid backup label' >&2; return 1; }
+  umask 077
   mkdir -p "$BACKUP_DIR"
   chmod 700 "$BACKUP_DIR"
-  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
   prefix="$BACKUP_DIR/$(get_env CARRIER_TENANT_ID)-$stamp-$(get_env LATTICE_VERSION)-$label"
-  start_data_services
-  compose exec -T db pg_dump -U "$(get_env DB_USER)" -d "$(get_env DB_NAME)" -Fc > "$prefix.dump"
-  [ -s "$prefix.dump" ] || die "database backup is empty"
-  compose run --rm -T --no-deps api tar -czf - -C /data/documents . > "$prefix.documents.tgz"
+  if ! start_data_services || ! compose exec -T db pg_dump -U "$(get_env DB_USER)" -d "$(get_env DB_NAME)" -Fc > "$prefix.dump" \
+     || [ ! -s "$prefix.dump" ] \
+     || ! compose run --rm -T --no-deps api tar -czf - -C /data/documents . > "$prefix.documents.tgz" \
+     || [ ! -s "$prefix.documents.tgz" ] || ! tar -tzf "$prefix.documents.tgz" >/dev/null; then
+    rm -f "$prefix.dump" "$prefix.documents.tgz"
+    echo 'Backup failed; no complete recovery point was created.' >&2
+    return 1
+  fi
   echo "$prefix"
+}
+
+# Standalone backups pause all writers for the entire database/document pair,
+# then restore exactly the services that were previously running.
+cmd_backup() {
+  need_env_file
+  backup_running="$(running_app_services)"
+  if ! stop_app_services >&2; then
+    resume_services "$backup_running" >&2
+    return 1
+  fi
+  if backup_result="$(create_backup "${1:-manual}")"; then
+    resume_services "$backup_running" >&2
+    echo "$backup_result"
+  else
+    resume_services "$backup_running" >&2
+    return 1
+  fi
 }
 
 cmd_restore() {
@@ -223,12 +260,14 @@ cmd_restore() {
   [ -n "$prefix" ] || die "usage: stack.sh restore <backup-prefix>"
   prefix="${prefix%.dump}"
   [ -s "$prefix.dump" ] || die "backup not found: $prefix.dump"
+  [ -s "$prefix.documents.tgz" ] || die "document backup not found: $prefix.documents.tgz"
+  tar -tzf "$prefix.documents.tgz" >/dev/null || die 'document backup archive is invalid'
   db_user="$(get_env DB_USER)"
   db_name="$(get_env DB_NAME)"
 
   echo "Restoring $(get_env CARRIER_TENANT_ID) from $prefix (this replaces current data)..."
   # Nothing may write to the database while it is being replaced.
-  stop_app_services >/dev/null 2>&1 || true
+  stop_app_services
   start_data_services
   # The restricted RLS role is cluster-wide and referenced by the dump's grants.
   compose exec -T db psql -v ON_ERROR_STOP=1 -U "$db_user" -d postgres -c \
@@ -255,15 +294,23 @@ cmd_upgrade() {
   # Check the carrier's customisations against the new release before anything
   # is stopped, backed up, or migrated.
   if [ "$(get_env LATTICE_PULL)" != "0" ]; then
-    LATTICE_VERSION="$target" compose pull api
+    LATTICE_VERSION="$target" compose pull api frontend
   fi
   check_pack "$target" || die "the carrier pack does not fit release $target; nothing was changed"
-  backup="$(cmd_backup "pre-$target")"
+  upgrade_running="$(running_app_services)"
+  if ! stop_app_services; then
+    resume_services "$upgrade_running"
+    return 1
+  fi
+  if ! backup="$(create_backup "pre-$target")"; then
+    resume_services "$upgrade_running"
+    return 1
+  fi
   printf 'PREVIOUS_VERSION=%s\nPREVIOUS_BACKUP=%s\n' "$current" "$backup" > "$(state_file)"
   echo "Backup: $backup"
 
   set_env LATTICE_VERSION "$target"
-  if pull_images && stop_app_services && run_migrations && compose up -d \
+  if run_migrations && compose up -d \
      && wait_for_api && verify_running_version && ! schema_is_ahead; then
     echo "Upgrade to $target complete."
     cmd_status

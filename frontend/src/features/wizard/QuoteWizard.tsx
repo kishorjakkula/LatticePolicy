@@ -1,3 +1,6 @@
+import { RadioGroup } from '../../components/RadioGroup'
+import { FieldError } from '../../components/FieldError'
+import { validateQuoteSetup } from './setupValidation'
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, apiDetails } from '../../api/client'
@@ -858,6 +861,8 @@ export function QuoteWizard() {
   // Lookup tables the screen's rules read, sent with the screen.
   const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
+  const [setupChecked, setSetupChecked] = useState(false)
+  const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [quoteResp, setQuoteResp] = useState<any | null>(null)
@@ -2027,6 +2032,13 @@ export function QuoteWizard() {
       return
     }
     if (locked && target < step) return
+    if (step === 1 && target > step && (!isPolicyTransactionMode || isRewriteTransaction)) {
+      setSetupChecked(true)
+      if (Object.keys(validateQuoteSetup(q)).length > 0) {
+        setError('Complete the required fields before continuing.')
+        return
+      }
+    }
     if (step === 2 && target > step && qualificationEditable) {
       const errs = validateQualificationAnswers(q.productCode, q.qualificationAnswers)
       setQualificationErrors(errs)
@@ -2742,36 +2754,24 @@ export function QuoteWizard() {
     try {
       const payload: any = buildQuotePayload(rateState)
       if (draft?.quoteId) payload.quoteId = draft.quoteId
-      const resp = await api.createQuote(payload)
-      let ratedResponse: any = resp
-      let previewWarning: string | null = null
+      let resp: any
       if (wizardMode === 'endorse') {
         const policyIdForPreview = policyContext?.policyId || boundPolicy?.policyId || policyIdParam
-        if (policyIdForPreview) {
-          try {
-            const preview = await api.endorsePreview(policyIdForPreview, {
-              effectiveDate: transactionEffectiveDate || q.effectiveDate,
-              payload
-            })
-            setEndorsementPreview(preview)
-            ratedResponse = {
-              ...resp,
-              underwriting: preview?.underwriting || resp?.underwriting,
-              premium: preview?.premium || resp?.premium,
-              retroAdjustment: preview?.retroAdjustment || null,
-              timeline: preview?.timeline || null,
-              fullTerm: preview?.fullTerm || null
-            }
-          } catch (previewErr: any) {
-            setEndorsementPreview(null)
-            previewWarning = `Rated premium, but OOS timeline preview failed: ${previewErr?.message || String(previewErr)}`
-          }
-        } else {
-          setEndorsementPreview(null)
-        }
+        if (!policyIdForPreview) throw new Error('Select a policy before rating an endorsement.')
+        // The policy preview loads its pinned definition and rules. Creating a
+        // new-business quote first incorrectly applies today's carrier screen.
+        setEndorsementPreview(null)
+        const preview = await api.endorsePreview(policyIdForPreview, {
+          effectiveDate: transactionEffectiveDate || q.effectiveDate,
+          payload
+        })
+        setEndorsementPreview(preview)
+        resp = { ...preview, quoteId: draft?.quoteId || '', quoteNumber: draft?.quoteNumber || '', status: 'Rated', progressStep: 7 }
       } else {
         setEndorsementPreview(null)
+        resp = await api.createQuote(payload)
       }
+      const ratedResponse = resp
       setQuoteResp(ratedResponse)
       if (wizardMode === 'quote') {
         setQuoteDocumentModel(buildQuoteSummaryModel(ratedResponse))
@@ -2795,7 +2795,6 @@ export function QuoteWizard() {
         params.set('quoteId', nextDraft.quoteId)
         setSearchParams(params, { replace: true })
       }
-      if (previewWarning) setError(previewWarning)
     } catch (e: any) {
       setError(e.message || String(e))
     } finally { setAction(null) }
@@ -3553,8 +3552,11 @@ export function QuoteWizard() {
           <CollapsibleSection className="wizard-section" title="Company & Agency">
           <div className="row">
             <div className="col uw-company-col">
-              <label>Underwriting Company</label>
+              <label htmlFor="wizard-setup-company">Underwriting Company</label>
               <select
+                id="wizard-setup-company"
+                aria-invalid={Boolean(setupErrors.underwritingCompanyName)}
+                aria-describedby={setupErrors.underwritingCompanyName ? 'wizard-setup-company-error' : undefined}
                 value={q.underwritingCompanyName || ''}
                 onChange={e => {
                   const nextName = e.target.value
@@ -3593,6 +3595,7 @@ export function QuoteWizard() {
                   </option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-company-error" message={setupErrors.underwritingCompanyName} />
             </div>
           </div>
           <div className="row">
@@ -3700,8 +3703,11 @@ export function QuoteWizard() {
           <CollapsibleSection className="wizard-section" title="Product & Term">
           <div className="row">
             <div className="col">
-              <label>Effective Date</label>
+              <label htmlFor="wizard-setup-date">Effective Date</label>
               <input
+                id="wizard-setup-date"
+                aria-invalid={Boolean(setupErrors.effectiveDate)}
+                aria-describedby={setupErrors.effectiveDate ? 'wizard-setup-date-error' : undefined}
                 type="date"
                 value={q.effectiveDate}
                 onChange={e => {
@@ -3716,10 +3722,14 @@ export function QuoteWizard() {
                 }}
                 disabled={isCancellationMode || lockCoreProductFields || isViewOnly}
               />
+              <FieldError id="wizard-setup-date-error" message={setupErrors.effectiveDate} />
             </div>
             <div className="col">
-              <label>Country</label>
+              <label htmlFor="wizard-setup-country">Country</label>
               <select
+                id="wizard-setup-country"
+                aria-invalid={Boolean(setupErrors.country)}
+                aria-describedby={setupErrors.country ? 'wizard-setup-country-error' : undefined}
                 value={q.country || ''}
                 onChange={e => {
                   const nextCountry = e.target.value ? normalizeCountryCode(e.target.value) : ''
@@ -3732,10 +3742,14 @@ export function QuoteWizard() {
                   <option key={entry.code} value={entry.code}>{entry.label}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-country-error" message={setupErrors.country} />
             </div>
             <div className="col">
-              <label>State</label>
+              <label htmlFor="wizard-setup-state">State</label>
               <select
+                id="wizard-setup-state"
+                aria-invalid={Boolean(setupErrors.state)}
+                aria-describedby={setupErrors.state ? 'wizard-setup-state-error' : undefined}
                 value={q.state || ''}
                 onChange={e => setQ({ ...q, state: normalizeRegionCode(e.target.value) })}
                 disabled={isCancellationMode || !q.country || isViewOnly}
@@ -3745,10 +3759,14 @@ export function QuoteWizard() {
                   <option key={state.code} value={state.code}>{state.code} - {state.name}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-state-error" message={setupErrors.state} />
             </div>
             <div className="col">
-              <label>Product</label>
+              <label htmlFor="wizard-setup-product">Product</label>
               <select
+                id="wizard-setup-product"
+                aria-invalid={Boolean(setupErrors.productCode)}
+                aria-describedby={setupErrors.productCode ? 'wizard-setup-product-error' : undefined}
                 value={q.productCode || ''}
                 onChange={e => onProductChange(e.target.value as QuoteProductCode)}
                 disabled={lockCoreProductFields || !q.country || !q.state || loadingUnderwritingCompanies || isViewOnly}
@@ -3767,6 +3785,7 @@ export function QuoteWizard() {
                   <option key={code} value={code}>{productLabel(code)}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-product-error" message={setupErrors.productCode} />
             </div>
           </div>
           <div className="row">
@@ -3812,10 +3831,11 @@ export function QuoteWizard() {
             </div>
             <div className="col">
               <label>Term</label>
-              <select value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
+              <select aria-invalid={Boolean(setupErrors.termMonths)} aria-describedby={setupErrors.termMonths ? 'wizard-setup-term-error' : undefined} value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
                 <option value={6}>6 months</option>
                 <option value={12}>12 months</option>
               </select>
+              <FieldError id="wizard-setup-term-error" message={setupErrors.termMonths} />
             </div>
           </div>
           </CollapsibleSection>
@@ -3878,59 +3898,28 @@ export function QuoteWizard() {
                       key={question.key}
                     >
                       <div className="qualification-label">{question.label}</div>
-                      <div className="qualification-radio-group" role="radiogroup" aria-label={question.label}>
-                        <label className={`qualification-radio ${selectedAnswer === 'yes' ? 'selected' : ''}`}>
-                          <input
-                            type="radio"
-                            name={`qualification-${question.key}`}
-                            value="yes"
-                            checked={selectedAnswer === 'yes'}
-                            onChange={() => {
-                              setQ((prev) => ({
-                                ...prev,
-                                qualificationAnswers: {
-                                  ...prev.qualificationAnswers,
-                                  [question.key]: 'yes'
-                                }
-                              }))
-                              setQualificationErrors((prev) => {
-                                if (!prev[question.key]) return prev
-                                const next = { ...prev }
-                                delete next[question.key]
-                                return next
-                              })
-                            }}
-                            disabled={!qualificationEditable || isCancellationMode || isViewOnly}
-                          />
-                          <span>Yes</span>
-                        </label>
-                        <label className={`qualification-radio ${selectedAnswer === 'no' ? 'selected' : ''}`}>
-                          <input
-                            type="radio"
-                            name={`qualification-${question.key}`}
-                            value="no"
-                            checked={selectedAnswer === 'no'}
-                            onChange={() => {
-                              setQ((prev) => ({
-                                ...prev,
-                                qualificationAnswers: {
-                                  ...prev.qualificationAnswers,
-                                  [question.key]: 'no'
-                                }
-                              }))
-                              setQualificationErrors((prev) => {
-                                if (!prev[question.key]) return prev
-                                const next = { ...prev }
-                                delete next[question.key]
-                                return next
-                              })
-                            }}
-                            disabled={!qualificationEditable || isCancellationMode || isViewOnly}
-                          />
-                          <span>No</span>
-                        </label>
-                      </div>
-                      {qualificationErrors[question.key] && <div className="error qualification-error">{qualificationErrors[question.key]}</div>}
+                      <RadioGroup
+                        className="qualification-radio-group"
+                        layout="binary"
+                        name={`qualification-${question.key}`}
+                        ariaLabel={question.label}
+                        required={question.required}
+                        invalid={Boolean(qualificationErrors[question.key])}
+                        describedBy={qualificationErrors[question.key] ? `qualification-${question.key}-error` : undefined}
+                        options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] as const}
+                        value={selectedAnswer}
+                        onChange={(answer) => {
+                          setQ((prev) => ({ ...prev, qualificationAnswers: { ...prev.qualificationAnswers, [question.key]: answer } }))
+                          setQualificationErrors((prev) => {
+                            if (!prev[question.key]) return prev
+                            const next = { ...prev }
+                            delete next[question.key]
+                            return next
+                          })
+                        }}
+                        disabled={!qualificationEditable || isCancellationMode || isViewOnly}
+                      />
+                      {qualificationErrors[question.key] && <div id={`qualification-${question.key}-error`} className="error qualification-error">{qualificationErrors[question.key]}</div>}
                     </div>
                   )
                 })}

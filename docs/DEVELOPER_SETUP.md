@@ -121,14 +121,19 @@ Stop the stack:
 docker compose down
 ```
 
-Reset local database and cache volumes:
+Generated documents persist in the Compose `documentdata` volume, mounted at
+`/var/lib/lattice-policy/documents` in the API container. Container rebuilds
+preserve these artifacts.
+
+Reset local database, cache, and document volumes:
 
 ```bash
 docker compose down -v
 docker compose up -d --build
 ```
 
-Use the volume reset only when you are comfortable deleting local PostgreSQL and Redis data.
+Use the volume reset only when you are comfortable deleting local PostgreSQL,
+Redis, and generated document data.
 
 ## Option 2: Local Node Development
 

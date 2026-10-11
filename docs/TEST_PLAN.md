@@ -266,6 +266,8 @@ dependence on freshly seeded names.
 | `underwriting-authority` | Authority grants gating bind above a premium limit, revoke, validation |
 | `uw-referrals`, `pre-bind-checks` | Referral queue decisions; internal-consistency referral on prior non-payment cancellation |
 | `customer-portal` | Customer-safe projection, cross-customer isolation, portal summary and documents |
+| `policy-documents` | Distinct Bind/Issue packet labels; every listed document opens with nonempty PDF or worksheet content, including headless PDF downloads |
+| `pilot-product-pinning` (separate pilot config) | Real mounted pack changes, pinned core/additive and absent screens, endorsement persistence, and button-triggered mandatory validation |
 | `dashboard-search`, `workflows` | Dashboard KPIs, quick lookup, filters, customers tab, CSV export API, sort/page-size URL state, mobile nav |
 | `forms-management` | Seeded forms, draft form creation, Word template upload, template variable reference |
 | `admin-users-security`, `admin-customers`, `admin-reference-config`, `admin-workflows` | Users, roles, customers and PII reveal, underwriting companies, tenant, compliance, notification templates, agency onboarding, operations dashboard, reinsurance, exposure, bordereaux, import, jobs |
@@ -289,6 +291,12 @@ Conventions for new specs:
 - A test that documents a known product defect is written with the correct
   expectation and marked `test.fixme` with a comment naming the defect; remove
   the marker in the change that fixes it. The suite currently has none.
+
+- Radio inputs must use the shared `RadioGroup`; the frontend source audit
+  enforces this across production code. The screen audit checks visible radio
+  naming, alignment, and viewport bounds. Qualification alignment tests exercise
+  all five core products at desktop and mobile widths. See
+  [UI control standards](UI_CONTROL_STANDARDS.md).
 
 - A new screen must be added to `SCREENS` in `e2e/ui-section-standards.spec.ts`,
   and its sections must use `CollapsibleSection`; the audit fails otherwise.

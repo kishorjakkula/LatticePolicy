@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import crypto from 'node:crypto'
 import request from 'supertest'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
@@ -236,6 +239,25 @@ describe('policy document artifact storage and retrieval', () => {
     expect(contentBuffer.subarray(0, 5).toString('latin1')).toBe('%PDF-')
     const actualHash = crypto.createHash('sha256').update(contentBuffer).digest('hex')
     expect(actualHash).toBe(hash)
+
+    // A container rebuild can lose a legacy packet file. Recover only exact bytes.
+    const packetFile = path.join(process.env.DOCUMENT_STORAGE_DIR || path.join(os.tmpdir(), 'lattice-policy-documents'), tenantId, `${documentId}.pdf`)
+    await fs.unlink(packetFile)
+    const recovered = await authGet(`/api/v1/policies/${policy.policyId}/documents/${documentId}/content`, agentToken, tenantId).expect(200)
+    expect(crypto.createHash('sha256').update(recovered.body).digest('hex')).toBe(hash)
+    await fs.writeFile(packetFile, 'corrupted content')
+    await authGet(`/api/v1/policies/${policy.policyId}/documents/${documentId}/content`, agentToken, tenantId).expect(409)
+    await fs.writeFile(packetFile, contentBuffer)
+
+    const worksheet = listRes.body.data.documents.find((doc: any) => doc.type === 'RATING_WORKSHEET')
+    expect(worksheet.integrityStatus).toBe('VERIFIED')
+    const worksheetUrl = `/api/v1/policies/${policy.policyId}/documents/${worksheet.documentId}/content`
+    const worksheetContent = await authGet(worksheetUrl, agentToken, tenantId).expect(200)
+    expect(worksheetContent.text).toContain('Rating worksheet')
+    // Model the old snapshot-only worksheet record without deleting rating data.
+    await getDb()!.query("UPDATE documents SET metadata=metadata - 'artifact', hash='rating:legacy', integrity_status='UNVERIFIED' WHERE tenant_id=$1 AND document_id=$2", [tenantId, worksheet.documentId])
+    const repairedWorksheet = await authGet(worksheetUrl, agentToken, tenantId).expect(200)
+    expect(repairedWorksheet.text).toContain('Rating worksheet')
 
     await authPost(
       `/api/v1/policies/${policy.policyId}/documents/${documentId}/regenerate`,

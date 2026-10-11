@@ -23,20 +23,18 @@ function integrityBadgeColor(status?: string): string {
   return 'yellow' // UNVERIFIED, or any other/unknown status
 }
 
-function openBlobInNewTab(blob: Blob) {
-  const url = URL.createObjectURL(blob)
-  // The blob retains the Content-Type the server sent (e.g. application/pdf
-  // or text/html), so the browser renders it appropriately in the new tab —
-  // no need to branch on content type here.
-  window.open(url, '_blank', 'noopener,noreferrer')
-  window.setTimeout(() => URL.revokeObjectURL(url), 30000)
-}
-
 async function handleOpen(policyId: string, documentId: string) {
+  // Reserve the tab during the click; opening only after a fetch can be blocked.
+  const tab = window.open('about:blank', '_blank')
+  if (tab) tab.opener = null
   try {
+    if (!tab) throw new Error('Allow pop-ups to open policy documents.')
     const blob = await api.downloadPolicyDocument(policyId, documentId)
-    openBlobInNewTab(blob)
+    const url = URL.createObjectURL(blob)
+    tab.location.href = url
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000)
   } catch (err) {
+    tab?.close()
     window.alert(err instanceof Error ? err.message : 'Failed to open document')
   }
 }

@@ -79,9 +79,10 @@ npm run validate:pack --workspace=server -- ../examples/carrier-pack
   A generic workbook-driven rating path is step 2.
 - `contracts/quote.request.schema.json` still enumerates core products and
   risk types; the server relaxes only the product code check.
-- `enabledProducts` hides a product from the registry on that stack, so an
-  existing policy for a product later removed from the list would stop
-  resolving. Treat removal as a product retirement, not a toggle.
+- `enabledProducts` controls sales availability. Installed product definitions
+  remain available for existing-policy servicing; see
+  [product retirement servicing](product-retirement-servicing.md). Keep the
+  product files installed while policies still need servicing.
 - The registry re-reads pack files on each call, as it already did for core
   product files. Cache if it shows up in profiles.
 - State eligibility for a pack product is still configured in the database
