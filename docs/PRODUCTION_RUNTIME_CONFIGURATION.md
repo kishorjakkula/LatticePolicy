@@ -47,6 +47,10 @@ Additional guarded settings:
 - `LATTICE_ROLE` selects what the process does: `all` (default: API plus the
   background loops that are switched on), `api`, `worker` (batch jobs), or
   `dispatcher` (outbox delivery). See `docs/MODULES.md`.
+- `EVENT_TRANSPORT` selects where the dispatcher delivers messages: `webhook`
+  (default, `ASYNC_PUSH_WEBHOOK_URL`) or `kafka` (`KAFKA_BROKERS` and related
+  settings). A dispatcher with incomplete transport settings refuses to start.
+  See `docs/EVENTS.md`.
 - `CARRIER_TENANT_ID` pins the stack to one carrier. Set it on every
   single-carrier deployment: requests, logins, SSO routes, and background
   workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is

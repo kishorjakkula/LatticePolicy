@@ -187,6 +187,7 @@ instead of being forced into the single-carrier quote shape:
 ## Key Docs
 
 - `README.md`: overview and quick start.
+- `docs/EVENTS.md`: outbound messages: how they are recorded, the envelope, message types, delivery guarantees, and the webhook and Kafka transports.
 - `docs/MODULES.md`: target modules (UI, Policy API, rating, batch jobs, messaging), decisions, and shared runtime packages.
 - `docs/ARCHITECTURE.md`: architecture, lifecycle, customer portal, cache, logging, async outbox, AI, rating workbench.
 - `docs/DEVELOPER_SETUP.md`: local setup and commands.

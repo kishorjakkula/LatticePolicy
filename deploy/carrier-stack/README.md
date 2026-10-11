@@ -40,7 +40,7 @@ are ignored by git.
 | --- | --- |
 | `api` | Serves the API. Runs no background work. |
 | `worker` | Runs scheduled and queued batch jobs. |
-| `dispatcher` | Delivers outbox messages to `ASYNC_PUSH_WEBHOOK_URL`, or writes them to its log when that is empty. |
+| `dispatcher` | Delivers outbox messages by webhook (`ASYNC_PUSH_WEBHOOK_URL`, or its log when that is empty) or to Kafka (`EVENT_TRANSPORT=kafka`, `KAFKA_BROKERS`). See `docs/EVENTS.md`. |
 | `frontend` | Serves the UI. |
 | `db`, `cache` | PostgreSQL and Redis. |
 

@@ -32,7 +32,8 @@ Update it whenever a module boundary, contract, or deployment unit changes.
   (`server/src/lib/product-snapshot.ts`).
 - **The outbox stays.** An event is recorded in the same transaction as the
   change that caused it. The dispatcher publishes through a transport adapter.
-- **Transports:** the existing webhook, and Kafka as the second adapter.
+- **Transports:** the existing webhook, and Kafka as the second adapter
+  (`EVENT_TRANSPORT`). Both deliver the same envelope.
 - **One release image, several start commands** for API, worker, and
   dispatcher, so the deployment kit can run them as separate services.
 - **Each module owns its tables.** No module joins across another's.
@@ -45,7 +46,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time: the wizard renders a carrier pack screen with it and the API enforces the same rules when a quote is rated. `packages/types` remains types only. |
 | Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Staying that way by decision. It prices from a product definition, either today's or the snapshot a policy term is pinned to. |
 | Batch jobs | Runs as its own process (`LATTICE_ROLE=worker`, or `node server/dist/worker.js`); the deployment kit runs it as the `worker` service. Handlers still import core code and the database directly, so it shares the release image. |
-| Asynchronous messaging | `async_message_outbox`, written by notifications only. Delivered by its own process (`LATTICE_ROLE=dispatcher`, or `node server/dist/dispatcher.js`) to one webhook (`ASYNC_PUSH_*`). |
+| Asynchronous messaging | Policy transactions write `ledger_events`; a trigger copies each into `async_message_outbox`, and notifications are added there too. Its own process (`LATTICE_ROLE=dispatcher`, or `node server/dist/dispatcher.js`) delivers them in a versioned envelope through a pluggable transport: webhook or Kafka. See `docs/EVENTS.md`. |
 
 ## Process Roles
 
@@ -96,8 +97,8 @@ copy it in both Dockerfiles; and add it to `build:packages` and
 
 1. Packaging foundation (done): shared runtime packages.
 2. Process split (done): API, worker, and dispatcher roles and kit services.
-3. Event contracts and transports: versioned business events and a Kafka
-   adapter beside the webhook.
+3. Event contracts and transports (done): a versioned envelope, a transport
+   interface, and a Kafka transport beside the webhook.
 
 Not planned: a rating interface with asynchronous callers and a standalone
 rating service. Rating stays in the API flow (see Decisions).

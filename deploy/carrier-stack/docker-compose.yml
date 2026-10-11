@@ -84,9 +84,20 @@ services:
     command: ["node", "server/dist/dispatcher.js"]
     environment:
       <<: *app-environment
-      # Where outbox messages are delivered. Empty writes them to the log.
+      # Where outbox messages are delivered: a webhook (default) or Kafka.
+      EVENT_TRANSPORT: ${EVENT_TRANSPORT:-webhook}
+      # Webhook. An empty URL writes messages to the dispatcher's log.
       ASYNC_PUSH_WEBHOOK_URL: ${ASYNC_PUSH_WEBHOOK_URL:-}
       ASYNC_PUSH_AUTH_HEADER: ${ASYNC_PUSH_AUTH_HEADER:-}
+      # Kafka.
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-}
+      KAFKA_TOPIC_PREFIX: ${KAFKA_TOPIC_PREFIX:-}
+      KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-}
+      KAFKA_SSL: ${KAFKA_SSL:-}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
     volumes: *app-volumes
     depends_on: *app-depends-on
 

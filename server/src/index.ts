@@ -9,6 +9,7 @@ import { warmPublishedRatingModelCache } from './ratingModelRegistry.js'
 import { assertDeploymentConfig, getPinnedTenantId, getProcessRole, isManagedDeployment, planProcess, type ProcessPlan } from './config.js'
 import { assertCarrierPackValid } from './lib/carrier-pack-validator.js'
 import { closePdfRenderer } from './services/document-storage.service.js'
+import { assertEventTransportConfig } from './events/transport.js'
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000
 let stopAsyncWorker: (() => void) | null = null
@@ -32,6 +33,8 @@ let plan: ProcessPlan
 try {
   assertDeploymentConfig()
   plan = planProcess(getProcessRole())
+  // A process that delivers messages must know where to before it starts.
+  if (plan.dispatcher) logger.info({ transport: assertEventTransportConfig() }, 'Event transport configured')
 } catch (err) {
   logger.error({ err }, 'Invalid deployment configuration')
   process.exit(1)
