@@ -160,6 +160,24 @@ Behaviour to rely on:
   screen. It may only place fields the pack defines in `fields/<code>.json`
   that the built-in screen does not already show.
 
+## Changing a pack while policies are in force
+
+Each policy term is pinned to the product as it was defined when the term
+started: rates, coverages, screen rules, and any published rating workbook.
+
+- A **new quote**, a **renewal**, and a **rewrite** use the pack as it is now.
+- An **endorsement**, **cancellation**, or **reinstatement** uses the version
+  the term was written on. A new rate table does not change a mid-term
+  endorsement premium, and a new rule does not reach back into a term already
+  in force.
+- At **renewal** the policy must meet the current rules, so a rule added
+  mid-term can stop a renewal until the data is corrected.
+- The wizard shows a mid-term transaction the screen from the pinned version.
+- Every premium records the product version that priced it.
+
+Bump `version` in `pack.yaml` whenever the pack changes, so the version on a
+policy tells you which pack it was written on.
+
 ## Checking a pack
 
 ```bash

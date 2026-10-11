@@ -35,6 +35,7 @@ import {
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { assertProductRules } from './product-rules.service.js'
+import { ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { computePlacementForTransactionSafely } from './reinsurance.service.js'
 import { extractExposureDimensions, loadExposureRows } from './exposure.service.js'
@@ -344,7 +345,8 @@ export async function bindQuote(
   const row = r.rows[0]
   const quote = { payload: row.payload, uw: row.underwriting, premium: row.premium }
   requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
-  // The product's rules may have changed since the quote was rated.
+  // The quote is bound on the product version it was rated on.
+  await ensureProductSnapshots(tenantId, [quote.payload])
   assertProductRules(tenantId, quote.payload, 'bind')
   const existingStatusHistory = normalizeQuoteAuditHistory(row.status_history)
   const existingStepHistory = normalizeQuoteAuditHistory(row.step_history)

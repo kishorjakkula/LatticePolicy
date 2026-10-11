@@ -1894,7 +1894,10 @@ export function QuoteWizard() {
   async function loadConfig(code: ProductCode) {
     try { setCfg(await api.getProductConfig(code)) } catch { setCfg(null) }
     try {
-      const form = await api.getProductForm(code)
+      // Endorse, cancel, and reinstate stay on the product version the term was
+      // written on; a renewal or rewrite starts a new term on the current one.
+      const midTerm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
+      const form = await api.getProductForm(code, midTerm && policyIdParam ? policyIdParam : undefined)
       setRiskFields(form?.fields || [])
       setRiskScreen(form?.screen || null)
     } catch {

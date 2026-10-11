@@ -2,6 +2,7 @@ import { ValidationError } from '../errors/domain.errors.js'
 import { getProductCapabilities } from '../lib/product-registry.js'
 import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
 import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-screen.js'
+import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
 
 /**
  * Rules a carrier pack defines for a product (required fields, conditional
@@ -18,6 +19,10 @@ import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-sc
 export type RuledTransaction = 'quote' | 'bind' | 'endorsement' | 'renewal' | 'rewrite' | 'reinstatement' | 'cancellation'
 
 export function productRuleViolations(tenantId: string, payload: any): ScreenViolation[] {
+  // A pinned payload is checked against the rules of the product version it
+  // was written on, not rules added since.
+  const snapshot = getLoadedSnapshot(snapshotIdOf(payload))
+  if (snapshot) return snapshot.definition.screen ? checkQuoteAgainstScreen(snapshot.definition.screen, payload) : []
   const code = String(payload?.productCode || '').trim().toLowerCase()
   if (!code || !getProductCapabilities(code)) return []
   const screen = loadRiskScreen(code, loadProductConfig(code), tenantId)

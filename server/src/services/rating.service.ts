@@ -4,6 +4,7 @@ import { getPublishedRatingModelForProduct } from '../ratingModelRegistry.js'
 import { round2 } from '../lib/date.utils.js'
 import { requireProductCapability } from '../lib/product-registry.js'
 import { BadRequestError } from '../errors/domain.errors.js'
+import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
 
 export type QuoteInput = any
 
@@ -18,34 +19,66 @@ export type PremiumResult = {
 export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
   const product = String(payload?.productCode || '').trim().toLowerCase()
   if (!product) throw new Error('productCode is required')
-  const descriptor = requireProductCapability(product, 'quote')
-  const pack = loadProductRates(product)
-  const tenant = loadTenantOverrides(tenantId)
-  const rates = mergeRates(pack.rates, tenant)
+
+  // A payload pinned to a product snapshot is rated on that definition, so a
+  // policy in force keeps the rates it was written on.
+  const snapshotId = snapshotIdOf(payload)
+  const snapshot = getLoadedSnapshot(snapshotId)
+  if (snapshotId && !snapshot) {
+    // Never fall back to today's rates for a pinned policy: that would
+    // silently change its premium.
+    throw new BadRequestError(
+      'PRODUCT_VERSION_NOT_LOADED',
+      `The product version this policy was written on (${snapshotId}) is not available.`,
+      { productCode: product, productSnapshotId: snapshotId },
+    )
+  }
+
+  let ratingAdapter: string
+  let rates: Rates
+  let productConfig: () => any
+  let publishedModel: any
+  if (snapshot) {
+    ratingAdapter = snapshot.definition.ratingAdapter
+    rates = snapshot.definition.rates
+    productConfig = () => snapshot.definition.config
+    publishedModel = snapshot.definition.publishedModel
+  } else {
+    const descriptor = requireProductCapability(product, 'quote')
+    ratingAdapter = descriptor.ratingAdapter
+    rates = mergeRates(loadProductRates(product).rates, loadTenantOverrides(tenantId))
+    productConfig = () => loadProductConfig(product)
+    publishedModel = tenantId ? getPublishedRatingModelForProduct(tenantId, product, payload?.state) : null
+  }
 
   let fallback: () => PremiumResult
-  if (descriptor.ratingAdapter === 'rate-table') {
+  if (ratingAdapter === 'rate-table') {
     // Priced entirely from the product's own rates.yaml; no product-specific code.
-    fallback = () => rateFromRateTable(payload, rates, loadProductConfig(product))
-  } else if (descriptor.ratingAdapter === 'personal-auto') {
+    fallback = () => rateFromRateTable(payload, rates, productConfig())
+  } else if (ratingAdapter === 'personal-auto') {
     fallback = () => rateAuto(payload, rates)
-  } else if (descriptor.ratingAdapter === 'commercial-auto') {
+  } else if (ratingAdapter === 'commercial-auto') {
     fallback = () => rateCommercialAuto(payload, rates)
-  } else if (descriptor.ratingAdapter === 'cyber') {
+  } else if (ratingAdapter === 'cyber') {
     fallback = () => rateCyber(payload, rates)
-  } else if (descriptor.ratingAdapter === 'professional-liability') {
+  } else if (ratingAdapter === 'professional-liability') {
     fallback = () => rateProfessionalLiability(payload, rates)
-  } else if (descriptor.ratingAdapter === 'homeowners') {
+  } else if (ratingAdapter === 'homeowners') {
     fallback = () => rateHO(payload, rates)
   } else {
     throw new BadRequestError(
       'PRODUCT_RATING_ADAPTER_UNSUPPORTED',
       `Product '${product}' does not have an executable rating adapter.`,
-      { productCode: product, ratingAdapter: descriptor.ratingAdapter },
+      { productCode: product, ratingAdapter },
     )
   }
 
-  return rateWithPublishedModelOrFallback(tenantId, product, payload, rates, fallback)
+  const result = rateWithPublishedModelOrFallback(product, payload, rates, publishedModel, fallback)
+  // Record which product version priced this, for audit.
+  if (snapshot && result && typeof (result as any).calcTrace === 'object' && (result as any).calcTrace) {
+    ;(result as any).calcTrace.productSnapshotId = snapshot.id
+  }
+  return result
 }
 
 /**
@@ -63,15 +96,12 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
  * hardcoded rater already attaches.
  */
 function rateWithPublishedModelOrFallback(
-  tenantId: string | undefined,
   productCode: string,
   payload: any,
   rates: Rates,
+  publishedModel: any,
   fallback: () => PremiumResult
 ): PremiumResult {
-  const publishedModel = tenantId
-    ? getPublishedRatingModelForProduct(tenantId, productCode, payload?.state)
-    : null
   const workbookRated = publishedModel ? rateFromPublishedWorkbook(payload, rates, publishedModel) : null
   if (workbookRated) return workbookRated
 

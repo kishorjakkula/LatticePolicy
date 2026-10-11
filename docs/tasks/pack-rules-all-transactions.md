@@ -68,9 +68,8 @@ npm run test:integration
 - A policy written before a rule was added can fail that rule at its next
   endorsement or renewal. That is intended, but there is no report of
   in-force policies that would fail a new pack version before it is loaded.
-- Per-term product version pinning is not built: an in-force policy is
-  re-rated at endorsement with the pack's current rate tables, not the ones
-  it was written on.
+- Per-term product version pinning was added afterwards; see
+  `docs/tasks/product-version-pinning.md`.
 - The cancellation, reinstatement, renewal, and rewrite wizards were not
   driven in a browser for a pack product; only endorsement was.
 - Non-renewal and issue take no risk data and are not checked.

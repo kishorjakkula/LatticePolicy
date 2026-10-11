@@ -13,7 +13,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | --- | --- | --- | --- |
 | UI | Operations and customer portal screens | Consumes the public REST API only | Its own image (exists today) |
 | Policy API | Quote, bind, issue, endorse, cancel, renew, administration | REST API, business events | API process |
-| Rating | Pricing from rate tables and published workbooks, with a calculation trace | Rating API: rate, explain, publish and version models | In-process by default, or a standalone service |
+| Rating | Pricing from rate tables and published workbooks, with a calculation trace | The `rate()` function and its result shape | Inside the Policy API. A copy can be split out and hosted as its own application later if that is needed |
 | Batch jobs | Scheduled and queued operational work | Job definitions and schedules | Worker process |
 | Asynchronous messaging | Reliable publishing of business events | Versioned event schemas | Dispatcher process, pluggable transport |
 
@@ -23,12 +23,13 @@ Update it whenever a module boundary, contract, or deployment unit changes.
   codebase with the existing in-process behavior as its first implementation.
   A second implementation calls the module over the network. A stack that
   keeps the default sees no change.
-- **Rating runs in-process by default; remote is optional.** A stack can be
-  configured to call a standalone rating service instead. Both are the same
-  rating code.
-- **Rating owns its data.** As a standalone product the rating service has its
-  own database and no foreign keys into policy data. Everything it needs to
-  price a risk arrives in the request.
+- **Rating stays in the API flow.** Rating runs inside the Policy API process
+  and is called directly. No rating interface, asynchronous callers, or
+  standalone rating service is being built now. If rating is later needed as a
+  separate product, a copy of the rating code is split out and hosted as its
+  own application then. To keep that possible, rating code should not reach
+  into policy tables: it prices a payload from a product definition
+  (`server/src/lib/product-snapshot.ts`).
 - **The outbox stays.** An event is recorded in the same transaction as the
   change that caused it. The dispatcher publishes through a transport adapter.
 - **Transports:** the existing webhook, and Kafka as the second adapter.
@@ -42,7 +43,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | --- | --- |
 | UI | Separate application and image. |
 | Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time: the wizard renders a carrier pack screen with it and the API enforces the same rules when a quote is rated. `packages/types` remains types only. |
-| Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Not yet behind an interface. |
+| Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Staying that way by decision. It prices from a product definition, either today's or the snapshot a policy term is pinned to. |
 | Batch jobs | Runs as its own process (`LATTICE_ROLE=worker`, or `node server/dist/worker.js`); the deployment kit runs it as the `worker` service. Handlers still import core code and the database directly, so it shares the release image. |
 | Asynchronous messaging | `async_message_outbox`, written by notifications only. Delivered by its own process (`LATTICE_ROLE=dispatcher`, or `node server/dist/dispatcher.js`) to one webhook (`ASYNC_PUSH_*`). |
 
@@ -95,9 +96,8 @@ copy it in both Dockerfiles; and add it to `build:packages` and
 
 1. Packaging foundation (done): shared runtime packages.
 2. Process split (done): API, worker, and dispatcher roles and kit services.
-3. Rating port: one interface, asynchronous callers, in-process behavior
-   unchanged, with proof that premiums are identical.
-4. Rating service: standalone application, API contract, own storage, and a
-   remote implementation of the port.
-5. Event contracts and transports: versioned business events and a Kafka
+3. Event contracts and transports: versioned business events and a Kafka
    adapter beside the webhook.
+
+Not planned: a rating interface with asynchronous callers and a standalone
+rating service. Rating stays in the API flow (see Decisions).
