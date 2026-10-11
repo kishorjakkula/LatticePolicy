@@ -1,6 +1,11 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    // Run against the shared package's source so tests never depend on a stale build.
+    alias: { '@lattice-policy/rules': fileURLToPath(new URL('../packages/rules/src/index.ts', import.meta.url)) },
+  },
   test: {
     environment: 'node',
     globals: true,

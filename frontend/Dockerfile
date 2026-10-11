@@ -12,8 +12,11 @@ COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY server/package.json ./server/package.json
 COPY packages/types/package.json ./packages/types/package.json
+COPY packages/rules/package.json ./packages/rules/package.json
 RUN npm ci --workspace=frontend
 
+# Shared runtime package, bundled from source by Vite (see vite.config.ts).
+COPY packages/rules/src ./packages/rules/src
 COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN npm run build

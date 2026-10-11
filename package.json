@@ -30,6 +30,8 @@
   "scripts": {
     "dev:server": "npm run dev --workspace=server",
     "dev:frontend": "npm run dev --workspace=frontend",
+    "build:packages": "npm run build --workspace=@lattice-policy/rules",
+    "test:packages": "npm run test --workspace=@lattice-policy/rules",
     "build:frontend": "npm run build --workspace=frontend",
     "build:server": "npm run build --workspace=server",
     "build": "npm run build:frontend && npm run build:server",
@@ -37,7 +39,7 @@
     "test:server": "npm run test --workspace=server",
     "test:contracts": "npm run test:contracts --workspace=server",
     "test:coverage": "npm run test:coverage --workspace=frontend && npm run test:coverage --workspace=server",
-    "test:local": "npm run test:frontend && npm run test:server",
+    "test:local": "npm run test:packages && npm run test:frontend && npm run test:server",
     "test": "sh scripts/test.sh",
     "test:docker": "sh scripts/test-docker.sh",
     "test:integration": "sh scripts/test-integration.sh",
@@ -51,7 +53,7 @@
     "sync:github-roadmap": "node scripts/sync-github-roadmap.mjs",
     "check:import-templates": "node scripts/check-import-templates.mjs",
     "check:architecture": "node --test scripts/check-module-boundaries.test.mjs && node scripts/check-module-boundaries.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "4.64.0",

@@ -6,8 +6,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "build:packages": "npm run build --workspace=@lattice-policy/rules",
+    "predev": "npm run build:packages",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "prebuild": "npm run build:packages",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:contracts": "vitest run src/__tests__/contracts.test.ts src/__tests__/openapi-contract.test.ts",
@@ -23,6 +26,7 @@
     "rehash:pii": "tsx scripts/rehash-sensitive-lookups.ts"
   },
   "dependencies": {
+    "@lattice-policy/rules": "file:../packages/rules",
     "@lattice-policy/types": "file:../packages/types",
     "@sentry/node": "^10.75.0",
     "ajv": "^8.20.0",

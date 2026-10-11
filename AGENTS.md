@@ -12,6 +12,8 @@ area you are changing.
 - Use `docs/AI_CONTRIBUTOR_PROCESS.md` for the required AI-readable handoff
   and documentation process.
 - For local setup, use `docs/DEVELOPER_SETUP.md`.
+- Before moving code between modules or adding a shared package, read
+  `docs/MODULES.md` (target modules, decisions, and how shared packages build).
 - If you are working an issue linked from a roadmap epic (#69-#76 or any
   later epic), or asked to audit/close one, use `docs/EPIC_WORKFLOW.md`.
   Closing an issue or epic is a shared-state action a maintainer should
@@ -24,6 +26,8 @@ area you are changing.
 - `server/`: Express TypeScript API, auth, tenancy, RBAC, lifecycle, rating,
   persistence, migrations, and background worker startup.
 - `packages/types/`: shared TypeScript types and Zod schemas.
+- `packages/rules/`: shared runtime package (rule expressions, screen rules)
+  imported by both server and frontend. See `docs/MODULES.md`.
 - `products/`: product coverage and rate YAML files.
 - `tenants/`: tenant configuration and overrides.
 - `contracts/`: JSON schemas and sample seed data.

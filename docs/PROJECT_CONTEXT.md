@@ -13,6 +13,7 @@ The main architectural idea is one shared policy platform with access-based expe
 - `frontend/`: React 19, Vite, React Query, Zustand operations and customer portal UI.
 - `server/`: Express TypeScript API, auth, tenancy, RBAC, policy lifecycle, quote/rating, forms, customers, onboarding, AI insights, and persistence.
 - `packages/types/`: shared TypeScript types and Zod schemas.
+- `packages/rules/`: shared runtime package (rule expressions and screen rules) used by both server and frontend; see `docs/MODULES.md`.
 - `products/`: product pack YAML for personal auto, homeowners, cyber, commercial auto, and professional liability.
 - `tenants/sample-carrier/`: sample tenant configuration and field metadata.
 - `contracts/`: JSON schemas and sample relational seed data.
@@ -186,6 +187,7 @@ instead of being forced into the single-carrier quote shape:
 ## Key Docs
 
 - `README.md`: overview and quick start.
+- `docs/MODULES.md`: target modules (UI, Policy API, rating, batch jobs, messaging), decisions, and shared runtime packages.
 - `docs/ARCHITECTURE.md`: architecture, lifecycle, customer portal, cache, logging, async outbox, AI, rating workbench.
 - `docs/DEVELOPER_SETUP.md`: local setup and commands.
 - `docs/AI_CONTRIBUTOR_PROCESS.md`: process for AI-assisted contributors and task notes.

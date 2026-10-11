@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    alias: { '@lattice-policy/rules': fileURLToPath(new URL('../packages/rules/src/index.ts', import.meta.url)) },
+  },
   test: {
     environment: 'node',
     globals: true,
