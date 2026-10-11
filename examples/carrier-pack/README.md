@@ -16,6 +16,7 @@ This example is for a carrier `acme-mutual`. Copy it as a starting point.
 | `products/<code>/coverage.yaml` | A product the carrier adds: coverages, limits, deductibles, capabilities. Same contract as `docs/PRODUCT_PACK_CONTRACT.md`. |
 | `products/<code>/rates.yaml` | That product's rate and factor tables. |
 | `fields/<code>.json` | Field metadata for a product (core or added): type, validation, visibility, grouping, order. Optional. |
+| `screens/<code>.yaml` | The risk step for a product: sections or tabs, columns, widgets, and rules for when fields show, are required, and are valid. Optional. |
 
 ## What this example shows
 
@@ -91,6 +92,70 @@ taxes: { rate: 0.02 }
 - Before the product can be quoted it needs, in the admin screens, an
   underwriting company that writes it and a state eligibility record.
 
+## Designing the risk screen
+
+`screens/<code>.yaml` lays out the fields from `fields/<code>.json`. Without
+it, a product's fields are shown in one section per `ui.group`.
+
+```yaml
+product: condo-unit-owners
+risk:
+  layout: tabs                  # or sections (stacked, the default)
+  sections:
+    - title: Unit
+      columns: 3                # 1 to 4
+      help: Shown under the section title.
+      visibleWhen: quote.state != 'FL'      # hide a whole section
+      fields:
+        - floorLevel                         # a field by name
+        - field: address
+          span: 2                            # columns the field takes
+          placeholder: Street and unit
+        - field: occupancy
+          widget: radio
+        - field: monthlyRent
+          widget: currency
+          visibleWhen: risk.occupancy == 'TenantOccupied'
+          requiredWhen: risk.occupancy == 'TenantOccupied'
+  validations:
+    - rule: risk.floorLevel <= risk.buildingFloors    # must be true
+      when: isSet(risk.buildingFloors)                # only checked while this holds
+      field: floorLevel                               # omit for a whole-step message
+      message: Floor level cannot be higher than the building
+```
+
+| Field type | Widgets (first is the default) |
+| --- | --- |
+| `string` | `text`, `textarea` |
+| `int`, `number` | `number`, `currency` |
+| `enum` | `select`, `radio` |
+| `bool` | `checkbox`, `select`, `radio` |
+| `date` | `date` |
+
+A field entry can also set `label`, `help`, and `readOnly: true`.
+
+Rules are expressions over the quote:
+
+- **Names:** `risk.<field>`, `quote.state`, `quote.termMonths`,
+  `quote.effectiveDate`, `quote.productCode`, `applicant.<field>`, and
+  `coverages.<CODE>.selected`, `.limit`, `.deductible`, `.percent`.
+- **Operators:** `||`, `&&`, `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in [...]`,
+  `not in [...]`, `+`, `-`, `*`, `/`, and parentheses.
+- **Functions:** `isSet`, `isEmpty`, `len`, `min`, `max`, `abs`, `round`,
+  `lower`, `upper`, `contains`, `startsWith`, `number`.
+- A name with no value is empty, never an error. `'true'`/`'false'` and
+  numeric text from form controls compare as booleans and numbers.
+
+Behaviour to rely on:
+
+- The API applies the same rules when a quote is rated, so they cannot be
+  skipped by calling the API directly.
+- A hidden field is never required and its rules do not apply. A value left
+  in a field that later becomes hidden is kept but ignored.
+- For a **core product**, the screen file adds sections under the built-in
+  screen. It may only place fields the pack defines in `fields/<code>.json`
+  that the built-in screen does not already show.
+
 ## Checking a pack
 
 ```bash
@@ -108,6 +173,6 @@ start on an invalid pack.
 
 ## Not in the pack format yet
 
-Custom tables, screen layouts, coverage triggers, rating workbooks, form
-templates, and layering a carrier product over a core product are planned
-additions to the format.
+Custom tables, lists of risks, coverage triggers, rating workbooks, form
+templates, screens for steps other than the risk step, and layering a carrier
+product over a core product are planned additions to the format.

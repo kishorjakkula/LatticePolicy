@@ -41,7 +41,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | Module | State |
 | --- | --- |
 | UI | Separate application and image. |
-| Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time. `packages/types` remains types only. |
+| Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time: the wizard renders a carrier pack screen with it and the API enforces the same rules when a quote is rated. `packages/types` remains types only. |
 | Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Not yet behind an interface. |
 | Batch jobs | Worker loop started inside the API process (`JOB_WORKER_ENABLED`). Handlers import core code and the database directly. |
 | Asynchronous messaging | `async_message_outbox`, written by notifications only, dispatched in-process to one webhook (`ASYNC_PUSH_*`). |

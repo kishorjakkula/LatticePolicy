@@ -8,5 +8,10 @@
   {"path": "risks.0.protectionClass", "label": "Protection Class", "type": "int", "required": false, "ui": {"group": "Building", "order": 240}},
   {"path": "risks.0.occupancy", "label": "Occupancy", "type": "enum", "enum": ["OwnerOccupied", "TenantOccupied", "Seasonal"], "required": true, "ui": {"group": "Occupancy", "order": 310}},
   {"path": "risks.0.masterPolicyDeductible", "label": "Association Master Policy Deductible", "type": "int", "required": false, "visibleTo": ["Agent", "Underwriter"], "ui": {"group": "Association", "order": 410}, "help": "Deductible on the association policy that could be assessed to the unit owner"},
-  {"path": "risks.0.associationName", "label": "Association Name", "type": "string", "required": false, "ui": {"group": "Association", "order": 420}}
+  {"path": "risks.0.associationName", "label": "Association Name", "type": "string", "required": false, "ui": {"group": "Association", "order": 420}},
+  {"path": "risks.0.monthlyRent", "label": "Monthly Rent", "type": "number", "ui": {"group": "Unit", "order": 140}},
+  {"path": "risks.0.buildingFloors", "label": "Floors in Building", "type": "int", "ui": {"group": "Building", "order": 250}},
+  {"path": "risks.0.hasElevator", "label": "Building Has an Elevator", "type": "bool", "ui": {"group": "Building", "order": 260}},
+  {"path": "risks.0.elevatorCount", "label": "Number of Elevators", "type": "int", "ui": {"group": "Building", "order": 270}},
+  {"path": "risks.0.specialAssessmentNotes", "label": "Known or Pending Special Assessments", "type": "string", "ui": {"group": "Association", "order": 430}}
 ]

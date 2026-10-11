@@ -2,7 +2,23 @@ import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
 import { getProductCapabilities, resolveProductPackDir } from './product-registry.js'
+import type { ProductScreen } from '@lattice-policy/rules'
 import { carrierPackFieldMetaPath, carrierPackFor, loadCarrierPackConfig } from './carrier-pack.js'
+import { loadProductScreen } from './product-screen.js'
+
+/** Products whose risk screens are built into the framework. */
+const CORE_PRODUCT_CODES = new Set(['personal-auto', 'commercial-auto', 'homeowners', 'cyber', 'professional-liability'])
+
+/**
+ * The risk screen a carrier pack defines for a product, or null. For a core
+ * product the pack can only add sections for its own extra fields; the fields
+ * the built-in screen already shows are reserved.
+ */
+export function loadRiskScreen(productCode: ProductCode, cfg: any, tenantId: string | undefined): ProductScreen | null {
+  if (!tenantId) return null
+  const reserved = CORE_PRODUCT_CODES.has(productCode) ? buildRiskFields(productCode, cfg).map((field) => field.key) : []
+  return loadProductScreen(productCode, tenantId, reserved)
+}
 
 export type ProductCode = string
 

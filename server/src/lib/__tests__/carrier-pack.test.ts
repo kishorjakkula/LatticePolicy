@@ -263,7 +263,8 @@ describe('carrier pack', () => {
     it('builds the quote form from the pack field definitions', () => {
       const fields = buildRiskFields('condo-unit-owners', loadProductConfig('condo-unit-owners'), 'acme-mutual')
       expect(fields.map((field) => field.key)).toEqual([
-        'address', 'floorLevel', 'squareFeet', 'yearBuilt', 'construction', 'roofAgeYears', 'protectionClass', 'occupancy', 'masterPolicyDeductible', 'associationName',
+        'address', 'floorLevel', 'squareFeet', 'monthlyRent', 'yearBuilt', 'construction', 'roofAgeYears', 'protectionClass',
+        'buildingFloors', 'hasElevator', 'elevatorCount', 'occupancy', 'masterPolicyDeductible', 'associationName', 'specialAssessmentNotes',
       ])
       expect(fields.find((field) => field.key === 'floorLevel')).toEqual({
         key: 'floorLevel', label: 'Floor Level', type: 'number', path: 'risks.0.floorLevel', required: true, help: 'Enter the floor the unit is on', group: 'Unit',

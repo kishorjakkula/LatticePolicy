@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { loadProductConfig, buildRiskFields, loadFieldMeta } from '../products.js'
+import { loadProductConfig, buildRiskFields, loadFieldMeta, loadRiskScreen } from '../products.js'
 import { listProductCapabilities, requireProductCapabilities } from '../lib/product-registry.js'
 import { requirePermission } from '../auth.js'
 import { routeParam } from '../lib/utils.js'
@@ -32,7 +32,9 @@ productsRoutes.get('/products/:code/form', requireProductAccess, (req, res, next
     requireProductCapabilities(code)
     const cfg = loadProductConfig(code)
     const fields = buildRiskFields(code, cfg, req.tenant?.tenantId)
-    return res.json({ fields })
+    // Present only when the carrier pack defines a screen for this product.
+    const screen = loadRiskScreen(code, cfg, req.tenant?.tenantId)
+    return res.json(screen ? { fields, screen } : { fields })
   } catch (err) {
     next(err)
   }

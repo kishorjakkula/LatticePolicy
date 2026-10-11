@@ -25,6 +25,8 @@ import { validateInsureds } from './insuredValidation'
 import { deriveWizardTransactionStatus } from '../policies/statusModel'
 import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
+import type { ProductScreen } from '@lattice-policy/rules'
+import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
 import { hasPermission } from '../../auth/permissions'
@@ -849,6 +851,10 @@ export function QuoteWizard() {
   const [step, setStep] = useState(1)
   const [cfg, setCfg] = useState<any | null>(null)
   const [riskFields, setRiskFields] = useState<Field[]>([])
+  // Screen a carrier pack defines for the product: the whole risk step for a
+  // pack product, or extra sections under a core product's built-in step.
+  const [riskScreen, setRiskScreen] = useState<ProductScreen | null>(null)
+  const [riskScreenChecked, setRiskScreenChecked] = useState(false)
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -962,6 +968,7 @@ export function QuoteWizard() {
     if (!q.productCode) {
       setCfg(null)
       setRiskFields([])
+      setRiskScreen(null)
       return
     }
     void loadConfig(q.productCode)
@@ -1886,7 +1893,15 @@ export function QuoteWizard() {
 
   async function loadConfig(code: ProductCode) {
     try { setCfg(await api.getProductConfig(code)) } catch { setCfg(null) }
-    try { const form = await api.getProductForm(code); setRiskFields(form?.fields || []) } catch { setRiskFields([]) }
+    try {
+      const form = await api.getProductForm(code)
+      setRiskFields(form?.fields || [])
+      setRiskScreen(form?.screen || null)
+    } catch {
+      setRiskFields([])
+      setRiskScreen(null)
+    }
+    setRiskScreenChecked(false)
   }
 
   async function loadQuoteFromServer(quoteId: string) {
@@ -2017,9 +2032,13 @@ export function QuoteWizard() {
       if (!validateCurrentInsureds()) return
     }
     if (step === 4 && target > step && !isCancellationMode) {
-      const errs = q.productCode === 'personal-auto'
+      // A pack product is checked by its own screen rules alone; a core product
+      // keeps its built-in checks and adds the rules for any pack sections.
+      const builtInErrs = q.productCode === 'personal-auto'
         ? validatePersonalAutoVehicles(q.risks)
-        : validateFields(riskFields, q)
+        : riskScreen && !isCoreProductCode(q.productCode) ? {} : validateFields(riskFields, q)
+      const errs = riskScreen ? { ...builtInErrs, ...screenErrors(riskScreen, q) } : builtInErrs
+      setRiskScreenChecked(true)
       setFieldErrors(errs)
       if (Object.keys(errs).length > 0) return
     }
@@ -2062,6 +2081,7 @@ export function QuoteWizard() {
     if (!code) {
       setCfg(null)
       setRiskFields([])
+      setRiskScreen(null)
     }
   }
 
@@ -4391,7 +4411,7 @@ export function QuoteWizard() {
                 setFieldErrors(validatePersonalAutoVehicles(nextRisks))
               }}
             />
-          ) : (
+          ) : riskScreen && !isCoreProductCode(q.productCode) ? null : (
             <DynamicRiskForm
               fields={riskFields}
               value={q}
@@ -4402,6 +4422,21 @@ export function QuoteWizard() {
                 setQ(next)
               }}
               onValidate={(errs) => setFieldErrors(errs)}
+            />
+          )}
+          {q.productCode && riskScreen && (
+            <ConfiguredRiskForm
+              screen={riskScreen}
+              value={q}
+              disabled={isCancellationMode || isViewOnly}
+              showAllErrors={riskScreenChecked}
+              onChange={(path, val) => {
+                // setByPath writes in place, so copy the risk being edited first.
+                const next = { ...q, risks: (Array.isArray(q.risks) ? q.risks : []).map((risk: any) => ({ ...risk })) }
+                if (next.risks.length === 0) next.risks = [{}]
+                setByPath(next, path, val)
+                setQ(next)
+              }}
             />
           )}
           </CollapsibleSection>
@@ -4561,19 +4596,21 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Prior Losses (3 years)</span><span>{q.risks?.[0]?.priorLossesCount ?? '-'}</span></div>
                 </>
               ) : !isCoreProductCode(q.productCode) ? (
-                // A product added by a carrier pack: summarise the fields its own form defines.
-                <>
-                  {riskFields.length === 0 && <div className="muted">No risk details defined for this product.</div>}
-                  {riskFields.map((field) => {
-                    const value = getByPath(q, field.path)
-                    return (
-                      <div className="kvline" key={field.key}>
-                        <span className="muted">{field.label}</span>
-                        <span>{value === undefined || value === null || value === '' ? '-' : String(value)}</span>
-                      </div>
-                    )
-                  })}
-                </>
+                // A product added by a carrier pack: summarise the fields its own screen shows.
+                riskScreen ? <ConfiguredRiskSummary screen={riskScreen} value={q} /> : (
+                  <>
+                    {riskFields.length === 0 && <div className="muted">No risk details defined for this product.</div>}
+                    {riskFields.map((field) => {
+                      const value = getByPath(q, field.path)
+                      return (
+                        <div className="kvline" key={field.key}>
+                          <span className="muted">{field.label}</span>
+                          <span>{value === undefined || value === null || value === '' ? '-' : String(value)}</span>
+                        </div>
+                      )
+                    })}
+                  </>
+                )
               ) : (
                 <>
                   <div className="kvline"><span className="muted">Industry</span><span>{q.risks?.[0]?.industry || '-'}</span></div>
@@ -4588,6 +4625,8 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Domain</span><span>{q.risks?.[0]?.domain || '-'}</span></div>
                 </>
               )}
+              {/* Fields a carrier pack adds to a core product's screen. */}
+              {q.productCode && isCoreProductCode(q.productCode) && riskScreen && <ConfiguredRiskSummary screen={riskScreen} value={q} />}
             </CollapsibleSection>
 
             <CollapsibleSection className="card">

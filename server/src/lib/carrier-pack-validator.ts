@@ -10,6 +10,8 @@ import {
 } from './carrier-pack.js'
 import { RATING_ADAPTERS, parseProductDescriptor, resolveCoreProductsDir } from './product-registry.js'
 import { validateRateTable } from './rating-table.js'
+import { buildProductScreen } from './product-screen.js'
+import { buildRiskFields } from './products.js'
 
 export type CarrierPackIssue = {
   /** Path inside the pack the issue is about, for example products/condo/coverage.yaml. */
@@ -36,7 +38,7 @@ export type CarrierPackValidationOptions = {
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
 const FIELD_TYPES = new Set(['string', 'int', 'number', 'bool', 'enum', 'date'])
-const TOP_LEVEL_ENTRIES = new Set(['pack.yaml', 'config.yaml', 'products', 'fields', 'README.md'])
+const TOP_LEVEL_ENTRIES = new Set(['pack.yaml', 'config.yaml', 'products', 'fields', 'screens', 'README.md'])
 
 function listDirectories(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
@@ -201,6 +203,7 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
 
   // --- fields/ ----------------------------------------------------------------
   const fieldPathsByProduct = new Map<string, string[]>()
+  const fieldMetaByProduct = new Map<string, any[]>()
   const fieldsDir = path.join(dir, 'fields')
   if (fs.existsSync(fieldsDir)) {
     for (const file of fs.readdirSync(fieldsDir).sort()) {
@@ -228,6 +231,7 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
       }
       const seen = new Set<string>()
       fieldPathsByProduct.set(code, parsed.map((field: any) => (typeof field?.path === 'string' ? field.path.trim() : '')).filter(Boolean))
+      fieldMetaByProduct.set(code, parsed)
       parsed.forEach((field: any, index: number) => {
         const where = `field ${index + 1}`
         const fieldPath = typeof field?.path === 'string' ? field.path.trim() : ''
@@ -241,6 +245,38 @@ export function validateCarrierPack(dir: string, options: CarrierPackValidationO
           error(rel, `${where} (${fieldPath}): an enum field needs a non-empty enum list`)
         }
       })
+    }
+  }
+
+  // --- screens/ -----------------------------------------------------------------
+  const screensDir = path.join(dir, 'screens')
+  if (fs.existsSync(screensDir)) {
+    for (const file of fs.readdirSync(screensDir).sort()) {
+      const rel = `screens/${file}`
+      if (!file.endsWith('.yaml')) {
+        warning(rel, 'only <product-code>.yaml files are read from screens/')
+        continue
+      }
+      const code = file.slice(0, -'.yaml'.length)
+      if (!knownProducts.has(code)) {
+        error(rel, `'${code}' is neither a core product nor in this pack`)
+        continue
+      }
+      const parsed = readYaml(path.join(screensDir, file))
+      if (parsed.error) {
+        error(rel, `not valid YAML: ${parsed.error}`)
+        continue
+      }
+      // A core product's built-in screen already shows these fields.
+      let reserved: string[] = []
+      if (coreCodes.has(code)) {
+        const coreConfig = readYaml(path.join(coreProductsDir, code, 'coverage.yaml'))
+        reserved = coreConfig.error ? [] : buildRiskFields(code, coreConfig.value).map((field) => field.key)
+      }
+      for (const issue of buildProductScreen(code, fieldMetaByProduct.get(code) || [], parsed.value, reserved).issues) {
+        if (issue.level === 'error') error(rel, issue.message)
+        else warning(rel, issue.message)
+      }
     }
   }
 

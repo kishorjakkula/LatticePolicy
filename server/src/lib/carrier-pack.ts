@@ -14,6 +14,7 @@ import YAML from 'yaml'
  *   products/<code>/coverage.yaml      product packs, same contract as core
  *   products/<code>/rates.yaml
  *   fields/<code>.json                 field metadata per product (optional)
+ *   screens/<code>.yaml                risk screen layout and rules (optional)
  *
  * With CARRIER_PACK_DIR unset nothing here applies and products, overrides
  * and field metadata load from the repository as before.
@@ -89,6 +90,10 @@ export function carrierPackConfigPath(pack: CarrierPack): string {
 
 export function carrierPackFieldMetaPath(pack: CarrierPack, productCode: string): string {
   return path.join(pack.dir, 'fields', `${productCode}.json`)
+}
+
+export function carrierPackScreenPath(pack: CarrierPack, productCode: string): string {
+  return path.join(pack.dir, 'screens', `${productCode}.yaml`)
 }
 
 export function loadCarrierPackConfig(pack: CarrierPack): any {
