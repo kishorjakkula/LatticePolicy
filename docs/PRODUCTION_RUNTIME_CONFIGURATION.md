@@ -49,6 +49,11 @@ Additional guarded settings:
   workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is
   optional today so existing shared deployments keep working; see
   `docs/MULTITENANCY.md`.
+- `TENANT_RLS_ENFORCED=1` makes Postgres enforce the tenant row-level security
+  policies by running every tenant transaction as the restricted
+  `lattice_tenant_rls` role (created by migration 058). Startup fails if the
+  database user cannot use that role. Recommended for every production stack;
+  off by default so existing deployments are unchanged until it is turned on.
 
 The API does not currently provide public self-registration or domain-based
 demo allowlisting. Use exact entries in `DEMO_ALLOWED_EMAILS`, provision users

@@ -50,6 +50,7 @@ services:
       DATABASE_URL: postgres://${DB_USER:-lattice_policy}:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DB_NAME:-lattice_policy}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-local}
       CARRIER_TENANT_ID: ${CARRIER_TENANT_ID:-}
+      TENANT_RLS_ENFORCED: ${TENANT_RLS_ENFORCED:-}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       CUSTOMER_DATA_KEY: ${CUSTOMER_DATA_KEY:-customer-data-key-for-local-docker-e2e}
       PII_LOOKUP_KEY: ${PII_LOOKUP_KEY:-pii-lookup-key-for-local-docker-e2e}

@@ -50,6 +50,16 @@ export function getPinnedTenantId(): string | null {
   return value || null
 }
 
+/**
+ * When TENANT_RLS_ENFORCED is on, every tenant transaction switches into the
+ * restricted lattice_tenant_rls role so Postgres applies the tenant RLS
+ * policies. Off keeps the legacy owner-connection behavior, where the
+ * policies exist but are not evaluated.
+ */
+export function isTenantRlsEnforced(): boolean {
+  return isTruthyEnv(process.env.TENANT_RLS_ENFORCED)
+}
+
 export function isTruthyEnv(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase())
 }

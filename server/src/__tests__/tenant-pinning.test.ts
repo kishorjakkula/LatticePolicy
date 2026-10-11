@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPinnedTenantId } from '../config.js'
+import { getPinnedTenantId, isTenantRlsEnforced } from '../config.js'
 import { assertTenantServed, toRawQuery, withTenantTx } from '../db.js'
 import { tenancyMiddleware } from '../tenancy.js'
 
@@ -35,6 +35,7 @@ describe('single-carrier tenant pinning', () => {
 
   beforeEach(() => {
     delete process.env.CARRIER_TENANT_ID
+    delete process.env.TENANT_RLS_ENFORCED
   })
 
   afterEach(() => {
@@ -51,6 +52,16 @@ describe('single-carrier tenant pinning', () => {
     it('returns the trimmed configured tenant', () => {
       process.env.CARRIER_TENANT_ID = ' acme-mutual '
       expect(getPinnedTenantId()).toBe('acme-mutual')
+    })
+  })
+
+  describe('isTenantRlsEnforced', () => {
+    it('is off unless TENANT_RLS_ENFORCED is truthy', () => {
+      expect(isTenantRlsEnforced()).toBe(false)
+      process.env.TENANT_RLS_ENFORCED = '0'
+      expect(isTenantRlsEnforced()).toBe(false)
+      process.env.TENANT_RLS_ENFORCED = 'true'
+      expect(isTenantRlsEnforced()).toBe(true)
     })
   })
 

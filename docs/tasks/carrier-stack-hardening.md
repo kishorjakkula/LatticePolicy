@@ -67,12 +67,31 @@ npm run test --workspace=server
 npm run test:integration   # disposable PostgreSQL
 ```
 
+## Row-Level Security Enforcement (second change)
+
+- `server/migrations/058_tenant_rls_enforcement.sql`: restricted
+  `lattice_tenant_rls` role, grants, policies for the four RLS-enabled tables
+  that had none, and RLS on three tenant tables that had none.
+- `server/src/db.ts`: `withTenantTx` runs `SET LOCAL ROLE lattice_tenant_rls`
+  when `TENANT_RLS_ENFORCED` is on; `initDb` fails fast if the role is
+  unusable.
+- `server/src/__tests__/tenant-rls-enforcement.integration.test.ts`: proves
+  cross-tenant reads return nothing and cross-tenant writes are rejected,
+  that the pooled connection returns to the owner role, and that no tenant
+  table is left without RLS or a policy.
+- Validated by running the full integration suite twice on fresh databases,
+  once with `TENANT_RLS_ENFORCED=1` and once without; both pass, and the
+  Postgres log of the enforced run shows no unexpected permission or policy
+  errors.
+
 ## Follow-Ups Or Risks
 
-- Row-level security is still not enforced at runtime (table-owner connection,
-  no `FORCE ROW LEVEL SECURITY`). Needs a non-owner application role and a
-  policy review; several policies use `current_setting('app.tenant_id')`
-  without `missing_ok` and cross-tenant worker queries would need a bypass.
+- `TENANT_RLS_ENFORCED` is off by default. Turn it on per environment, then
+  make it the default for managed deployments.
+- Enforcement covers tenant transactions only. Raw-pool queries (workers'
+  claim queries, login username lookup, migrations) still run as the owner.
+- The enforced path is covered by integration tests, not by the Playwright
+  end-to-end suite.
 - `CARRIER_TENANT_ID` is optional. Make it required for managed deployments
   once existing shared environments are migrated.
 - The scheduler-tick tenant filter is covered by typecheck and the worker

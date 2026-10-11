@@ -5,7 +5,7 @@ import { Pool, type PoolClient } from 'pg'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from './schema.js'
 import { logger } from './logger.js'
-import { assertDeploymentConfig, getPinnedTenantId } from './config.js'
+import { assertDeploymentConfig, getPinnedTenantId, isTenantRlsEnforced } from './config.js'
 import { BadRequestError, ForbiddenError } from './errors/domain.errors.js'
 
 let pool: Pool | null = null
@@ -66,6 +66,30 @@ export async function initDb() {
   pool = new Pool({ connectionString: url })
   await ensureMigrationTable()
   await runMigrations()
+  await assertTenantRlsRoleUsable()
+}
+
+/** Non-owner role tenant transactions switch into so RLS policies apply (migration 058). */
+export const TENANT_RLS_ROLE = 'lattice_tenant_rls'
+
+/**
+ * Fail at startup, not on the first request, when enforcement is requested
+ * but the connection cannot switch into the restricted role.
+ */
+async function assertTenantRlsRoleUsable() {
+  if (!pool || !isTenantRlsEnforced()) return
+  const result = await pool.query(
+    `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS role_exists,
+            COALESCE((SELECT pg_has_role(current_user, oid, 'MEMBER') FROM pg_roles WHERE rolname = $1), false) AS can_assume`,
+    [TENANT_RLS_ROLE]
+  )
+  const row = result.rows[0] || {}
+  if (!row.role_exists || !row.can_assume) {
+    throw new Error(
+      `TENANT_RLS_ENFORCED is on but the database user cannot use role ${TENANT_RLS_ROLE}; ` +
+      `create the role and grant it to the application user (see docs/MULTITENANCY.md)`
+    )
+  }
 }
 
 /**
@@ -87,6 +111,9 @@ export async function withTenantTx<T>(tenantId: string, fn: (db: DrizzleDB) => P
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    // SET LOCAL lasts for this transaction only, so the pooled connection
+    // returns to the owner role on COMMIT/ROLLBACK.
+    if (isTenantRlsEnforced()) await client.query(`SET LOCAL ROLE ${TENANT_RLS_ROLE}`)
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId])
     const db = createDrizzleDb(client)
     ;(db as any).__pgClient = client

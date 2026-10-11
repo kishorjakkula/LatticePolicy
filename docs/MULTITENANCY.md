@@ -48,7 +48,31 @@ Fail-Closed Rules (all modes)
 - Login rejects an account whose tenant differs from the tenant being signed
   into, so one tenant's MFA and local-auth settings are never applied to
   another tenant's user.
-- Known gap: row-level security policies exist but are not enforced at
-  runtime, because the API connects as the table owner and the tables do not
-  use `FORCE ROW LEVEL SECURITY`. Application-level tenant filters remain the
-  effective control until the non-owner database role work lands.
+
+Row-Level Security Enforcement (TENANT_RLS_ENFORCED)
+- Postgres does not apply RLS policies to a table's owner or to a superuser,
+  and the API connects as the owner. With `TENANT_RLS_ENFORCED` off (default)
+  the policies exist but are not evaluated; application-level tenant filters
+  are the effective control.
+- With `TENANT_RLS_ENFORCED=1`, `withTenantTx` runs `SET LOCAL ROLE
+  lattice_tenant_rls` at the start of every tenant transaction. That role is
+  not an owner, cannot bypass RLS, and cannot log in, so every policy applies:
+  an unfiltered query sees only the transaction's tenant and a write for
+  another tenant is rejected. The connection returns to the owner role at
+  COMMIT/ROLLBACK.
+- Migration `058_tenant_rls_enforcement.sql` creates the role, grants it DML
+  on current and future tables, adds parent-scoped policies for `user_roles`,
+  `party_contacts`, `party_licenses`, and `party_roles`, and enables RLS on
+  `auto_vehicles`, `dwellings`, and `short_rate_tables`.
+- If the migration user lacks `CREATEROLE`, the migration still applies but
+  logs a notice. An operator then runs `CREATE ROLE lattice_tenant_rls NOLOGIN
+  NOINHERIT;`, `GRANT lattice_tenant_rls TO <app user>;` and the table and
+  sequence grants from the migration before turning enforcement on. Startup
+  refuses to run with enforcement on when the role is unusable.
+- Still on the owner connection by design: migrations, the cross-tenant
+  claim queries in the job scheduler, job queue, and outbox worker, the
+  username lookup at login, and the rating model cache warm-up. Scope any new
+  raw-pool query by tenant explicitly.
+- Every new tenant table needs `ENABLE ROW LEVEL SECURITY` and a
+  `tenant_isolation` policy; `tenant-rls-enforcement.integration.test.ts`
+  fails if one is missing.
