@@ -2,7 +2,7 @@
 
 ## Summary and links
 
-Pilot administration owns carrier identity instead of displaying the framework logo on customer output. This extends the pilot configuration work in PR #371.
+Pilot administration owns carrier identity instead of displaying the framework logo on customer output. This extends the pilot configuration work in PR #371. Implementation: [PR #372](https://github.com/kishorjakkula/LatticePolicy/pull/372).
 
 ## Important files
 
@@ -30,6 +30,6 @@ Pilot administration owns carrier identity instead of displaying the framework l
 - Unit/API tests cover invalid logo/color rejection, permissions, tenant mismatch, safe public projection, escaping and immutable branding.
 - PostgreSQL integration proves migration, tenant isolation and printed snapshot retention.
 - Frontend tests exercise save, header refresh, upload errors and server error presentation; login tests retain SSO/pinning coverage.
-- Pilot Playwright uploads a real PNG through admin, checks header/login image loading, opens every accepted document and parses actual PDF text to require carrier identity and exclude framework branding.
+- Pilot Playwright uploads a real PNG through admin, checks header/login image loading, opens every accepted document and parses actual PDF text to require carrier identity and exclude framework branding. Browser worksheet and packet section headings reserve enough baseline spacing to avoid overlap; Playwright checks the worksheet heading-to-field gap.
 
 Commands: `npm run test:frontend`, `npm run test:server`, `npm run typecheck`, `npm run build`, targeted PostgreSQL integration, `npm run security:audit`, and the pilot acceptance/browser/recovery/monitor/handoff pipeline. Final results are recorded in the PR and pilot evidence.

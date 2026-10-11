@@ -186,6 +186,12 @@ async function assertCarrierPdf(bytes: Buffer, name: string) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const content = await (await pdf.getPage(i)).getTextContent()
       text += content.items.map((item: any) => item.str || '').join(' ')
+      const heading = content.items.find((item: any) => item.str === 'Policy / Transaction Context') as any
+      const firstValue = content.items.find((item: any) => item.str?.trim() === 'Policy Number:') as any
+      if (heading) {
+        expect(firstValue).toBeTruthy()
+        expect(Math.abs(heading.transform[5] - firstValue.transform[5])).toBeGreaterThanOrEqual(15)
+      }
     }
     expect(text).toContain(name)
     expect(text).not.toMatch(/Lattice\s*Policy/i)

@@ -6553,11 +6553,11 @@ async function buildRatingWorksheetPdf(model: RatingWorksheetDocumentModel): Pro
 
   const sectionTitle = (label: string) => {
     y += 6
-    ensureSpace(20)
+    ensureSpace(36)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(12)
     doc.text(label, marginLeft, y)
-    y += 8
+    y += 18
   }
 
   const drawDivider = () => {
@@ -6891,11 +6891,11 @@ async function buildPolicyPacketPdf(model: PolicyPacketDocumentModel): Promise<B
 
   const sectionTitle = (value: string): void => {
     y += 8
-    ensureSpace(22)
+    ensureSpace(40)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(13)
     doc.text(value, marginLeft, y)
-    y += 8
+    y += 18
   }
 
   const branding = await fetchCarrierBranding()
