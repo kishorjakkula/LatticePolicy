@@ -1,4 +1,6 @@
 import { RadioGroup } from '../../components/RadioGroup'
+import { FieldError } from '../../components/FieldError'
+import { validateQuoteSetup } from './setupValidation'
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, apiDetails } from '../../api/client'
@@ -859,6 +861,8 @@ export function QuoteWizard() {
   // Lookup tables the screen's rules read, sent with the screen.
   const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
+  const [setupChecked, setSetupChecked] = useState(false)
+  const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [quoteResp, setQuoteResp] = useState<any | null>(null)
@@ -2028,6 +2032,13 @@ export function QuoteWizard() {
       return
     }
     if (locked && target < step) return
+    if (step === 1 && target > step && (!isPolicyTransactionMode || isRewriteTransaction)) {
+      setSetupChecked(true)
+      if (Object.keys(validateQuoteSetup(q)).length > 0) {
+        setError('Complete the required fields before continuing.')
+        return
+      }
+    }
     if (step === 2 && target > step && qualificationEditable) {
       const errs = validateQualificationAnswers(q.productCode, q.qualificationAnswers)
       setQualificationErrors(errs)
@@ -3554,8 +3565,11 @@ export function QuoteWizard() {
           <CollapsibleSection className="wizard-section" title="Company & Agency">
           <div className="row">
             <div className="col uw-company-col">
-              <label>Underwriting Company</label>
+              <label htmlFor="wizard-setup-company">Underwriting Company</label>
               <select
+                id="wizard-setup-company"
+                aria-invalid={Boolean(setupErrors.underwritingCompanyName)}
+                aria-describedby={setupErrors.underwritingCompanyName ? 'wizard-setup-company-error' : undefined}
                 value={q.underwritingCompanyName || ''}
                 onChange={e => {
                   const nextName = e.target.value
@@ -3594,6 +3608,7 @@ export function QuoteWizard() {
                   </option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-company-error" message={setupErrors.underwritingCompanyName} />
             </div>
           </div>
           <div className="row">
@@ -3701,8 +3716,11 @@ export function QuoteWizard() {
           <CollapsibleSection className="wizard-section" title="Product & Term">
           <div className="row">
             <div className="col">
-              <label>Effective Date</label>
+              <label htmlFor="wizard-setup-date">Effective Date</label>
               <input
+                id="wizard-setup-date"
+                aria-invalid={Boolean(setupErrors.effectiveDate)}
+                aria-describedby={setupErrors.effectiveDate ? 'wizard-setup-date-error' : undefined}
                 type="date"
                 value={q.effectiveDate}
                 onChange={e => {
@@ -3717,10 +3735,14 @@ export function QuoteWizard() {
                 }}
                 disabled={isCancellationMode || lockCoreProductFields || isViewOnly}
               />
+              <FieldError id="wizard-setup-date-error" message={setupErrors.effectiveDate} />
             </div>
             <div className="col">
-              <label>Country</label>
+              <label htmlFor="wizard-setup-country">Country</label>
               <select
+                id="wizard-setup-country"
+                aria-invalid={Boolean(setupErrors.country)}
+                aria-describedby={setupErrors.country ? 'wizard-setup-country-error' : undefined}
                 value={q.country || ''}
                 onChange={e => {
                   const nextCountry = e.target.value ? normalizeCountryCode(e.target.value) : ''
@@ -3733,10 +3755,14 @@ export function QuoteWizard() {
                   <option key={entry.code} value={entry.code}>{entry.label}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-country-error" message={setupErrors.country} />
             </div>
             <div className="col">
-              <label>State</label>
+              <label htmlFor="wizard-setup-state">State</label>
               <select
+                id="wizard-setup-state"
+                aria-invalid={Boolean(setupErrors.state)}
+                aria-describedby={setupErrors.state ? 'wizard-setup-state-error' : undefined}
                 value={q.state || ''}
                 onChange={e => setQ({ ...q, state: normalizeRegionCode(e.target.value) })}
                 disabled={isCancellationMode || !q.country || isViewOnly}
@@ -3746,10 +3772,14 @@ export function QuoteWizard() {
                   <option key={state.code} value={state.code}>{state.code} - {state.name}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-state-error" message={setupErrors.state} />
             </div>
             <div className="col">
-              <label>Product</label>
+              <label htmlFor="wizard-setup-product">Product</label>
               <select
+                id="wizard-setup-product"
+                aria-invalid={Boolean(setupErrors.productCode)}
+                aria-describedby={setupErrors.productCode ? 'wizard-setup-product-error' : undefined}
                 value={q.productCode || ''}
                 onChange={e => onProductChange(e.target.value as QuoteProductCode)}
                 disabled={lockCoreProductFields || !q.country || !q.state || loadingUnderwritingCompanies || isViewOnly}
@@ -3768,6 +3798,7 @@ export function QuoteWizard() {
                   <option key={code} value={code}>{productLabel(code)}</option>
                 ))}
               </select>
+              <FieldError id="wizard-setup-product-error" message={setupErrors.productCode} />
             </div>
           </div>
           <div className="row">
@@ -3813,10 +3844,11 @@ export function QuoteWizard() {
             </div>
             <div className="col">
               <label>Term</label>
-              <select value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
+              <select aria-invalid={Boolean(setupErrors.termMonths)} aria-describedby={setupErrors.termMonths ? 'wizard-setup-term-error' : undefined} value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
                 <option value={6}>6 months</option>
                 <option value={12}>12 months</option>
               </select>
+              <FieldError id="wizard-setup-term-error" message={setupErrors.termMonths} />
             </div>
           </div>
           </CollapsibleSection>

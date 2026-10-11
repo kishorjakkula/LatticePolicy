@@ -21,6 +21,9 @@ certification remains a separate gate. Issue links and original findings are in
   API and browser acceptance, bounded concurrency workload, restore and upgrade
   drill, local monitor/backup schedule, and redacted handoff tooling.
 - Carrier API/UI ports default to loopback behind an explicitly configured proxy.
+- Pilot validation also exposed missing step-one setup checks. The wizard now
+  blocks an incomplete setup on Continue and associates field errors with the
+  controls; the reusable `FieldError` and setup validator are covered by tests.
 
 ## Tests
 

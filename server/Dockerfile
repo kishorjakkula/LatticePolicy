@@ -27,9 +27,6 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-# Commit this image was built from; reported by GET /version.
-ARG BUILD_COMMIT=""
-ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN apk upgrade --no-cache libcrypto3 libssl3
 
 # System Chromium + the shared libraries it needs to actually run headless on
@@ -63,6 +60,12 @@ COPY contracts ./contracts
 COPY products ./products
 COPY tenants ./tenants
 COPY server/migrations ./server/migrations
+
+# Keep release identity after the expensive dependency layers so a new commit
+# does not reinstall Chromium and all runtime packages.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=${BUILD_COMMIT}
+LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
 
 EXPOSE 3000
 CMD ["node", "server/dist/index.js"]
