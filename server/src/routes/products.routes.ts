@@ -59,12 +59,10 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
         ) || []
         // Core screens are additive. Generate their base controls from the
         // term's config, and never consult current carrier field metadata.
-        const fields = pinnedScreen && !hasBuiltInRiskFields(code) ? [] : buildRiskFields(code, snapshot.definition.config)
-        const paths = new Set(fields.map((field) => field.path))
-        for (const field of pinnedFields) if (!paths.has(field.path)) {
-          fields.push(field)
-          paths.add(field.path)
-        }
+        // Core products render the additive fields through ConfiguredRiskForm,
+        // so their DynamicRiskForm must contain only the base controls.
+        const fields = hasBuiltInRiskFields(code) || !pinnedScreen
+          ? buildRiskFields(code, snapshot.definition.config) : pinnedFields
         return res.json({ fields, screen: pinnedScreen, tables: snapshot.definition.tables || {}, productSnapshotId: snapshot.id })
       }
     }
