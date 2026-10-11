@@ -148,8 +148,12 @@ Rules are expressions over the quote:
 
 Behaviour to rely on:
 
-- The API applies the same rules when a quote is rated, so they cannot be
-  skipped by calling the API directly.
+- The API applies the same rules on every transaction that creates or changes
+  risk data: quote, bind, endorsement (preview and execution), renewal, and
+  rewrite. They cannot be skipped by calling the API directly.
+- A cancellation or reinstatement that leaves the risk data as it was is
+  never blocked by these rules. One that also changes the risk data must meet
+  them.
 - A hidden field is never required and its rules do not apply. A value left
   in a field that later becomes hidden is kept but ignored.
 - For a **core product**, the screen file adds sections under the built-in

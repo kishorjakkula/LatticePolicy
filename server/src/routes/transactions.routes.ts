@@ -18,6 +18,7 @@ import {
 import * as endorsementService from '../services/endorsement.service.js'
 import * as lifecycleService from '../services/lifecycle.service.js'
 import { rate } from '../rating.js'
+import { assertProductRules } from '../services/product-rules.service.js'
 import { evaluateUW } from '../uw.js'
 import { today, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from '../lib/date.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
@@ -366,6 +367,7 @@ transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.v
     payload.effectiveDate = nextEff
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
+    assertProductRules(tenantId, payload, 'rewrite')
     const prem = rate(tenantId, payload)
     const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {
@@ -451,6 +453,7 @@ transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.vie
     payload.effectiveDate = nextEff
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
+    assertProductRules(tenantId, payload, 'renewal')
     const prem = rate(tenantId, payload)
     const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {

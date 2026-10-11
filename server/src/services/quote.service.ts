@@ -6,9 +6,7 @@ import { evaluateUW } from '../uw.js'
 import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuoteDetailed } from '../contracts.js'
-import { getProductCapabilities } from '../lib/product-registry.js'
-import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
-import { checkQuoteAgainstScreen } from '../lib/product-screen.js'
+import { productRuleViolations } from './product-rules.service.js'
 import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
@@ -94,13 +92,6 @@ export function clampStep(step: any): number {
  *
  * Returns the data needed to build the route response.
  */
-function screenViolationsForQuote(tenantId: string, body: any) {
-  const code = String(body?.productCode || '').trim().toLowerCase()
-  if (!code || !getProductCapabilities(code)) return []
-  const screen = loadRiskScreen(code, loadProductConfig(code), tenantId)
-  return screen ? checkQuoteAgainstScreen(screen, body) : []
-}
-
 export async function createOrRateQuote(
   db: DrizzleDB,
   tenantId: string,
@@ -131,7 +122,7 @@ export async function createOrRateQuote(
 
   // Rules from the carrier pack's screen for this product. The wizard applies
   // the same rules; enforcing them here means the API cannot be used to skip them.
-  const screenViolations = screenViolationsForQuote(tenantId, body)
+  const screenViolations = productRuleViolations(tenantId, body)
   if (screenViolations.length > 0) {
     throw new ValidationError('INVALID_QUOTE', {
       message: 'Quote does not satisfy the rules for this product',

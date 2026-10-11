@@ -27,6 +27,7 @@ import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../li
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { assertProductRules } from './product-rules.service.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
 import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
@@ -537,6 +538,8 @@ async function computeEndorsementTimeline(
   const changes = overridePayload
     ? diffPayloadPaths(previousPayload || {}, nextPayload || {})
     : bodyChanges
+  // The endorsed risk data must satisfy the product's current rules.
+  assertProductRules(tenantId, nextPayload, 'endorsement')
   const previousPremium = rate(tenantId, previousPayload)
   const nextPremium = rate(tenantId, nextPayload)
   const hypotheticalVersion: TimelineVersionInput = {

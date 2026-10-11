@@ -76,8 +76,9 @@ npm run test:integration
 - Only the risk step is configurable. Product, insureds, coverages, and
   review steps are still built in.
 - Rules read the first risk only; lists of risks arrive with custom tables.
-- Screen rules are enforced when a quote is created or rated. Endorsement,
-  renewal, and rewrite transactions do not check them yet.
+- Screen rules were first enforced only when a quote was created or rated.
+  `docs/tasks/pack-rules-all-transactions.md` extends them to every
+  transaction.
 - Adding fields to a core product's screen was tested through the server and
   pack validator, not in a browser.
 - No automated end-to-end test covers a pack screen.
