@@ -79,6 +79,18 @@ describe('document storage service', () => {
     expect(escaped).toContain('&lt;script&gt;')
   })
 
+  it('recovers a pre-branding packet without changing its original bytes', async () => {
+    const legacyHtml = renderPolicyPacketHtml(baseMetadata)
+      .replace('<div class="brand" style="color:#1f3a8a">Insurance carrier</div>', '<div class="brand">LatticePolicy</div>')
+      .replace("Coverage is governed by the policy's terms and conditions.", "This document was generated automatically by LatticePolicy and is governed by the policy's terms and conditions.")
+      .replace(/\nh2 \{ color: #1f3a8a; \} \.letterhead, \.id-card \{ border-color: #1f3a8a; \} table\.forms-table th \{ background: #1f3a8a; \}/, '')
+    const original = await renderHtmlToPdf(legacyHtml, baseMetadata.generatedAt)
+    const hash = crypto.createHash('sha256').update(original).digest('hex')
+    const recovered = await regenerateAndVerifyDocument({ tenantId: 'test', documentId: 'legacy', metadata: baseMetadata, expectedHash: hash })
+    expect(recovered?.contentHash).toBe(hash)
+    expect(await retrieveStoredDocument(recovered!.storageUri)).toEqual(original)
+  })
+
   it('renders real PDF bytes via the shared headless browser, not an HTML stub', async () => {
     const html = renderPolicyPacketHtml(baseMetadata)
     const pdf = await renderHtmlToPdf(html, baseMetadata.generatedAt)

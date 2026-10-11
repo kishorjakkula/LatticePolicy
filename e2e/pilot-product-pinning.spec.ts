@@ -125,3 +125,47 @@ test('endorsement retains base controls, original additive fields, and a null or
     for (const [p, contents] of originals) if (contents) fs.writeFileSync(p, contents); else fs.rmSync(p, { force: true })
   }
 })
+
+test('pilot branding is editable in administration and appears on login and documents', async ({ page, request, sessionFor, signInAs }) => {
+  const { token } = await sessionFor(username)
+  const settings = await apiJson<any>(request, 'GET', '/api/v1/admin/branding', { token })
+  expect(settings.configured).toBe(true)
+  expect(settings.branding.name).toBe('Acme Mutual Pilot')
+  await signInAs(page, username)
+  await page.goto('/admin/tenant')
+  await expect(page.getByLabel('Carrier display name')).toHaveValue(settings.branding.name)
+  await page.getByLabel(/Carrier logo \(/).setInputFiles('deploy/pilot/acme-mutual-logo.png')
+  await page.getByRole('button', { name: 'Save carrier branding', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Carrier branding saved.')
+  await expect(page.locator('img.topbar-logo')).toHaveAttribute('alt', settings.branding.name)
+  expect(await page.locator('img.topbar-logo').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await page.screenshot({ path: 'test-results/pilot-carrier-branding-admin.png', fullPage: true })
+  const acceptance = JSON.parse(fs.readFileSync(path.join(pack, '../evidence/acceptance.json'), 'utf8'))
+  const { documents } = await apiJson<any>(request, 'GET', `/api/v1/policies/${acceptance.policyId}/documents`, { token })
+  for (const doc of documents) {
+    const response = await request.get(`${process.env.E2E_API_BASE_URL}/api/v1/policies/${acceptance.policyId}/documents/${doc.documentId}/content`, { headers: { 'X-Tenant': process.env.E2E_TENANT_ID!, Authorization: `Bearer ${token}` } })
+    expect(response.ok()).toBe(true)
+    const bytes = await response.body()
+    if (doc.type === 'RATING_WORKSHEET') {
+      expect(bytes.toString()).toContain(settings.branding.name)
+      expect(bytes.toString()).not.toMatch(/Lattice\s*Policy/i)
+    } else if (doc.type === 'POLICY_PACKET') {
+      // Parse actual downloaded PDF text, rather than trusting document metadata.
+      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const pdf = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: true }).promise
+      let text = ''
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const content = await (await pdf.getPage(i)).getTextContent()
+        text += content.items.map((item: any) => item.str || '').join(' ')
+      }
+      expect(text).toContain(settings.branding.name)
+      expect(text).not.toMatch(/Lattice\s*Policy/i)
+      await pdf.destroy()
+    }
+  }
+  await page.context().clearCookies()
+  await page.evaluate(() => localStorage.clear())
+  await page.goto('/login')
+  await expect(page.locator('img.login-brand-logo')).toHaveAttribute('alt', settings.branding.name)
+  await page.screenshot({ path: 'test-results/pilot-carrier-branding-login.png', fullPage: true })
+})

@@ -13,7 +13,7 @@ import {
   useCancellationReasonCodes,
   useAgencyContacts
 } from '../../api/hooks'
-import latticePolicyLogo from '../../assets/lattice-policy-logo.svg'
+import { fetchCarrierBranding } from '../../tenant/carrierBranding'
 import { normalizePayloadCoverages } from './coverageUtils'
 import {
   defaultAutoRisk,
@@ -6399,7 +6399,14 @@ async function buildQuoteSummaryPdf(model: QuoteSummaryDocumentModel): Promise<B
     y += 12
   }
 
-  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 170, 44)
+  const branding = await fetchCarrierBranding()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(branding.primaryColor)
+  doc.text(branding.name, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight })
+  doc.setTextColor(15, 23, 42)
+  y += 30
+  const logo = branding.logoDataUrl ? await loadImageAsPngDataUrl(branding.logoDataUrl, 170, 44) : null
   const headerStartY = y
   let textX = marginLeft
   let headerBottomY = headerStartY
@@ -6492,6 +6499,15 @@ async function buildQuoteSummaryPdf(model: QuoteSummaryDocumentModel): Promise<B
     doc.line(marginLeft, y - 4, pageWidth - marginRight, y - 4)
   }
 
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    const footerWidth = pageWidth - marginLeft - marginRight
+    const lines = doc.splitTextToSize(branding.documentFooter, footerWidth)
+    doc.setFontSize(Math.min(7, 30 / Math.max(1, lines.length) / 1.15))
+    doc.text(doc.splitTextToSize(branding.documentFooter, footerWidth), marginLeft, pageHeight - 36)
+  }
   return doc.output('blob')
 }
 
@@ -6551,7 +6567,14 @@ async function buildRatingWorksheetPdf(model: RatingWorksheetDocumentModel): Pro
     y += 10
   }
 
-  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 160, 42)
+  const branding = await fetchCarrierBranding()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(branding.primaryColor)
+  doc.text(branding.name, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight })
+  doc.setTextColor(15, 23, 42)
+  y += 30
+  const logo = branding.logoDataUrl ? await loadImageAsPngDataUrl(branding.logoDataUrl, 160, 42) : null
   const headerY = y
   let textX = marginLeft
   let headerBottom = headerY
@@ -6772,6 +6795,15 @@ async function buildRatingWorksheetPdf(model: RatingWorksheetDocumentModel): Pro
     doc.setFont('helvetica', 'normal')
   }
 
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    const footerWidth = pageWidth - marginLeft - marginRight
+    const lines = doc.splitTextToSize(branding.documentFooter, footerWidth)
+    doc.setFontSize(Math.min(7, 30 / Math.max(1, lines.length) / 1.15))
+    doc.text(doc.splitTextToSize(branding.documentFooter, footerWidth), marginLeft, pageHeight - 36)
+  }
   return doc.output('blob')
 }
 
@@ -6866,7 +6898,14 @@ async function buildPolicyPacketPdf(model: PolicyPacketDocumentModel): Promise<B
     y += 8
   }
 
-  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 170, 44)
+  const branding = await fetchCarrierBranding()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(branding.primaryColor)
+  doc.text(branding.name, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight })
+  doc.setTextColor(15, 23, 42)
+  y += 30
+  const logo = branding.logoDataUrl ? await loadImageAsPngDataUrl(branding.logoDataUrl, 170, 44) : null
   const headerStartY = y
   let textX = marginLeft
   let headerBottomY = headerStartY
@@ -6960,6 +6999,15 @@ async function buildPolicyPacketPdf(model: PolicyPacketDocumentModel): Promise<B
     y += cardHeight + 12
   }
 
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    const footerWidth = pageWidth - marginLeft - marginRight
+    const lines = doc.splitTextToSize(branding.documentFooter, footerWidth)
+    doc.setFontSize(Math.min(7, 30 / Math.max(1, lines.length) / 1.15))
+    doc.text(doc.splitTextToSize(branding.documentFooter, footerWidth), marginLeft, pageHeight - 36)
+  }
   return doc.output('blob')
 }
 
@@ -6982,7 +7030,14 @@ async function buildPolicyIdCardsPdf(model: PolicyIdCardsDocumentModel): Promise
     y = top
   }
 
-  const logo = await loadImageAsPngDataUrl(latticePolicyLogo, 130, 34)
+  const branding = await fetchCarrierBranding()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(branding.primaryColor)
+  doc.text(branding.name, marginLeft, y, { maxWidth: pageWidth - marginLeft - marginRight })
+  doc.setTextColor(15, 23, 42)
+  y += 30
+  const logo = branding.logoDataUrl ? await loadImageAsPngDataUrl(branding.logoDataUrl, 130, 34) : null
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 23, 42)
   doc.setFontSize(19)
@@ -7057,6 +7112,15 @@ async function buildPolicyIdCardsPdf(model: PolicyIdCardsDocumentModel): Promise
     y += cardHeight + 14
   }
 
+  for (let page = 1; page <= doc.getNumberOfPages(); page++) {
+    doc.setPage(page)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    const footerWidth = pageWidth - marginLeft - marginRight
+    const lines = doc.splitTextToSize(branding.documentFooter, footerWidth)
+    doc.setFontSize(Math.min(7, 30 / Math.max(1, lines.length) / 1.15))
+    doc.text(doc.splitTextToSize(branding.documentFooter, footerWidth), marginLeft, pageHeight - 36)
+  }
   return doc.output('blob')
 }
 

@@ -1,3 +1,4 @@
+import { CarrierBrand } from '../../tenant/carrierBranding'
 import { Link } from 'react-router-dom'
 
 type HeaderOption = {
@@ -81,7 +82,7 @@ export default function HeaderWireframesPage() {
                   </div>
 
                   <div className="header-wireframe-brand-copy">
-                    <span className="header-wireframe-carrier-name">LatticePolicy</span>
+                    <CarrierBrand className="header-wireframe-carrier-name" />
                   </div>
                 </div>
 

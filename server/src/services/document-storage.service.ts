@@ -1,3 +1,4 @@
+import { defaultBranding, brandingSchema, type CarrierBranding } from './carrier-branding.service.js'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import os from 'os'
@@ -23,6 +24,7 @@ export type RenderablePacketForm = {
 }
 
 export type RenderablePacketMetadata = {
+  branding?: CarrierBranding
   policyId: string
   policyNumber?: string | null
   transactionId: string
@@ -149,7 +151,15 @@ function renderIdCardSection(metadata: RenderablePacketMetadata, form: Renderabl
  * the content layer only — see `renderHtmlToPdf` for turning this into real
  * PDF bytes. Kept as a pure function (no I/O) so it stays trivially testable.
  */
+export function renderCarrierLetterhead(branding: CarrierBranding): string {
+  const parsed = brandingSchema.safeParse(branding)
+  const brand = parsed.success ? parsed.data : defaultBranding()
+  return `${brand.logoDataUrl ? `<img src="${escapeHtml(brand.logoDataUrl)}" alt="${escapeHtml(brand.name)}" style="max-width:180px;max-height:60px;object-fit:contain" />` : ''}<div class="brand" style="color:${brand.primaryColor}">${escapeHtml(brand.name)}</div>`
+}
+
 export function renderPolicyPacketHtml(metadata: RenderablePacketMetadata): string {
+  const brand = brandingSchema.safeParse(metadata.branding)
+  const branding = brand.success ? brand.data : defaultBranding()
   const rows = metadata.forms
     .map(
       (form) =>
@@ -164,12 +174,13 @@ export function renderPolicyPacketHtml(metadata: RenderablePacketMetadata): stri
 <head>
 <meta charset="utf-8">
 <title>Policy Packet ${policyLabel}</title>
-<style>${DOCUMENT_PRINT_STYLES}</style>
+<style>${DOCUMENT_PRINT_STYLES}
+h2 { color: ${branding.primaryColor}; } .letterhead, .id-card { border-color: ${branding.primaryColor}; } table.forms-table th { background: ${branding.primaryColor}; }</style>
 </head>
 <body>
   <div class="letterhead">
     <div>
-      <div class="brand">LatticePolicy</div>
+      ${renderCarrierLetterhead(branding)}
       <div class="doc-title">Policy Document Packet</div>
     </div>
     <div class="meta">
@@ -195,7 +206,7 @@ export function renderPolicyPacketHtml(metadata: RenderablePacketMetadata): stri
 
   ${idCardSections ? `<h2>Identification Cards</h2>${idCardSections}` : ''}
 
-  <div class="footer-note">This document was generated automatically by LatticePolicy and is governed by the policy's terms and conditions.</div>
+  <div class="footer-note">${escapeHtml(branding.documentFooter)}</div>
 </body>
 </html>`
 }
@@ -445,15 +456,31 @@ export async function regenerateAndVerifyDocument(params: {
   metadata: RenderablePacketMetadata
   expectedHash: string
 }): Promise<StoredDocumentDescriptor | null> {
-  const artifact = await renderAndStoreDocument(params)
-  return artifact.contentHash === params.expectedHash ? artifact : null
+  let content = await renderHtmlToPdf(renderPolicyPacketHtml(params.metadata), params.metadata.generatedAt)
+  if (sha256Bytes(content) !== params.expectedHash && !params.metadata.branding) {
+    // Recover pre-branding issued packets using their historical rendering contract.
+    const html = renderPolicyPacketHtml(params.metadata)
+      .replace('<div class="brand" style="color:#1f3a8a">Insurance carrier</div>', '<div class="brand">LatticePolicy</div>')
+      .replace("Coverage is governed by the policy's terms and conditions.", "This document was generated automatically by LatticePolicy and is governed by the policy's terms and conditions.")
+      .replace(/\nh2 \{ color: #1f3a8a; \} \.letterhead, \.id-card \{ border-color: #1f3a8a; \} table\.forms-table th \{ background: #1f3a8a; \}/, '')
+    content = await renderHtmlToPdf(html, params.metadata.generatedAt)
+  }
+  // Never replace stored bytes when verification fails.
+  if (sha256Bytes(content) !== params.expectedHash) return null
+  const contentType = 'application/pdf'
+  const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: `${params.documentId}.pdf`, contentType, content })
+  return { storageUri, contentType, byteSize: content.length, contentHash: params.expectedHash, storageAdapter: getDocumentStorageAdapter().name, renderedAt: new Date().toISOString() }
 }
 
 
 /** Stored worksheet content comes from the immutable rating snapshot, never current rates. */
 export async function storeRatingWorksheet(params: { tenantId: string; documentId: string; metadata: any }): Promise<StoredDocumentDescriptor> {
   const context = params.metadata.snapshot?.context || {}
-  const content = Buffer.from(`<!doctype html><html><head><meta charset="utf-8"><title>Rating worksheet</title></head><body><h1>Rating worksheet</h1><p>Policy: ${escapeHtml(context.policyNumber)} · Transaction: ${escapeHtml(context.transactionNumber)}</p><pre>${escapeHtml(JSON.stringify(params.metadata.snapshot, null, 2))}</pre></body></html>`)
+  const parsed = brandingSchema.safeParse(params.metadata.branding)
+  const brand = parsed.success ? parsed.data : defaultBranding(params.tenantId)
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Rating worksheet</title><style>${DOCUMENT_PRINT_STYLES} pre { white-space:pre-wrap; overflow-wrap:anywhere; }</style></head><body>${renderCarrierLetterhead(brand)}<h1>Rating worksheet</h1><p>Policy: ${escapeHtml(context.policyNumber)} · Transaction: ${escapeHtml(context.transactionNumber)}</p><pre>${escapeHtml(JSON.stringify(params.metadata.snapshot, null, 2))}</pre><div class="footer-note">${escapeHtml(brand.documentFooter)}</div></body></html>`
+  const legacyHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Rating worksheet</title></head><body><h1>Rating worksheet</h1><p>Policy: ${escapeHtml(context.policyNumber)} · Transaction: ${escapeHtml(context.transactionNumber)}</p><pre>${escapeHtml(JSON.stringify(params.metadata.snapshot, null, 2))}</pre></body></html>`
+  const content = Buffer.from(params.metadata.branding ? html : legacyHtml)
   const contentType = 'text/html; charset=utf-8'
   const { storageUri } = await getDocumentStorageAdapter().store({ tenantId: params.tenantId, documentId: params.documentId, fileName: `${params.documentId}.html`, contentType, content })
   return { storageUri, contentType, byteSize: content.length, contentHash: sha256Bytes(content), storageAdapter: getDocumentStorageAdapter().name, renderedAt: new Date().toISOString() }

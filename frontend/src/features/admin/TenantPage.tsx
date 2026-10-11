@@ -1,3 +1,4 @@
+import { CarrierBrandingSettings } from './CarrierBrandingSettings'
 import { useEffect, useMemo, useState } from 'react'
 import {
   DATE_FORMAT_OPTIONS,
@@ -306,6 +307,7 @@ export function TenantPage() {
 
   return (
     <div className="ps-admin-page">
+      <CarrierBrandingSettings />
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Tenant</h2></div>
       </div>

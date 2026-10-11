@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +23,7 @@ describe('LoginPage SSO', () => {
 
   it('opens a tenant-scoped popup flow', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue with SSO' }))
 
@@ -35,13 +36,13 @@ describe('LoginPage SSO', () => {
   })
 
   it('asks for an organization when the stack is not pinned to one carrier', () => {
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
 
     expect(screen.getByLabelText('Organization Slug')).toHaveValue('sample-carrier')
   })
 
   it('does not expose local demo credentials in a client configuration', () => {
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
 
     expect(screen.queryByText('Demo Credentials')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Email / Username')).toHaveValue('')
@@ -49,7 +50,7 @@ describe('LoginPage SSO', () => {
   })
 
   it('accepts credentials only from the configured API origin', async () => {
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
     window.dispatchEvent(new MessageEvent('message', {
       origin: 'https://untrusted.example.com',
       data: { type: 'lattice:sso', token: 'bad', user: { tenantId: 'other' } },
@@ -65,7 +66,7 @@ describe('LoginPage SSO', () => {
   })
 
   it('shows a safe provider error returned by the popup', async () => {
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
     window.dispatchEvent(new MessageEvent('message', {
       origin: 'https://api.example.com',
       data: { type: 'lattice:sso:error', message: 'Single sign-on could not be completed' },
