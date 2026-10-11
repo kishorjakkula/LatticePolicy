@@ -1,7 +1,7 @@
 import { Kafka, logLevel, type KafkaConfig, type Producer, type SASLOptions } from 'kafkajs'
 import { logger } from '../../logger.js'
 import { eventOrderingKey, type EventEnvelope } from '../envelope.js'
-import type { EventTransport } from '../transport.js'
+import type { EventTransport } from '../types.js'
 
 /**
  * Publishes each message to Kafka.

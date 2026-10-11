@@ -1,6 +1,6 @@
 import { logger } from '../../logger.js'
 import type { EventEnvelope } from '../envelope.js'
-import type { EventTransport } from '../transport.js'
+import type { EventTransport } from '../types.js'
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || ''), 10)
