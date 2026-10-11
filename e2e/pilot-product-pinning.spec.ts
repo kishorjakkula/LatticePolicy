@@ -22,6 +22,32 @@ test('mandatory fields appear on button click in the pilot wizard', async ({ pag
   await expect(page.getByRole('main')).toContainText(/required|answer/i)
 })
 
+test('the accepted pilot policy opens every listed document', async ({ page, context, request, sessionFor, signInAs }) => {
+  const acceptance = JSON.parse(fs.readFileSync(path.join(pack, '../evidence/acceptance.json'), 'utf8'))
+  const auth = await sessionFor(username)
+  const { documents } = await apiJson<any>(request, 'GET', `/api/v1/policies/${acceptance.policyId}/documents`, { token: auth.token })
+  expect(new Set(documents.map((d: any) => d.displayName)).size).toBe(documents.length)
+  await page.addInitScript(() => {
+    const original = URL.createObjectURL.bind(URL)
+    ;(window as any).__pilotOpened = []
+    URL.createObjectURL = blob => { if (blob instanceof Blob) (window as any).__pilotOpened.push(blob); return original(blob) }
+  })
+  await signInAs(page, username)
+  await page.goto(`/policies/${acceptance.policyId}`)
+  for (const [i, doc] of documents.entries()) {
+    const popup = context.waitForEvent('page')
+    const response = page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(`/documents/${doc.documentId}/content`))
+    await page.getByRole('row').filter({ hasText: doc.displayName }).getByRole('button', { name: 'Open', exact: true }).click()
+    const tab = await popup
+    expect((await response).status()).toBe(200)
+    await expect.poll(() => page.evaluate(index => (window as any).__pilotOpened[index]?.size || 0, i)).toBeGreaterThan(100)
+    const text = await page.evaluate(async index => ((window as any).__pilotOpened[index] as Blob).text(), i)
+    if (doc.type === 'RATING_WORKSHEET') expect(text).toContain('Rating worksheet')
+    else expect(text.slice(0, 5)).toBe('%PDF-')
+    await tab.close()
+  }
+})
+
 test('endorsement retains base controls, original additive fields, and a null original screen', async ({ page, request, sessionFor, signInAs }) => {
   const auth = await sessionFor(username)
   const originals = new Map([screenPath, fieldsPath].map(p => [p, fs.existsSync(p) ? fs.readFileSync(p) : null]))
