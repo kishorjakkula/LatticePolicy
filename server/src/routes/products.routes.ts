@@ -42,7 +42,7 @@ productsRoutes.get('/products/:code/form', requireProductAccess, async (req, res
     const policyId = typeof req.query.policyId === 'string' ? req.query.policyId.trim() : ''
     if (policyId && getDb() && isUuidLike(policyId)) {
       const ctx = await req.tx((db) => loadPolicyContext(db, req.tenant!.tenantId, policyId))
-      const snapshot = getLoadedSnapshot(snapshotIdOf(ctx?.latestPayload))
+      const snapshot = getLoadedSnapshot(req.tenant!.tenantId, snapshotIdOf(ctx?.latestPayload), code)
       if (snapshot && snapshot.productCode === code && snapshot.definition.screen) {
         const pinnedScreen = snapshot.definition.screen
         const pinnedFields = pinnedScreen.sections.flatMap((section) =>

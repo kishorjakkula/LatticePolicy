@@ -72,6 +72,27 @@ npm run test:integration
 
 ## Follow-Ups Or Risks
 
+### PR #359 snapshot isolation fix
+
+- Snapshot cache keys include the tenant. Every lookup also verifies product
+  ownership; rating and rule checks share `requireLoadedSnapshot` and reject
+  missing, foreign, or wrong-product pins with `PRODUCT_VERSION_NOT_LOADED`.
+  A warmed cache cannot bypass the tenant-scoped database query.
+- In-memory snapshot IDs include tenant and product identity as well as the
+  definition hash, so identical definitions cannot overwrite another tenant's
+  cache entry. Database snapshot IDs and existing stored pins are unchanged.
+- `product-snapshot-isolation.test.ts`: five regressions reproduced before
+  the fix, now passing, covering tenant/product mismatch, in-memory collisions,
+  scoped database reloads, and unavailable pins.
+- `product-snapshot-isolation.integration.test.ts`: authenticated quote-insights
+  requests reject foreign and wrong-product pins with both warm and cold caches,
+  while the owning carrier still rates successfully.
+- Validation: 527 server tests; build and typecheck; nine PostgreSQL integration
+  tests across snapshot isolation, product pinning, and carrier-pack lifecycle
+  with `TENANT_RLS_ENFORCED=1`; `git diff --check`.
+
+### Remaining limits
+
 - Policies written before this change have no pin and keep following the
   current definition until their next renewal or rewrite.
 - A quote is pinned when it is rated. A quote rated before a pack change and

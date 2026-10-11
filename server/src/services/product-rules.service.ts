@@ -2,7 +2,7 @@ import { ValidationError } from '../errors/domain.errors.js'
 import { getProductCapabilities } from '../lib/product-registry.js'
 import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
 import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-screen.js'
-import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
 
 /**
@@ -22,7 +22,7 @@ export type RuledTransaction = 'quote' | 'bind' | 'endorsement' | 'renewal' | 'r
 export function productRuleViolations(tenantId: string, payload: any): ScreenViolation[] {
   // A pinned payload is checked against the rules of the product version it
   // was written on, not rules added since.
-  const snapshot = getLoadedSnapshot(snapshotIdOf(payload))
+  const snapshot = requireLoadedSnapshot(tenantId, payload)
   if (snapshot) {
     return snapshot.definition.screen ? checkQuoteAgainstScreen(snapshot.definition.screen, payload, snapshot.definition.tables || {}) : []
   }

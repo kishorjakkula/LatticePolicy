@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { BadRequestError } from '../errors/domain.errors.js'
 import type { LookupTable, ProductScreen } from '@lattice-policy/rules'
 import { getDb, toRawQuery, withTenantTx } from '../db.js'
 import { getBuildInfo } from '../version.js'
@@ -65,8 +66,12 @@ function hashOf(definition: ProductDefinition): string {
   return crypto.createHash('sha256').update(stableStringify(definition)).digest('hex')
 }
 
+function cacheKey(tenantId: string, id: string): string {
+  return JSON.stringify([tenantId, id])
+}
+
 function remember(snapshot: ProductSnapshot): ProductSnapshot {
-  byId.set(snapshot.id, snapshot)
+  byId.set(cacheKey(snapshot.tenantId, snapshot.id), snapshot)
   idByKey.set(`${snapshot.tenantId}|${snapshot.productCode}|${snapshot.hash}`, snapshot.id)
   return snapshot
 }
@@ -108,9 +113,26 @@ export function snapshotIdOf(payload: any): string | null {
   return typeof id === 'string' && id.trim() ? id.trim() : null
 }
 
-/** A snapshot this process has already loaded. */
-export function getLoadedSnapshot(id: string | null | undefined): ProductSnapshot | null {
-  return id ? byId.get(id) || null : null
+/** Cached definitions are usable only by their owning tenant and product. */
+export function getLoadedSnapshot(tenantId: string, id: string | null | undefined, productCode: string): ProductSnapshot | null {
+  const snapshot = id ? byId.get(cacheKey(tenantId, id)) : null
+  const code = String(productCode || '').trim().toLowerCase()
+  return snapshot && snapshot.tenantId === tenantId && snapshot.productCode === code ? snapshot : null
+}
+
+/** Fail closed for an unavailable pin, including tenant or product mismatches. */
+export function requireLoadedSnapshot(tenantId: string, payload: any): ProductSnapshot | null {
+  const id = snapshotIdOf(payload)
+  if (!id) return null
+  const snapshot = getLoadedSnapshot(tenantId, id, payload?.productCode)
+  if (!snapshot) {
+    throw new BadRequestError(
+      'PRODUCT_VERSION_NOT_LOADED',
+      'The product version this policy was written on is not available.',
+      { productCode: payload?.productCode, productSnapshotId: id },
+    )
+  }
+  return snapshot
 }
 
 /**
@@ -122,7 +144,7 @@ export async function captureProductSnapshot(tenantId: string, productCode: stri
   const definition = currentProductDefinition(tenantId, code, stateCode)
   if (!definition) return null
   const hash = hashOf(definition)
-  const known = byId.get(idByKey.get(`${tenantId}|${code}|${hash}`) || '')
+  const known = getLoadedSnapshot(tenantId, idByKey.get(`${tenantId}|${code}|${hash}`), code)
   if (known) return known
 
   const source: ProductSnapshotSource = {
@@ -132,7 +154,8 @@ export async function captureProductSnapshot(tenantId: string, productCode: stri
   }
   if (!getDb()) {
     // No database: the snapshot lives for the life of the process, like the rest of in-memory mode.
-    return remember({ id: `mem-${hash.slice(0, 32)}`, tenantId, productCode: code, hash, source, definition })
+    const memoryId = crypto.createHash('sha256').update(JSON.stringify([tenantId, code, hash])).digest('hex').slice(0, 32)
+    return remember({ id: `mem-${memoryId}`, tenantId, productCode: code, hash, source, definition })
   }
   const result = await withTenantTx(tenantId, (db) =>
     toRawQuery(db)(
@@ -154,18 +177,25 @@ export async function captureProductSnapshot(tenantId: string, productCode: stri
  * rates or checks a stored payload.
  */
 export async function ensureProductSnapshots(tenantId: string, payloads: any[]): Promise<void> {
-  const missing = Array.from(new Set(payloads.map(snapshotIdOf).filter((id): id is string => Boolean(id) && !byId.has(id as string))))
-    .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
-  if (missing.length === 0 || !getDb()) return
-  const result = await withTenantTx(tenantId, (db) =>
-    toRawQuery(db)(
-      'SELECT snapshot_id, product_code, content_hash, source, definition FROM product_snapshots WHERE tenant_id = $1 AND snapshot_id = ANY($2::uuid[])',
-      [tenantId, missing]
+  const missing = Array.from(new Set(payloads
+    .filter((payload) => !getLoadedSnapshot(tenantId, snapshotIdOf(payload), payload?.productCode))
+    .map(snapshotIdOf)
+    .filter((id): id is string => Boolean(id))))
+    .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+  if (missing.length > 0 && getDb()) {
+    const result = await withTenantTx(tenantId, (db) =>
+      toRawQuery(db)(
+        'SELECT snapshot_id, product_code, content_hash, source, definition FROM product_snapshots WHERE tenant_id = $1 AND snapshot_id = ANY($2::uuid[])',
+        [tenantId, missing]
+      )
     )
-  )
-  for (const row of result.rows) {
-    remember({ id: String(row.snapshot_id), tenantId, productCode: row.product_code, hash: row.content_hash, source: row.source, definition: row.definition })
+    for (const row of result.rows) {
+      remember({ id: String(row.snapshot_id), tenantId, productCode: row.product_code, hash: row.content_hash, source: row.source, definition: row.definition })
+    }
   }
+  // A cache hit must satisfy the same ownership checks as a database read.
+  // Never silently substitute current rules for a missing or foreign pin.
+  for (const payload of payloads) requireLoadedSnapshot(tenantId, payload)
 }
 
 /** Pins a payload to the product as it is defined now. Used when a term starts. */

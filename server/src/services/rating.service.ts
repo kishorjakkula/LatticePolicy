@@ -4,7 +4,7 @@ import { getPublishedRatingModelForProduct } from '../ratingModelRegistry.js'
 import { round2 } from '../lib/date.utils.js'
 import { requireProductCapability } from '../lib/product-registry.js'
 import { BadRequestError } from '../errors/domain.errors.js'
-import { getLoadedSnapshot, snapshotIdOf } from '../lib/product-snapshot.js'
+import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
 import type { LookupTable } from '@lattice-policy/rules'
 
@@ -24,17 +24,7 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
 
   // A payload pinned to a product snapshot is rated on that definition, so a
   // policy in force keeps the rates it was written on.
-  const snapshotId = snapshotIdOf(payload)
-  const snapshot = getLoadedSnapshot(snapshotId)
-  if (snapshotId && !snapshot) {
-    // Never fall back to today's rates for a pinned policy: that would
-    // silently change its premium.
-    throw new BadRequestError(
-      'PRODUCT_VERSION_NOT_LOADED',
-      `The product version this policy was written on (${snapshotId}) is not available.`,
-      { productCode: product, productSnapshotId: snapshotId },
-    )
-  }
+  const snapshot = requireLoadedSnapshot(tenantId, payload)
 
   let ratingAdapter: string
   let rates: Rates
