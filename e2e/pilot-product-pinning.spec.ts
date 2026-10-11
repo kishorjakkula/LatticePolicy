@@ -27,7 +27,7 @@ test('endorsement retains base controls, original additive fields, and a null or
   const originals = new Map([screenPath, fieldsPath].map(p => [p, fs.existsSync(p) ? fs.readFileSync(p) : null]))
   const payload = () => ({
     ...productQuotePayload(productLine('homeowners'), { name: `${uniqueName('Pilot').replace(/[^a-zA-Z0-9]/g, '')} Holder`, effectiveDate: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10) }),
-    underwritingCompanyName: 'Sample Carrier Personal Lines',
+    underwritingCompanyName: 'Sample Carrier Property',
     uwAnswers: Object.fromEntries(['noPropertyClaims5Years', 'roofMaintained', 'noBusinessOnPremises', 'noVacancyOver30Days', 'protectiveDevicesInstalled'].map(k => [k, true])),
     coverages: [{ code: 'A', selected: true, limit: 300000, deductible: 1000 }],
   })

@@ -33,7 +33,7 @@ export function homeownersPayload(suffix = Date.now().toString(36)) {
   const answers = Object.fromEntries(['noPropertyClaims5Years', 'roofMaintained', 'noBusinessOnPremises', 'noVacancyOver30Days', 'protectiveDevicesInstalled'].map(key => [key, 'yes']))
   return {
     productCode: 'homeowners', country: 'US', state: 'TX', effectiveDate: date(-30), termMonths: 12,
-    underwritingCompanyName: 'Sample Carrier Personal Lines',
+    underwritingCompanyName: 'Sample Carrier Property',
     applicant: { firstName: 'Pilot', lastName: `Insured${suffix}`, email: `pilot.${suffix}@example.com` },
     insureds: { primary: { firstName: 'Pilot', lastName: `Insured${suffix}`, displayName: `Pilot Insured${suffix}` } },
     qualificationAnswers: answers, uwAnswers: Object.fromEntries(Object.keys(answers).map(key => [key, true])),
