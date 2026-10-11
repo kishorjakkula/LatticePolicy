@@ -1,0 +1,81 @@
+# One carrier, one stack: API, UI, PostgreSQL, Redis, and document storage.
+# Driven by stack.sh with a per-carrier env file (see carrier.env.example).
+# Uses published release images; nothing is built here.
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-lattice_policy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-lattice_policy}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-lattice_policy} -d ${DB_NAME:-lattice_policy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: ${LATTICE_API_IMAGE:-ghcr.io/kishorjakkula/latticepolicy-api}:${LATTICE_VERSION:?LATTICE_VERSION is required}
+    restart: unless-stopped
+    environment:
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-production}
+      DATABASE_URL: postgres://${DB_USER:-lattice_policy}:${DB_PASSWORD}@db:5432/${DB_NAME:-lattice_policy}
+      CARRIER_TENANT_ID: ${CARRIER_TENANT_ID:?CARRIER_TENANT_ID is required}
+      TENANT_RLS_ENFORCED: ${TENANT_RLS_ENFORCED:-1}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CUSTOMER_DATA_KEY: ${CUSTOMER_DATA_KEY:?CUSTOMER_DATA_KEY is required}
+      PII_LOOKUP_KEY: ${PII_LOOKUP_KEY:?PII_LOOKUP_KEY is required}
+      MFA_TOKEN_SECRET: ${MFA_TOKEN_SECRET:?MFA_TOKEN_SECRET is required}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required}
+      REDIS_URL: redis://cache:6379
+      CACHE_ENABLED: "1"
+      DOCUMENT_STORAGE_DIR: /data/documents
+      JOB_WORKER_ENABLED: ${JOB_WORKER_ENABLED:-}
+      ASYNC_PUSH_ENABLED: ${ASYNC_PUSH_ENABLED:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Only read by `stack.sh bootstrap`.
+      CARRIER_NAME: ${CARRIER_NAME:-}
+      CARRIER_ADMIN_USERNAME: ${CARRIER_ADMIN_USERNAME:-}
+      CARRIER_ADMIN_PASSWORD: ${CARRIER_ADMIN_PASSWORD:-}
+    volumes:
+      - documents:/data/documents
+    ports:
+      - "${API_PORT:-3300}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  frontend:
+    image: ${LATTICE_FRONTEND_IMAGE:-ghcr.io/kishorjakkula/latticepolicy-frontend}:${LATTICE_VERSION}
+    restart: unless-stopped
+    environment:
+      LATTICE_API_BASE_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
+      LATTICE_CARRIER_TENANT_ID: ${CARRIER_TENANT_ID}
+      LATTICE_USE_MOCK: "0"
+      LATTICE_SHOW_DEMO_CREDENTIALS: "0"
+    ports:
+      - "${UI_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
+  documents:

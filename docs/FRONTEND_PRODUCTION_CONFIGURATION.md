@@ -102,3 +102,23 @@ Before promoting a frontend image:
 
 The validation logic is implemented in `frontend/src/config.ts` and covered by
 `frontend/src/__tests__/config.test.ts`.
+
+## Configuring A Prebuilt Image At Container Start
+
+The published frontend image is built once and configured when the container
+starts, so the same image serves every carrier stack. The image's entrypoint
+(`frontend/docker-entrypoint.d/40-runtime-config.sh`) writes
+`/runtime-config.js` from these container environment variables:
+
+| Container variable | Overrides |
+| --- | --- |
+| `LATTICE_API_BASE_URL` | `VITE_API_BASE_URL` |
+| `LATTICE_CARRIER_TENANT_ID` | `VITE_CARRIER_TENANT_ID` |
+| `LATTICE_USE_MOCK` | `VITE_USE_MOCK` |
+| `LATTICE_SHOW_DEMO_CREDENTIALS` | `VITE_SHOW_DEMO_CREDENTIALS` |
+
+A value set at container start wins over the build-time `VITE_*` value; an
+unset variable leaves the build-time value in effect. The same production
+validation applies either way (HTTPS API URL, mock mode off). These values are
+served to the browser and must not contain secrets. `VITE_SENTRY_DSN` is still
+build-time only.

@@ -137,7 +137,16 @@ For each release:
 - document migration impact in the changelog when schemas or seed behavior
   change,
 - prefer forward-only migrations unless maintainers explicitly approve a
-  rollback script.
+  rollback script,
+- state in the release notes whether the release's migrations are backward
+  compatible with the previous release. Carriers rely on that statement to
+  choose between `stack.sh rollback --keep-data` (application-only) and a
+  full restore (`deploy/carrier-stack/README.md`).
+
+Carriers take releases on their own schedule, and the current release and the
+one before it are supported. Release notes must therefore also list any change
+to the product pack contract, tenant override format, or field metadata
+format that could affect a carrier's own products and fields.
 
 ## GitHub Release
 

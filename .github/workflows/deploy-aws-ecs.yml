@@ -23,6 +23,8 @@ env:
   ECS_CONTAINER_NAME_API: ${{ vars.ECS_CONTAINER_NAME_API }}
   ECS_CONTAINER_NAME_FRONTEND: ${{ vars.ECS_CONTAINER_NAME_FRONTEND }}
   VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+  # Optional: set the CARRIER_TENANT_ID repository variable for a single-carrier stack.
+  VITE_CARRIER_TENANT_ID: ${{ vars.CARRIER_TENANT_ID }}
   TEST_API_HEALTH_URL: ${{ vars.TEST_API_HEALTH_URL }}
   TEST_FRONTEND_URL: ${{ vars.TEST_FRONTEND_URL }}
 
@@ -133,6 +135,7 @@ jobs:
           docker build \
             -f frontend/Dockerfile \
             --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            --build-arg VITE_CARRIER_TENANT_ID="$VITE_CARRIER_TENANT_ID" \
             -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
           echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"

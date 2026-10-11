@@ -27,6 +27,7 @@ area you are changing.
 - `products/`: product coverage and rate YAML files.
 - `tenants/`: tenant configuration and overrides.
 - `contracts/`: JSON schemas and sample seed data.
+- `deploy/carrier-stack/`: per-carrier stack deployment kit.
 - `docs/tasks/`: AI-readable task notes for non-trivial changes.
 
 ## Required Process

@@ -18,6 +18,7 @@ The main architectural idea is one shared policy platform with access-based expe
 - `contracts/`: JSON schemas and sample relational seed data.
 - `docs/`: architecture, setup, API, domain, deployment, multitenancy, and data model documentation.
 - `server/migrations/`: ordered SQL migrations applied on API startup when `DATABASE_URL` is configured.
+- `deploy/carrier-stack/`: deployment kit for one full stack per carrier (compose file, env template, and `stack.sh` for provision, bootstrap, backup, upgrade, rollback).
 
 ## Runtime Stack
 
