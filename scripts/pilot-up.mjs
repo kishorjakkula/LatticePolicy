@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { login, prepare } from './pilot-lib.mjs'
 
 const profile = JSON.parse(fs.readFileSync('deploy/pilot/standards.json', 'utf8'))
 const root = path.resolve('.pilot')
@@ -46,6 +47,7 @@ run('docker', ['build', '-f', 'frontend/Dockerfile', '-t', `latticepolicy-pilot-
 run('sh', [path.join(kit, 'stack.sh'), 'up'])
 const auth = JSON.parse(fs.readFileSync(credentials, 'utf8'))
 run('sh', [path.join(kit, 'stack.sh'), 'bootstrap'], { env: { ...process.env, CARRIER_ADMIN_USERNAME: auth.username, CARRIER_ADMIN_PASSWORD: auth.password } })
+await prepare((await login()).token)
 const imageId = name => execFileSync('docker', ['image', 'inspect', `${name}:${tag}`, '--format', '{{.Id}}'], { encoding: 'utf8' }).trim()
 fs.writeFileSync(path.join(root, 'release.json'), JSON.stringify({ sha, tag, builtAt: new Date().toISOString(),
   apiImage: imageId('latticepolicy-pilot-api'), frontendImage: imageId('latticepolicy-pilot-ui'), profile }, null, 2))

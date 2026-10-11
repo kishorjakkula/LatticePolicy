@@ -5,6 +5,24 @@ It runs a separate six-service Docker stack with a dedicated database, Redis,
 document volume, carrier pack, generated secrets, and tenant RLS. Nothing uses
 the existing demo database. The versioned standards are in `standards.json`.
 
+## Product and underwriting company setup standard
+
+For every carrier setup, configure both the enabled product list and the
+underwriting company/product rows under Administration → Underwriting Companies
+(`/admin/uw-company`). Set **Active** only for configurations the carrier is
+offering; deactivate other product rows rather than deleting their history.
+Product enablement and underwriting company activation are separate controls.
+The wizard lists active company configurations; administrators can still view
+and maintain inactive rows for later product expansion.
+
+For this pilot, keep Homeowners/US configurations applicable to TX or ALL active
+and deactivate Personal Auto, Commercial Auto, Cyber, and Professional Liability.
+`pilot:up`, `pilot:check`, and `pilot:browser` apply this through the existing
+authorized admin API after reference-data seeding. The browser regression checks
+that inactive product rows remain in administration and that the wizard offers
+only the Homeowners company and product. Re-enabling a product later requires
+both product enablement and an appropriate active underwriting configuration.
+
 ## Run
 
 From a clean, committed repository checkout with Node 20 and Docker:
