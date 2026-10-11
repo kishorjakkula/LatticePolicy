@@ -7,7 +7,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 export const API_PREFIX = '/api'
 
 export function tenantId() {
-  return localStorage.getItem('tenantId') || 'sample-carrier'
+  return config.carrierTenantId || localStorage.getItem('tenantId') || 'sample-carrier'
 }
 
 export function readAuthToken(): string {

@@ -11,6 +11,7 @@ change an already-built frontend image.
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Required | Absolute HTTPS origin for the public API, for example `https://api.example.com`. Do not include `/api` or a trailing slash; the client appends `/api` and the versioned route itself. Localhost HTTP URLs are accepted only for local smoke tests. |
 | `VITE_USE_MOCK` | Must not be `1` or `true` | Set to `0` for explicit production builds. When omitted, a configured API URL also disables mock mode. Production startup fails if mock mode resolves to enabled. |
+| `VITE_CARRIER_TENANT_ID` | Set on single-carrier stacks | Must equal the API's `CARRIER_TENANT_ID`. The UI sends this tenant on every request regardless of any tenant remembered in the browser, and the login page hides the organization field. Leave empty for local/demo multi-tenant use. |
 | `VITE_SENTRY_DSN` | Optional | Browser-side Sentry DSN. Like every `VITE_*` value, it is visible in downloaded browser assets and must not be treated as a secret. |
 | `VITE_MOCK_API_DELAY_MS` | Local/demo only | Artificial latency for the mock API. Do not configure it for production because mock mode must be disabled. |
 

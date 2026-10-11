@@ -38,6 +38,9 @@ Single-Carrier Stacks (CARRIER_TENANT_ID)
   rating model cache warm-up only touch the pinned tenant's rows, and demo
   seed users are not created unless the pinned tenant is `sample-carrier`.
 - When unset: tenant resolution is unchanged (header, query, then token).
+- Build the frontend for a pinned stack with `VITE_CARRIER_TENANT_ID` set to
+  the same value; otherwise the UI defaults to `sample-carrier` and the API
+  rejects it. Docker Compose passes `CARRIER_TENANT_ID` to both.
 
 Fail-Closed Rules (all modes)
 - `withTenantTx` rejects an empty tenant id (`TENANT_REQUIRED`) and, when

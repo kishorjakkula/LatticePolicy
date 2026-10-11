@@ -84,7 +84,21 @@ npm run test:integration   # disposable PostgreSQL
   Postgres log of the enforced run shows no unexpected permission or policy
   errors.
 
+## Frontend Carrier Pinning (third change)
+
+- `frontend/src/config.ts`: `config.carrierTenantId` from
+  `VITE_CARRIER_TENANT_ID`.
+- `frontend/src/api/request.ts`, `frontend/src/store/tenant.store.ts`,
+  `frontend/src/features/auth/LoginPage.tsx`: a pinned build always sends the
+  configured carrier and hides the organization field at login.
+- Tests: `frontend/src/api/__tests__/request-tenant.test.ts`,
+  `frontend/src/features/auth/LoginPage.pinned.test.tsx`, and one added case
+  in `LoginPage.test.tsx`.
+
 ## Follow-Ups Or Risks
+
+- The AWS and Azure deploy workflows do not pass `VITE_CARRIER_TENANT_ID` as
+  a build argument yet.
 
 - `TENANT_RLS_ENFORCED` is off by default. Turn it on per environment, then
   make it the default for managed deployments.

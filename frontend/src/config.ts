@@ -12,6 +12,10 @@ const resolvedShowDemoCredentials = showDemoCredentialsEnv != null
   ? showDemoCredentialsEnv === '1' || showDemoCredentialsEnv.toLowerCase() === 'true'
   : import.meta.env.DEV
 
+// Set on a single-carrier stack so the UI always addresses that carrier
+// (matches the API's CARRIER_TENANT_ID). Empty keeps the tenant chosen at login.
+const carrierTenantId = String(import.meta.env.VITE_CARRIER_TENANT_ID || '').trim()
+
 function validateFrontendRuntimeConfig() {
   if (!import.meta.env.PROD) return
   if (resolvedUseMock) {
@@ -36,5 +40,6 @@ export const config = {
   useMock: resolvedUseMock,
   apiVersion: '1',
   mockApiDelayMs: resolvedMockDelayMs,
-  showDemoCredentials: resolvedShowDemoCredentials
+  showDemoCredentials: resolvedShowDemoCredentials,
+  carrierTenantId
 }
