@@ -56,8 +56,17 @@ export function homeownersPayload(suffix = Date.now().toString(36)) {
 }
 export async function prepare(token) {
   await call('POST', '/api/v1/admin/seed-reference-data', { token, data: {} })
+  const companies = await call('GET', '/api/v1/admin/underwriting-companies?includeInactive=true', { token })
+  for (const company of companies) {
+    const active = isPilotCompanyEnabled(company)
+    if (company.active !== active) await call('PATCH', `/api/v1/admin/underwriting-companies/${company.companyId}`, { token, data: { active } })
+  }
   await call('POST', '/api/v1/admin/compliance/eligibility', { token, expected: [201],
     data: { productCode: 'homeowners', stateCode: 'TX', admitted: true, status: 'ACTIVE', notes: 'Synthetic pilot only' } })
+}
+export function isPilotCompanyEnabled(company) {
+  return company.productCode === profile.product && company.country === 'US'
+    && (company.state === 'ALL' || profile.jurisdictions.includes(company.state))
 }
 export function evidence(name, data) {
   fs.mkdirSync(path.join(pilotRoot, 'evidence'), { recursive: true })
