@@ -28,7 +28,7 @@
   "dependencies": {
     "@lattice-policy/rules": "file:../packages/rules",
     "@lattice-policy/types": "file:../packages/types",
-    "@sentry/node": "^10.75.0",
+    "@sentry/node": "^11.6.0",
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
