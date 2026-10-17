@@ -39,9 +39,14 @@ function derivePolicyTermCountFromPolicy(policy: any): number {
 }
 
 export const policyRoutes = Router()
+// Bounds document listing and download per client. A policy transaction can
+// produce several documents (packet, rating worksheet, and one filled Word
+// document per form with a template, e.g. homeowners declarations, binder,
+// and mortgagee evidence), so the budget allows a reviewer to open every
+// document of a policy with several transactions more than once.
 const policyDocumentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 60,
+  max: 180,
   standardHeaders: true,
   legacyHeaders: false,
 })
