@@ -60,16 +60,35 @@ function decodeQuotedPrintable(text: string): string {
     .replace(/=([0-9A-F]{2})/gi, (_match, hex: string) => String.fromCharCode(parseInt(hex, 16)))
 }
 
-/** Removes markup until none is left, so a nested or split tag cannot survive one pass. */
+/**
+ * Text outside markup, read character by character: everything between "<"
+ * and ">" is dropped, and so is the content of script and style elements.
+ * No angle bracket survives, so the result can never contain markup.
+ */
 function stripTags(text: string, replacement: string): string {
-  let previous: string
-  let current = text
-  do {
-    previous = current
-    current = current.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '').replace(/<[^<>]*>/g, replacement)
-  } while (current !== previous)
-  // A stray angle bracket left by broken markup is not text worth keeping.
-  return current.replace(/[<>]/g, ' ')
+  let out = ''
+  let index = 0
+  let skipUntil: string | null = null
+  while (index < text.length) {
+    const open = text.indexOf('<', index)
+    if (open < 0) {
+      if (!skipUntil) out += text.slice(index)
+      break
+    }
+    if (!skipUntil) out += text.slice(index, open)
+    const close = text.indexOf('>', open + 1)
+    if (close < 0) break
+    const tag = text.slice(open + 1, close).trim().toLowerCase()
+    const name = tag.replace(/^\//, '').split(/[\s/]/)[0]
+    if (skipUntil) {
+      if (tag.startsWith('/') && name === skipUntil) skipUntil = null
+    } else {
+      if (!tag.startsWith('/') && (name === 'script' || name === 'style')) skipUntil = name
+      out += replacement
+    }
+    index = close + 1
+  }
+  return out.replace(/[<>]/g, ' ')
 }
 
 /**
