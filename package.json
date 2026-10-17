@@ -64,9 +64,9 @@
     "pilot:handoff": "node scripts/pilot-handoff.mjs"
   },
   "optionalDependencies": {
-    "@rollup/rollup-darwin-arm64": "4.64.0",
-    "@rollup/rollup-linux-arm64-musl": "4.64.0",
-    "@rollup/rollup-linux-x64-gnu": "4.64.0"
+    "@rollup/rollup-darwin-arm64": "4.64.3",
+    "@rollup/rollup-linux-arm64-musl": "4.64.3",
+    "@rollup/rollup-linux-x64-gnu": "4.64.3"
   },
   "overrides": {
     "source-map-js": "1.2.2",
@@ -76,7 +76,7 @@
     "basic-ftp": "6.2.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "jsdom": "^29.1.1",
     "pdfjs-dist": "4.10.38"
   }
