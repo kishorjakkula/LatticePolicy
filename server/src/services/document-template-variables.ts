@@ -17,6 +17,7 @@
 import crypto from 'crypto'
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
+import { loadProductConfig } from '../lib/products.js'
 
 export type QueryFn = (text: string, params?: any[]) => Promise<any>
 
@@ -26,7 +27,7 @@ export type QueryFn = (text: string, params?: any[]) => Promise<any>
 export const DOCX_TEMPLATE_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-export type DocumentTemplateVariableGroup = 'Insured' | 'Policy' | 'Coverage' | 'Premium' | 'Agent'
+export type DocumentTemplateVariableGroup = 'Insured' | 'Policy' | 'Policy details' | 'Coverage' | 'Homeowners' | 'Premium' | 'Agent'
 
 export type DocumentTemplateVariable = {
   token: string
@@ -254,11 +255,136 @@ export const DOCUMENT_TEMPLATE_VARIABLES: DocumentTemplateVariable[] = [
       'The commission rate on file (onboarding_commission_plans) for this agency/producer, product, and state, for this transaction type, formatted as a percentage. Empty when no commission plan is on file — commission calculation for payment purposes remains owned by the external commission system.',
     group: 'Agent',
   },
+
+  // ── Policy details shared by every product (quote payload common fields:
+  // see frontend/src/features/wizard/CommonQuoteSections.tsx) ───────────────────
+  { token: 'underwritingCompany', label: 'Underwriting Company', description: 'The insurer writing the policy.', group: 'Policy details' },
+  { token: 'mailingAddress', label: 'Mailing Address', description: 'Where notices are sent, on one line; falls back to the insured address.', group: 'Policy details' },
+  { token: 'billingMethod', label: 'Billing Method', description: 'Direct bill or agency bill.', group: 'Policy details' },
+  { token: 'paymentPlan', label: 'Payment Plan', description: 'Annual, semi-annual, quarterly, or monthly.', group: 'Policy details' },
+  { token: 'priorCarrier', label: 'Prior Carrier', description: 'The prior insurer.', group: 'Policy details' },
+  { token: 'priorPolicyNumber', label: 'Prior Policy Number', description: 'The prior policy number.', group: 'Policy details' },
+  { token: 'priorExpirationDate', label: 'Prior Policy Expiration', description: 'When the prior policy expires or expired.', group: 'Policy details' },
+  { token: 'additionalInterests', label: 'Additional Interests', description: 'Every additional interest, one per line: type, name, loan number, address.', group: 'Policy details' },
+  { token: 'mortgageeName', label: 'Mortgagee / Lienholder Name', description: 'The first mortgagee, or the first lienholder/loss payee when there is no mortgagee.', group: 'Policy details' },
+  { token: 'mortgageeLoanNumber', label: 'Mortgagee Loan Number', description: 'Loan number of that mortgagee or lienholder.', group: 'Policy details' },
+  { token: 'mortgageeAddress', label: 'Mortgagee Address', description: 'Address of that mortgagee or lienholder, on one line.', group: 'Policy details' },
+
+  // ── Homeowners (HO-3 structure; empty for other products) ───────────────────
+  { token: 'policyFormName', label: 'Policy Form', description: 'The policy form name and code from the product definition, e.g. "Homeowners Special Form (HO3)".', group: 'Homeowners' },
+  { token: 'premisesAddress', label: 'Residence Premises', description: 'The insured location (risk address).', group: 'Homeowners' },
+  { token: 'dwellingConstruction', label: 'Construction', description: 'Dwelling construction type.', group: 'Homeowners' },
+  { token: 'dwellingYearBuilt', label: 'Year Built', description: 'Year the dwelling was built.', group: 'Homeowners' },
+  { token: 'coverageALimit', label: 'Coverage A - Dwelling', description: 'Coverage A limit, formatted as currency.', group: 'Homeowners' },
+  { token: 'coverageBLimit', label: 'Coverage B - Other Structures', description: 'Coverage B limit (from its percentage of A when no amount is stored).', group: 'Homeowners' },
+  { token: 'coverageCLimit', label: 'Coverage C - Personal Property', description: 'Coverage C limit.', group: 'Homeowners' },
+  { token: 'coverageDLimit', label: 'Coverage D - Loss of Use', description: 'Coverage D limit.', group: 'Homeowners' },
+  { token: 'coverageELimit', label: 'Coverage E - Personal Liability', description: 'Coverage E limit, each occurrence.', group: 'Homeowners' },
+  { token: 'coverageFLimit', label: 'Coverage F - Medical Payments', description: 'Coverage F limit, each person.', group: 'Homeowners' },
+  { token: 'allPerilDeductible', label: 'All Peril Deductible', description: 'The all-peril deductible, formatted as currency.', group: 'Homeowners' },
+  { token: 'windHailDeductible', label: 'Wind/Hail Deductible', description: 'The wind/hail deductible as a percentage of Coverage A with its dollar amount.', group: 'Homeowners' },
+  { token: 'endorsementsList', label: 'Endorsements', description: 'Selected optional endorsements with their limits, one per line; "None" when none.', group: 'Homeowners' },
 ]
 
 export const DOCUMENT_TEMPLATE_VARIABLE_TOKENS: ReadonlySet<string> = new Set(
   DOCUMENT_TEMPLATE_VARIABLES.map((variable) => variable.token)
 )
+
+// ── Policy details and homeowners tokens (pure, from the payload) ──────────────
+
+function loadProductConfigSafely(productCode: string): any {
+  if (!productCode) return null
+  try {
+    return loadProductConfig(productCode)
+  } catch {
+    return null
+  }
+}
+
+const INTEREST_LABELS: Record<string, string> = {
+  MORTGAGEE: 'Mortgagee',
+  LOSS_PAYEE: 'Lienholder / loss payee',
+  ADDITIONAL_INSURED: 'Additional insured',
+  ADDITIONAL_INTEREST: 'Additional interest',
+}
+const PAYMENT_PLANS: Record<string, string> = { annual: 'Annual', 'semi-annual': 'Semi-annual', quarterly: 'Quarterly', monthly: 'Monthly' }
+
+function money(value: unknown): string {
+  if (value === null || value === undefined || value === '') return ''
+  const num = typeof value === 'number' ? value : Number(String(value).replace(/[$,\s]/g, ''))
+  if (!Number.isFinite(num)) return ''
+  return `$${num.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+}
+
+function oneLineAddress(address: any): string {
+  if (!address || typeof address !== 'object') return ''
+  const cityLine = [text(address.city), [text(address.state), text(address.zip || address.postalCode)].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [text(address.street || address.line1), cityLine].filter(Boolean).join(', ')
+}
+
+/**
+ * Tokens computed only from the policy/quote payload: the common policy
+ * details every product shares, and the homeowners declarations values.
+ * `productConfig` is the product definition (coverage names, form name).
+ */
+export function resolvePolicyDetailTokens(payload: any, productConfig?: any): Record<string, string> {
+  const interests = Array.isArray(payload?.additionalInterests) ? payload.additionalInterests.filter((item: any) => text(item?.name)) : []
+  const mortgagee = interests.find((item: any) => item.role === 'MORTGAGEE') || interests.find((item: any) => item.role === 'LOSS_PAYEE')
+  const interestAddress = (item: any) => oneLineAddress({ street: item.street, city: item.city, state: item.state, zip: item.zip })
+  const coverages: any[] = Array.isArray(payload?.coverages) ? payload.coverages.filter((cov: any) => cov && cov.selected !== false) : []
+  const byCode = new Map<string, any>(coverages.map((cov: any) => [String(cov.code || cov.coverageCode || '').toUpperCase(), cov]))
+  const dwelling: any = byCode.get('A') || {}
+  const aLimit = Number(dwelling.limit)
+  const limitOf = (code: string) => {
+    const cov: any = byCode.get(code)
+    if (!cov) return ''
+    if (cov.limit != null && cov.limit !== '') return money(cov.limit)
+    if (cov.percent != null && Number.isFinite(aLimit)) return money(Math.round((aLimit * Number(cov.percent)) / 100))
+    return ''
+  }
+  const configured = new Map<string, any>((Array.isArray(productConfig?.coverages) ? productConfig.coverages : []).map((cov: any) => [String(cov.code), cov]))
+  const endorsements = coverages
+    .filter((cov: any) => String(cov.code || '').toUpperCase().startsWith('END_') || configured.get(cov.code)?.endorsement === true)
+    .map((cov: any) => {
+      const name = configured.get(cov.code)?.name || cov.code
+      const detail = cov.percent != null && cov.percent !== '' ? `${cov.percent}% of Coverage A` : cov.limit != null && cov.limit !== '' ? money(cov.limit) : ''
+      return detail ? `${name}: ${detail}` : String(name)
+    })
+  const windPct = Number(dwelling.windHailPercent)
+  const risk = Array.isArray(payload?.risks) ? payload.risks[0] || {} : {}
+  const isHomeowners = text(payload?.productCode) === 'homeowners'
+  const form = productConfig?.form
+  return {
+    underwritingCompany: text(payload?.underwritingCompanyName),
+    mailingAddress: oneLineAddress(payload?.mailingAddress) || oneLineAddress(payload?.insureds?.primary?.address),
+    billingMethod: payload?.billingMethod === 'agency' ? 'Agency bill' : payload?.billingMethod === 'direct' ? 'Direct bill' : '',
+    paymentPlan: PAYMENT_PLANS[text(payload?.paymentPlan)] || '',
+    priorCarrier: text(payload?.priorCarrier),
+    priorPolicyNumber: text(payload?.priorPolicyNumber),
+    priorExpirationDate: dateOnly(payload?.priorExpirationDate),
+    additionalInterests: interests
+      .map((item: any) => [INTEREST_LABELS[item.role] || 'Additional interest', text(item.name), text(item.loanNumber) ? `loan ${text(item.loanNumber)}` : '', interestAddress(item)].filter(Boolean).join(', '))
+      .join('\n'),
+    mortgageeName: text(mortgagee?.name),
+    mortgageeLoanNumber: text(mortgagee?.loanNumber),
+    mortgageeAddress: mortgagee ? interestAddress(mortgagee) : '',
+    policyFormName: isHomeowners && form?.name ? `${form.name}${form.code ? ` (${form.code})` : ''}` : '',
+    premisesAddress: isHomeowners ? text(risk.address) : '',
+    dwellingConstruction: isHomeowners ? text(risk.construction) : '',
+    dwellingYearBuilt: isHomeowners ? text(risk.yearBuilt) : '',
+    coverageALimit: isHomeowners ? limitOf('A') : '',
+    coverageBLimit: isHomeowners ? limitOf('B') : '',
+    coverageCLimit: isHomeowners ? limitOf('C') : '',
+    coverageDLimit: isHomeowners ? limitOf('D') : '',
+    coverageELimit: isHomeowners ? limitOf('E') : '',
+    coverageFLimit: isHomeowners ? limitOf('F') : '',
+    allPerilDeductible: isHomeowners ? money(dwelling.deductible) : '',
+    windHailDeductible: isHomeowners && Number.isFinite(windPct) && windPct > 0
+      ? `${windPct}% of Coverage A${Number.isFinite(aLimit) ? ` (${money(Math.round((aLimit * windPct) / 100))})` : ''}`
+      : '',
+    endorsementsList: isHomeowners ? (endorsements.join('\n') || 'None') : '',
+  }
+}
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
 
@@ -596,6 +722,8 @@ export async function resolveDocumentTemplateVariables(
     agencyCode: producerAndAgency.agencyCode,
     agencyNpn: text(agencyRecord?.agency_np_number),
     agentCommissionPercent,
+
+    ...resolvePolicyDetailTokens(payload, loadProductConfigSafely(productCode)),
   }
 
   const result: Record<string, string> = {}
