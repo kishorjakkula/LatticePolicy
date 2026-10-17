@@ -105,7 +105,15 @@ describe('quote-to-bind persistence', () => {
     const quote = await createOrRateQuote(
       {} as any,
       tenantId,
-      quotePayload(),
+      quotePayload({
+        // Common quote fields shared by every product.
+        additionalInterests: [
+          { role: 'LOSS_PAYEE', name: 'Golden State Auto Finance', loanNumber: 'LN-4471', street: '1 Market St', city: 'San Francisco', state: 'ca', zip: '94105' },
+          { role: 'NOT_A_ROLE', name: 'Ignored' },
+        ],
+        paymentPlan: 'monthly',
+        billingMethod: 'direct',
+      }),
       null,
       'integration-test',
     )
@@ -129,6 +137,14 @@ describe('quote-to-bind persistence', () => {
     expect(bound.versionId).toBeTruthy()
     expect(bound.ratingId).toBeTruthy()
     expect(bound.premiumSummary.total.amount).toBeGreaterThan(0)
+
+    const interests = await db!.query(
+      `SELECT role, name, loan_number, address FROM policy_additional_interests WHERE tenant_id=$1 AND policy_id=$2`,
+      [tenantId, bound.policyId],
+    )
+    expect(interests.rows).toHaveLength(1)
+    expect(interests.rows[0]).toMatchObject({ role: 'LOSS_PAYEE', name: 'Golden State Auto Finance', loan_number: 'LN-4471' })
+    expect(interests.rows[0].address).toMatchObject({ city: 'San Francisco', state: 'CA' })
 
     const persisted = await db!.query(
       `SELECT

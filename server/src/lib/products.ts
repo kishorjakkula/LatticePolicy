@@ -44,6 +44,14 @@ export type Rates = {
   constructionFactors?: Record<string, number>
   protectionClassFactors?: Record<string, number>
   roofAgeFactors?: Record<string, number>
+  // Homeowners version 2: each applies only when present.
+  deductibleFactors?: Record<string, number>
+  windHailFactors?: Record<string, number>
+  dwellingAgeFactors?: Record<string, number>
+  roofTypeFactors?: Record<string, number>
+  dwellingUnitsFactors?: Record<string, number>
+  fireStationDistanceFactors?: Record<string, number>
+  protectiveDeviceCredits?: { fireAlarm?: number; burglarAlarm?: number }
   industryFactors?: Record<string, number>
   revenueFactors?: Record<string, number>
   employeeCountFactors?: Record<string, number>
@@ -222,6 +230,10 @@ export function buildRiskFields(productCode: ProductCode, cfg: any, tenantId?: s
     add({ key: 'yearBuilt', label: 'Year Built', type: 'number', path: 'risks.0.yearBuilt', required: true })
     add({ key: 'squareFeet', label: 'Square Feet', type: 'number', path: 'risks.0.squareFeet' })
     add({ key: 'occupancy', label: 'Occupancy', type: 'select', path: 'risks.0.occupancy', required: false, options: ['OwnerOccupied','TenantOccupied','Seasonal'] })
+    if (keys.includes('roofType')) add({ key: 'roofType', label: 'Roof Type', type: 'select', path: 'risks.0.roofType', required: false, options: ['asphalt-shingle', 'metal', 'tile', 'slate', 'wood-shake', 'other'] })
+    if (keys.includes('dwellingUnits')) add({ key: 'dwellingUnits', label: 'Dwelling Units (families)', type: 'select', path: 'risks.0.dwellingUnits', required: false, options: ['1', '2'] })
+    if (keys.includes('stories')) add({ key: 'stories', label: 'Stories', type: 'number', path: 'risks.0.stories', required: false })
+    if (keys.includes('distanceToFireStationMiles')) add({ key: 'distanceToFireStationMiles', label: 'Distance to Fire Station (miles)', type: 'number', path: 'risks.0.distanceToFireStationMiles', required: false })
     add({ key: 'fireAlarm', label: 'Fire Alarm', type: 'select', path: 'risks.0.fireAlarm', required: false, options: ['true','false'] })
     add({ key: 'burglarAlarm', label: 'Burglar Alarm', type: 'select', path: 'risks.0.burglarAlarm', required: false, options: ['true','false'] })
   } else if (productCode === 'cyber') {
@@ -371,6 +383,10 @@ export function loadFieldMeta(productCode: ProductCode, tenantId: string): any[]
       { path: 'risks.0.roofAgeYears', type: 'int', required: true, ui: { group: 'Dwelling', order: 130 }},
       { path: 'risks.0.squareFeet', type: 'int', required: false, ui: { group: 'Dwelling', order: 140 }},
       { path: 'risks.0.occupancy', type: 'enum', enum: ['OwnerOccupied','TenantOccupied','Seasonal'], required: false, ui: { group: 'Dwelling', order: 150 }},
+      { path: 'risks.0.roofType', type: 'enum', enum: ['asphalt-shingle', 'metal', 'tile', 'slate', 'wood-shake', 'other'], required: false, ui: { group: 'Dwelling', order: 160 }},
+      { path: 'risks.0.dwellingUnits', type: 'enum', enum: ['1', '2'], required: false, ui: { group: 'Dwelling', order: 170 }},
+      { path: 'risks.0.stories', type: 'int', required: false, ui: { group: 'Dwelling', order: 180 }},
+      { path: 'risks.0.distanceToFireStationMiles', type: 'number', required: false, ui: { group: 'Protection', order: 190 }},
       { path: 'risks.0.fireAlarm', type: 'bool', required: false, ui: { group: 'Credits', order: 210 }},
       { path: 'risks.0.burglarAlarm', type: 'bool', required: false, ui: { group: 'Credits', order: 220 }}
     ]

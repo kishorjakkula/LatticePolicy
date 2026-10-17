@@ -272,12 +272,51 @@ function rateHO(payload: any, rates: Rates) {
     base *= rf
   }
   const selectedCoverages = getSelectedCoverages(payload?.coverages)
+  base *= hoVersion2Factor(payload, rates, selectedCoverages)
   const hoBreakdown = rateHOCoverages(base, selectedCoverages)
   const fees = rates.fees?.policy ?? 35
   const taxesRate = rates.taxes?.rate ?? 0.02
   const taxes = round2(hoBreakdown.coverageSubtotal * taxesRate)
   const total = round2(hoBreakdown.coverageSubtotal + fees + taxes)
   return breakdown(total, fees, taxes, hoBreakdown.byCoverage)
+}
+
+/**
+ * Homeowners version 2 factors (HO-3 structure): deductible, wind/hail
+ * deductible, dwelling age, roof type, dwelling units, distance to the fire
+ * station, and protective device credits. Each applies only when the rates
+ * the quote is pinned to contain its table, so a quote on version 1 rates
+ * exactly as before.
+ */
+export function hoVersion2Factor(payload: any, rates: Rates, selectedCoverages: any[]): number {
+  const risk = payload?.risks?.[0] || {}
+  const dwelling = selectedCoverages.find((cov: any) => coverageKey(coverageCode(cov)) === 'A') || {}
+  let factor = 1
+  if (rates.deductibleFactors && dwelling.deductible != null) {
+    factor *= pickNamedFactor(String(Number(dwelling.deductible)), rates.deductibleFactors, 1)
+  }
+  if (rates.windHailFactors && dwelling.windHailPercent != null) {
+    factor *= pickNamedFactor(String(Number(dwelling.windHailPercent)), rates.windHailFactors, 1)
+  }
+  const yearBuilt = Number(risk.yearBuilt)
+  if (rates.dwellingAgeFactors && Number.isFinite(yearBuilt) && yearBuilt > 1700) {
+    const effectiveYear = Number(String(payload?.effectiveDate || '').slice(0, 4)) || new Date().getFullYear()
+    factor *= pickRangeFactor(Math.max(0, effectiveYear - yearBuilt), rates.dwellingAgeFactors, 1)
+  }
+  if (rates.roofTypeFactors && risk.roofType) factor *= pickNamedFactor(String(risk.roofType), rates.roofTypeFactors, 1)
+  if (rates.dwellingUnitsFactors && risk.dwellingUnits != null && risk.dwellingUnits !== '') {
+    factor *= pickNamedFactor(String(Number(risk.dwellingUnits)), rates.dwellingUnitsFactors, 1)
+  }
+  const fireStationMiles = Number(risk.distanceToFireStationMiles)
+  if (rates.fireStationDistanceFactors && risk.distanceToFireStationMiles != null && risk.distanceToFireStationMiles !== '' && Number.isFinite(fireStationMiles)) {
+    factor *= pickRangeFactor(fireStationMiles, rates.fireStationDistanceFactors, 1)
+  }
+  const credits = rates.protectiveDeviceCredits
+  if (credits) {
+    if (parseBooleanLike(risk.fireAlarm) && Number.isFinite(Number(credits.fireAlarm))) factor *= Number(credits.fireAlarm)
+    if (parseBooleanLike(risk.burglarAlarm) && Number.isFinite(Number(credits.burglarAlarm))) factor *= Number(credits.burglarAlarm)
+  }
+  return factor
 }
 
 function rateCyber(payload: any, rates: Rates) {
@@ -855,7 +894,11 @@ function rateHOCoverages(base: number, coverages: any[]): { byCoverage: any[]; c
     D: 0.08,
     E: 0.12,
     F: 0.05,
-    END_WB: 0.05
+    END_WB: 0.05,
+    // Version 2 endorsements; quotes on version 1 never select them.
+    END_PPRC: 0.06,
+    END_ORD: 0.03,
+    END_ERC: 0.04
   }
   let subtotal = 0
   const byCoverage = coverages.map((cov: any) => {
@@ -986,6 +1029,11 @@ function hoCoverageMultiplier(code: string, cov: any): number {
     const limit = parseCoverageLimit(cov?.limit, 5000)
     return clamp(Math.sqrt(limit / 5000), 0.7, 1.8)
   }
+  if (code === 'END_ORD' || code === 'END_ERC') {
+    const pct = parsePercent(cov?.percent, 25)
+    return clamp(pct / 25, 0.5, 2.5)
+  }
+  if (code === 'END_PPRC') return 1
   const fallbackLimit = parseCoverageLimit(cov?.limit, 5000)
   return clamp(Math.sqrt(fallbackLimit / 5000), 0.65, 1.8)
 }
@@ -1017,6 +1065,7 @@ function coverageKey(code: string): string {
   if (upper === 'COMP' || upper.endsWith('.COMP') || upper.includes('COMPREHENSIVE')) return 'COMP'
   if (upper === 'COLL' || upper.endsWith('.COLL') || upper.includes('COLLISION')) return 'COLL'
   if (upper === 'END_WB' || upper.includes('WATER_BACKUP') || upper.includes('WATER-BACKUP') || upper.includes('WATER BACKUP')) return 'END_WB'
+  if (upper === 'END_PPRC' || upper === 'END_ORD' || upper === 'END_ERC') return upper
   if (upper === 'CYB_LIAB' || upper.includes('CYBER_LIABILITY') || upper.includes('CYBER LIABILITY')) return 'CYB_LIAB'
   if (upper === 'BIZ_INT' || upper.includes('BUSINESS_INTERRUPTION') || upper.includes('BUSINESS INTERRUPTION')) return 'BIZ_INT'
   if (upper === 'CYB_EXT' || upper.includes('CYBER_EXTORTION') || upper.includes('CYBER EXTORTION')) return 'CYB_EXT'

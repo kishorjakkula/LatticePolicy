@@ -62,6 +62,7 @@ test('the accepted pilot policy opens every listed document', async ({ page, con
     await expect.poll(() => page.evaluate(index => (window as any).__pilotOpened[index]?.size || 0, i)).toBeGreaterThan(100)
     const text = await page.evaluate(async index => ((window as any).__pilotOpened[index] as Blob).text(), i)
     if (doc.type === 'RATING_WORKSHEET') expect(text).toContain('Rating worksheet')
+    else if (doc.type === 'POLICY_FORM_DOCUMENT') expect(text.slice(0, 2)).toBe('PK') // filled Word form
     else expect(text.slice(0, 5)).toBe('%PDF-')
     await tab.close()
   }

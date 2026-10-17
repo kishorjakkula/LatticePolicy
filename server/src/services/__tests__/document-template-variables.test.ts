@@ -64,7 +64,7 @@ describe('document template variable catalog', () => {
       seen.add(variable.token)
       expect(variable.label.length).toBeGreaterThan(0)
       expect(variable.description.length).toBeGreaterThan(0)
-      expect(['Insured', 'Policy', 'Coverage', 'Premium', 'Agent']).toContain(variable.group)
+      expect(['Insured', 'Policy', 'Policy details', 'Coverage', 'Homeowners', 'Premium', 'Agent']).toContain(variable.group)
     }
     expect(DOCUMENT_TEMPLATE_VARIABLE_TOKENS.size).toBe(seen.size)
   })
@@ -163,6 +163,18 @@ describe('resolveDocumentTemplateVariables', () => {
       return { rows: [], rowCount: 0 }
     }
   }
+
+  it('uses the bind premium when the policy version is not saved yet', async () => {
+    const q = createQuery({})
+    const result = await resolveDocumentTemplateVariables(q, {
+      tenantId: 'tenant-1',
+      policyId: 'policy-1',
+      productCode: 'homeowners',
+      payload: { productCode: 'homeowners', coverages: [{ code: 'A', limit: 300000 }] },
+      premium: { total: { amount: 775.21, currency: 'USD' }, fees: { amount: 35 }, taxes: { amount: 14.5 } },
+    })
+    expect(result).toMatchObject({ premiumTotal: '775.21', premiumFees: '35', premiumTaxes: '14.5', premiumCurrency: 'USD', coverageALimit: '$300,000' })
+  })
 
   it('resolves every catalog token to a string, defaulting missing data to empty string', async () => {
     const q = createQuery({})

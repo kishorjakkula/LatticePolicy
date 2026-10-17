@@ -75,6 +75,17 @@ function normalizeOption(raw: string, options: string[]): Normalized {
   if (lowered.includes('false') && NO.has(lower)) return { value: options[lowered.indexOf('false')], ok: true }
   if (lowered.includes('yes') && YES.has(lower)) return { value: options[lowered.indexOf('yes')], ok: true }
   if (lowered.includes('no') && NO.has(lower)) return { value: options[lowered.indexOf('no')], ok: true }
+  // Common insurance wording for listed options.
+  const ALIASES: Record<string, string> = {
+    'paid in full': 'annual', 'pay in full': 'annual', 'full pay': 'annual', yearly: 'annual', annually: 'annual',
+    'semi annual': 'semi-annual', 'semiannual': 'semi-annual', 'two payments': 'semi-annual', 'twice a year': 'semi-annual',
+    'four payments': 'quarterly', 'twelve payments': 'monthly', '12 payments': 'monthly', '4 payments': 'quarterly', '2 payments': 'semi-annual',
+    'direct bill': 'direct', 'insured billed': 'direct', 'carrier billed': 'direct', 'agency bill': 'agency', 'agent bill': 'agency',
+    mortgagee: 'MORTGAGEE', 'first mortgagee': 'MORTGAGEE', lienholder: 'LOSS_PAYEE', 'loss payee': 'LOSS_PAYEE',
+    'additional insured': 'ADDITIONAL_INSURED', 'additional interest': 'ADDITIONAL_INTEREST',
+  }
+  const alias = ALIASES[lower.replace(/[^a-z0-9]+/g, ' ').trim()]
+  if (alias && options.includes(alias)) return { value: alias, ok: true }
   const contained = options.filter((option) => {
     const words = option.toLowerCase().replace(/-/g, ' ')
     return lower.includes(words) || words.includes(lower)

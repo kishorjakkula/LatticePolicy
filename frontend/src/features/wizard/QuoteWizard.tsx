@@ -30,6 +30,7 @@ import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
 import type { LookupTable, ProductScreen, QualificationAnswer, QualificationAnswers, QualificationQuestion } from '@lattice-policy/rules'
 import { QUALIFICATION_QUESTIONS } from '@lattice-policy/rules'
+import { AdditionalInterestsFields, BillingFields, commonFieldsFromPayload, CommonQuoteSummary, MailingAddressFields, PriorInsuranceExtras, type CommonQuoteFields } from './CommonQuoteSections'
 import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
@@ -103,7 +104,7 @@ type QuoteState = {
   applicant: { firstName: string; lastName: string; email?: string }
   risks: any[]
   coverages: any[]
-}
+} & CommonQuoteFields
 
 type InsuredAddress = {
   street: string
@@ -329,6 +330,12 @@ const defaultState: QuoteState = {
   underwriterName: '',
   priorPolicyNumber: '',
   priorCarrier: '',
+  priorExpirationDate: '',
+  yearsWithPriorCarrier: '',
+  billingMethod: '',
+  paymentPlan: '',
+  mailingAddress: { street: '', city: '', state: '', zip: '' },
+  additionalInterests: [],
   qualificationAnswers: {},
   applicant: { firstName: 'Test', lastName: 'User' },
   risks: [],
@@ -3806,6 +3813,10 @@ export function QuoteWizard() {
               </select>
             </div>
           </div>
+          <PriorInsuranceExtras value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Billing">
+            <BillingFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
           </CollapsibleSection>
         </section>
       )}
@@ -4322,6 +4333,12 @@ export function QuoteWizard() {
             </div>
             </div>
           )}
+          <CollapsibleSection className="wizard-section" title="Mailing Address">
+            <MailingAddressFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} insuredAddress={insureds.primary.address} />
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Additional Interests">
+            <AdditionalInterestsFields value={q} productCode={q.productCode} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
+          </CollapsibleSection>
         </section>
       )}
 
@@ -4411,6 +4428,7 @@ export function QuoteWizard() {
               <div className="kvline"><span className="muted">State</span><span>{q.state || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Policy #</span><span>{q.priorPolicyNumber || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Carrier</span><span>{q.priorCarrier || '-'}</span></div>
+              <CommonQuoteSummary value={q} />
             </CollapsibleSection>
 
             <CollapsibleSection className="card">
@@ -5832,6 +5850,43 @@ function HomeownersCoverageEditor({ cfg, selections, onChange, disabled }: { cfg
     )
   }
 
+  const endorsements = coverages.filter((cov: any) => cov.endorsement === true || String(cov.code || '').startsWith('END_'))
+
+  function renderEndorsement(covCfg: any) {
+    const code = covCfg.code
+    const existing = selectionMap.get(code)
+    const enabled = !!existing
+    const limits: number[] = Array.isArray(covCfg.limits) ? covCfg.limits.map(Number) : []
+    const percents: number[] = Array.isArray(covCfg.percentOptions) ? covCfg.percentOptions.map(Number) : []
+    return (
+      <div key={code} className="row" style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+        <div className="col">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={enabled} onChange={e => toggleCoverage(code, e.target.checked)} disabled={disabled} />
+            {covCfg.name}
+          </label>
+          <div className="muted">{covCfg.description || (enabled ? 'Choose the limit' : 'Optional endorsement')}</div>
+        </div>
+        {enabled && limits.length > 0 && (
+          <div className="col">
+            <label>Limit</label>
+            <select value={String(existing?.limit ?? limits[0])} onChange={e => updateCoverage(code, { limit: Number(e.target.value) })} disabled={disabled}>
+              {limits.map((l) => <option key={l} value={String(l)}>{formatCurrency(l)}</option>)}
+            </select>
+          </div>
+        )}
+        {enabled && percents.length > 0 && (
+          <div className="col">
+            <label>Percent of A</label>
+            <select value={String(existing?.percent ?? percents[0])} onChange={e => updateCoverage(code, { percent: Number(e.target.value) })} disabled={disabled}>
+              {percents.map((p) => <option key={p} value={String(p)}>{p}%</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <CollapsibleSection className="card" style={{ paddingBottom: 16 }}>
@@ -5902,7 +5957,56 @@ function HomeownersCoverageEditor({ cfg, selections, onChange, disabled }: { cfg
         <h3 style={{ marginTop: 0 }}>Liability & Medical</h3>
         {['E', 'F'].map(renderLimitCoverage)}
       </CollapsibleSection>
+
+      {endorsements.length > 0 && (
+        <CollapsibleSection className="card" style={{ paddingBottom: 8 }}>
+          <h3 style={{ marginTop: 0 }}>Optional Endorsements</h3>
+          {endorsements.map((cov: any) => renderEndorsement(cov))}
+        </CollapsibleSection>
+      )}
+
+      <HomeownersIncludedCoverages cfg={cfg} />
     </div>
+  )
+}
+
+/** What the form includes without extra premium, from the product definition. */
+function HomeownersIncludedCoverages({ cfg }: { cfg: any }) {
+  const additional: any[] = Array.isArray(cfg?.additionalCoverages) ? cfg.additionalCoverages : []
+  const specialLimits: any[] = Array.isArray(cfg?.specialLimits) ? cfg.specialLimits : []
+  const notCovered: string[] = Array.isArray(cfg?.notCovered) ? cfg.notCovered : []
+  const settlement = cfg?.lossSettlement || {}
+  if (!additional.length && !specialLimits.length && !notCovered.length) return null
+  return (
+    <CollapsibleSection className="card" style={{ paddingBottom: 8 }} defaultOpen={false}>
+      <h3 style={{ marginTop: 0 }}>Included in this policy{cfg?.form?.name ? ` (${cfg.form.name})` : ''}</h3>
+      {cfg?.form?.description && <p className="muted" style={{ marginTop: 0 }}>{cfg.form.description}</p>}
+      {(settlement.dwelling || settlement.personalProperty) && (
+        <div style={{ marginBottom: 12 }}>
+          <strong>Loss settlement</strong>
+          {settlement.dwelling && <div className="kvline"><span className="muted">Dwelling and other structures</span><span>{settlement.dwelling}</span></div>}
+          {settlement.personalProperty && <div className="kvline"><span className="muted">Personal property</span><span>{settlement.personalProperty}</span></div>}
+        </div>
+      )}
+      {additional.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <strong>Additional coverages, no extra premium</strong>
+          {additional.map((item) => <div className="kvline" key={item.code || item.name}><span className="muted">{item.name}</span><span>{item.limit}</span></div>)}
+        </div>
+      )}
+      {specialLimits.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <strong>Special limits within Personal Property</strong>
+          {specialLimits.map((item) => <div className="kvline" key={item.category}><span className="muted">{item.category}</span><span>{formatCurrency(Number(item.limit))}</span></div>)}
+        </div>
+      )}
+      {notCovered.length > 0 && (
+        <div>
+          <strong>Not covered unless an endorsement adds it</strong>
+          <div className="muted">{notCovered.join(' · ')}</div>
+        </div>
+      )}
+    </CollapsibleSection>
   )
 }
 function buildHomeownerDefaults(cfg: any, current: any[]): any[] {
@@ -5913,7 +6017,8 @@ function buildHomeownerDefaults(cfg: any, current: any[]): any[] {
   const existing = Array.isArray(current) ? current.filter((c: any) => validCodes.has(c.code)) : []
   const map = new Map<string, any>(existing.map((c: any) => [c.code, { ...c, selected: c.selected !== false }]))
   for (const cov of coverages) {
-    if (!map.has(cov.code)) {
+    // Optional endorsements are added only when the insured asks for them.
+    if (!map.has(cov.code) && cov.optional !== true) {
       const def = hoDefaultSelection(cfg, cov.code)
       if (def) map.set(cov.code, def)
     }
@@ -5932,8 +6037,9 @@ function hoDefaultSelection(cfg: any, code: string): any | null {
   const cov = coverages.find((c: any) => c.code === code)
   if (!cov) return null
   if (code === 'A') {
-    const defaultLimit = 350000
-    const deductible = pickFirstNumber(cfg?.deductibles?.allPeril)
+    const defaultLimit = Number.isFinite(Number(cov.defaultLimit)) ? Number(cov.defaultLimit) : 350000
+    const configuredDeductible = Number(cfg?.deductibles?.defaultAllPeril)
+    const deductible = Number.isFinite(configuredDeductible) && configuredDeductible > 0 ? configuredDeductible : pickFirstNumber(cfg?.deductibles?.allPeril)
     const wind = pickFirstNumber(cfg?.deductibles?.windHailPercent)
     return {
       code,
@@ -5944,7 +6050,8 @@ function hoDefaultSelection(cfg: any, code: string): any | null {
     }
   }
   if (cov.limitAsPercentOf === 'A') {
-    const percent = pickFirstNumber(cov.percentOptions, 20) ?? 20
+    const configured = Number(cov.defaultPercent)
+    const percent = Number.isFinite(configured) && configured > 0 ? configured : pickFirstNumber(cov.percentOptions, 20) ?? 20
     return {
       code,
       selected: true,
@@ -5953,7 +6060,8 @@ function hoDefaultSelection(cfg: any, code: string): any | null {
     }
   }
   if (Array.isArray(cov.limits) && cov.limits.length > 0) {
-    const limitValue = pickFirstNumber(cov.limits, cov.limits[0])
+    const configured = Number(cov.defaultLimit)
+    const limitValue = Number.isFinite(configured) && cov.limits.map(Number).includes(configured) ? configured : pickFirstNumber(cov.limits, cov.limits[0])
     return { code, selected: true, limit: limitValue }
   }
   return { code, selected: true }
@@ -6138,6 +6246,7 @@ function mergeQuoteState(payload: any, current: QuoteState): QuoteState {
     underwriterName: payload?.underwriterName || current.underwriterName || '',
     priorPolicyNumber: payload?.priorPolicyNumber || current.priorPolicyNumber || '',
     priorCarrier: payload?.priorCarrier || current.priorCarrier || '',
+    ...commonFieldsFromPayload(payload, current),
     qualificationAnswers,
     applicant,
     risks,

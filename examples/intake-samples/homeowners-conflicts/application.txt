@@ -1,0 +1,34 @@
+HOMEOWNER APPLICATION - SECONDARY HOME (SAMPLE)
+
+Agency: Coastal Bend Insurance
+Named insured: Robert Allen
+Insured type: person
+Date of birth: 07/22/1961
+Insured email: rallen@example.com
+Mailing address: 55 Westlake Blvd
+City: Houston
+Address state: TX
+ZIP code: 77079
+
+Effective date: 12/01/2026
+Rating state: TX
+Payment plan: Paid in full
+Billing method: Direct bill
+Prior carrier: Gulf States Mutual
+Prior policy number: GSM-H-77120
+Years with prior carrier: 3
+
+Address: 310 Dune Rd, Port Aransas TX 78373
+Year Built: 1985
+Construction: Frame
+Roof Type: Metal
+Roof Age (years): 4
+Occupancy: Seasonal
+Distance to Fire Station (miles): 12
+
+Dwelling limit: 310,000
+All peril deductible: 2,500
+Wind/hail deductible: 5%
+
+No property claims in last 5 years? No
+Home not vacant for more than 30 days? No

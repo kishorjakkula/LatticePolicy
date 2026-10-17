@@ -1,0 +1,20 @@
+LONE STAR HOME INSURANCE - HOMEOWNERS DECLARATIONS (SAMPLE, ILLUSTRATIVE)
+
+Named insured: Maria Gonzalez
+Prior policy number: LSH-HO-2231987
+Policy period: 11/15/2025 to 11/15/2026
+Address: 2214 Live Oak Dr, Austin TX 78704
+
+COVERAGES                         LIMITS
+Coverage A - Dwelling             $385,000
+Coverage B - Other Structures     $38,500
+Coverage C - Personal Property    $192,500
+Coverage D - Loss of Use          $77,000
+Coverage E - Personal Liability   $300,000
+Coverage F - Medical Payments     $1,000
+
+All peril deductible: $1,000
+Wind/hail deductible: 2% of Coverage A
+
+Mortgagee or lienholder: Capital City Mortgage Corp ISAOA/ATIMA
+Loan number: CCM-88412-07

@@ -146,6 +146,15 @@ const LABEL_SYNONYMS: Record<string, string[]> = {
   addressState: ['address state'],
   postalCode: ['zip code', 'postal code', 'mailing zip'],
   brokerName: ['agency', 'agency name', 'broker', 'producer'],
+  priorPolicyNumber: ['prior policy number', 'prior policy #', 'current policy number', 'expiring policy number'],
+  priorExpirationDate: ['prior policy expiration', 'expiration date', 'current policy expires', 'expiring date'],
+  yearsWithPriorCarrier: ['years with prior carrier', 'years with current carrier', 'years insured with carrier'],
+  billingMethod: ['billing method', 'bill to'],
+  paymentPlan: ['payment plan', 'pay plan', 'payment option'],
+  interestRole: ['additional interest type', 'interest type'],
+  interestName: ['mortgagee or lienholder', 'mortgagee', 'first mortgagee', 'lienholder', 'loss payee'],
+  interestLoanNumber: ['loan number', 'loan #', 'mortgage loan number'],
+  interestAddress: ['mortgagee address', 'lienholder address'],
   brokerEmail: ['agency email', 'broker email', 'producer email'],
 }
 
@@ -168,6 +177,9 @@ function labelVariants(field: IntakeTargetField): Array<{ text: string; exact: b
   for (const synonym of LABEL_SYNONYMS[field.key] || []) {
     if (synonym !== field.label.toLowerCase()) variants.push({ text: synonym, exact: false })
   }
+  for (const alias of field.aliases || []) {
+    if (!variants.some((variant) => variant.text === alias.toLowerCase())) variants.push({ text: alias.toLowerCase(), exact: false })
+  }
   if (field.key.startsWith('risk.')) {
     const humanized = field.key.slice(5).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
     if (humanized !== field.label.toLowerCase()) variants.push({ text: humanized, exact: false })
@@ -183,7 +195,10 @@ function labelVariants(field: IntakeTargetField): Array<{ text: string; exact: b
  */
 function matchLabel(line: string, label: string): { value: string; quote: string } | null {
   // A question ("…access?") may be followed by its answer without a colon.
-  const separator = label.trim().endsWith('?') ? '[:#]?' : '[:#]'
+  // A question may be followed by its answer without a colon; a table row
+  // ("Coverage A - Dwelling    $385,000") separates label and value with a
+  // column gap.
+  const separator = label.trim().endsWith('?') ? '(?:[:#]|\\s)' : '(?:[:#]|\\s{2,}(?=\\S))'
   const pattern = new RegExp(`(^[\\s\\-*•\\d.)]*|\\s{2,}|\\|\\s*)${escapeRegex(label)}\\s*(\\([^)]*\\))?\\s*${separator}\\s*(.+)$`, 'i')
   const match = pattern.exec(line)
   if (!match) return null
@@ -383,6 +398,7 @@ function describeFields(fields: IntakeTargetField[]): string {
     const parts = [`- ${field.key}: ${field.label} (${field.type}${field.required ? ', required' : ''})`]
     if (field.options.length) parts.push(`options: ${field.options.join(', ')}`)
     if (field.help) parts.push(`hint: ${field.help}`)
+    if (field.aliases?.length) parts.push(`also written as: ${field.aliases.join(' / ')}`)
     return parts.join('; ')
   }).join('\n')
 }

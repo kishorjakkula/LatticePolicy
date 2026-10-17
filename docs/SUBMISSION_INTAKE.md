@@ -61,6 +61,14 @@ The target fields come from the framework, not from intake code:
 - The product's risk fields from `buildRiskFields`, the same list the quote
   wizard renders, including carrier pack fields and option lists. A carrier
   that adds a field to its product gets it in intake with no code change.
+- The coverages the submission asks for, from the product's coverage
+  definition: limits, deductibles, amounts, percentages of Coverage A, and
+  optional endorsements (`cov.<CODE>.<attribute>`), with aliases for
+  declarations-style rows such as "Coverage A - Dwelling  $385,000".
+- Common fields: prior policy number, expiration and years with the prior
+  carrier, billing method, payment plan, insured date of birth (people), and
+  one mortgagee or lienholder (type, name, loan number, address), which
+  becomes an additional interest on the quote.
 - The product's qualification (eligibility) questions, yes or no, from
   `QUALIFICATION_QUESTIONS` in `packages/rules`, the list the wizard's
   qualification step uses. Follow-up questions asked only after a particular

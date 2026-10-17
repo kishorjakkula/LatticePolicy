@@ -15,6 +15,7 @@ import {
   buildTargetFields,
   listIntakeProducts,
   PRODUCT_FIELD_KEY,
+  COVERAGE_FIELD_PREFIX,
   QUALIFICATION_FIELD_PREFIX,
   RISK_FIELD_PREFIX,
   type IntakeTargetField,
@@ -795,7 +796,7 @@ export function buildCustomerInput(values: Record<string, string>) {
     status: 'ACTIVE',
     identity: isCompany
       ? { company: { legalName: name, fein: values.fein || '' } }
-      : { person: splitPersonName(name) },
+      : { person: { ...splitPersonName(name), dob: values.insuredDob || '' } },
     contactPoints,
     addresses,
   })
@@ -834,6 +835,23 @@ export function buildQuotePayload(
     if (field.key.startsWith(RISK_FIELD_PREFIX) && field.value) risk[field.key.slice(RISK_FIELD_PREFIX.length)] = coerceRiskValue(field, field.value)
   }
   if (isCompany && name && !('businessName' in risk) && fields.some((field) => field.key === `${RISK_FIELD_PREFIX}businessName`)) risk.businessName = name
+  // Coverages the submission asked for; the wizard applies the product's
+  // defaults to the rest.
+  const coverageMap = new Map<string, Record<string, unknown>>()
+  for (const field of fields) {
+    if (!field.key.startsWith(COVERAGE_FIELD_PREFIX) || !field.value) continue
+    const [code, attribute] = field.key.slice(COVERAGE_FIELD_PREFIX.length).split('.')
+    if (!code || !attribute) continue
+    const entry: Record<string, unknown> = coverageMap.get(code) || { code, selected: true }
+    if (attribute === 'selected') {
+      if (field.value === 'no') entry.selected = false
+    } else {
+      const number = Number(String(field.value).replace(/[$,%\s]/g, ''))
+      entry[attribute] = /^\d[\d,]*(\.\d+)?$/.test(String(field.value).replace(/[$,%\s]/g, '')) && Number.isFinite(number) ? number : field.value
+    }
+    coverageMap.set(code, entry)
+  }
+  const coverages = Array.from(coverageMap.values()).filter((entry) => entry.selected !== false)
   const qualificationAnswers: Record<string, string> = {}
   for (const field of fields) {
     if (field.key.startsWith(QUALIFICATION_FIELD_PREFIX)) qualificationAnswers[field.key.slice(QUALIFICATION_FIELD_PREFIX.length)] = field.value === 'yes' || field.value === 'no' ? field.value : ''
@@ -845,6 +863,15 @@ export function buildQuotePayload(
     country: 'US',
     state: values.state,
     priorCarrier: values.priorCarrier || '',
+    priorPolicyNumber: values.priorPolicyNumber || '',
+    priorExpirationDate: values.priorExpirationDate || '',
+    yearsWithPriorCarrier: values.yearsWithPriorCarrier || '',
+    billingMethod: values.billingMethod || '',
+    paymentPlan: values.paymentPlan || '',
+    mailingAddress: { street: values.addressLine1 || '', city: values.city || '', state: values.addressState || '', zip: values.postalCode || '' },
+    additionalInterests: values.interestName
+      ? [{ role: values.interestRole || (values.productCode === 'homeowners' ? 'MORTGAGEE' : values.productCode?.includes('auto') ? 'LOSS_PAYEE' : 'ADDITIONAL_INTEREST'), name: values.interestName, loanNumber: values.interestLoanNumber || '', street: values.interestAddress || '', city: '', state: '', zip: '' }]
+      : [],
     underwritingCompanyId: company?.companyId || '',
     underwritingCompanyName: company?.name || '',
     qualificationAnswers,
@@ -855,7 +882,7 @@ export function buildQuotePayload(
       primary: {
         firstName: person.firstName,
         lastName: person.lastName,
-        dob: '',
+        dob: isCompany ? '' : values.insuredDob || '',
         prefix: '',
         displayName: name,
         email: values.email || '',
@@ -868,7 +895,7 @@ export function buildQuotePayload(
       additional: [],
     },
     risks: [risk],
-    coverages: [],
+    coverages,
     intake: {
       submissionId: submission.submissionId,
       submissionNumber: submission.submissionNumber,
