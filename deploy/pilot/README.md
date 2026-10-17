@@ -25,7 +25,7 @@ both product enablement and an appropriate active underwriting configuration.
 
 ## Run
 
-From a clean, committed repository checkout with Node 20 and Docker:
+From a clean, committed repository checkout with Node 22 and Docker:
 
 ```bash
 npm run pilot:up

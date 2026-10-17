@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-IMAGE="${NODE_TEST_IMAGE:-node:20-alpine}"
+IMAGE="${NODE_TEST_IMAGE:-node:22-alpine}"
 VOLUME="${NODE_TEST_VOLUME:-latticepolicy-test-node-modules}"
 
 docker run --rm \
