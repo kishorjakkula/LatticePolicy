@@ -35,6 +35,7 @@ function DataCell({ item }: { item: SubmissionSummary }) {
   return (
     <div>
       <div><b>{item.fieldConfirmed}</b> of {item.fieldTotal} confirmed</div>
+      {typeof item.aiRun?.counts?.averageScore === 'number' && <div className="si-small si-muted">Average confidence {item.aiRun.counts.averageScore}%</div>}
       {(item.fieldAttention || 0) > 0 && (
         <div className="si-small" style={{ color: 'var(--si-medium-fg)', fontWeight: 600 }}>
           {item.fieldAttention} need attention{item.fieldConflicts ? ` · ${item.fieldConflicts} conflict${item.fieldConflicts > 1 ? 's' : ''}` : ''}

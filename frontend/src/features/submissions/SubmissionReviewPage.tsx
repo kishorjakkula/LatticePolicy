@@ -22,6 +22,7 @@ import {
   AiTag,
   CONFIDENCE_LABEL,
   Check,
+  ScoreMeter,
   Sparkle,
   STATUS_META,
   actorText,
@@ -231,6 +232,9 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
           </div>
         )}
         <span className={`si-pill si-tone-${badge.tone}`}>{badge.text}</span>
+        {typeof field.confidenceScore === 'number' && (
+          <ScoreMeter score={field.confidenceScore} tone={accepted ? 'neutral' : field.confidence} />
+        )}
         {sourceName && (
           <button type="button" className="si-btn si-btn-sm" onClick={onSelect} aria-label={`Show where ${field.label} came from`}>
             {sourceName.length > 18 ? `${sourceName.slice(0, 16)}…` : sourceName}
@@ -257,6 +261,13 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
             <span style={{ marginTop: 3, color: 'var(--si-ai)' }}><Sparkle /></span>
             <span><b>Why this was suggested:</b> {field.reason || 'Found in the documents.'}</span>
           </span>
+          {typeof field.confidenceScore === 'number' && (
+            <span>
+              <b>Confidence {field.confidenceScore}%</b>
+              {' '}({field.confidenceScore >= 85 ? 'high: 85% or more' : field.confidenceScore >= 60 ? 'medium: 60 to 84%, check it' : 'low: below 60%, check it'}).
+              {' '}{submission.aiRun?.provider === 'anthropic' ? 'Reported by the AI model, lowered by LatticePolicy if its checks fail.' : 'Set by the built-in reader from how the value was matched.'}
+            </span>
+          )}
           {field.aiValue && field.edited && <span>AI value: <b>{displayValue(field, field.aiValue, settings)}</b></span>}
           {evidenceNote(field, submission.documents) && <span className="si-muted" style={{ color: 'inherit', opacity: 0.85 }}>{evidenceNote(field, submission.documents)}</span>}
         </div>
@@ -279,6 +290,7 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
           <p style={{ margin: '0 0 10px' }}>{run.summary}</p>
           {run.productReason && <p className="si-small" style={{ margin: '0 0 10px' }}><b>Product:</b> {productLabel(settings, submission.productCode)}. {run.productReason}</p>}
           <div className="si-small si-muted" style={{ borderTop: '1px solid var(--si-ai-border)', paddingTop: 8 }}>
+            {typeof run.counts?.averageScore === 'number' && <><b>Average confidence {run.counts.averageScore}%</b> across {run.counts.drafted} drafted values. </>}
             {run.label || 'Reader'} · read {run.documentsRead ?? '?'} of {run.documentsTotal ?? submission.documents.length} documents{run.finishedAt ? ` · ${formatDisplayDateTime(run.finishedAt)}` : ''}.
             {' '}The reader can be wrong; you approve the final data.
           </div>

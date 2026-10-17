@@ -15,6 +15,8 @@ export type SubmissionField = {
   required: boolean
   aiValue: string | null
   confidence: FieldConfidence
+  /** 0-100, or null when not found or documents disagree. */
+  confidenceScore: number | null
   evidence: SubmissionEvidence[]
   alternatives: Array<SubmissionEvidence & { value: string }>
   reason: string | null

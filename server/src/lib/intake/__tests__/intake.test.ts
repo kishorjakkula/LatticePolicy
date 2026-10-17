@@ -7,6 +7,7 @@ import { buildExtractionCatalog, buildTargetFields } from '../target-fields.js'
 import {
   AnthropicExtractor,
   BuiltinExtractor,
+  confidenceBand,
   createIntakeExtractor,
   parseModelOutput,
   readIntakeAiSettings,
@@ -186,6 +187,13 @@ describe('BuiltinExtractor', () => {
     expect(byKey.get('insuredType')).toMatchObject({ value: 'company' })
     expect(byKey.get('brokerEmail')).toMatchObject({ value: 'dana@brightway.example' })
 
+    // Scores: exact label 90, agreeing documents +5, synonym 75; keyword product detection stays below "high".
+    expect(byKey.get('fein')?.score).toBe(90)
+    expect(byKey.get('risk.driverCount')?.score).toBe(95)
+    expect(byKey.get('insuredName')?.score).toBe(75)
+    expect(result.productScore).toBeGreaterThanOrEqual(60)
+    expect(result.productScore).toBeLessThan(85)
+
     const evidence = byKey.get('fein')!.evidence[0]
     expect(evidence).toMatchObject({ documentId: 'd2', line: 2, verified: true })
 
@@ -213,6 +221,12 @@ describe('BuiltinExtractor', () => {
     expect(result.productConfidence).toBe('high')
     expect(result.values.find((value) => value.key === 'email')).toBeUndefined()
     expect(result.values.find((value) => value.key === 'phone')?.value).toBe('555-0100')
+  })
+})
+
+describe('confidenceBand', () => {
+  it('derives the label from the score', () => {
+    expect([100, 85, 84, 60, 59, 0].map(confidenceBand)).toEqual(['high', 'high', 'medium', 'medium', 'low', 'low'])
   })
 })
 
@@ -250,7 +264,8 @@ describe('parseModelOutput', () => {
 
     const byKey = new Map(result.values.map((value) => [value.key, value]))
     expect(result.productCode).toBe('commercial-auto')
-    expect(byKey.get('fein')).toMatchObject({ confidence: 'high', evidence: [{ line: 2, verified: true }] })
+    expect(byKey.get('fein')).toMatchObject({ confidence: 'high', score: 90, evidence: [{ line: 2, verified: true }] })
+    expect(byKey.get('insuredName')?.score).toBe(35)
     expect(byKey.get('effectiveDate')?.value).toBe('2026-12-01')
     expect(byKey.get('insuredName')?.confidence).toBe('low')
     expect(byKey.get('insuredName')?.reason).toMatch(/not found in the document/)
@@ -260,6 +275,24 @@ describe('parseModelOutput', () => {
     expect(byKey.has('state')).toBe(false)
     expect(result.conflicts[0].options).toHaveLength(2)
     expect(result.warnings[0]).toMatch(/2 value\(s\) from the AI model were ignored/)
+  })
+
+  it('keeps the model\'s numeric score and only lowers it when a check fails', async () => {
+    const documents = [await doc('d2', 'acord125.txt', ACORD)]
+    const result = parseModelOutput({
+      productCode: 'commercial-auto', productConfidence: 93, productReason: 'r', summary: 's',
+      values: [
+        { key: 'fein', value: '84-2219031', confidence: 97, documentId: 'd2', line: 3, quote: 'FEIN: 84-2219031', reason: 'Stated.' },
+        { key: 'effectiveDate', value: 'early next year', confidence: 88, documentId: 'd2', line: 6, quote: 'Proposed eff. date: 12/01/2026', reason: 'Guess.' },
+        { key: 'city', value: 'Columbus', confidence: 0.92, documentId: 'd2', line: 5, quote: 'City: Columbus', reason: 'Stated.' },
+      ],
+      conflicts: [],
+    }, { documents, catalog: buildExtractionCatalog() })
+    const byKey = new Map(result.values.map((value) => [value.key, value]))
+    expect(result).toMatchObject({ productScore: 93, productConfidence: 'high' })
+    expect(byKey.get('fein')).toMatchObject({ score: 97, confidence: 'high' })
+    expect(byKey.get('effectiveDate')).toMatchObject({ score: 50, confidence: 'low' })
+    expect(byKey.get('city')).toMatchObject({ score: 92, confidence: 'high' })
   })
 
   it('ignores a product code that is not installed', async () => {

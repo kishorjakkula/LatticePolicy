@@ -50,7 +50,7 @@ const mockUseAuth = vi.mocked(useAuth)
 function field(overrides: Partial<SubmissionField>): SubmissionField {
   return {
     key: 'fein', section: 'Insured', label: 'FEIN', type: 'text', options: [], required: false,
-    aiValue: '84-2219031', confidence: 'high', evidence: [{ documentId: 'doc-1', line: 1, page: null, quote: 'FEIN: 84-2219031', verified: true }],
+    aiValue: '84-2219031', confidence: 'high', confidenceScore: 92, evidence: [{ documentId: 'doc-1', line: 1, page: null, quote: 'FEIN: 84-2219031', verified: true }],
     alternatives: [], reason: 'Stated on the application.', value: '84-2219031', status: 'pending', edited: false, decidedBy: null, decidedAt: null,
     ...overrides,
   }
@@ -60,7 +60,7 @@ function submission(fields: SubmissionField[], overrides: Partial<SubmissionDeta
   return {
     submissionId: 'sub-1', submissionNumber: 'SUB-20261017-AB12', status: 'IN_REVIEW', channel: 'upload', subject: 'Northline',
     brokerName: 'Brightway', brokerEmail: null, insuredName: 'Northline Logistics LLC', productCode: 'commercial-auto', notes: null,
-    assignedTo: 'uw1', aiRun: { provider: 'anthropic', label: 'Claude (claude-sonnet-5-5)', summary: 'Regional dry goods carrier.', counts: {}, documentsRead: 1, documentsTotal: 1 },
+    assignedTo: 'uw1', aiRun: { provider: 'anthropic', label: 'Claude (claude-sonnet-5-5)', summary: 'Regional dry goods carrier.', counts: { averageScore: 84, drafted: 2 }, documentsRead: 1, documentsTotal: 1 },
     customerChoice: {}, readError: null, approvedBy: null, approvedAt: null, declinedBy: null, declineReason: null,
     customerId: null, quoteId: null, quoteNumber: null, receivedAt: '2026-10-17T09:42:00Z', updatedAt: '2026-10-17T09:43:00Z',
     documents: [{ documentId: 'doc-1', fileName: 'acord125.txt', contentType: 'text/plain', sizeBytes: 400, readableWithoutAi: true, lines: ['Applicant: NORTHLINE LOGISTICS LLC', 'FEIN: 84-2219031', 'Primary Garaging ZIP: 43215'] }],
@@ -93,13 +93,14 @@ describe('SubmissionReviewPage', () => {
   it('labels AI drafts, shows confidence in words, and highlights the source line of the selected value', () => {
     mockUseSubmission.mockReturnValue({ data: submission([
       field({}),
-      field({ key: 'risk.garagingZip', section: 'Fleet', label: 'Garaging ZIP', required: true, aiValue: null, value: null, confidence: 'conflict', evidence: [],
+      field({ key: 'risk.garagingZip', section: 'Fleet', label: 'Garaging ZIP', required: true, aiValue: null, value: null, confidence: 'conflict', confidenceScore: null, evidence: [],
         alternatives: [{ value: '43215', documentId: 'doc-1', line: 2, page: null, quote: 'Primary Garaging ZIP: 43215', verified: true }, { value: '43219', documentId: 'doc-1', line: null, page: 2, quote: 'ZIP 43219', verified: false }],
         reason: 'Two documents disagree.' }),
     ]), isLoading: false })
     renderPage()
 
     expect(screen.getAllByText('AI draft').length).toBeGreaterThan(0)
+    expect(screen.getByText('Average confidence 84%')).toBeInTheDocument()
     expect(screen.getByText('High confidence')).toBeInTheDocument()
     expect(screen.getByText('Documents disagree')).toBeInTheDocument()
     // The conflict needs attention, so it is selected first and its source line is highlighted.
@@ -109,6 +110,9 @@ describe('SubmissionReviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show where FEIN came from' }))
     expect(screen.getByText('Source for FEIN')).toBeInTheDocument()
     expect(screen.getByText(/Quote checked against the document/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Confidence 92 percent' })).toBeInTheDocument()
+    expect(screen.getByText('Confidence 92%')).toBeInTheDocument()
+    expect(screen.getByText(/high: 85% or more/)).toBeInTheDocument()
 
     const confirmZip = screen.getByRole('button', { name: /Confirm Garaging ZIP/ })
     expect(confirmZip).toBeDisabled()

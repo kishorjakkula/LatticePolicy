@@ -7,7 +7,7 @@ Only approval creates the customer and the draft quote.
 
 Code: `server/src/lib/intake/`, `server/src/services/submission-intake.service.ts`,
 `server/src/routes/submissions.routes.ts`, `frontend/src/features/submissions/`.
-Migration: `server/migrations/060_submission_intake.sql`.
+Migrations: `server/migrations/060_submission_intake.sql`, `061_submission_confidence_score.sql`.
 
 ## Principles
 
@@ -18,8 +18,14 @@ Migration: `server/migrations/060_submission_intake.sql`.
    line or page, and the exact quoted text. The server checks quotes against
    the document text; a quote that is not in the document caps the value at
    low confidence, so an invented value cannot arrive as "high confidence".
-3. **Confidence is shown in words and color.** High, medium (check), low
-   (check), not found, documents disagree. AI-drafted content is marked in
+3. **Confidence is shown as a score, in words, and in color.** Each drafted
+   value has a 0-100 score; its label follows from it: high (85 or more),
+   medium (60-84, check), low (below 60, check). Not found and documents
+   disagree have no score. Claude reports its own score; the built-in reader
+   scores exact labels 90, similar labels 75, plus 5 when documents agree.
+   The server's checks only ever lower a score: a value that does not fit
+   its field's format is capped at 50, and a quote that is not in the
+   document at 35. The review shows each score and the submission's average. AI-drafted content is marked in
    violet with an "AI" label throughout the UI.
 4. **Approval is a gate, and it is atomic.** It needs every value confirmed,
    all required values present, and the reviewer's attestation. The customer

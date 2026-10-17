@@ -19,6 +19,21 @@ export const CONFIDENCE_LABEL: Record<FieldConfidence, string> = {
   conflict: 'Documents disagree',
 }
 
+/** The score as shown to reviewers, e.g. "92%". */
+export function scoreText(score: number | null | undefined): string {
+  return typeof score === 'number' ? `${score}%` : ''
+}
+
+/** A compact meter for a 0-100 confidence score; the number is always shown as text too. */
+export function ScoreMeter({ score, tone }: { score: number; tone: string }) {
+  return (
+    <span className={`si-meter si-meter-${tone}`} role="img" aria-label={`Confidence ${score} percent`}>
+      <span className="si-meter-track" aria-hidden="true"><span style={{ width: `${score}%` }} /></span>
+      <span className="si-meter-value" aria-hidden="true">{score}%</span>
+    </span>
+  )
+}
+
 export function Sparkle({ size = 12 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ fill: 'currentColor', flex: 'none' }}>

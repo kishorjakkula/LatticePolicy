@@ -119,7 +119,9 @@ describe('submission intake', () => {
     expect(submission.documents.map((document) => document.fileName)).toEqual(['acord125.txt', 'acord127.txt', 'broker.eml'].sort())
 
     const byKey = new Map(submission.fields.map((field) => [field.key, field]))
-    expect(byKey.get('fein')).toMatchObject({ aiValue: '84-2219031', value: '84-2219031', confidence: 'high', status: 'pending' })
+    expect(byKey.get('fein')).toMatchObject({ aiValue: '84-2219031', value: '84-2219031', confidence: 'high', confidenceScore: 90, status: 'pending' })
+    expect(byKey.get('risk.garagingZip')!.confidenceScore).toBeNull()
+    expect(submission.aiRun.counts.averageScore).toBeGreaterThan(0)
     expect(byKey.get('risk.garagingZip')).toMatchObject({ confidence: 'conflict', aiValue: null })
     expect(byKey.get('risk.garagingZip')!.alternatives.map((option: any) => option.value).sort()).toEqual(['43215', '43219'])
 

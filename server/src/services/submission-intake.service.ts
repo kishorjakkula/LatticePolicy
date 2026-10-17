@@ -116,6 +116,7 @@ function mapField(row: any) {
     required: row.required === true,
     aiValue: row.ai_value,
     confidence: row.confidence,
+    confidenceScore: row.confidence_score == null ? null : Number(row.confidence_score),
     evidence: row.evidence || [],
     alternatives: row.alternatives || [],
     reason: row.reason,
@@ -433,6 +434,7 @@ function fieldRowsFromResult(result: ExtractionResult, targets: IntakeTargetFiel
         field, index,
         aiValue: result.productCode,
         confidence: result.productCode ? result.productConfidence : 'missing',
+        score: result.productCode ? result.productScore : null,
         evidence: [] as Evidence[],
         alternatives: [] as any[],
         reason: result.productReason || null,
@@ -444,6 +446,7 @@ function fieldRowsFromResult(result: ExtractionResult, targets: IntakeTargetFiel
         field, index,
         aiValue: null,
         confidence: 'conflict',
+        score: null as number | null,
         evidence: conflict.options.map((option) => option.evidence),
         alternatives: conflict.options.map((option) => ({ value: option.value, ...option.evidence })),
         reason: conflict.reason,
@@ -451,21 +454,21 @@ function fieldRowsFromResult(result: ExtractionResult, targets: IntakeTargetFiel
     }
     const value = values.get(field.key)
     if (value) {
-      return { field, index, aiValue: value.value, confidence: value.confidence, evidence: value.evidence, alternatives: [], reason: value.reason }
+      return { field, index, aiValue: value.value, confidence: value.confidence, score: value.score as number | null, evidence: value.evidence, alternatives: [], reason: value.reason }
     }
-    return { field, index, aiValue: null, confidence: 'missing', evidence: [], alternatives: [], reason: 'Not found in the documents.' }
+    return { field, index, aiValue: null, confidence: 'missing', score: null as number | null, evidence: [], alternatives: [], reason: 'Not found in the documents.' }
   })
 }
 
 async function writeFieldRows(q: Q, tenantId: string, submissionId: string, rows: ReturnType<typeof fieldRowsFromResult>) {
   for (const row of rows) {
     await q(
-      `INSERT INTO submission_fields (tenant_id, submission_id, field_key, section, label, data_type, options, required, sort_order, ai_value, confidence, evidence, alternatives, reason, value, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$10,'pending')`,
+      `INSERT INTO submission_fields (tenant_id, submission_id, field_key, section, label, data_type, options, required, sort_order, ai_value, confidence, evidence, alternatives, reason, value, status, confidence_score)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$10,'pending',$15)`,
       [
         tenantId, submissionId, row.field.key, row.field.section, row.field.label, row.field.type,
         JSON.stringify(row.field.options), row.field.required, row.index, row.aiValue, row.confidence,
-        JSON.stringify(row.evidence), JSON.stringify(row.alternatives), row.reason,
+        JSON.stringify(row.evidence), JSON.stringify(row.alternatives), row.reason, row.score ?? null,
       ]
     )
   }
@@ -542,6 +545,10 @@ export async function runExtraction(
       needsAttention: rows.filter((item) => item.confidence !== 'high').length,
       conflicts: rows.filter((item) => item.confidence === 'conflict').length,
       missing: rows.filter((item) => item.confidence === 'missing').length,
+      averageScore: (() => {
+        const scores = rows.map((item) => item.score).filter((score): score is number => typeof score === 'number')
+        return scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null
+      })(),
     }
     const unread = documents.filter((document) => !extractor.canRead(document.kind)).map((document) => document.fileName)
     const warnings = [...result.warnings]
@@ -676,7 +683,7 @@ async function replaceRiskFields(q: Q, tenantId: string, submissionId: string, p
   await q(`DELETE FROM submission_fields WHERE tenant_id = $1 AND submission_id = $2 AND field_key LIKE $3`, [tenantId, submissionId, `${RISK_FIELD_PREFIX}%`])
   const base = 1000
   const rows = riskTargetFields(productCode, tenantId).map((field, index) => ({
-    field, index: base + index, aiValue: null, confidence: 'missing', evidence: [] as Evidence[], alternatives: [] as any[],
+    field, index: base + index, aiValue: null, confidence: 'missing', score: null as number | null, evidence: [] as Evidence[], alternatives: [] as any[],
     reason: 'Product changed by the reviewer; re-read the documents or enter this value.',
   }))
   await writeFieldRows(q, tenantId, submissionId, rows)
