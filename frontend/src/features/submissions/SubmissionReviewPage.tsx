@@ -362,7 +362,16 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const matches = checks?.clearance.customerMatches || []
-  const choice = submission.customerChoice?.mode === 'existing' && submission.customerChoice.customerId ? submission.customerChoice.customerId : 'new'
+  // With possible matches, the reviewer must pick the existing customer: creating a
+  // duplicate anyway is an administrator decision, so "new" is not offered then.
+  const [pickedCustomer, setPickedCustomer] = useState<string | null>(null)
+  const companies = checks?.underwritingCompanies || []
+  const [companyId, setCompanyId] = useState('')
+  useEffect(() => { if (companies.length === 1) setCompanyId(companies[0].companyId) }, [companies.length, companies[0]?.companyId])
+  const savedExisting = submission.customerChoice?.mode === 'existing' && submission.customerChoice.customerId ? submission.customerChoice.customerId : null
+  const chosenExisting = pickedCustomer && pickedCustomer !== 'new' ? pickedCustomer : pickedCustomer === 'new' ? null : savedExisting
+  const choice = matches.length ? chosenExisting : chosenExisting || 'new'
+  const needsCustomerChoice = matches.length > 0 && !chosenExisting
 
   const asDrafted = submission.fields.filter((field) => field.aiValue && !field.edited).length
   const changed = submission.fields.filter((field) => field.aiValue && field.edited)
@@ -378,17 +387,21 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
 
   const chooseCustomer = async (value: string) => {
     setError(null)
+    setPickedCustomer(value)
     try {
       await apiSubmissions.setCustomer(submission.submissionId, value === 'new' ? { mode: 'new' } : { mode: 'existing', customerId: value })
       await qc.invalidateQueries({ queryKey: queryKeys.submissions.detail(submission.submissionId) })
-    } catch (err) { setError(apiErrorMessage(err)) }
+    } catch (err) {
+      setPickedCustomer(null)
+      setError(apiErrorMessage(err))
+    }
   }
 
   const approve = async () => {
     setBusy(true)
     setError(null)
     try {
-      await apiSubmissions.approve(submission.submissionId)
+      await apiSubmissions.approve(submission.submissionId, companyId || undefined)
       await qc.invalidateQueries({ queryKey: queryKeys.submissions.all() })
       onClose()
     } catch (err) {
@@ -434,20 +447,35 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
             <h3 id="si-customer-title" style={{ margin: '0 0 6px', fontSize: 15 }}>Customer</h3>
             {matches.length ? (
               <>
-                <p className="si-small" style={{ margin: '0 0 8px' }}>These existing customers may be the same insured. Pick one, or create a new customer.</p>
+                <p className="si-small" style={{ margin: '0 0 8px' }}>This insured may already be a customer. Choose the matching customer to link the quote to.</p>
                 <RadioGroup
                   name="si-customer-choice"
                   labelledBy="si-customer-title"
                   value={choice}
+                  required
+                  invalid={needsCustomerChoice}
                   onChange={(value: string) => void chooseCustomer(value)}
-                  options={[
-                    ...matches.map((match) => ({ value: match.customerId, label: `Use ${match.displayName} (${match.customerKey}) · ${match.reasons.join(', ') || `match ${match.matchScore}`}` })),
-                    { value: 'new', label: `Create a new customer: ${insured || ''}` },
-                  ]}
+                  options={matches.map((match) => ({ value: match.customerId, label: `${match.displayName} (${match.customerKey}) · ${match.reasons.join(', ') || `match ${match.matchScore}`}` }))}
                 />
+                <p className="si-small si-muted" style={{ margin: '8px 0 0' }}>If none of these is the insured, an administrator must create the new customer, because it looks like a duplicate.</p>
               </>
             ) : (
               <p className="si-small" style={{ margin: 0 }}>No existing customer matches. A new customer <b>{insured}</b> will be created.</p>
+            )}
+          </div>
+
+          <div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 15 }}><label htmlFor="si-company">Underwriting company</label></h3>
+            {companies.length ? (
+              <>
+                <select id="si-company" className="si-input" style={{ maxWidth: 420 }} value={companyId} onChange={(event) => setCompanyId(event.target.value)} required aria-invalid={!companyId || undefined}>
+                  <option value="">Choose the company that will write this quote…</option>
+                  {companies.map((company) => <option key={company.companyId} value={company.companyId}>{company.name}</option>)}
+                </select>
+                <p className="si-small si-muted" style={{ margin: '6px 0 0' }}>Companies that write {product || 'this product'} in {submission.fields.find((field) => field.key === 'state')?.value || 'this state'}.</p>
+              </>
+            ) : (
+              <div className="si-banner is-error" role="alert"><p>No active underwriting company writes {product || 'this product'} in {submission.fields.find((field) => field.key === 'state')?.value || 'this state'}. An administrator must set one up before this can be approved.</p></div>
             )}
           </div>
 
@@ -466,8 +494,8 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
           <div>
             <h3 style={{ margin: '0 0 6px', fontSize: 15 }}>When you approve, LatticePolicy will</h3>
             <ol className="si-plan">
-              <li>{choice === 'new' ? 'Create the customer' : 'Link the chosen existing customer'} with the approved insured details.</li>
-              <li>Create a draft {product} quote with the approved values, linked to this submission and its documents.</li>
+              <li>{choice === 'new' ? 'Create the customer with the approved insured details.' : 'Link the quote to the chosen existing customer.'}</li>
+              <li>Create a draft {product} quote{companies.find((company) => company.companyId === companyId) ? ` with ${companies.find((company) => company.companyId === companyId)!.name}` : ''} from the approved values, including the qualification answers, linked to this submission.</li>
               <li>Open the quote at the risk step, so you can choose coverages and rate it. Rating and underwriting rules run as usual.</li>
             </ol>
             <p className="si-small si-muted" style={{ margin: '8px 0 0' }}>All of this happens in one step. If any part fails, nothing is created and the submission stays open.</p>
@@ -477,12 +505,13 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
             <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} disabled={!canApprove} />
             <span>{settings?.attestation || 'I checked the values against the source documents and approve creating the customer and draft quote.'}</span>
           </label>
+          {needsCustomerChoice && <div className="si-banner is-info"><p>Choose the customer above before approving.</p></div>}
           {!canApprove && <div className="si-banner is-info"><p>Your role can review but not approve. An underwriter with approval permission must approve this submission.</p></div>}
           {error && <div className="si-banner is-error" role="alert"><p>{error}</p></div>}
         </div>
         <div className="si-dialog-foot">
           <button type="button" className="si-btn" onClick={onClose} disabled={busy}>Back to review</button>
-          <button type="button" className="si-btn si-btn-primary si-btn-lg" disabled={!canApprove || !attested || busy || (choice === 'new' && (checks?.clearance.newCustomerProblems || []).length > 0)} onClick={() => void approve()}>
+          <button type="button" className="si-btn si-btn-primary si-btn-lg" disabled={!canApprove || !attested || busy || needsCustomerChoice || !companyId || (choice === 'new' && (checks?.clearance.newCustomerProblems || []).length > 0)} onClick={() => void approve()}>
             {busy ? 'Approving…' : 'Approve and create quote'}
           </button>
         </div>

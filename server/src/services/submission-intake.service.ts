@@ -15,6 +15,7 @@ import {
   buildTargetFields,
   listIntakeProducts,
   PRODUCT_FIELD_KEY,
+  QUALIFICATION_FIELD_PREFIX,
   RISK_FIELD_PREFIX,
   riskTargetFields,
   type IntakeTargetField,
@@ -31,6 +32,7 @@ import {
 import { createCustomerRecord, findPotentialMatches, loadCustomerSettings, normalizeCustomerInput, validateCustomerPayload } from '../routes/customers.routes.js'
 import { insertDraftQuote } from './quote.service.js'
 import { evaluateUW } from './uw.service.js'
+import { getInstalledProductCapabilities } from '../lib/product-registry.js'
 
 /**
  * Submission intake: AI drafts, a person confirms, approval completes.
@@ -726,6 +728,25 @@ export async function setCustomerChoice(tenantId: string, submissionId: string, 
   })
 }
 
+// ── Underwriting companies ────────────────────────────────────────────────────
+
+export type UnderwritingCompanyOption = { companyId: string; name: string }
+
+/** Active underwriting companies that write this product in this state, as the quote wizard offers them. */
+async function underwritingCompaniesFor(q: Q, tenantId: string, productCode: string | undefined, state: string | undefined): Promise<UnderwritingCompanyOption[]> {
+  if (!productCode || !state) return []
+  const result = await q(
+    `SELECT company_id, name FROM underwriting_companies
+      WHERE tenant_id = $1 AND active = true AND product_code = $2 AND country_code = 'US' AND (state_code = $3 OR state_code = 'ALL')
+      ORDER BY name`,
+    [tenantId, productCode, state]
+  )
+  const seen = new Set<string>()
+  return (result.rows || [])
+    .filter((row: any) => (seen.has(row.company_id) ? false : (seen.add(row.company_id), true)))
+    .map((row: any) => ({ companyId: String(row.company_id), name: String(row.name) }))
+}
+
 // ── Checks (carrier rules, not AI) ────────────────────────────────────────────
 
 function fieldValues(fields: SubmissionField[]): Record<string, string> {
@@ -778,16 +799,34 @@ function coerceRiskValue(field: SubmissionField, value: string): unknown {
 }
 
 /** The draft quote payload the wizard opens, built only from confirmed values. */
-export function buildQuotePayload(submission: { submissionId: string; submissionNumber: string }, fields: SubmissionField[], customer: { customerId: string; customerKey: string | null } | null, approval: { approvedBy: string; approvedAt: string } | null) {
+export function buildQuotePayload(
+  submission: { submissionId: string; submissionNumber: string },
+  fields: SubmissionField[],
+  customer: { customerId: string; customerKey: string | null } | null,
+  approval: { approvedBy: string; approvedAt: string } | null,
+  company: UnderwritingCompanyOption | null = null
+) {
   const values = fieldValues(fields)
   const isCompany = values.insuredType !== 'person'
   const name = values.insuredName || ''
   const person = isCompany ? { firstName: name, lastName: '' } : splitPersonName(name)
+  // Structural defaults the product needs on every risk (such as its risk
+  // `type`), but never a default for a field the reviewer saw: those values
+  // come only from the approved submission.
+  const reviewedRiskKeys = new Set(fields.filter((field) => field.key.startsWith(RISK_FIELD_PREFIX)).map((field) => field.key.slice(RISK_FIELD_PREFIX.length)))
+  const defaultRisk = (values.productCode ? getInstalledProductCapabilities(values.productCode)?.defaultRisk : null) || {}
   const risk: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(defaultRisk)) {
+    if (!reviewedRiskKeys.has(key)) risk[key] = value
+  }
   for (const field of fields) {
     if (field.key.startsWith(RISK_FIELD_PREFIX) && field.value) risk[field.key.slice(RISK_FIELD_PREFIX.length)] = coerceRiskValue(field, field.value)
   }
   if (isCompany && name && !('businessName' in risk) && fields.some((field) => field.key === `${RISK_FIELD_PREFIX}businessName`)) risk.businessName = name
+  const qualificationAnswers: Record<string, string> = {}
+  for (const field of fields) {
+    if (field.key.startsWith(QUALIFICATION_FIELD_PREFIX)) qualificationAnswers[field.key.slice(QUALIFICATION_FIELD_PREFIX.length)] = field.value === 'yes' || field.value === 'no' ? field.value : ''
+  }
   return {
     productCode: values.productCode,
     effectiveDate: values.effectiveDate,
@@ -795,7 +834,11 @@ export function buildQuotePayload(submission: { submissionId: string; submission
     country: 'US',
     state: values.state,
     priorCarrier: values.priorCarrier || '',
-    agencyName: values.brokerName || '',
+    underwritingCompanyId: company?.companyId || '',
+    underwritingCompanyName: company?.name || '',
+    qualificationAnswers,
+    // The wizard reads qualification answers back from uwAnswers.
+    uwAnswers: { ...qualificationAnswers },
     applicant: { firstName: person.firstName, lastName: person.lastName, email: values.email || '' },
     insureds: {
       primary: {
@@ -836,6 +879,7 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
   const missingRequired = submission.fields.filter((field) => field.required && !field.value).map((field) => ({ key: field.key, label: field.label }))
   const unconfirmed = submission.fields.filter((field) => field.status !== 'accepted').length
 
+  let underwritingCompanies: UnderwritingCompanyOption[] = []
   const clearance = await withTenantTx(tenantId, async (db) => {
     const q = toRawQuery(db)
     let customerMatches: any[] = []
@@ -856,6 +900,7 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
         [tenantId, submissionId, values.insuredName, OPEN]
       )).rows || []
       : []
+    underwritingCompanies = await underwritingCompaniesFor(q, tenantId, values.productCode, values.state)
     return {
       customerMatches: customerMatches.slice(0, 5).map((match: any) => ({
         customerId: match.customerId,
@@ -889,7 +934,9 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
     appetite,
     missingRequired,
     unconfirmed,
-    readyToApprove: REVIEWABLE.includes(submission.status) && unconfirmed === 0 && missingRequired.length === 0 && !(usesNewCustomer && clearance.newCustomerProblems.length),
+    underwritingCompanies,
+    readyToApprove: REVIEWABLE.includes(submission.status) && unconfirmed === 0 && missingRequired.length === 0
+      && !(usesNewCustomer && clearance.newCustomerProblems.length) && underwritingCompanies.length > 0,
   }
 }
 
@@ -900,7 +947,7 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
  * link or create the customer, create the draft quote from the confirmed
  * values, and close the submission. Any failure rolls all of it back.
  */
-export async function approveSubmission(tenantId: string, submissionId: string, actor: string, input: { attestation?: boolean }) {
+export async function approveSubmission(tenantId: string, submissionId: string, actor: string, input: { attestation?: boolean; underwritingCompanyId?: string }) {
   requireUuid(submissionId)
   if (input?.attestation !== true) {
     throw new ValidationError('ATTESTATION_REQUIRED', { message: 'Confirm that you checked the values against the documents.' })
@@ -922,6 +969,20 @@ export async function approveSubmission(tenantId: string, submissionId: string, 
     const values = fieldValues(fields)
     if (!listIntakeProducts().some((product) => product.code === values.productCode)) {
       throw new ValidationError('UNKNOWN_PRODUCT', { message: `Product ${values.productCode} is not installed.` })
+    }
+
+    // The quote needs the company that will write it, chosen from those that
+    // write this product in this state; with only one, it is used.
+    const companies = await underwritingCompaniesFor(q, tenantId, values.productCode, values.state)
+    if (!companies.length) {
+      throw new ValidationError('NO_UNDERWRITING_COMPANY', { message: `No active underwriting company writes ${values.productCode} in ${values.state}. An administrator must set one up first.` })
+    }
+    const requestedCompany = String(input?.underwritingCompanyId || '').trim()
+    const company = requestedCompany ? companies.find((item) => item.companyId === requestedCompany) : companies.length === 1 ? companies[0] : null
+    if (!company) {
+      throw new ValidationError(requestedCompany ? 'UNKNOWN_UNDERWRITING_COMPANY' : 'UNDERWRITING_COMPANY_REQUIRED', {
+        message: requestedCompany ? 'That underwriting company does not write this product in this state.' : 'Choose the underwriting company.',
+      })
     }
 
     const choice = row.customer_choice || {}
@@ -949,7 +1010,7 @@ export async function approveSubmission(tenantId: string, submissionId: string, 
     }
 
     const approvedAt = new Date().toISOString()
-    const payload = buildQuotePayload(mapSubmission(row), fields, customer, { approvedBy: actor, approvedAt })
+    const payload = buildQuotePayload(mapSubmission(row), fields, customer, { approvedBy: actor, approvedAt }, company)
     // Step 4 of the wizard (risk details) so the user continues with coverages and rating.
     const quote = await insertDraftQuote(q, tenantId, { payload, status: 'Draft', progressStep: 4 }, actor)
 
@@ -963,7 +1024,7 @@ export async function approveSubmission(tenantId: string, submissionId: string, 
     const edited = fields.filter((field: SubmissionField) => field.edited).map((field: SubmissionField) => field.key)
     await recordEvent(q, tenantId, submissionId, 'user', actor, 'approved', { attestation: APPROVAL_ATTESTATION, values: fields.length, changedFromAi: edited })
     await recordEvent(q, tenantId, submissionId, 'system', 'LatticePolicy', customerAction, customer)
-    await recordEvent(q, tenantId, submissionId, 'system', 'LatticePolicy', 'quote_created', { quoteId: quote.quoteId, quoteNumber: quote.quoteNumber, productCode: values.productCode })
+    await recordEvent(q, tenantId, submissionId, 'system', 'LatticePolicy', 'quote_created', { quoteId: quote.quoteId, quoteNumber: quote.quoteNumber, productCode: values.productCode, underwritingCompany: company.name })
     return { submissionId, status: 'COMPLETED' as const, customerId: customer.customerId, customerAction, quoteId: quote.quoteId, quoteNumber: quote.quoteNumber }
   })
 }

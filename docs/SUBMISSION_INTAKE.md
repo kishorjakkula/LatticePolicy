@@ -55,6 +55,10 @@ The target fields come from the framework, not from intake code:
 - The product's risk fields from `buildRiskFields`, the same list the quote
   wizard renders, including carrier pack fields and option lists. A carrier
   that adds a field to its product gets it in intake with no code change.
+- The product's qualification (eligibility) questions, yes or no, from
+  `QUALIFICATION_QUESTIONS` in `packages/rules`, the list the wizard's
+  qualification step uses. Follow-up questions asked only after a particular
+  answer are optional here.
 
 Values are normalized to what the quote stores: ISO dates, plain numbers, a
 listed option, two-letter state codes (`normalize.ts`).
@@ -115,12 +119,20 @@ not retried.
    the approve button stays disabled until it passes. A likely duplicate stops the
    approval (`409 POTENTIAL_DUPLICATE`); the reviewer picks the existing
    customer instead. Creating a duplicate anyway stays an administrator
-   decision, as in the quote wizard.
-3. Draft quote: built only from confirmed values (`buildQuotePayload`), with
-   `payload.intake` linking back to the submission, at wizard step 4 (risk),
-   so the user continues with coverages and rating. Rating, product pinning,
+   decision, as in the quote wizard. When there are possible matches, the
+   dialog offers only those customers and approval waits for a choice.
+3. Underwriting company: one of the active companies that write the product
+   in the state, chosen in the approval dialog (used automatically when there
+   is only one). With none, approval is blocked until an administrator sets
+   one up.
+4. Draft quote: built only from confirmed values (`buildQuotePayload`), with
+   the underwriting company, qualification answers (`qualificationAnswers`
+   and `uwAnswers`), the product's structural risk defaults such as the risk
+   `type` (never a default for a field the reviewer saw), and
+   `payload.intake` linking back to the submission. It opens at wizard step 4
+   (risk), so the user continues with coverages and rating. Rating, product pinning,
    and underwriting rules then run exactly as for any quote.
-4. The submission becomes `COMPLETED` with the customer and quote ids.
+5. The submission becomes `COMPLETED` with the customer and quote ids.
 
 ## Permissions
 

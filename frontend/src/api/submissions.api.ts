@@ -78,6 +78,7 @@ export type SubmissionChecks = {
   appetite: { decision: string; reasons: string[]; evaluated: boolean; note?: string }
   missingRequired: Array<{ key: string; label: string }>
   unconfirmed: number
+  underwritingCompanies: Array<{ companyId: string; name: string }>
   readyToApprove: boolean
 }
 
@@ -120,8 +121,8 @@ export const apiSubmissions = {
     request<SubmissionField>('PATCH', `/v1/submissions/${id}/fields/${encodeURIComponent(key)}`, body),
   acceptHighConfidence: (id: string) => request<{ accepted: number }>('POST', `/v1/submissions/${id}/accept-high-confidence`),
   setCustomer: (id: string, body: { mode: 'new' | 'existing'; customerId?: string }) => request<any>('PUT', `/v1/submissions/${id}/customer`, body),
-  approve: (id: string) =>
-    request<{ quoteId: string; quoteNumber: string; customerId: string; customerAction: string }>('POST', `/v1/submissions/${id}/approve`, { attestation: true }),
+  approve: (id: string, underwritingCompanyId?: string) =>
+    request<{ quoteId: string; quoteNumber: string; customerId: string; customerAction: string }>('POST', `/v1/submissions/${id}/approve`, { attestation: true, underwritingCompanyId }),
   decline: (id: string, reason: string) => request<any>('POST', `/v1/submissions/${id}/decline`, { reason }),
 }
 

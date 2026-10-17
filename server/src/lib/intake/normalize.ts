@@ -73,6 +73,8 @@ function normalizeOption(raw: string, options: string[]): Normalized {
   const lowered = options.map((option) => option.toLowerCase())
   if (lowered.includes('true') && YES.has(lower)) return { value: options[lowered.indexOf('true')], ok: true }
   if (lowered.includes('false') && NO.has(lower)) return { value: options[lowered.indexOf('false')], ok: true }
+  if (lowered.includes('yes') && YES.has(lower)) return { value: options[lowered.indexOf('yes')], ok: true }
+  if (lowered.includes('no') && NO.has(lower)) return { value: options[lowered.indexOf('no')], ok: true }
   const contained = options.filter((option) => {
     const words = option.toLowerCase().replace(/-/g, ' ')
     return lower.includes(words) || words.includes(lower)

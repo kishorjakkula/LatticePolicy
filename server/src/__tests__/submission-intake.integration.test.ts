@@ -97,6 +97,14 @@ describe('submission intake', () => {
         [id, name]
       )
     }
+    // Two companies write commercial auto in Ohio (the reviewer must choose); one writes cyber (used automatically).
+    for (const [company, product] of [['Acme Mutual Casualty', 'commercial-auto'], ['Acme Specialty', 'commercial-auto'], ['Acme Specialty', 'cyber']]) {
+      await db.query(
+        `INSERT INTO underwriting_companies (tenant_id, name, product_code, country_code, state_code, active) VALUES ($1,$2,$3,'US','OH',true)
+         ON CONFLICT DO NOTHING`,
+        [TENANT_ID, company, product]
+      )
+    }
   })
 
   afterAll(async () => {
@@ -135,7 +143,11 @@ describe('submission intake', () => {
     expect(checks.appetite.evaluated).toBe(true)
 
     await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', {})).rejects.toMatchObject({ code: 'ATTESTATION_REQUIRED' })
-    const approved = await approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })
+    expect(checks.underwritingCompanies.map((company) => company.name)).toEqual(['Acme Mutual Casualty', 'Acme Specialty'])
+    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })).rejects.toMatchObject({ code: 'UNDERWRITING_COMPANY_REQUIRED' })
+    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true, underwritingCompanyId: '00000000-0000-4000-8000-000000000000' })).rejects.toMatchObject({ code: 'UNKNOWN_UNDERWRITING_COMPANY' })
+    const company = checks.underwritingCompanies[0]
+    const approved = await approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true, underwritingCompanyId: company.companyId })
     expect(approved).toMatchObject({ status: 'COMPLETED', customerAction: 'customer_created', quoteNumber: expect.any(String) })
 
     const quote = await withTenantTx(TENANT_ID, async (db) => (await toRawQuery(db)(`SELECT * FROM quotes WHERE tenant_id = $1 AND quote_id = $2`, [TENANT_ID, approved.quoteId])).rows[0])
@@ -143,6 +155,13 @@ describe('submission intake', () => {
     expect(quote.payload.intake).toMatchObject({ submissionId: submission.submissionId, approvedBy: 'uw1' })
     expect(quote.payload.insureds.primary).toMatchObject({ displayName: 'Northline Logistics, LLC', customerId: approved.customerId })
     expect(quote.payload.risks[0]).toMatchObject({ garagingZip: '43215', vehicleCount: 2, driverCount: 4 })
+    expect(quote.payload).toMatchObject({ underwritingCompanyId: company.companyId, underwritingCompanyName: 'Acme Mutual Casualty' })
+    // Qualification questions are drafted and approved like any other value.
+    expect(quote.payload.qualificationAnswers).toMatchObject({ noHazmatHauling: 'yes', fleetMaintained: 'yes' })
+    expect(quote.payload.uwAnswers).toMatchObject({ noHazmatHauling: 'yes' })
+    // The risk carries the product's structural defaults (its type) but only approved values for reviewed fields.
+    expect(quote.payload.risks[0].type).toBeTruthy()
+    expect(quote.payload.risks[0].vehicleCount).toBe(2)
 
     const done = await getSubmission(TENANT_ID, submission.submissionId)
     expect(done).toMatchObject({ status: 'COMPLETED', quoteId: approved.quoteId, customerId: approved.customerId, approvedBy: 'uw1' })
@@ -162,14 +181,14 @@ describe('submission intake', () => {
 
     const checks = await getSubmissionChecks(TENANT_ID, submission.submissionId)
     expect(checks.clearance.customerMatches.length).toBeGreaterThan(0)
-    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })).rejects.toMatchObject({ code: 'POTENTIAL_DUPLICATE' })
+    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true, underwritingCompanyId: checks.underwritingCompanies[0].companyId })).rejects.toMatchObject({ code: 'POTENTIAL_DUPLICATE' })
     // The failed approval created nothing.
     expect(await count(`SELECT COUNT(*) FROM quotes WHERE tenant_id = $1 AND payload->'intake'->>'submissionId' = $2`, [TENANT_ID, submission.submissionId])).toBe(0)
     expect((await getSubmission(TENANT_ID, submission.submissionId)).status).toBe('IN_REVIEW')
 
     const existing = checks.clearance.customerMatches[0]
     await setCustomerChoice(TENANT_ID, submission.submissionId, 'uw1', { mode: 'existing', customerId: existing.customerId })
-    const approved = await approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })
+    const approved = await approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true, underwritingCompanyId: checks.underwritingCompanies[0].companyId })
     expect(approved).toMatchObject({ customerAction: 'customer_linked', customerId: existing.customerId })
   })
 

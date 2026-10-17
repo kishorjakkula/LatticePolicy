@@ -10,6 +10,8 @@ vi.mock('../../../auth/AuthContext', () => ({ useAuth: vi.fn() }))
 
 const mockUseSubmission = vi.fn()
 const mockCustomerProblems = vi.fn(() => [] as string[])
+const mockCustomerMatches = vi.fn(() => [] as any[])
+const mockCompanies = vi.fn(() => [{ companyId: 'co-1', name: 'Acme Specialty' }])
 const mockActionMutate = vi.fn()
 vi.mock('../../../api/hooks', () => ({
   useSubmission: (...args: any[]) => mockUseSubmission(...args),
@@ -20,9 +22,9 @@ vi.mock('../../../api/hooks', () => ({
     attestation: 'I checked the values against the source documents and approve creating the customer and draft quote.',
   } }),
   useSubmissionChecks: () => ({ data: {
-    clearance: { customerMatches: [], openSubmissions: [], newCustomerProblems: mockCustomerProblems() },
+    clearance: { customerMatches: mockCustomerMatches(), openSubmissions: [], newCustomerProblems: mockCustomerProblems() },
     appetite: { decision: 'Refer', reasons: ['Youngest driver under 21'], evaluated: true },
-    missingRequired: [], unconfirmed: 0, readyToApprove: true,
+    missingRequired: [], unconfirmed: 0, readyToApprove: true, underwritingCompanies: mockCompanies(),
   } }),
   useSubmissionAction: () => ({ mutateAsync: mockActionMutate, isPending: false }),
   setSubmissionField: vi.fn(),
@@ -138,7 +140,8 @@ describe('SubmissionReviewPage', () => {
     const dialog = screen.getByRole('dialog', { name: /Approve Northline Logistics, LLC/ })
     expect(within(dialog).getByText('NORTHLINE LOGISTICS LLC')).toBeInTheDocument()
     expect(within(dialog).getByText(/Underwriting rules: referral/)).toBeInTheDocument()
-    expect(within(dialog).getByText(/Create a draft Commercial Auto quote/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Create a draft Commercial Auto quote with Acme Specialty/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Underwriting company')).toHaveValue('co-1')
     expect(within(dialog).getByText(/A new customer/)).toBeInTheDocument()
 
     const approve = within(dialog).getByRole('button', { name: 'Approve and create quote' })
@@ -146,7 +149,7 @@ describe('SubmissionReviewPage', () => {
     fireEvent.click(within(dialog).getByRole('checkbox'))
     expect(approve).toBeEnabled()
     fireEvent.click(approve)
-    await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('sub-1'))
+    await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('sub-1', 'co-1'))
   })
 
   it('blocks approval and says why when the values cannot make a new customer', () => {
@@ -160,6 +163,35 @@ describe('SubmissionReviewPage', () => {
     fireEvent.click(within(dialog).getByRole('checkbox'))
     expect(within(dialog).getByRole('button', { name: 'Approve and create quote' })).toBeDisabled()
     mockCustomerProblems.mockReturnValue([])
+  })
+
+  it('requires choosing the existing customer when the insured may already be one', () => {
+    mockCustomerMatches.mockReturnValue([{ customerId: 'c-9', customerKey: 'CUST-9', displayName: 'Keystone Software Inc.', status: 'ACTIVE', matchScore: 95, reasons: ['FEIN last4 match'] }])
+    mockUseSubmission.mockReturnValue({ data: submission([field({ status: 'accepted' })]), isLoading: false })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to approval' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByText(/Create a new customer/)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('radio', { name: /Keystone Software Inc\. \(CUST-9\)/ })).not.toBeChecked()
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    expect(within(dialog).getByRole('button', { name: 'Approve and create quote' })).toBeDisabled()
+    expect(within(dialog).getByText('Choose the customer above before approving.')).toBeInTheDocument()
+    mockCustomerMatches.mockReturnValue([])
+  })
+
+  it('makes the reviewer choose the underwriting company when more than one writes the product', () => {
+    mockCompanies.mockReturnValue([{ companyId: 'co-1', name: 'Acme Mutual Casualty' }, { companyId: 'co-2', name: 'Acme Specialty' }])
+    mockUseSubmission.mockReturnValue({ data: submission([field({ status: 'accepted' })]), isLoading: false })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to approval' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    const approve = within(dialog).getByRole('button', { name: 'Approve and create quote' })
+    expect(approve).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText('Underwriting company'), { target: { value: 'co-2' } })
+    expect(approve).toBeEnabled()
+    mockCompanies.mockReturnValue([])
+    mockCompanies.mockImplementation(() => [{ companyId: 'co-1', name: 'Acme Specialty' }])
   })
 
   it('lets a reviewer without approval permission prepare but not approve', () => {

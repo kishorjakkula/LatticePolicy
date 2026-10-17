@@ -151,6 +151,16 @@ describe('target fields', () => {
     const radius = fields.find((field) => field.key === 'risk.radiusClass')
     expect(radius?.type).toBe('select')
     expect(radius?.options).toContain('long-haul')
+    const hazmat = fields.find((field) => field.key === 'qual.noHazmatHauling')
+    expect(hazmat).toMatchObject({ section: 'Qualification questions', type: 'select', options: ['yes', 'no'], required: true })
+  })
+
+  it('does not require follow-up qualification questions asked only after a particular answer', () => {
+    const followUp = buildTargetFields('personal-auto').find((field) => field.key === 'qual.majorViolationsOlderThan12Months')
+    expect(followUp?.required).toBe(false)
+    expect(followUp?.help).toMatch(/Answer only if/)
+    expect(normalizeFieldValue({ key: 'qual.x', type: 'select', options: ['yes', 'no'] }, 'Yes')).toEqual({ value: 'yes', ok: true })
+    expect(normalizeFieldValue({ key: 'qual.x', type: 'select', options: ['yes', 'no'] }, 'false')).toEqual({ value: 'no', ok: true })
   })
 
   it('offers only common fields when the product is unknown', () => {

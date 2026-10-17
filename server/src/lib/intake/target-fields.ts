@@ -1,5 +1,6 @@
 import { buildRiskFields, loadProductConfig } from '../products.js'
 import { listProductCapabilities } from '../product-registry.js'
+import { qualificationQuestionsFor } from '@lattice-policy/rules'
 
 /**
  * A value the intake extractor is asked to find in a submission.
@@ -21,6 +22,7 @@ export type IntakeTargetField = {
 
 export const PRODUCT_FIELD_KEY = 'productCode'
 export const RISK_FIELD_PREFIX = 'risk.'
+export const QUALIFICATION_FIELD_PREFIX = 'qual.'
 
 const COMMON_FIELDS: IntakeTargetField[] = [
   { key: 'effectiveDate', label: 'Effective date', section: 'Policy', type: 'date', options: [], required: true, help: 'YYYY-MM-DD' },
@@ -81,12 +83,34 @@ export function riskTargetFields(productCode: string, tenantId?: string): Intake
   }))
 }
 
+/**
+ * The product's qualification questions (the wizard's eligibility step) as
+ * yes/no intake targets, keyed `qual.<questionKey>`. A follow-up question
+ * asked only after a particular answer is not required here; the wizard asks
+ * it again when it applies.
+ */
+export function qualificationTargetFields(productCode: string): IntakeTargetField[] {
+  const questions = qualificationQuestionsFor(productCode)
+  return questions.map((question) => {
+    const parent = question.showWhen ? questions.find((item) => item.key === question.showWhen!.key) : null
+    return {
+      key: `${QUALIFICATION_FIELD_PREFIX}${question.key}`,
+      label: question.label,
+      section: 'Qualification questions',
+      type: 'select' as const,
+      options: ['yes', 'no'],
+      required: question.required === true && !question.showWhen,
+      help: parent ? `Answer only if "${parent.label}" is ${question.showWhen!.answer}.` : 'yes or no',
+    }
+  })
+}
+
 /** Every field to draft for a submission on `productCode` (or only common fields when unknown). */
 export function buildTargetFields(productCode: string | null | undefined, tenantId?: string): IntakeTargetField[] {
   const products = listIntakeProducts()
   const [effectiveDate, state, priorCarrier, ...rest] = COMMON_FIELDS
   const out = [productField(products), effectiveDate, state, priorCarrier, ...rest]
-  if (productCode) out.push(...riskTargetFields(productCode, tenantId))
+  if (productCode) out.push(...riskTargetFields(productCode, tenantId), ...qualificationTargetFields(productCode))
   return out
 }
 
@@ -101,7 +125,7 @@ export function buildExtractionCatalog(tenantId?: string): {
 } {
   const products = listIntakeProducts()
   return {
-    products: products.map((product) => ({ ...product, fields: riskTargetFields(product.code, tenantId) })),
+    products: products.map((product) => ({ ...product, fields: [...riskTargetFields(product.code, tenantId), ...qualificationTargetFields(product.code)] })),
     common: buildTargetFields(null, tenantId),
   }
 }
