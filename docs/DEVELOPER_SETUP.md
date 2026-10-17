@@ -344,7 +344,7 @@ re-downloading them).
 
 ### Node version does not match the pinned version
 
-This project pins Node 20 in `.node-version` and `.nvmrc`. Using an
+This project pins Node 22 in `.node-version` and `.nvmrc`. Using an
 older or much newer Node can cause `npm install` or `npm run build`
 failures that are easy to mistake for a code problem.
 
@@ -352,12 +352,12 @@ failures that are easy to mistake for a code problem.
 node --version
 ```
 
-If the version is not `20.x`, install and use Node 20, for example with
+If the version is not `22.x`, install and use Node 22, for example with
 `nvm`:
 
 ```bash
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 ```
 
 Then reinstall dependencies:

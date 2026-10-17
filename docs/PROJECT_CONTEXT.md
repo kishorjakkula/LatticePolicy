@@ -25,7 +25,7 @@ The main architectural idea is one shared policy platform with access-based expe
 ## Runtime Stack
 
 - Root workspace uses npm workspaces: `packages/*`, `frontend`, and `server`.
-- Server: Node.js 20+, Express, TypeScript ESM, Drizzle ORM, PostgreSQL, Redis, pino logging, JWT auth, Sentry optional.
+- Server: Node.js 22.12+, Express, TypeScript ESM, Drizzle ORM, PostgreSQL, Redis, pino logging, JWT auth, Sentry optional.
 - Frontend: React, Vite, React Router, React Query, Zustand, react-hook-form, Zod, jsPDF.
 - Docker Compose runs PostgreSQL on `localhost:65432`, Redis on `localhost:6379`, API on `localhost:3300`, and UI on `localhost:5173`.
 

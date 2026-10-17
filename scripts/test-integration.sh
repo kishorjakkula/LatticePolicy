@@ -39,7 +39,7 @@ if ! docker exec "$CONTAINER_NAME" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/
 fi
 
 HOST_PORT="$(docker inspect -f '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$CONTAINER_NAME")"
-IMAGE="${NODE_TEST_IMAGE:-node:20-alpine}"
+IMAGE="${NODE_TEST_IMAGE:-node:22-alpine}"
 VOLUME="${NODE_TEST_VOLUME:-latticepolicy-test-node-modules}"
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@host.docker.internal:${HOST_PORT}/${DB_NAME}"
 
