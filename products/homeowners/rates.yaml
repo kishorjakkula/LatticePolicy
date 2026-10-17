@@ -1,5 +1,5 @@
 product: homeowners
-version: 1.0.0
+version: 2.0.0
 base:
   state: '*'
   per100LimitRate:
@@ -17,8 +17,40 @@ roofAgeFactors:
   '0-10': 1.00
   '11-20': 1.05
   '21+': 1.15
+# Version 2 factors. Each applies only when its table is present, so a quote
+# pinned to version 1 rates exactly as before.
+deductibleFactors:
+  '500': 1.08
+  '1000': 1.00
+  '2500': 0.88
+  '5000': 0.80
+windHailFactors:
+  '1': 1.00
+  '2': 0.96
+  '5': 0.90
+dwellingAgeFactors:
+  '<=10': 0.95
+  11-30: 1.00
+  31-50: 1.08
+  51+: 1.15
+roofTypeFactors:
+  metal: 0.92
+  tile: 0.95
+  slate: 0.95
+  asphalt-shingle: 1.00
+  wood-shake: 1.20
+  other: 1.05
+dwellingUnitsFactors:
+  '1': 1.00
+  '2': 1.12
+fireStationDistanceFactors:
+  '<=5': 1.00
+  6-10: 1.10
+  11+: 1.25
+protectiveDeviceCredits:
+  fireAlarm: 0.97
+  burglarAlarm: 0.98
 fees:
   policy: 35.00
 taxes:
   rate: 0.02
-

@@ -1,5 +1,13 @@
+# Homeowners, special form (HO-3 structure).
+#
+# Structure follows the industry HO-3 special form: open-peril dwelling and
+# other structures, named-peril personal property, loss of use, personal
+# liability and medical payments, Section I additional coverages, and special
+# limits on categories of personal property. Names and descriptions here are
+# LatticePolicy's own; no filed or ISO wording is reproduced. Amounts are the
+# product's defaults; a carrier pack or state override may change them.
 product: homeowners
-version: 1.0.0
+version: 2.0.0
 capabilities:
   label: Homeowners
   riskLabel: Property
@@ -20,43 +28,159 @@ capabilities:
     roofAgeYears: 10
     occupancy: OwnerOccupied
   ui: {}
+form:
+  code: HO3
+  name: Homeowners Special Form
+  description: Dwelling and other structures are insured against direct physical loss unless excluded; personal property against named perils.
 coverages:
+  # Section I - property
   - code: A
     name: Dwelling
+    section: I
     selectable: true
     limitType: value
+    defaultLimit: 350000
+    valuation: replacementCost
+    perilBasis: open
   - code: B
     name: Other Structures
+    section: I
     selectable: true
     limitAsPercentOf: A
-    percentOptions: [10, 20]
+    percentOptions: [10, 20, 30]
+    defaultPercent: 10
+    valuation: replacementCost
+    perilBasis: open
   - code: C
     name: Personal Property
+    section: I
     selectable: true
     limitAsPercentOf: A
-    percentOptions: [50, 70]
+    percentOptions: [50, 60, 70, 75]
+    defaultPercent: 50
+    valuation: actualCashValue
+    perilBasis: named
   - code: D
     name: Loss of Use
+    section: I
     selectable: true
     limitAsPercentOf: A
     percentOptions: [20, 30]
+    defaultPercent: 20
+  # Section II - liability
   - code: E
     name: Personal Liability
+    section: II
     selectable: true
-    limits: [100000, 300000, 500000]
+    limits: [100000, 300000, 500000, 1000000]
+    defaultLimit: 300000
+    limitBasis: each occurrence
   - code: F
-    name: Medical Payments
+    name: Medical Payments to Others
+    section: II
     selectable: true
-    limits: [1000, 5000]
+    limits: [1000, 2500, 5000]
+    defaultLimit: 1000
+    limitBasis: each person
+  # Optional endorsements: not selected unless the insured asks for them.
+  - code: END_WB
+    name: Water Back-Up and Sump Overflow
+    endorsement: true
+    optional: true
+    selectable: true
+    limits: [5000, 10000, 25000]
+    defaultLimit: 5000
+  - code: END_PPRC
+    name: Personal Property Replacement Cost
+    endorsement: true
+    optional: true
+    selectable: true
+    description: Settles personal property losses at replacement cost instead of actual cash value.
+  - code: END_ORD
+    name: Ordinance or Law Increased Amount
+    endorsement: true
+    optional: true
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [25, 50]
+    defaultPercent: 25
+    description: Raises the ordinance or law additional coverage from the base 10% of Coverage A.
+  - code: END_ERC
+    name: Extended Replacement Cost on Dwelling
+    endorsement: true
+    optional: true
+    selectable: true
+    limitAsPercentOf: A
+    percentOptions: [25, 50]
+    defaultPercent: 25
+    description: Pays above the Coverage A limit, up to this percentage, to rebuild the dwelling.
 deductibles:
-  allPeril: [500, 1000, 2500]
+  allPeril: [500, 1000, 2500, 5000]
+  defaultAllPeril: 1000
   windHailPercent: [1, 2, 5]
+  windHailBasis: Percentage of the Coverage A limit, applied to windstorm or hail losses instead of the all-peril deductible.
+lossSettlement:
+  dwelling: Replacement cost, without deduction for depreciation, once repaired or replaced
+  otherStructures: Replacement cost, without deduction for depreciation, once repaired or replaced
+  personalProperty: Actual cash value, or replacement cost with the Personal Property Replacement Cost endorsement
+# Included at no extra premium (Section I and II additional coverages).
+additionalCoverages:
+  - { code: DEBRIS, name: Debris removal, limit: 'Included in the limit, plus 5% more when the limit is exhausted' }
+  - { code: REPAIRS, name: Reasonable repairs after a covered loss, limit: Included in the limit }
+  - { code: TREES, name: Trees, shrubs and plants, limit: '5% of Coverage A, up to $500 per item' }
+  - { code: FIRE_DEPT, name: Fire department service charge, limit: '$500' }
+  - { code: REMOVED, name: Property removed to protect it, limit: Included for 30 days }
+  - { code: CARD_FORGERY, name: Credit card, forgery and counterfeit money, limit: '$500' }
+  - { code: LOSS_ASSESS, name: Loss assessment, limit: '$1,000' }
+  - { code: COLLAPSE, name: Collapse, limit: Included in the limit }
+  - { code: GLASS, name: Glass or safety glazing, limit: Included in the limit }
+  - { code: LANDLORD_FURN, name: Landlord's furnishings, limit: '$2,500' }
+  - { code: ORDINANCE, name: Ordinance or law, limit: '10% of Coverage A' }
+  - { code: GRAVE, name: Grave markers, limit: '$5,000' }
+  - { code: CLAIM_EXP, name: Liability claim expenses, limit: Paid in addition to the Coverage E limit }
+  - { code: FIRST_AID, name: First aid to others, limit: Included }
+  - { code: PROP_OTHERS, name: Damage to property of others, limit: '$1,000' }
+# Category limits within Coverage C (theft-only limits marked).
+specialLimits:
+  - { category: 'Money, bullion, coins and stored-value cards', limit: 200 }
+  - { category: 'Securities, deeds, tickets and stamps', limit: 1500 }
+  - { category: 'Watercraft and their trailers and equipment', limit: 1500 }
+  - { category: 'Trailers not used with watercraft', limit: 1500 }
+  - { category: 'Jewelry, watches and furs (theft)', limit: 1500 }
+  - { category: 'Firearms (theft)', limit: 2500 }
+  - { category: 'Silverware and goldware (theft)', limit: 2500 }
+  - { category: 'Business property on premises', limit: 2500 }
+  - { category: 'Business property away from premises', limit: 1500 }
+  - { category: 'Portable electronics in a vehicle', limit: 1500 }
+  - { category: 'Computer equipment', limit: 4000 }
+# Named perils for Coverage C.
+namedPerils:
+  - Fire or lightning
+  - Windstorm or hail
+  - Explosion
+  - Riot or civil commotion
+  - Aircraft
+  - Vehicles
+  - Smoke
+  - Vandalism or malicious mischief
+  - Theft
+  - Falling objects
+  - Weight of ice, snow or sleet
+  - Accidental discharge or overflow of water or steam
+  - Sudden tearing apart, cracking, burning or bulging of a heating or plumbing system
+  - Freezing of plumbing, heating or sprinkler systems
+  - Sudden damage from artificially generated electrical current
+  - Volcanic eruption
+# Not covered unless an endorsement adds it; documents say so plainly.
+notCovered:
+  - Flood and surface water
+  - Earth movement, including earthquake
+  - Wear and tear, deterioration and neglect
 ratingKeys:
   - construction
   - protectionClass
   - roofAgeYears
-# Endorsements
-  - code: END_WB
-    name: Water Backup
-    selectable: true
-    limits: [2500, 5000, 10000]
+  - roofType
+  - dwellingUnits
+  - stories
+  - distanceToFireStationMiles
