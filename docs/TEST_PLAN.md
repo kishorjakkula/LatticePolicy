@@ -187,8 +187,8 @@ npm run test:e2e:docker
 npm run typecheck
 ```
 
-The root `npm run test` command runs local Vitest on Node 20. If the active
-local Node version is not 20 and Docker is available, it falls back to the
+The root `npm run test` command runs local Vitest on Node 22. If the active
+local Node version is not 22 and Docker is available, it falls back to the
 Docker runner automatically.
 
 You can also run the full suite in Docker directly:
@@ -197,7 +197,7 @@ You can also run the full suite in Docker directly:
 npm run test:docker
 ```
 
-The Docker test runner uses `node:20-alpine` with an isolated `node_modules`
+The Docker test runner uses `node:22-alpine` with an isolated `node_modules`
 volume so local machine Node versions and native optional dependencies do not
 affect test results.
 
