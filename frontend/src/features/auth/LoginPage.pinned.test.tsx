@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,7 @@ describe('LoginPage on a single-carrier stack', () => {
   })
 
   it('does not ask for an organization', () => {
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
 
     expect(screen.queryByLabelText('Organization Slug')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Email / Username')).toBeInTheDocument()
@@ -24,7 +25,7 @@ describe('LoginPage on a single-carrier stack', () => {
 
   it('starts SSO for the configured carrier', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
-    render(<MemoryRouter><LoginPage /></MemoryRouter>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><LoginPage /></MemoryRouter></QueryClientProvider>)
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue with SSO' }))
 

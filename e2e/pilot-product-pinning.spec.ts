@@ -67,7 +67,7 @@ test('the accepted pilot policy opens every listed document', async ({ page, con
   }
 })
 
-test('endorsement retains base controls, original additive fields, and a null original screen', async ({ page, request, sessionFor, signInAs }) => {
+test('endorsement retains base controls, original additive fields, and a null original screen', async ({ page, request, sessionFor, signInAs }, testInfo) => {
   const auth = await sessionFor(username)
   const originals = new Map([screenPath, fieldsPath].map(p => [p, fs.existsSync(p) ? fs.readFileSync(p) : null]))
   const payload = () => ({
@@ -113,6 +113,19 @@ test('endorsement retains base controls, original additive fields, and a null or
         } else await expect(page.getByText('Changed extras', { exact: true })).toHaveCount(0)
         await fieldByLabel(page, 'Roof Age (years)').fill('6')
       })
+      // Exercise the browser-generated PDF as well as stored server artifacts.
+      await page.evaluate(() => {
+        const original = URL.createObjectURL.bind(URL)
+        URL.createObjectURL = blob => { (window as any).__carrierPdf = blob; return original(blob) }
+      })
+      await page.getByRole('button', { name: 'Documents', exact: true }).click()
+      const popup = page.context().waitForEvent('page')
+      await page.getByRole('row').filter({ hasText: /Rating Worksheet/ }).getByRole('button', { name: 'View', exact: true }).click()
+      const pdfTab = await popup
+      const bytes = Buffer.from(await page.evaluate(async () => Array.from(new Uint8Array(await (window as any).__carrierPdf.arrayBuffer()))))
+      await assertCarrierPdf(bytes, 'Acme Mutual Pilot')
+      await testInfo.attach('Carrier branded browser worksheet', { body: bytes, contentType: 'application/pdf' })
+      await pdfTab.close()
       await page.getByRole('button', { name: 'Issue', exact: true }).click()
       await expect(page.getByRole('status').filter({ hasText: 'Issued' })).toBeVisible()
       const stored = await apiJson<any>(request, 'GET', `/api/v1/policies/${policy.policyId}/full`, { token: auth.token })
@@ -125,3 +138,64 @@ test('endorsement retains base controls, original additive fields, and a null or
     for (const [p, contents] of originals) if (contents) fs.writeFileSync(p, contents); else fs.rmSync(p, { force: true })
   }
 })
+
+test('pilot branding is editable in administration and appears on login and documents', async ({ page, request, sessionFor, signInAs }, testInfo) => {
+  const { token } = await sessionFor(username)
+  const settings = await apiJson<any>(request, 'GET', '/api/v1/admin/branding', { token })
+  expect(settings.configured).toBe(true)
+  expect(settings.branding.name).toBe('Acme Mutual Pilot')
+  await signInAs(page, username)
+  await page.goto('/admin/tenant')
+  await expect(page.getByLabel('Carrier display name')).toHaveValue(settings.branding.name)
+  await page.getByLabel(/Carrier logo \(/).setInputFiles('deploy/pilot/acme-mutual-logo.png')
+  await page.getByRole('button', { name: 'Save carrier branding', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Carrier branding saved.')
+  await expect(page.locator('img.topbar-logo')).toHaveAttribute('alt', settings.branding.name)
+  expect(await page.locator('img.topbar-logo').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  const adminShot = testInfo.outputPath('pilot-carrier-branding-admin.png')
+  await page.screenshot({ path: adminShot, fullPage: true, animations: 'disabled' })
+  await testInfo.attach('Carrier branding administration', { path: adminShot, contentType: 'image/png' })
+  const acceptance = JSON.parse(fs.readFileSync(path.join(pack, '../evidence/acceptance.json'), 'utf8'))
+  const { documents } = await apiJson<any>(request, 'GET', `/api/v1/policies/${acceptance.policyId}/documents`, { token })
+  for (const doc of documents) {
+    const response = await request.get(`${process.env.E2E_API_BASE_URL}/api/v1/policies/${acceptance.policyId}/documents/${doc.documentId}/content`, { headers: { 'X-Tenant': process.env.E2E_TENANT_ID!, Authorization: `Bearer ${token}` } })
+    expect(response.ok()).toBe(true)
+    const bytes = await response.body()
+    if (doc.type === 'RATING_WORKSHEET') {
+      expect(bytes.toString()).toContain(settings.branding.name)
+      expect(bytes.toString()).not.toMatch(/Lattice\s*Policy/i)
+    } else if (doc.type === 'POLICY_PACKET') {
+      await assertCarrierPdf(bytes, settings.branding.name)
+    }
+  }
+  await page.context().clearCookies()
+  await page.evaluate(() => localStorage.clear())
+  await page.goto('/login')
+  await expect(page.locator('img.login-brand-logo')).toHaveAttribute('alt', settings.branding.name)
+  const loginShot = testInfo.outputPath('pilot-carrier-branding-login.png')
+  await page.screenshot({ path: loginShot, fullPage: true, animations: 'disabled' })
+  await testInfo.attach('Carrier branded login', { path: loginShot, contentType: 'image/png' })
+})
+
+async function assertCarrierPdf(bytes: Buffer, name: string) {
+  // Parse downloaded bytes, rather than trusting branding metadata.
+  const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdf = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: true }).promise
+  try {
+    let text = ''
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const content = await (await pdf.getPage(i)).getTextContent()
+      text += content.items.map((item: any) => item.str || '').join(' ')
+      const heading = content.items.find((item: any) => item.str === 'Policy / Transaction Context') as any
+      const firstValue = content.items.find((item: any) => item.str?.trim() === 'Policy Number:') as any
+      if (heading) {
+        expect(firstValue).toBeTruthy()
+        expect(Math.abs(heading.transform[5] - firstValue.transform[5])).toBeGreaterThanOrEqual(15)
+      }
+    }
+    expect(text).toContain(name)
+    expect(text).not.toMatch(/Lattice\s*Policy/i)
+    const operators = await (await pdf.getPage(1)).getOperatorList()
+    expect(operators.fnArray).toContain(OPS.paintImageXObject)
+  } finally { await pdf.destroy() }
+}

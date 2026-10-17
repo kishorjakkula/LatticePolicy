@@ -223,3 +223,15 @@ Example validation response:
   ]
 }
 ```
+
+### Carrier branding
+
+`GET /brand` with tenant context is intentionally public for the login screen.
+It returns only `{ name, primaryColor, logoDataUrl, documentFooter }`.
+`GET /api/v1/admin/branding` requires `admin.tenant.read` and returns
+`{ branding, configured }`; `PATCH` requires `admin.tenant.manage` and accepts
+the complete branding object. Both administration endpoints require the admin
+menu permission. Use embedded PNG/JPEG/WebP logos up to 500 KB; remote images,
+SVG and invalid colors are rejected. Tenant administration edits the same
+settings used by screens and newly generated documents. Issued server document
+metadata snapshots branding so subsequent edits do not change existing hashes.

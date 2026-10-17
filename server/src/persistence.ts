@@ -1,8 +1,9 @@
+import { loadCarrierBranding } from './services/carrier-branding.service.js'
 import { storeRatingWorksheet } from './services/document-storage.service.js'
 import { eq, and, desc, sql } from 'drizzle-orm'
 import { ensureProductSnapshots } from './lib/product-snapshot.js'
 import { v4 as uuidv4 } from './uuid.js'
-import type { DrizzleDB } from './db.js'
+import { toRawQuery, type DrizzleDB } from './db.js'
 import {
   policies,
   policyVersions,
@@ -526,6 +527,7 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
   const metadata = {
     transactionNumber: versionRow.transactionNumber || null,
     transactionType: versionRow.transactionType || null,
+    branding: await loadCarrierBranding(tenantId, toRawQuery(q)),
     generatedKind: 'RATING_WORKSHEET',
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
