@@ -85,7 +85,7 @@ export type SubmissionChecks = {
 }
 
 export type IntakeSettings = {
-  provider: 'builtin' | 'anthropic'
+  provider: 'builtin' | 'anthropic' | 'private'
   model: string | null
   label: string
   configured: boolean
@@ -119,6 +119,7 @@ export const apiSubmissions = {
   checks: (id: string) => request<SubmissionChecks>('GET', `/v1/submissions/${id}/checks`),
   create: (payload: NewSubmission) => request<SubmissionDetail>('POST', '/v1/submissions', payload),
   read: (id: string, productCode?: string | null) => request<any>('POST', `/v1/submissions/${id}/read`, { productCode: productCode || null }),
+  manualReview: (id: string) => request<any>('POST', `/v1/submissions/${id}/manual-review`),
   updateField: (id: string, key: string, body: { action: 'set' | 'accept' | 'undo'; value?: string | null }) =>
     request<SubmissionField>('PATCH', `/v1/submissions/${id}/fields/${encodeURIComponent(key)}`, body),
   acceptHighConfidence: (id: string) => request<{ accepted: number }>('POST', `/v1/submissions/${id}/accept-high-confidence`),

@@ -432,7 +432,9 @@ export async function insertDraftQuote(
     } catch (err: any) {
       if (err?.code === '23505') {
         await q('ROLLBACK TO SAVEPOINT draft_quote_insert')
+        await q('RELEASE SAVEPOINT draft_quote_insert')
         attempts++
+        if (attempts === 5) throw err
         continue
       }
       throw err

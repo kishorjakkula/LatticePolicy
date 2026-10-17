@@ -55,6 +55,11 @@ export type SecurityRelationshipMap = {
 }
 
 const PERMISSION_CATALOG: PermissionDefinition[] = [
+  { permissionCode:'menu.admin.llm.view',scope:'menu',resourceKey:'admin.llm',actionKey:'view',label:'Admin Menu: LLM Releases',description:'View private model release governance',sortOrder:800 },
+  { permissionCode:'page.admin.llm.view',scope:'page',resourceKey:'admin.llm',actionKey:'view',label:'Page: LLM Releases',description:'Review private model candidates',sortOrder:801 },
+  { permissionCode:'llm.releases.read',scope:'api',resourceKey:'llm.releases',actionKey:'read',label:'LLM Releases: Read',description:'Read tenant model releases',sortOrder:802 },
+  { permissionCode:'llm.releases.register',scope:'api',resourceKey:'llm.releases',actionKey:'manage',label:'LLM Releases: Register',description:'Register evaluated candidates; no approval rights',sortOrder:803 },
+  { permissionCode:'llm.releases.review',scope:'api',resourceKey:'llm.releases',actionKey:'approve',label:'LLM Releases: Review',description:'Test candidates and authorize production',sortOrder:804 },
   { permissionCode: 'menu.search.view', scope: 'menu', resourceKey: 'search', actionKey: 'view', label: 'Menu: Search', description: 'View Search menu entry', sortOrder: 10 },
   { permissionCode: 'menu.portal.view', scope: 'menu', resourceKey: 'portal', actionKey: 'view', label: 'Menu: Customer Portal', description: 'View customer portal menu entry', sortOrder: 12 },
   { permissionCode: 'menu.rating.view', scope: 'menu', resourceKey: 'rating', actionKey: 'view', label: 'Menu: Rating', description: 'View Rating workbench menu entry', sortOrder: 15 },
@@ -175,6 +180,10 @@ type RoleSeed = {
 const ALL_PERMISSION_CODES = PERMISSION_CATALOG.map((x) => x.permissionCode)
 
 const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
+  { roleCode:'carrier_technical_admin',roleName:'Carrier Technical Administrator',description:'Validates private LLM releases and authorizes production',isSystem:true,
+    permissionCodes:['menu.admin.view','menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.review'] },
+  { roleCode:'llm_release_automation',roleName:'LLM Release Automation',description:'Registers evaluated candidates; cannot approve',isSystem:true,
+    permissionCodes:['llm.releases.read','llm.releases.register'] },
   {
     roleCode: 'admin',
     roleName: 'Administrator',

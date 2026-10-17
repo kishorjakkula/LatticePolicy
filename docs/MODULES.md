@@ -15,6 +15,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | Policy API | Quote, bind, issue, endorse, cancel, renew, administration | REST API, business events | API process |
 | Rating | Pricing from rate tables and published workbooks, with a calculation trace | The `rate()` function and its result shape | Inside the Policy API. A copy can be split out and hosted as its own application later if that is needed |
 | Batch jobs | Scheduled and queued operational work | Job definitions and schedules | Worker process |
+| Document processing | Private OCR and schema-driven LLM extraction; no policy database access | Versioned authenticated `/v1/extract` JSON contract | Independent processor image and self-hosted model |
 | Asynchronous messaging | Reliable publishing of business events | Versioned event schemas | Dispatcher process, pluggable transport |
 
 ## Decisions
@@ -43,6 +44,7 @@ Update it whenever a module boundary, contract, or deployment unit changes.
 | Module | State |
 | --- | --- |
 | UI | Separate application and image. |
+| Document processing | Standalone Node service in `services/document-processor`, local OCR and private OpenAI-compatible inference. Submission intake supplies the schema and retains review/approval. Independent `services/document-learning` jobs curate approved examples, calculate held-out evaluation, optionally train offline weights and register candidates. Technical-admin approvals gate signed deployment. See `docs/PRIVATE_DOCUMENT_PROCESSING.md` and `docs/DOCUMENT_LEARNING.md`. |
 | Shared runtime packages | `packages/rules` (rule expressions, screen rules) is the first package both the API and UI import at run time: the wizard renders a carrier pack screen with it and the API enforces the same rules when a quote is rated. `packages/types` remains types only. |
 | Rating | In-process function `rate()` in `server/src/services/rating.service.ts`, called synchronously from 16 places in 9 files. Staying that way by decision. It prices from a product definition, either today's or the snapshot a policy term is pinned to. |
 | Batch jobs | Runs as its own process (`LATTICE_ROLE=worker`, or `node server/dist/worker.js`); the deployment kit runs it as the `worker` service. Handlers still import core code and the database directly, so it shares the release image. |

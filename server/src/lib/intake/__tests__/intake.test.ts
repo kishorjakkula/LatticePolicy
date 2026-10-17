@@ -85,6 +85,12 @@ describe('normalizeFieldValue', () => {
 })
 
 describe('readDocumentLines', () => {
+  it('preserves complete source lines and rejects oversized text in private mode', async () => {
+    const line = 'Applicant: ' + 'A'.repeat(1000)
+    expect((await readDocumentLines('application.txt', Buffer.from(line), { strictLimits: true })).lines).toEqual([line])
+    await expect(readDocumentLines('large.txt', Buffer.from('A'.repeat(120001)), { strictLimits: true })).rejects.toThrow(/processing limits/)
+    await expect(readDocumentLines('many.txt', Buffer.from(Array(4001).fill('line').join('\n')), { strictLimits: true })).rejects.toThrow(/processing limits/)
+  })
   it('keeps email headers that matter and drops blank lines', async () => {
     const { lines, readable } = await readDocumentLines('mail.eml', Buffer.from(EMAIL))
     expect(readable).toBe(true)
@@ -348,8 +354,8 @@ describe('extractor selection', () => {
     expect(readIntakeAiSettings({})).toMatchObject({ provider: 'builtin', configured: true })
     expect(createIntakeExtractor({}).provider).toBe('builtin')
     expect(readIntakeAiSettings({ INTAKE_AI_PROVIDER: 'anthropic' })).toMatchObject({ provider: 'anthropic', configured: false })
-    expect(() => createIntakeExtractor({ INTAKE_AI_PROVIDER: 'anthropic' })).toThrow(/ANTHROPIC_API_KEY/)
-    const claude = createIntakeExtractor({ INTAKE_AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k', INTAKE_AI_MODEL: 'claude-opus-5-5' })
+    expect(() => createIntakeExtractor({ INTAKE_AI_PROVIDER: 'anthropic', INTAKE_DATA_BOUNDARY: 'external' })).toThrow(/ANTHROPIC_API_KEY/)
+    const claude = createIntakeExtractor({ INTAKE_AI_PROVIDER: 'anthropic', INTAKE_DATA_BOUNDARY: 'external', ANTHROPIC_API_KEY: 'k', INTAKE_AI_MODEL: 'claude-opus-5-5' })
     expect(claude).toMatchObject({ provider: 'anthropic', model: 'claude-opus-5-5' })
     expect(readIntakeAiSettings({ INTAKE_AI_PROVIDER: 'other' }).problem).toMatch(/Unknown INTAKE_AI_PROVIDER/)
   })

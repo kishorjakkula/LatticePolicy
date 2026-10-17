@@ -12,6 +12,9 @@ The main architectural idea is one shared policy platform with access-based expe
 
 - `frontend/`: React 19, Vite, React Query, Zustand operations and customer portal UI.
 - `server/`: Express TypeScript API, auth, tenancy, RBAC, policy lifecycle, quote/rating, forms, customers, onboarding, AI insights, and persistence.
+- `services/document-processor/`: independent private OCR/LLM service; versioned extraction profiles, no policy database access or automatic training. See `docs/PRIVATE_DOCUMENT_PROCESSING.md`.
+- Carrier LLM candidates are reviewed at `/admin/llm-releases`; technical admins authorize lower-environment testing before signed production activation. Readiness email is opt-in (`LLM_EMAIL_ENABLED=true`), disabled by default. See `docs/LLM_RELEASE_GOVERNANCE.md`.
+- `services/document-learning/` provides approved-dataset profile learning, held-out evaluation, optional offline weight training, and automatic registration for admin review. It never trains directly on raw uploads. See `docs/DOCUMENT_LEARNING.md`.
 - `packages/types/`: shared TypeScript types and Zod schemas.
 - `packages/rules/`: shared runtime package (rule expressions and screen rules) used by both server and frontend; see `docs/MODULES.md`.
 - `products/`: product pack YAML for personal auto, homeowners, cyber, commercial auto, and professional liability.

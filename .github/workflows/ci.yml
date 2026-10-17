@@ -38,6 +38,25 @@ jobs:
       - name: Test shared packages
         run: npm run test:packages
 
+      - name: Test private document processor
+        run: npm run test:document-processor
+
+      - name: Test private document learning and offline trainer contracts
+        run: npm run test:document-learning && npm run test:document-training && npm run test:document-deployment
+
+      - name: Build independent learning operator image
+        run: docker build -f services/document-learning/Dockerfile -t lattice-document-learning:ci .
+
+      - name: Build private document processor image
+        run: docker build -f services/document-processor/Dockerfile -t lattice-document-processor:ci .
+
+      - name: Test offline OCR and signed release enforcement
+        run: >-
+          docker run --rm --network none --read-only
+          --tmpfs /tmp:size=128m,mode=1777 --memory 512m
+          -e RUN_OCR_SMOKE=1 lattice-document-processor:ci
+          node --test ocr.test.mjs release-authorization.test.mjs
+
       - name: Build frontend
         env:
           VITE_API_BASE_URL: https://api.example.com

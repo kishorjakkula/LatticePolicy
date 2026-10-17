@@ -558,6 +558,7 @@ export function SubmissionReviewPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const read = useSubmissionAction(id, (productCode: string | null) => apiSubmissions.read(id, productCode))
+  const manualReview = useSubmissionAction(id, () => apiSubmissions.manualReview(id))
   const acceptHigh = useSubmissionAction(id, () => apiSubmissions.acceptHighConfidence(id))
   const decline = useSubmissionAction(id, (reason: string) => apiSubmissions.decline(id, reason))
 
@@ -601,6 +602,8 @@ export function SubmissionReviewPage() {
   const meta = STATUS_META[submission.status]
   const insuredName = fields.find((field) => field.key === 'insuredName')?.value || submission.insuredName || submission.subject || submission.submissionNumber
   const open = ['RECEIVED', 'READING', 'READ_FAILED', 'READY_FOR_REVIEW', 'IN_REVIEW'].includes(submission.status)
+  const readStartedAt = Date.parse(submission.aiRun?.startedAt || '')
+  const staleRead = submission.status === 'READING' && (!Number.isFinite(readStartedAt) || Date.now() - readStartedAt > 15 * 60 * 1000)
 
   return (
     <div className="si-page">
@@ -617,11 +620,11 @@ export function SubmissionReviewPage() {
           </div>
         </div>
         <div className="si-actions">
-          {canManage && (reviewable || submission.status === 'READ_FAILED') && (
+          {canManage && (reviewable || submission.status === 'READ_FAILED' || submission.status === 'RECEIVED' || staleRead) && (
             rereadArmed ? (
               <>
                 <span className="si-small">{confirmed ? `Reading again discards ${confirmed} confirmation${confirmed > 1 ? 's' : ''}.` : 'Read the documents again?'}</span>
-                <button type="button" className="si-btn" onClick={() => { setRereadArmed(false); void run(read.mutateAsync(productField?.value || null)) }}>Read again</button>
+                <button type="button" className="si-btn" disabled={read.isPending} onClick={() => { setRereadArmed(false); void run(read.mutateAsync(productField?.value || submission.productCode || submission.aiRun?.productHint || null)) }}>Read again</button>
                 <button type="button" className="si-link" onClick={() => setRereadArmed(false)}>Cancel</button>
               </>
             ) : (
@@ -656,7 +659,11 @@ export function SubmissionReviewPage() {
       {submission.status === 'READ_FAILED' && (
         <div className="si-banner is-error" role="alert">
           <p><b>The documents could not be read.</b> {submission.readError}</p>
-          {canManage && <button type="button" className="si-btn" onClick={() => void run(read.mutateAsync(null))}>Try again</button>}
+          {canManage && <button type="button" className="si-btn" disabled={read.isPending || manualReview.isPending} onClick={() => {
+            if (confirmed) setRereadArmed(true)
+            else void run(read.mutateAsync(productField?.value || submission.productCode || submission.aiRun?.productHint || null))
+          }}>Try again</button>}
+          {canManage && <button type="button" className="si-btn" disabled={read.isPending || manualReview.isPending} onClick={() => void run(manualReview.mutateAsync(undefined))}>Enter values by hand</button>}
         </div>
       )}
       {submission.status === 'COMPLETED' && (
@@ -672,10 +679,10 @@ export function SubmissionReviewPage() {
 
       {reviewable && (
         <section className="si-ai-note" aria-label="How to review">
-          <AiTag>{submission.aiRun?.provider === 'anthropic' ? 'AI draft' : 'Reader draft'}</AiTag>
+          <AiTag>{['anthropic', 'private'].includes(submission.aiRun?.provider || '') ? 'AI draft' : 'Reader draft'}</AiTag>
           <p>
             <b>Check each value against its source, then accept it.</b> Values marked <i>check</i>, <i>not found</i>, or <i>documents disagree</i> need you.
-            {submission.aiRun?.provider === 'anthropic' ? ' Drafted by ' + (submission.aiRun?.label || 'the AI model') + '.' : ' Drafted by the built-in reader, which matches labels and does not understand free text.'}
+            {['anthropic', 'private'].includes(submission.aiRun?.provider || '') ? ' Drafted by ' + (submission.aiRun?.label || 'the AI model') + '.' : ' Drafted by the built-in reader, which matches labels and does not understand free text.'}
           </p>
         </section>
       )}

@@ -26,6 +26,7 @@ const SCREENS: Array<{ name: string; path: string }> = [
   { name: 'admin customers', path: '/admin/customers' },
   { name: 'admin agency onboarding', path: '/admin/onboarding' },
   { name: 'admin notification templates', path: '/admin/notification-templates' },
+  { name: 'admin LLM releases', path: '/admin/llm-releases' },
   { name: 'admin compliance', path: '/admin/compliance' },
   { name: 'admin data import', path: '/admin/import' },
   { name: 'admin operations dashboard', path: '/admin/dashboard' },

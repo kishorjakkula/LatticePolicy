@@ -186,7 +186,7 @@ export function getIntakeSettings() {
     label: ai.label,
     configured: ai.configured,
     problem: ai.problem,
-    readsPdfAndImages: ai.provider === 'anthropic',
+    readsPdfAndImages: ai.provider === 'anthropic' || ai.provider === 'private',
     sendsDocumentsOffStack: ai.provider === 'anthropic',
     maxDocuments: MAX_DOCUMENTS,
     maxDocumentBytes: MAX_DOCUMENT_BYTES,
@@ -233,7 +233,10 @@ export async function createSubmission(tenantId: string, actor: string, input: C
     const buffer = Buffer.from(data, 'base64')
     if (!buffer.length) throw new BadRequestError('INVALID_DOCUMENT', `${fileName} is empty.`)
     if (buffer.length > MAX_DOCUMENT_BYTES) throw new BadRequestError('DOCUMENT_TOO_LARGE', `${fileName} is larger than ${Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024)} MB.`)
-    const { lines, readable } = await readDocumentLines(fileName, buffer)
+    let parsed: Awaited<ReturnType<typeof readDocumentLines>>
+    try { parsed = await readDocumentLines(fileName, buffer, { strictLimits: readIntakeAiSettings().provider === 'private' }) }
+    catch { throw new BadRequestError('UNREADABLE_DOCUMENT', `${fileName}: document is damaged or exceeds private processing limits; split or replace it.`) }
+    const { lines, readable } = parsed
     prepared.push({
       fileName,
       contentType: contentTypeFor(fileName),
@@ -421,7 +424,26 @@ export async function startReading(
       discardsConfirmedValues: Number(confirmed.rows?.[0]?.count || 0),
     })
   })
-  await options.schedule({ tenantId, submissionId, runToken, productHint })
+  try {
+    await options.schedule({ tenantId, submissionId, runToken, productHint })
+  } catch {
+    // Scheduling can fail after the upload commits. Keep its id available and
+    // invalidate this run so a late/ambiguously enqueued job cannot overwrite recovery.
+    return withTenantTx(tenantId, async (db) => {
+      const q = toRawQuery(db)
+      const row = await loadSubmissionRow(q, tenantId, submissionId, true)
+      if (row.status === 'READING' && row.ai_run?.runToken === runToken) {
+        const error = 'The document read could not be queued. Try again or enter the values by hand.'
+        await q(
+          `UPDATE submissions SET status = 'READ_FAILED', read_error = $3, ai_run = ai_run || $4::jsonb, updated_at = now() WHERE tenant_id = $1 AND submission_id = $2`,
+          [tenantId, submissionId, error, JSON.stringify({ finishedAt: new Date().toISOString() })]
+        )
+        await recordEvent(q, tenantId, submissionId, 'system', 'LatticePolicy', 'reading_schedule_failed', { error })
+        return { submissionId, status: 'READ_FAILED' as const, runToken }
+      }
+      return { submissionId, status: row.status as SubmissionStatus, runToken: row.ai_run?.runToken }
+    })
+  }
   return { submissionId, status: 'READING' as const, runToken }
 }
 
@@ -561,7 +583,7 @@ export async function runExtraction(
         WHERE tenant_id = $1 AND submission_id = $2`,
       [
         tenantId, submissionId, productCode, insuredName,
-        JSON.stringify({ finishedAt, summary: result.summary, productReason: result.productReason, warnings, counts, documentsRead: readable.length, documentsTotal: documents.length }),
+        JSON.stringify({ finishedAt, summary: result.summary, productReason: result.productReason, warnings, counts, documentsRead: readable.length, documentsTotal: documents.length, processing: result.processing || null }),
       ]
     )
     await recordEvent(q, tenantId, submissionId, 'ai', extractor.label, 'drafted', { ...counts, productCode, documentsRead: readable.length })
@@ -570,6 +592,26 @@ export async function runExtraction(
 }
 
 // ── Review ────────────────────────────────────────────────────────────────────
+
+/** Explicitly leave failed extraction for human entry without discarding prior review. */
+export async function startManualReview(tenantId: string, submissionId: string, actor: string) {
+  requireUuid(submissionId)
+  return withTenantTx(tenantId, async (db) => {
+    const q = toRawQuery(db)
+    const row = await loadSubmissionRow(q, tenantId, submissionId, true)
+    if (row.status !== 'READ_FAILED') throw new ConflictError('NOT_READ_FAILED', 'Only a failed read can be recovered manually.')
+    const existing = await q(`SELECT field_key FROM submission_fields WHERE tenant_id = $1 AND submission_id = $2`, [tenantId, submissionId])
+    if (!existing.rows?.length) {
+      await writeFieldRows(q, tenantId, submissionId, buildTargetFields(row.product_code || row.ai_run?.productHint || null, tenantId).map((field, index) => ({
+        field, index, aiValue: null, confidence: 'missing', score: null,
+        evidence: [], alternatives: [], reason: 'Enter and confirm this value against the source documents.',
+      })))
+    }
+    await q(`UPDATE submissions SET status = 'IN_REVIEW', assigned_to = COALESCE(assigned_to, $3), updated_at = now() WHERE tenant_id = $1 AND submission_id = $2`, [tenantId, submissionId, actor])
+    await recordEvent(q, tenantId, submissionId, 'user', actor, 'manual_review_started')
+    return { submissionId, status: 'IN_REVIEW' as const }
+  })
+}
 
 async function loadReviewable(q: Q, tenantId: string, submissionId: string) {
   const row = await loadSubmissionRow(q, tenantId, submissionId, true)

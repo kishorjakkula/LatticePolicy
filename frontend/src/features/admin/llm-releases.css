@@ -1,0 +1,34 @@
+.llm-releases {
+  min-width: 0;
+}
+.llm-releases form > label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.llm-releases input:not([type='checkbox']):not([type='radio']),
+.llm-releases textarea,
+.llm-releases select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.llm-releases form > label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: flex-start;
+}
+.llm-releases dd {
+  margin-left: 0;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+.llm-releases button {
+  max-width: 100%;
+  white-space: normal;
+}
+.llm-releases .radio-group--binary {
+  width: 200px;
+  max-width: 100%;
+}

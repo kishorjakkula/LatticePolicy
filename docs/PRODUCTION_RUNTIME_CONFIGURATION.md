@@ -52,12 +52,24 @@ Additional guarded settings:
   settings). A dispatcher with incomplete transport settings refuses to start.
   See `docs/EVENTS.md`.
 - `INTAKE_AI_PROVIDER` selects who reads uploaded broker submissions:
-  `builtin` (default; a label reader, no documents leave the stack) or
-  `anthropic` (Claude, which also reads PDFs and images; needs
+  `builtin` (default; local label reader), `private` (independent local OCR/LLM
+  processor; `DOCUMENT_PROCESSOR_URL`, `DOCUMENT_PROCESSOR_TOKEN` of at least
+  32 characters, optional `DOCUMENT_EXTRACTION_PROFILE`), or
+  `anthropic` (external, blocked unless `INTAKE_DATA_BOUNDARY=external`; needs
   `ANTHROPIC_API_KEY`, optional `INTAKE_AI_MODEL`, `INTAKE_AI_BASE_URL`,
   `INTAKE_AI_TIMEOUT_MS`). `INTAKE_EXTRACTION_MODE=job|inline` overrides where
   reads run. Set these on the API and the worker. See
-  `docs/SUBMISSION_INTAKE.md`.
+  `docs/SUBMISSION_INTAKE.md` and `docs/PRIVATE_DOCUMENT_PROCESSING.md`.
+- LLM release governance requires `LLM_RELEASE_SIGNING_KEY` (Ed25519 private
+  PEM, API only) for approvals. `LLM_EMAIL_ENABLED` defaults to `false`; test
+  registrations need no SMTP, review URL, or email contacts. Only literal `true`
+  enables readiness mail on both API and dispatcher; then configure
+  `LLM_REVIEW_UI_URL` (HTTPS admin origin), technical-admin contacts,
+  `LLM_SMTP_HOST`, `LLM_SMTP_PORT` (587/465),
+  `LLM_SMTP_FROM`, and optional `LLM_SMTP_USER`/`LLM_SMTP_PASSWORD` on the
+  dispatcher. Processors use `RELEASE_ENVIRONMENT`, `CARRIER_TENANT_ID`,
+  `MODEL_ARTIFACT_SHA256`, and `LLM_RELEASE_PUBLIC_KEY_FILE`, never the private
+  signing key. See `docs/LLM_RELEASE_GOVERNANCE.md` for approval and rollout.
 - `CARRIER_TENANT_ID` pins the stack to one carrier. Set it on every
   single-carrier deployment: requests, logins, SSO routes, and background
   workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is

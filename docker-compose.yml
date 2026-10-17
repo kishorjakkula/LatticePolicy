@@ -61,6 +61,14 @@ services:
       REDIS_URL: redis://cache:6379
       CACHE_ENABLED: "1"
       SENTRY_DSN: ${SENTRY_DSN:-}
+      LLM_RELEASE_SIGNING_KEY: ${LLM_RELEASE_SIGNING_KEY:-}
+      LLM_EMAIL_ENABLED: ${LLM_EMAIL_ENABLED:-false}
+      LLM_REVIEW_UI_URL: ${LLM_REVIEW_UI_URL:-}
+      LLM_SMTP_HOST: ${LLM_SMTP_HOST:-}
+      LLM_SMTP_PORT: ${LLM_SMTP_PORT:-587}
+      LLM_SMTP_FROM: ${LLM_SMTP_FROM:-}
+      LLM_SMTP_USER: ${LLM_SMTP_USER:-}
+      LLM_SMTP_PASSWORD: ${LLM_SMTP_PASSWORD:-}
     volumes:
       - documentdata:/var/lib/lattice-policy/documents
     ports:
