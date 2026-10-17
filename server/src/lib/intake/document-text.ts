@@ -60,18 +60,36 @@ function decodeQuotedPrintable(text: string): string {
     .replace(/=([0-9A-F]{2})/gi, (_match, hex: string) => String.fromCharCode(parseInt(hex, 16)))
 }
 
-function htmlToText(html: string): string {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+/** Removes markup until none is left, so a nested or split tag cannot survive one pass. */
+function stripTags(text: string, replacement: string): string {
+  let previous: string
+  let current = text
+  do {
+    previous = current
+    current = current.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '').replace(/<[^<>]*>/g, replacement)
+  } while (current !== previous)
+  // A stray angle bracket left by broken markup is not text worth keeping.
+  return current.replace(/[<>]/g, ' ')
+}
+
+/**
+ * Decodes the common entities, `&amp;` last so `&amp;lt;` stays the text "&lt;".
+ * Angle brackets become look-alike characters, so decoded text never contains
+ * markup again; the reader only needs the words.
+ */
+function decodeEntities(text: string): string {
+  return text
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '‹')
+    .replace(/&gt;/g, '›')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+function htmlToText(html: string): string {
+  const withBreaks = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
+  return decodeEntities(stripTags(withBreaks, ' ')).split('\n').map((line) => line.trim()).join('\n')
 }
 
 /**
@@ -127,13 +145,8 @@ async function spreadsheetToLines(buffer: Buffer): Promise<string[]> {
 function wordToLines(buffer: Buffer): string[] {
   const zip = new PizZip(buffer)
   const xml = zip.file('word/document.xml')?.asText() || ''
-  return xml
-    .replace(/<w:tab\/>/g, '  ')
-    .replace(/<\/w:p>/g, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+  const withBreaks = xml.replace(/<w:tab\/>/g, '  ').replace(/<\/w:p>/g, '\n')
+  return decodeEntities(stripTags(withBreaks, ''))
     .split('\n')
 }
 

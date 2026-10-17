@@ -105,6 +105,14 @@ describe('readDocumentLines', () => {
     expect(lines).toContain('Effective date: 12/01/2026 confirmed')
   })
 
+  it('strips nested markup and decodes entities once', async () => {
+    const html = '<p>Applicant: Acme &amp; Sons</p><scr<script>ipt>alert(1)</script><p>Note: &amp;lt;b&amp;gt; &lt;5 years</p>'
+    const { lines } = await readDocumentLines('page.html', Buffer.from(html))
+    expect(lines).toContain('Applicant: Acme & Sons')
+    expect(lines.join('\n')).not.toMatch(/<|>|script/i)
+    expect(lines.join('\n')).toContain('&lt;b&gt;')
+  })
+
   it('reads Word and Excel files as lines', async () => {
     const zip = new PizZip()
     zip.file('word/document.xml', '<w:document><w:body><w:p><w:r><w:t>Applicant: Acme LLC</w:t></w:r></w:p><w:p><w:r><w:t>FEIN: 12-3456789</w:t></w:r></w:p></w:body></w:document>')
