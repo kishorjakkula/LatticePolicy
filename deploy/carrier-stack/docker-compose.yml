@@ -53,6 +53,11 @@ services:
         # Set only when a carrier pack is mounted (CARRIER_PACK_PATH in the env file).
         CARRIER_PACK_DIR: ${CARRIER_PACK_PATH:+/carrier-pack}
         SENTRY_DSN: ${SENTRY_DSN:-}
+        # Submission intake reader; the worker runs the reads. See docs/SUBMISSION_INTAKE.md.
+        INTAKE_AI_PROVIDER: ${INTAKE_AI_PROVIDER:-builtin}
+        INTAKE_AI_MODEL: ${INTAKE_AI_MODEL:-}
+        INTAKE_AI_BASE_URL: ${INTAKE_AI_BASE_URL:-}
+        ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LATTICE_ROLE: api
       # Only read by `stack.sh bootstrap`.
       CARRIER_NAME: ${CARRIER_NAME:-}

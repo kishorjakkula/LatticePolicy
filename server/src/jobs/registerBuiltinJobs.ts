@@ -4,6 +4,7 @@ import { asyncOutboxDeliveryRetryHandler } from './handlers/asyncOutboxDeliveryR
 import { renewalCandidateScanHandler } from './handlers/renewalCandidateScan.js'
 import { staleQuoteCleanupHandler } from './handlers/staleQuoteCleanup.js'
 import { policyIntegrityReconciliationHandler } from './handlers/policyIntegrityReconciliation.js'
+import { submissionExtractHandler } from './handlers/submissionExtract.js'
 
 const asyncOutboxDeliveryRetryPayloadSchema = z.object({}).passthrough()
 const renewalCandidateScanPayloadSchema = z.object({ windowDays: z.number().int().positive().optional() }).passthrough()
@@ -12,6 +13,11 @@ const staleQuoteCleanupPayloadSchema = z.object({
   dryRun: z.boolean().optional(),
 }).passthrough()
 const policyIntegrityPayloadSchema = z.object({ policyId: z.string().uuid().optional() }).passthrough()
+const submissionExtractPayloadSchema = z.object({
+  submissionId: z.string().uuid(),
+  runToken: z.string().uuid(),
+  productHint: z.string().nullable().optional(),
+}).passthrough()
 
 let registered = false
 
@@ -58,5 +64,14 @@ export function registerBuiltinJobs(): void {
     payloadSchema: policyIntegrityPayloadSchema,
     defaultMaxAttempts: 3,
     backoff: { baseSeconds: 60, maxSeconds: 3600 },
+  })
+
+  registerJob({
+    jobCode: 'submission_extract',
+    description: 'Reads a submission\'s documents with the configured intake extractor and drafts values for review.',
+    handler: submissionExtractHandler,
+    payloadSchema: submissionExtractPayloadSchema,
+    defaultMaxAttempts: 1,
+    backoff: { baseSeconds: 30, maxSeconds: 300 },
   })
 }

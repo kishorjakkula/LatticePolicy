@@ -60,6 +60,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'menu.rating.view', scope: 'menu', resourceKey: 'rating', actionKey: 'view', label: 'Menu: Rating', description: 'View Rating workbench menu entry', sortOrder: 15 },
   { permissionCode: 'menu.uw_queue.view', scope: 'menu', resourceKey: 'uw_queue', actionKey: 'view', label: 'Menu: UW Queue', description: 'View UW Queue menu entry', sortOrder: 20 },
   { permissionCode: 'menu.placements.view', scope: 'menu', resourceKey: 'placements', actionKey: 'view', label: 'Menu: Placements', description: 'View large commercial placements menu entry', sortOrder: 21 },
+  { permissionCode: 'menu.submissions.view', scope: 'menu', resourceKey: 'submissions', actionKey: 'view', label: 'Menu: Submissions', description: 'View the submission intake menu entry', sortOrder: 22 },
   { permissionCode: 'menu.admin.view', scope: 'menu', resourceKey: 'admin', actionKey: 'view', label: 'Menu: Administration', description: 'View Administration menu entry', sortOrder: 30 },
   { permissionCode: 'menu.admin.forms.view', scope: 'menu', resourceKey: 'admin.forms', actionKey: 'view', label: 'Admin Menu: Forms', description: 'View Forms section in Administration', sortOrder: 31 },
   { permissionCode: 'menu.admin.uw_company.view', scope: 'menu', resourceKey: 'admin.uw_company', actionKey: 'view', label: 'Admin Menu: UW Company', description: 'View UW Company section in Administration', sortOrder: 32 },
@@ -84,6 +85,7 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'page.policy.view', scope: 'page', resourceKey: 'policy', actionKey: 'view', label: 'Page: Policy View', description: 'Access policy detail and timeline pages', sortOrder: 130 },
   { permissionCode: 'page.uw_queue.view', scope: 'page', resourceKey: 'uw_queue', actionKey: 'view', label: 'Page: UW Queue', description: 'Access underwriting queue page', sortOrder: 140 },
   { permissionCode: 'page.placements.view', scope: 'page', resourceKey: 'placements', actionKey: 'view', label: 'Page: Placements', description: 'Access large commercial placement workflow page', sortOrder: 141 },
+  { permissionCode: 'page.submissions.view', scope: 'page', resourceKey: 'submissions', actionKey: 'view', label: 'Page: Submissions', description: 'Access the submission intake inbox and review pages', sortOrder: 142 },
   { permissionCode: 'page.admin.forms.view', scope: 'page', resourceKey: 'admin.forms', actionKey: 'view', label: 'Page: Admin Forms', description: 'Access forms administration page', sortOrder: 150 },
   { permissionCode: 'page.admin.uw_company.view', scope: 'page', resourceKey: 'admin.uw_company', actionKey: 'view', label: 'Page: Admin UW Company', description: 'Access underwriting company administration page', sortOrder: 160 },
   { permissionCode: 'page.admin.users.view', scope: 'page', resourceKey: 'admin.users', actionKey: 'view', label: 'Page: Admin Users', description: 'Access user administration page', sortOrder: 170 },
@@ -157,6 +159,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode: 'uw.authority.override', scope: 'api', resourceKey: 'uw.authority', actionKey: 'approve', label: 'UW Authority API: Override', description: 'Approve an authority exception with a recorded reason', sortOrder: 730 },
   { permissionCode: 'admin.underwriting_rules.read', scope: 'api', resourceKey: 'admin.underwriting_rules', actionKey: 'read', label: 'Admin API: Underwriting Rules Read', description: 'Read admin-authored underwriting eligibility rules and the field catalog', sortOrder: 740 },
   { permissionCode: 'admin.underwriting_rules.manage', scope: 'api', resourceKey: 'admin.underwriting_rules', actionKey: 'manage', label: 'Admin API: Underwriting Rules Manage', description: 'Create, update, and seed admin-authored underwriting eligibility rules', sortOrder: 750 },
+  { permissionCode: 'submissions.read', scope: 'api', resourceKey: 'submissions', actionKey: 'read', label: 'Submission API: Read', description: 'Read submissions, their documents, drafted values, and activity', sortOrder: 760 },
+  { permissionCode: 'submissions.manage', scope: 'api', resourceKey: 'submissions', actionKey: 'manage', label: 'Submission API: Manage', description: 'Upload submissions, run AI reading, and confirm or correct drafted values', sortOrder: 770 },
+  { permissionCode: 'submissions.approve', scope: 'api', resourceKey: 'submissions', actionKey: 'approve', label: 'Submission API: Approve', description: 'Approve reviewed submissions, creating the customer and draft quote, or decline them', sortOrder: 780 },
 ]
 
 type RoleSeed = {
@@ -182,7 +187,16 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
     roleName: 'Agent',
     description: 'Quote, bind, issue, and policy search access',
     isSystem: true,
-    permissionCodes: ['menu.search.view', 'page.search.view', 'page.wizard.view', 'page.policy.view']
+    permissionCodes: [
+      'menu.search.view',
+      'page.search.view',
+      'page.wizard.view',
+      'page.policy.view',
+      'menu.submissions.view',
+      'page.submissions.view',
+      'submissions.read',
+      'submissions.manage'
+    ]
   },
   {
     roleCode: 'underwriter',
@@ -204,7 +218,12 @@ const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
       'menu.placements.view',
       'page.placements.view',
       'placement.read',
-      'placement.manage'
+      'placement.manage',
+      'menu.submissions.view',
+      'page.submissions.view',
+      'submissions.read',
+      'submissions.manage',
+      'submissions.approve'
     ]
   },
   {

@@ -26,6 +26,8 @@ const UsersPage = lazy(() => import('./features/admin/UsersPage').then(m => ({ d
 const TenantPage = lazy(() => import('./features/admin/TenantPage').then(m => ({ default: m.TenantPage })))
 const UwQueue = lazy(() => import('./features/uw/UwQueue').then(m => ({ default: m.UwQueue })))
 const PlacementsPage = lazy(() => import('./features/placements/PlacementsPage').then(m => ({ default: m.PlacementsPage })))
+const SubmissionsInboxPage = lazy(() => import('./features/submissions/SubmissionsInboxPage').then(m => ({ default: m.SubmissionsInboxPage })))
+const SubmissionReviewPage = lazy(() => import('./features/submissions/SubmissionReviewPage').then(m => ({ default: m.SubmissionReviewPage })))
 const RatingWorkbenchPage = lazy(() => import('./features/rating/RatingWorkbenchPage').then(m => ({ default: m.RatingWorkbenchPage })))
 const AdministrationPage = lazy(() => import('./features/admin/AdministrationPage').then(m => ({ default: m.AdministrationPage })))
 const AdminShell = lazy(() => import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell })))
@@ -89,6 +91,7 @@ export default function App() {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊', permission: 'menu.search.view' },
     { path: '/search', label: 'Search', icon: '🔍', permission: 'menu.search.view' },
+    { path: '/submissions', label: 'Submissions', icon: '📥', permission: 'menu.submissions.view' },
     { path: '/rating', label: 'Rating', icon: '⚙️', permission: 'menu.rating.view' },
     { path: '/portal', label: 'Portal', icon: '🌐', permission: 'menu.portal.view' },
     { path: '/admin', label: 'Administration', icon: '🛠️', permission: 'menu.admin.view' }
@@ -123,6 +126,8 @@ export default function App() {
             <Route path="/customers/:id" element={<RequireAuth><RequirePermission permission="admin.customers.read"><CustomerViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/uw/queue" element={<RequireAuth><RequirePermission permission="page.uw_queue.view"><UwQueue /></RequirePermission></RequireAuth>} />
             <Route path="/placements" element={<RequireAuth><RequirePermission permission="page.placements.view"><PlacementsPage /></RequirePermission></RequireAuth>} />
+            <Route path="/submissions" element={<RequireAuth><RequirePermission permission="page.submissions.view"><SubmissionsInboxPage /></RequirePermission></RequireAuth>} />
+            <Route path="/submissions/:id" element={<RequireAuth><RequirePermission permission="page.submissions.view"><SubmissionReviewPage /></RequirePermission></RequireAuth>} />
             <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminShell /></RequireAdmin></RequireAuth>}>
               <Route index element={<AdminIndexRedirect />} />
               <Route path="forms" element={<RequirePermission permission="page.admin.forms.view"><FormsManagementPage /></RequirePermission>} />
