@@ -454,7 +454,8 @@ policyRoutes.get(
           documentId: String(row.document_id),
           versionId: row.version_id || null,
           type: String(row.type),
-          displayName: `${String(row.type)}${metadata.transactionType ? ` (${metadata.transactionType})` : ''} ${metadata.transactionNumber || metadata.snapshot?.context?.transactionNumber || ''}`.trim(),
+          // Form documents are named by their form, so several from one transaction stay distinguishable.
+          displayName: `${row.type === 'POLICY_FORM_DOCUMENT' && metadata.title ? `${String(metadata.title)}${metadata.code ? ` [${String(metadata.code)}]` : ''}` : String(row.type)}${metadata.transactionType ? ` (${metadata.transactionType})` : ''} ${metadata.transactionNumber || metadata.snapshot?.context?.transactionNumber || ''}`.trim(),
           transactionType: metadata.transactionType || null,
           transactionNumber: metadata.transactionNumber || null,
           forms: Array.isArray(metadata.forms) ? metadata.forms : [],

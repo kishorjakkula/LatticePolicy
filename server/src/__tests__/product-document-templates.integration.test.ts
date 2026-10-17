@@ -33,6 +33,18 @@ describe('product document template seeding', () => {
       expect(row.size_bytes).toBeGreaterThan(1000)
     }
 
+    const rules = await withTenantTx(TENANT_ID, async (db) => (await toRawQuery(db)(
+      `SELECT f.form_number, a.transaction_types FROM forms_admin_forms f
+         LEFT JOIN forms_admin_applicability a ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id
+        WHERE f.tenant_id = $1 AND f.form_number LIKE 'HO-%' ORDER BY f.form_number`,
+      [TENANT_ID]
+    )).rows)
+    expect(rules).toEqual([
+      { form_number: 'HO-BINDER', transaction_types: ['NB'] },
+      { form_number: 'HO-DEC', transaction_types: null },
+      { form_number: 'HO-EOI', transaction_types: ['NB', 'Renew'] },
+    ])
+
     const second = await withTenantTx(TENANT_ID, (db) => seedProductDocumentTemplates(toRawQuery(db), TENANT_ID, 'test', OPTIONS))
     expect(second.attached).toEqual([])
     expect(second.created).toEqual([])

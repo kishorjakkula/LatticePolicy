@@ -15,10 +15,12 @@ const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingm
  * never replaced. Generated at bind with the rest of the policy packet.
  */
 export const PRODUCT_DOCUMENT_TEMPLATES = [
-  { productCode: 'homeowners', formNumber: 'HO-DEC', formTitle: 'Homeowners Declarations', file: 'HO-DEC.docx' },
-  { productCode: 'homeowners', formNumber: 'HO-BINDER', formTitle: 'Homeowners Binder', file: 'HO-BINDER.docx' },
-  { productCode: 'homeowners', formNumber: 'HO-EOI', formTitle: 'Evidence of Property Insurance for the Mortgagee', file: 'HO-EOI.docx' },
-] as const
+  // Declarations print on every transaction that changes the policy.
+  { productCode: 'homeowners', formNumber: 'HO-DEC', formTitle: 'Homeowners Declarations', file: 'HO-DEC.docx', transactionTypes: [] as string[] },
+  // A binder confirms new business; the lender needs evidence at new business and renewal.
+  { productCode: 'homeowners', formNumber: 'HO-BINDER', formTitle: 'Homeowners Binder', file: 'HO-BINDER.docx', transactionTypes: ['NB'] },
+  { productCode: 'homeowners', formNumber: 'HO-EOI', formTitle: 'Evidence of Property Insurance for the Mortgagee', file: 'HO-EOI.docx', transactionTypes: ['NB', 'Renew'] },
+]
 
 export function productDocumentTemplatePath(productCode: string, file: string): string | null {
   const dir = resolveProductPackDir(productCode)
@@ -65,6 +67,17 @@ export async function seedProductDocumentTemplates(
       formId = inserted.rows[0].form_id
       await ensureDefaultFormRows(q, tenantId, formId, actor)
       summary.created.push(entry.formNumber)
+    }
+    // Which product and transactions the form attaches to; never changes rules a carrier has set.
+    if (entry.transactionTypes.length) {
+      const rules = await q(`SELECT 1 FROM forms_admin_applicability WHERE tenant_id=$1 AND form_id=$2 LIMIT 1`, [tenantId, formId])
+      if (!rules.rowCount) {
+        await q(
+          `INSERT INTO forms_admin_applicability (tenant_id, form_id, line_of_business, product_code, transaction_types, active, created_by, updated_by)
+           VALUES ($1,$2,$3,$3,$4::text[],true,$5,$5)`,
+          [tenantId, formId, entry.productCode, entry.transactionTypes, actor]
+        )
+      }
     }
     const asset = await q(`SELECT 1 FROM forms_admin_template_assets WHERE tenant_id=$1 AND form_id=$2 LIMIT 1`, [tenantId, formId])
     if (asset.rowCount) {

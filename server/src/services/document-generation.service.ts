@@ -560,6 +560,7 @@ async function buildFilledFormDocuments(
           versionId: context.versionId || null,
           transactionId: context.transactionId,
           transactionType: context.transactionType,
+          transactionNumber: context.transactionNumber || null,
           formId: sourceFormId,
           code: form.code,
           title: form.title,
