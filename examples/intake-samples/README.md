@@ -9,6 +9,7 @@ like the forms, not ACORD forms.
 | --- | --- | --- |
 | `commercial-auto/` | Commercial Auto | Four documents (email, application, vehicle schedule, loss runs). The application and the vehicle schedule give different garaging ZIPs (43215 and 43219), so that value arrives as **documents disagree** and you pick one. The broker's email describes the business in sentences, which the built-in reader does not use. The loss run shows an open claim. |
 | `cyber/` | Cyber | Email plus application. Yes/No answers map to the product's true/false fields. The email mentions a contained ransomware attempt that matches "Prior Cyber Incidents: 1". |
+| `cyber-complete/` | Cyber | Every field labelled exactly in two documents that agree, so every value scores the built-in reader's maximum, **95%**. Choose **Cyber** as the product when uploading and the product scores **100%**. |
 | `homeowners/` | Homeowners | One application for a person, not a company: insured type is drafted with low confidence, so you confirm it. |
 
 Each upload drafts most values with high confidence and leaves a few for you
@@ -18,3 +19,10 @@ samples include a FEIN and contact details, so a new customer can be created.
 
 With `INTAKE_AI_PROVIDER=anthropic`, Claude also reads the sentences in the
 emails (business description, the ransomware note) and PDFs or scans you add.
+
+## Why not 100% everywhere?
+
+The built-in reader matches labels; it cannot know a value is right, so its
+maximum is 95% (exact label, and two documents agree). 100% is kept for a
+value a person set, such as the product chosen at upload. Claude reports its
+own score and may give 100% to a value a document states plainly.

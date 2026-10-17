@@ -182,7 +182,9 @@ function labelVariants(field: IntakeTargetField): Array<{ text: string; exact: b
  * match inside "Mailing address".
  */
 function matchLabel(line: string, label: string): { value: string; quote: string } | null {
-  const pattern = new RegExp(`(^[\\s\\-*•\\d.)]*|\\s{2,}|\\|\\s*)${escapeRegex(label)}\\s*(\\([^)]*\\))?\\s*[:#]\\s*(.+)$`, 'i')
+  // A question ("…access?") may be followed by its answer without a colon.
+  const separator = label.trim().endsWith('?') ? '[:#]?' : '[:#]'
+  const pattern = new RegExp(`(^[\\s\\-*•\\d.)]*|\\s{2,}|\\|\\s*)${escapeRegex(label)}\\s*(\\([^)]*\\))?\\s*${separator}\\s*(.+)$`, 'i')
   const match = pattern.exec(line)
   if (!match) return null
   let value = match[3]

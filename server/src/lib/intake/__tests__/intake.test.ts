@@ -214,6 +214,14 @@ describe('BuiltinExtractor', () => {
     expect(result.conflicts).toEqual([])
   })
 
+  it('reads a questionnaire answer written after the question mark without a colon', async () => {
+    const documents = [await doc('d1', 'q.txt', 'MFA enforced for all remote and privileged access? Yes\nNo material cyber loss events in the last 3 years?: No')]
+    const result = await new BuiltinExtractor().extract({ documents, catalog: buildExtractionCatalog(), productHint: 'cyber' })
+    const byKey = new Map(result.values.map((value) => [value.key, value]))
+    expect(byKey.get('qual.mfaRequiredForRemoteAccess')).toMatchObject({ value: 'yes', score: 90 })
+    expect(byKey.get('qual.noMaterialCyberLoss3Years')).toMatchObject({ value: 'no', score: 90 })
+  })
+
   it('uses the reviewer product choice and never reads email headers as insured data', async () => {
     const documents = [await doc('d1', 'forwarded.txt', 'From: Broker <b@x.example>\nPhone: 555-0100')]
     const result = await new BuiltinExtractor().extract({ documents, catalog: buildExtractionCatalog(), productHint: 'cyber' })
