@@ -45,9 +45,9 @@ export const llmReleasesApi = {
       emailEnabled: boolean
     }>(
       'GET',
-      `/admin/llm/releases${release ? `?release=${encodeURIComponent(release)}` : ''}`,
+      `/v1/admin/llm/releases${release ? `?release=${encodeURIComponent(release)}` : ''}`,
     ),
-  contact: (email: string) => request('PUT', '/admin/llm/contact', { email }),
+  contact: (email: string) => request('PUT', '/v1/admin/llm/contact', { email }),
   transition: (id: string, action: string, body: unknown = {}) =>
-    request<LlmRelease>('POST', `/admin/llm/releases/${id}/${action}`, body),
+    request<LlmRelease>('POST', `/v1/admin/llm/releases/${id}/${action}`, body),
 }
