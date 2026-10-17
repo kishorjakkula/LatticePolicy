@@ -30,6 +30,7 @@ import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
 import type { LookupTable, ProductScreen, QualificationAnswer, QualificationAnswers, QualificationQuestion } from '@lattice-policy/rules'
 import { QUALIFICATION_QUESTIONS } from '@lattice-policy/rules'
+import { AdditionalInterestsFields, BillingFields, commonFieldsFromPayload, CommonQuoteSummary, MailingAddressFields, PriorInsuranceExtras, type CommonQuoteFields } from './CommonQuoteSections'
 import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
@@ -103,7 +104,7 @@ type QuoteState = {
   applicant: { firstName: string; lastName: string; email?: string }
   risks: any[]
   coverages: any[]
-}
+} & CommonQuoteFields
 
 type InsuredAddress = {
   street: string
@@ -329,6 +330,12 @@ const defaultState: QuoteState = {
   underwriterName: '',
   priorPolicyNumber: '',
   priorCarrier: '',
+  priorExpirationDate: '',
+  yearsWithPriorCarrier: '',
+  billingMethod: '',
+  paymentPlan: '',
+  mailingAddress: { street: '', city: '', state: '', zip: '' },
+  additionalInterests: [],
   qualificationAnswers: {},
   applicant: { firstName: 'Test', lastName: 'User' },
   risks: [],
@@ -3806,6 +3813,10 @@ export function QuoteWizard() {
               </select>
             </div>
           </div>
+          <PriorInsuranceExtras value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Billing">
+            <BillingFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
           </CollapsibleSection>
         </section>
       )}
@@ -4322,6 +4333,12 @@ export function QuoteWizard() {
             </div>
             </div>
           )}
+          <CollapsibleSection className="wizard-section" title="Mailing Address">
+            <MailingAddressFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} insuredAddress={insureds.primary.address} />
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Additional Interests">
+            <AdditionalInterestsFields value={q} productCode={q.productCode} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
+          </CollapsibleSection>
         </section>
       )}
 
@@ -4411,6 +4428,7 @@ export function QuoteWizard() {
               <div className="kvline"><span className="muted">State</span><span>{q.state || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Policy #</span><span>{q.priorPolicyNumber || '-'}</span></div>
               <div className="kvline"><span className="muted">Prior Carrier</span><span>{q.priorCarrier || '-'}</span></div>
+              <CommonQuoteSummary value={q} />
             </CollapsibleSection>
 
             <CollapsibleSection className="card">
@@ -6228,6 +6246,7 @@ function mergeQuoteState(payload: any, current: QuoteState): QuoteState {
     underwriterName: payload?.underwriterName || current.underwriterName || '',
     priorPolicyNumber: payload?.priorPolicyNumber || current.priorPolicyNumber || '',
     priorCarrier: payload?.priorCarrier || current.priorCarrier || '',
+    ...commonFieldsFromPayload(payload, current),
     qualificationAnswers,
     applicant,
     risks,

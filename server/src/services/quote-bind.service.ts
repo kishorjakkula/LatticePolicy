@@ -314,6 +314,27 @@ async function loadPolicyNumberFormats(tenantId: string): Promise<TenantPolicyNu
  *
  * This function handles ONLY the DB path (no in-memory fallback).
  */
+export const QUOTE_INTEREST_ROLES = ['MORTGAGEE', 'LOSS_PAYEE', 'ADDITIONAL_INSURED', 'ADDITIONAL_INTEREST'] as const
+
+/**
+ * Additional interests captured on a quote (`payload.additionalInterests`),
+ * cleaned for the policy's interest table. Rows without a name or with an
+ * unknown role are skipped.
+ */
+export function additionalInterestRowsFromPayload(payload: any): Array<{ role: string; name: string; loanNumber: string | null; address: Record<string, string> }> {
+  const items = Array.isArray(payload?.additionalInterests) ? payload.additionalInterests : []
+  const text = (value: unknown, max = 200) => String(value ?? '').trim().slice(0, max)
+  return items
+    .map((item: any) => ({
+      role: text(item?.role, 40).toUpperCase(),
+      name: text(item?.name),
+      loanNumber: text(item?.loanNumber, 80) || null,
+      address: { street: text(item?.street), city: text(item?.city, 100), state: text(item?.state, 2).toUpperCase(), zip: text(item?.zip, 10) },
+    }))
+    .filter((item: any) => item.name && (QUOTE_INTEREST_ROLES as readonly string[]).includes(item.role))
+    .slice(0, 20)
+}
+
 export async function bindQuote(
   db: DrizzleDB,
   tenantId: string,
@@ -668,6 +689,16 @@ export async function bindQuote(
 
     // Customer links
     await upsertPolicyCustomerLinks(txDb, tenantId, policyId, quoteCustomerLinks)
+
+    // Additional interests entered on the quote (mortgagee, loss payee, ...).
+    for (const interest of additionalInterestRowsFromPayload(quote.payload)) {
+      await q(
+        `INSERT INTO policy_additional_interests
+           (tenant_id, policy_id, role, name, address, loan_number, effective_date, expiration_date)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`,
+        [tenantId, policyId, interest.role, interest.name, JSON.stringify(interest.address), interest.loanNumber, effectiveDate, expirationDate]
+      )
+    }
 
     // Policy transaction
     documentPacket = await buildPolicyDocumentPacket(q, {
