@@ -7,7 +7,7 @@ Only approval creates the customer and the draft quote.
 
 Code: `server/src/lib/intake/`, `server/src/services/submission-intake.service.ts`,
 `server/src/routes/submissions.routes.ts`, `frontend/src/features/submissions/`.
-Migrations: `server/migrations/060_submission_intake.sql`, `061_submission_confidence_score.sql`.
+Migrations: `server/migrations/061_submission_intake.sql`, `062_submission_confidence_score.sql`.
 
 ## Principles
 

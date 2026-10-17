@@ -3,7 +3,7 @@
 ## Links
 
 - Issue: none yet
-- Pull request:
+- Pull request: https://github.com/kishorjakkula/LatticePolicy/pull/376
 - Design: canvas "AI Submission Intake" (inbox and review workspace)
 
 ## Summary
@@ -17,7 +17,7 @@ the submission is created before approval. Full description:
 
 ## Important Files
 
-- `server/migrations/060_submission_intake.sql`: submissions, documents,
+- `server/migrations/061_submission_intake.sql`: submissions, documents,
   fields, events (all with tenant RLS); permissions; the on-demand
   `submission_extract` job definition.
 - `server/src/lib/intake/target-fields.ts`: fields to draft, from the
@@ -55,6 +55,11 @@ the submission is created before approval. Full description:
 - Appetite and clearance come from carrier rules and records, not the AI.
 - All reads and writes go through `withTenantTx`; tables have RLS policies.
 - The settings endpoint never returns the API key.
+- Product changes discard both risk and qualification answers and recreate
+  the new product's fields as empty, pending review. Common fields retain
+  their values and confirmations. Switching back never revives old answers.
+- Intake migrations are 061/062, following branding migration 060; numeric
+  migration versions must be unique because the runner skips applied versions.
 
 ## Automated Tests
 
@@ -69,6 +74,11 @@ the submission is created before approval. Full description:
 - `frontend/src/features/submissions/__tests__/SubmissionReviewPage.test.tsx`
   (component): AI labeling, confidence text, source highlighting, approval
   locked until all confirmed, attestation, approver permission, states.
+- Product-switch DB regression proves both directions discard stale questions
+  and block approval until new answers are confirmed. A migration guard rejects
+  duplicate versions; fresh installation and upgrade retain branding and intake.
+- `e2e/submission-intake.spec.ts` exercises product switching in the real
+  review screen and checks the API approval gate.
 
 ## Validation
 

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb, initDb, toRawQuery, withTenantTx } from '../db.js'
 import { BuiltinExtractor } from '../lib/intake/extractors.js'
+import { qualificationTargetFields } from '../lib/intake/target-fields.js'
 import {
   acceptHighConfidence,
   approveSubmission,
@@ -174,6 +175,39 @@ describe('submission intake', () => {
     // A completed submission is closed.
     await expect(updateSubmissionField(TENANT_ID, submission.submissionId, 'fein', 'uw1', { action: 'undo' })).rejects.toMatchObject({ code: 'NOT_IN_REVIEW' })
     await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })).rejects.toMatchObject({ code: 'NOT_IN_REVIEW' })
+  })
+
+  it('replaces product questions and clears confirmations when the reviewer switches products', async () => {
+    const submission = await uploadAndRead()
+    await confirmEverything(submission.submissionId)
+    const original = await getSubmission(TENANT_ID, submission.submissionId)
+    const common = original.fields.find(field => field.key === 'insuredName')!
+    expect(original.fields.find(field => field.key === 'qual.fleetMaintained')?.status).toBe('accepted')
+
+    await updateSubmissionField(TENANT_ID, submission.submissionId, 'productCode', 'uw1', { action: 'accept', value: 'cyber' })
+    const switched = await getSubmission(TENANT_ID, submission.submissionId)
+    const questions = switched.fields.filter(field => field.key.startsWith('qual.'))
+    expect(questions.map(field => field.key).sort()).toEqual(qualificationTargetFields('cyber').map(field => field.key).sort())
+    expect(questions.length).toBeGreaterThan(0)
+    expect(questions.every(field => field.status === 'pending' && field.value === null && field.decidedBy === null)).toBe(true)
+    expect(switched.fields.some(field => field.key === 'qual.fleetMaintained')).toBe(false)
+    expect(switched.fields.some(field => field.key === 'risk.vehicleCount')).toBe(false)
+    expect(switched.fields.find(field => field.key === 'insuredName')).toEqual(common)
+    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })).rejects.toMatchObject({ code: 'UNCONFIRMED_VALUES' })
+
+    // Switching back must not revive previously accepted answers either.
+    await updateSubmissionField(TENANT_ID, submission.submissionId, 'qual.mfaRequiredForRemoteAccess', 'uw1', { action: 'accept', value: 'yes' })
+    await updateSubmissionField(TENANT_ID, submission.submissionId, 'productCode', 'uw1', { action: 'accept', value: 'commercial-auto' })
+    const restored = await getSubmission(TENANT_ID, submission.submissionId)
+    expect(restored.fields.find(field => field.key === 'qual.fleetMaintained')).toMatchObject({ status: 'pending', value: null, decidedBy: null })
+    expect(restored.fields.some(field => field.key === 'qual.mfaRequiredForRemoteAccess')).toBe(false)
+  })
+
+  it('applies branding and intake migrations together', async () => {
+    const rows = await getDb()!.query("SELECT name FROM schema_migrations WHERE tenant_id='system' AND version IN (60,61,62) ORDER BY version")
+    expect(rows.rows.map(row => row.name)).toEqual(['060_tenant_branding.sql', '061_submission_intake.sql', '062_submission_confidence_score.sql'])
+    const columns = await getDb()!.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND ((table_name='tenants' AND column_name='branding') OR (table_name='submission_fields' AND column_name='confidence_score'))")
+    expect(columns.rows).toHaveLength(2)
   })
 
   it('finds the existing customer, refuses a silent duplicate, and links when the reviewer chooses it', async () => {

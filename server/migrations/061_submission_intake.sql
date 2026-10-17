@@ -142,7 +142,7 @@ INSERT INTO rbac_permissions (permission_code, scope, resource_key, action_key, 
 ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO rbac_role_permissions (tenant_id, role_code, permission_code, created_at, created_by)
-SELECT r.tenant_id, r.role_code, p.code, now(), 'migration:060'
+SELECT r.tenant_id, r.role_code, p.code, now(), 'migration:061'
   FROM rbac_roles r
   CROSS JOIN (VALUES ('menu.submissions.view'), ('page.submissions.view'), ('submissions.read'), ('submissions.manage'), ('submissions.approve')) AS p(code)
  WHERE r.role_code = 'underwriter' AND r.is_system = true
@@ -150,7 +150,7 @@ SELECT r.tenant_id, r.role_code, p.code, now(), 'migration:060'
 ON CONFLICT (tenant_id, role_code, permission_code) DO NOTHING;
 
 INSERT INTO rbac_role_permissions (tenant_id, role_code, permission_code, created_at, created_by)
-SELECT r.tenant_id, r.role_code, p.code, now(), 'migration:060'
+SELECT r.tenant_id, r.role_code, p.code, now(), 'migration:061'
   FROM rbac_roles r
   CROSS JOIN (VALUES ('menu.submissions.view'), ('page.submissions.view'), ('submissions.read'), ('submissions.manage')) AS p(code)
  WHERE r.role_code = 'agent' AND r.is_system = true

@@ -17,7 +17,6 @@ import {
   PRODUCT_FIELD_KEY,
   QUALIFICATION_FIELD_PREFIX,
   RISK_FIELD_PREFIX,
-  riskTargetFields,
   type IntakeTargetField,
 } from '../lib/intake/target-fields.js'
 import { normalizeFieldValue } from '../lib/intake/normalize.js'
@@ -649,7 +648,7 @@ export async function updateSubmissionField(tenantId: string, submissionId: stri
         [tenantId, submissionId, fieldKey, value || null]
       )
     }
-    if (productChanged) await replaceRiskFields(q, tenantId, submissionId, value)
+    if (productChanged) await replaceProductFields(q, tenantId, submissionId, value)
     await recordEvent(q, tenantId, submissionId, 'user', actor, action === 'accept' ? 'value_confirmed' : 'value_edited', {
       field: fieldKey,
       aiValue: field.ai_value,
@@ -675,14 +674,19 @@ async function getFieldAfterUpdate(q: Q, tenantId: string, submissionId: string,
 }
 
 /**
- * The reviewer chose a different product: its risk fields replace the old
+ * The reviewer chose a different product: its risk and qualification fields replace the old
  * ones, empty and unconfirmed. The reviewer can then re-read the documents
  * for that product or fill them in.
  */
-async function replaceRiskFields(q: Q, tenantId: string, submissionId: string, productCode: string) {
-  await q(`DELETE FROM submission_fields WHERE tenant_id = $1 AND submission_id = $2 AND field_key LIKE $3`, [tenantId, submissionId, `${RISK_FIELD_PREFIX}%`])
+async function replaceProductFields(q: Q, tenantId: string, submissionId: string, productCode: string) {
+  await q(
+    `DELETE FROM submission_fields WHERE tenant_id = $1 AND submission_id = $2 AND (field_key LIKE $3 OR field_key LIKE $4)`,
+    [tenantId, submissionId, `${RISK_FIELD_PREFIX}%`, `${QUALIFICATION_FIELD_PREFIX}%`]
+  )
   const base = 1000
-  const rows = riskTargetFields(productCode, tenantId).map((field, index) => ({
+  const fields = buildTargetFields(productCode, tenantId)
+    .filter(field => field.key.startsWith(RISK_FIELD_PREFIX) || field.key.startsWith(QUALIFICATION_FIELD_PREFIX))
+  const rows = fields.map((field, index) => ({
     field, index: base + index, aiValue: null, confidence: 'missing', score: null as number | null, evidence: [] as Evidence[], alternatives: [] as any[],
     reason: 'Product changed by the reviewer; re-read the documents or enter this value.',
   }))

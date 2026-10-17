@@ -1,6 +1,7 @@
 BEGIN;
 
--- Numeric confidence (0-100) for each drafted value. The confidence label
+-- After migration 061 creates submission_fields, add numeric confidence (0-100).
+-- The confidence label
 -- (high, medium, low) is derived from it: high >= 85, medium >= 60, low below.
 -- Null for values that were not found or where documents disagree.
 ALTER TABLE submission_fields ADD COLUMN IF NOT EXISTS confidence_score integer;
