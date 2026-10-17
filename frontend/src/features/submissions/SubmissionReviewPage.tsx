@@ -189,7 +189,7 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
   }
   const acceptLabel = changed || field.confidence === 'missing' || field.confidence === 'conflict' ? 'Confirm' : 'Accept'
   const badge = accepted
-    ? { text: field.edited ? 'Changed by you' : field.aiValue ? 'Confirmed' : 'Entered by you', tone: 'neutral' }
+    ? { text: !field.value ? 'Left blank' : !field.aiValue ? 'Entered by you' : field.edited ? 'Changed by you' : 'Confirmed', tone: 'neutral' }
     : { text: CONFIDENCE_LABEL[field.confidence], tone: field.confidence }
 
   return (
@@ -239,7 +239,7 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
         )}
         {canEdit && (accepted ? (
           <>
-            <span className="si-done"><Check />{field.edited ? 'You changed it' : 'Accepted'}</span>
+            <span className="si-done"><Check />{!field.value ? 'Left blank' : !field.aiValue ? 'You entered it' : field.edited ? 'You changed it' : 'Accepted'}</span>
             <button type="button" className="si-link" disabled={busy} onClick={() => void send('undo')} aria-label={`Undo ${field.label}`}>Undo</button>
           </>
         ) : (
@@ -290,6 +290,7 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
         </div>
       )}
 
+      {(submission.status === 'READY_FOR_REVIEW' || submission.status === 'IN_REVIEW') && (
       <div className="si-card si-card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h2 style={{ margin: 0 }}>Checks</h2>
         {!checks ? <div className="si-muted si-small">Running checks…</div> : (
@@ -330,6 +331,7 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
           </>
         )}
       </div>
+      )}
 
       <CollapsibleSection className="si-card si-card-pad" title="Activity" defaultOpen={false}>
         <ol className="si-activity">
@@ -502,7 +504,8 @@ export function SubmissionReviewPage() {
   const { data: settings } = useIntakeSettings()
   const reviewable = submission?.status === 'READY_FOR_REVIEW' || submission?.status === 'IN_REVIEW'
   const checksVersion = useMemo(() => (submission ? submission.fields.map((field) => `${field.key}=${field.value ?? ''}`).join('|') + `|${submission.customerChoice?.customerId || ''}` : ''), [submission])
-  const { data: checks } = useSubmissionChecks(id, !!submission && (reviewable || submission.status === 'COMPLETED'), checksVersion)
+  // Checks guide the review; after approval they would only find the customer the approval created.
+  const { data: checks } = useSubmissionChecks(id, !!submission && reviewable, checksVersion)
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [docId, setDocId] = useState<string | null>(null)

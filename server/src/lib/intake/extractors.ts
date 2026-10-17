@@ -178,7 +178,7 @@ function detectProduct(documents: ExtractionDocument[], catalog: ExtractionCatal
   const text = documents.map((document) => document.lines.join('\n')).join('\n').toLowerCase()
   const scores = catalog.products.map((product) => {
     const terms = [product.label.toLowerCase(), product.code.replace(/-/g, ' '), ...(PRODUCT_KEYWORDS[product.code] || [])]
-    const hits = terms.filter((term) => term && text.includes(term))
+    const hits = Array.from(new Set(terms.filter((term) => term && text.includes(term))))
     return { code: product.code, score: hits.length, hits }
   }).sort((left, right) => right.score - left.score)
   const best = scores[0]
