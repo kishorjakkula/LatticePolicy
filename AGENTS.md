@@ -20,6 +20,9 @@ area you are changing.
   perform or explicitly authorize; propose the close with evidence rather
   than assuming you're allowed to do it.
 
+- For broker submission intake (AI drafting with human approval), read
+  `docs/SUBMISSION_INTAKE.md`.
+
 - For frontend controls, follow `docs/UI_CONTROL_STANDARDS.md`; use the shared
   `RadioGroup` for all radio choices and include new screens in the UI audit.
 

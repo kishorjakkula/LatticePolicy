@@ -366,7 +366,11 @@ export async function createDraftQuote(
   tenantId: string,
   body: any,
   updatedBy: string
-): Promise<{
+): Promise<DraftQuoteResult> {
+  return withTenantTx(tenantId, async (innerDb) => insertDraftQuote(toRawQuery(innerDb), tenantId, body, updatedBy))
+}
+
+export type DraftQuoteResult = {
   quoteId: string
   quoteNumber: string | null
   status: string
@@ -375,7 +379,19 @@ export async function createDraftQuote(
   updatedBy: string
   statusHistory: QuoteAuditEntry[]
   stepHistory: QuoteAuditEntry[]
-}> {
+}
+
+/**
+ * Inserts a draft quote using the caller's tenant transaction, so another
+ * service (submission intake approval) can create the quote atomically with
+ * its own writes.
+ */
+export async function insertDraftQuote(
+  q: (text: string, params?: any[]) => Promise<any>,
+  tenantId: string,
+  body: any,
+  updatedBy: string
+): Promise<DraftQuoteResult> {
   const quoteId = uuidv4()
   const progressStep = clampStep(body.progressStep)
   const status = typeof body.status === 'string' ? body.status : 'Draft'
@@ -385,42 +401,44 @@ export async function createDraftQuote(
   const statusHistory = upsertQuoteAuditHistory([], status, nowIso, updatedBy)
   let quoteNumber: string | null = null
 
-  await withTenantTx(tenantId, async (innerDb) => {
-    const q = toRawQuery(innerDb)
-    let attempts = 0
-    while (attempts < 5) {
-      quoteNumber = generateQuoteNumber()
-      try {
-        await q(
-          'INSERT INTO quotes (tenant_id, quote_id, quote_number, product_code, effective_date, term_months, state, payload, status, progress_step, created_at, updated_at, updated_by, status_history, step_history) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12,$13,$14)',
-          [
-            tenantId,
-            quoteId,
-            quoteNumber,
-            payload.productCode || body.productCode || null,
-            payload.effectiveDate || body.effectiveDate || new Date().toISOString().slice(0, 10),
-            payload.termMonths || body.termMonths || 12,
-            payload.state || body.state || null,
-            payload,
-            status,
-            progressStep,
-            nowIso,
-            updatedBy,
-            JSON.stringify(statusHistory),
-            JSON.stringify(stepHistory),
-          ]
-        )
-        break
-      } catch (err: any) {
-        if (err?.code === '23505') {
-          attempts++
-          continue
-        }
-        throw err
+  let attempts = 0
+  while (attempts < 5) {
+    quoteNumber = generateQuoteNumber()
+    try {
+      // A savepoint keeps the caller's transaction usable after a quote
+      // number collision, which aborts the statement.
+      await q('SAVEPOINT draft_quote_insert')
+      await q(
+        'INSERT INTO quotes (tenant_id, quote_id, quote_number, product_code, effective_date, term_months, state, payload, status, progress_step, created_at, updated_at, updated_by, status_history, step_history) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12,$13,$14)',
+        [
+          tenantId,
+          quoteId,
+          quoteNumber,
+          payload.productCode || body.productCode || null,
+          payload.effectiveDate || body.effectiveDate || new Date().toISOString().slice(0, 10),
+          payload.termMonths || body.termMonths || 12,
+          payload.state || body.state || null,
+          payload,
+          status,
+          progressStep,
+          nowIso,
+          updatedBy,
+          JSON.stringify(statusHistory),
+          JSON.stringify(stepHistory),
+        ]
+      )
+      await q('RELEASE SAVEPOINT draft_quote_insert')
+      break
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        await q('ROLLBACK TO SAVEPOINT draft_quote_insert')
+        attempts++
+        continue
       }
+      throw err
     }
-    if (!quoteNumber) quoteNumber = generateQuoteNumber()
-  })
+  }
+  if (!quoteNumber) quoteNumber = generateQuoteNumber()
 
   return { quoteId, quoteNumber, status, progressStep, updatedAt: nowIso, updatedBy, statusHistory, stepHistory }
 }

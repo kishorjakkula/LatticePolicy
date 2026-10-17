@@ -84,6 +84,14 @@ export const queryKeys = {
     all: () => ['uw-authority-grants'] as const,
     list: () => ['uw-authority-grants', 'list'] as const,
   },
+  submissions: {
+    all: () => ['submissions'] as const,
+    settings: () => ['submissions', 'settings'] as const,
+    lists: () => ['submissions', 'list'] as const,
+    list: (status?: string) => ['submissions', 'list', status ?? null] as const,
+    detail: (id: string) => ['submissions', 'detail', id] as const,
+    checks: (id: string) => ['submissions', 'checks', id] as const,
+  },
   placements: {
     all: () => ['placements'] as const,
     list: (page: number, pageSize: number, status?: string) => ['placements', 'list', page, pageSize, status ?? null] as const,

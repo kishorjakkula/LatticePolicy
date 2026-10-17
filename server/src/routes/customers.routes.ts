@@ -2617,7 +2617,7 @@ async function searchCustomers(
   })
 }
 
-async function findPotentialMatches(
+export async function findPotentialMatches(
   q: QueryFn,
   tenantId: string,
   payload: NormalizedCustomerInput,

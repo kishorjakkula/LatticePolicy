@@ -17,6 +17,7 @@ const SCREENS: Array<{ name: string; path: string }> = [
   { name: 'insureds', path: '/insureds' },
   { name: 'underwriting queue', path: '/uw/queue' },
   { name: 'placements', path: '/placements' },
+  { name: 'submissions', path: '/submissions' },
   { name: 'admin forms', path: '/admin/forms' },
   { name: 'admin underwriting companies', path: '/admin/uw-company' },
   { name: 'admin users', path: '/admin/users' },

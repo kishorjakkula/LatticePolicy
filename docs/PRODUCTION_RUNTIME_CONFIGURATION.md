@@ -51,6 +51,13 @@ Additional guarded settings:
   (default, `ASYNC_PUSH_WEBHOOK_URL`) or `kafka` (`KAFKA_BROKERS` and related
   settings). A dispatcher with incomplete transport settings refuses to start.
   See `docs/EVENTS.md`.
+- `INTAKE_AI_PROVIDER` selects who reads uploaded broker submissions:
+  `builtin` (default; a label reader, no documents leave the stack) or
+  `anthropic` (Claude, which also reads PDFs and images; needs
+  `ANTHROPIC_API_KEY`, optional `INTAKE_AI_MODEL`, `INTAKE_AI_BASE_URL`,
+  `INTAKE_AI_TIMEOUT_MS`). `INTAKE_EXTRACTION_MODE=job|inline` overrides where
+  reads run. Set these on the API and the worker. See
+  `docs/SUBMISSION_INTAKE.md`.
 - `CARRIER_TENANT_ID` pins the stack to one carrier. Set it on every
   single-carrier deployment: requests, logins, SSO routes, and background
   workers for any other tenant id are rejected with `TENANT_NOT_SERVED`. It is

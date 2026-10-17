@@ -126,6 +126,18 @@ Important lifecycle flows:
   this mid-term rebase model (see `docs/tasks/issue-52-out-of-sequence-handling.md`).
 - Customer portal APIs must return customer-safe projections only and enforce linked-customer scope.
 
+### Submission Intake
+
+Broker submissions can enter before the quote flow: uploaded documents are
+read by a reader (built-in label reader, or Claude when
+`INTAKE_AI_PROVIDER=anthropic`) that drafts the quote data with its source
+and confidence. A person confirms each value and approves; approval creates
+or links the customer and creates a draft quote in one transaction. The AI
+never creates records on its own. Entities `submissions`,
+`submission_documents`, `submission_fields`, `submission_events` (migration
+060); service `server/src/services/submission-intake.service.ts`; UI under
+`/submissions`. See `docs/SUBMISSION_INTAKE.md`.
+
 ### Standard Quote Flow Versus Large Commercial Placement
 
 Most business uses the standard single-carrier quote/rate/bind flow above.

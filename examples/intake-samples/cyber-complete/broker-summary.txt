@@ -1,0 +1,42 @@
+BROKER SUMMARY SHEET (SAMPLE: CONFIRMS EVERY APPLICATION VALUE)
+
+POLICY
+Effective date: 02/01/2027
+Rating state: TX
+Prior carrier: Lone Star Specialty
+
+INSURED
+Named insured: Bluebonnet Analytics LLC
+Insured type: company
+FEIN: 74-5521987
+Insured email: security@bluebonnet-analytics.example
+Insured phone: (512) 555-0199
+Mailing address: 1100 Lavaca St, Suite 400
+City: Austin
+Address state: TX
+ZIP code: 78701
+
+BROKER
+Broker or agency: Summit Insurance Agency
+Broker email: priya@summitagency.example
+
+INSURED PROFILE
+Industry: Technology
+Annual Revenue (USD): 8,400,000
+Employee Count: 52
+Sensitive Records Count: 120,000
+Primary Internet Domain: bluebonnet-analytics.example
+Public-Facing Applications: 2
+
+SECURITY CONTROLS
+MFA Enabled for Admin/Remote Access: Yes
+Endpoint Protection / EDR Enabled: Yes
+Backup Frequency: Daily
+Prior Cyber Incidents (Last 3 Years): 0
+
+QUALIFICATION QUESTIONS
+MFA enforced for all remote and privileged access? Yes
+EDR/anti-malware active on managed endpoints? Yes
+Backups are immutable/offline and tested regularly? Yes
+Incident response plan documented and tested annually? Yes
+No material cyber loss events in the last 3 years? Yes

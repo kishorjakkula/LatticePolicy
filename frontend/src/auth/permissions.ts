@@ -92,11 +92,25 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'uw.authority.override',
     'rating.models.read',
     'rating.models.manage',
-    'rating.models.publish'
+    'rating.models.publish',
+    'menu.submissions.view',
+    'page.submissions.view',
+    'submissions.read',
+    'submissions.manage',
+    'submissions.approve'
   ],
   customer: ['menu.portal.view', 'page.portal.view', 'customer.portal.read'],
   actuary: ['menu.rating.view', 'page.rating.view', 'rating.models.read', 'rating.models.manage', 'rating.models.publish'],
-  agent: ['menu.search.view', 'page.search.view', 'page.wizard.view', 'page.policy.view'],
+  agent: [
+    'menu.search.view',
+    'page.search.view',
+    'page.wizard.view',
+    'page.policy.view',
+    'menu.submissions.view',
+    'page.submissions.view',
+    'submissions.read',
+    'submissions.manage'
+  ],
   underwriter: [
     'menu.search.view',
     'menu.uw_queue.view',
@@ -111,7 +125,12 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
     'menu.placements.view',
     'page.placements.view',
     'placement.read',
-    'placement.manage'
+    'placement.manage',
+    'menu.submissions.view',
+    'page.submissions.view',
+    'submissions.read',
+    'submissions.manage',
+    'submissions.approve'
   ],
   forms_admin: ['menu.admin.view', 'menu.admin.forms.view', 'page.admin.forms.view', 'admin.forms.read', 'admin.forms.manage'],
   compliance_admin: [

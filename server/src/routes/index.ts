@@ -8,6 +8,7 @@ import { policyRoutes } from './policies.routes.js'
 import { transactionRoutes } from './transactions.routes.js'
 import { uwRoutes } from './uw.routes.js'
 import { placementRoutes } from './placement.routes.js'
+import { submissionRoutes } from './submissions.routes.js'
 import { productsRoutes } from './products.routes.js'
 import { adminRoutes } from './admin.routes.js'
 import { ratingRoutes } from './rating-workbench.routes.js'
@@ -28,6 +29,7 @@ mountRouter(routes, '/', policyRoutes)
 mountRouter(routes, '/', transactionRoutes)
 mountRouter(routes, '/', uwRoutes)
 mountRouter(routes, '/', placementRoutes)
+mountRouter(routes, '/', submissionRoutes)
 mountRouter(routes, '/', productsRoutes)
 mountRouter(routes, '/', productGovernanceRoutes)
 mountRouter(routes, '/admin', adminRoutes)

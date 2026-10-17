@@ -8,6 +8,20 @@ Conventions
   and the other `/auth/*` routes are not versioned and are not under `/api`.
 
 Endpoints
+- Submission intake (see `docs/SUBMISSION_INTAKE.md`)
+  - GET /v1/submissions/settings: reader in use, limits, products, attestation text. `submissions.read`.
+  - GET /v1/submissions?status=&page=&pageSize=: inbox with per-status counts. `submissions.read`.
+  - POST /v1/submissions: `{ documents: [{ fileName, dataBase64 }], brokerName?, brokerEmail?, productCode?, notes?, startReading? }`; stores the documents and starts reading. `submissions.manage`.
+  - GET /v1/submissions/{id}: documents (text lines), drafted fields with confidence and evidence, activity. `submissions.read`.
+  - GET /v1/submissions/{id}/checks: clearance (customer matches, open submissions), appetite (carrier underwriting rules), missing required values. `submissions.read`.
+  - GET /v1/submissions/{id}/documents/{documentId}: original file. `submissions.read`.
+  - POST /v1/submissions/{id}/read: `{ productCode? }`; read again (202). `submissions.manage`.
+  - PATCH /v1/submissions/{id}/fields/{key}: `{ action: set | accept | undo, value? }`. `submissions.manage`.
+  - POST /v1/submissions/{id}/accept-high-confidence. `submissions.manage`.
+  - PUT /v1/submissions/{id}/customer: `{ mode: new | existing, customerId? }`. `submissions.manage`.
+  - POST /v1/submissions/{id}/approve: `{ attestation: true }`; creates or links the customer and the draft quote in one transaction. `submissions.approve`.
+  - POST /v1/submissions/{id}/decline: `{ reason }`. `submissions.approve`.
+
 - POST /v1/quotes
   - Create a quote from risk, coverages, UW answers.
   - Body: `contracts/quote.request.schema.json`
