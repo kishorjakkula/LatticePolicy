@@ -99,3 +99,19 @@ Stop the stack with `sh .pilot/kit/stack.sh down`. This preserves its volumes.
 HTTP and `DEPLOYMENT_ENV=local` are intentional for this loopback-only pilot.
 Production requires HTTPS, managed secrets/configuration, remote recovery
 evidence, customer UAT, and the release gates in `docs/FIRST_CUSTOMER_HANDOFF.md`.
+
+### Pilot carrier identity
+
+Tenant administration → **Carrier branding** edits the carrier display name,
+logo, color and printed footer. Setup supplies the replaceable Acme Mutual Pilot
+monogram only when branding has not been configured. Saved choices, including
+removing a logo, survive later setup and deploys. Login and screen headers share
+these settings; all browser PDF generators and new policy packets/worksheets
+use carrier identity rather than framework branding.
+
+Issued documents retain their branding snapshots. To convert the older
+**synthetic pilot** examples once, run `npm run pilot:rebrand-documents` after
+upgrade. It stores verified branded copies and retains original artifact paths
+and hashes in revision metadata. It refuses other carriers and is never run
+automatically by setup. Customer-issued production documents must retain their
+historical originals.
