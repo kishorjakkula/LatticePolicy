@@ -156,6 +156,7 @@ describe('BuiltinExtractor', () => {
     expect(byKey.get('insuredName')?.value).toBe('NORTHLINE LOGISTICS LLC')
     expect(byKey.get('insuredName')?.confidence).toBe('medium')
     expect(byKey.get('effectiveDate')).toMatchObject({ value: '2026-12-01' })
+    expect(byKey.get('state')).toMatchObject({ value: 'OH', confidence: 'medium' })
     expect(byKey.get('fein')).toMatchObject({ value: '84-2219031', confidence: 'high' })
     expect(byKey.get('risk.vehicleCount')).toMatchObject({ value: '2', confidence: 'high' })
     expect(byKey.get('risk.driverCount')?.evidence).toHaveLength(2)

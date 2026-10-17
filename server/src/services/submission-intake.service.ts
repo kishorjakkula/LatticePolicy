@@ -28,7 +28,7 @@ import {
   type ExtractionResult,
   type IntakeExtractor,
 } from '../lib/intake/extractors.js'
-import { createCustomerRecord, findPotentialMatches, normalizeCustomerInput } from '../routes/customers.routes.js'
+import { createCustomerRecord, findPotentialMatches, loadCustomerSettings, normalizeCustomerInput, validateCustomerPayload } from '../routes/customers.routes.js'
 import { insertDraftQuote } from './quote.service.js'
 import { evaluateUW } from './uw.service.js'
 
@@ -839,8 +839,14 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
   const clearance = await withTenantTx(tenantId, async (db) => {
     const q = toRawQuery(db)
     let customerMatches: any[] = []
+    let newCustomerProblems: string[] = []
     if (values.insuredName) {
-      customerMatches = await findPotentialMatches(q, tenantId, buildCustomerInput(values), null)
+      const input = buildCustomerInput(values)
+      customerMatches = await findPotentialMatches(q, tenantId, input, null)
+      // What would stop a new customer being created from these values, so the
+      // reviewer can fix it before approving rather than at approval.
+      const validation = validateCustomerPayload(input, (await loadCustomerSettings(q, tenantId)).validation)
+      newCustomerProblems = validation.valid ? [] : validation.errors
     }
     const openSubmissions = values.insuredName
       ? (await q(
@@ -860,6 +866,7 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
         reasons: match.reasons,
       })),
       openSubmissions: openSubmissions.map((item: any) => ({ submissionId: item.submission_id, submissionNumber: item.submission_number, status: item.status, receivedAt: iso(item.received_at) })),
+      newCustomerProblems,
     }
   })
 
@@ -876,7 +883,14 @@ export async function getSubmissionChecks(tenantId: string, submissionId: string
     appetite.note = 'Runs once product, state, and effective date have values.'
   }
 
-  return { clearance, appetite, missingRequired, unconfirmed, readyToApprove: REVIEWABLE.includes(submission.status) && unconfirmed === 0 && missingRequired.length === 0 }
+  const usesNewCustomer = submission.customerChoice?.mode !== 'existing'
+  return {
+    clearance,
+    appetite,
+    missingRequired,
+    unconfirmed,
+    readyToApprove: REVIEWABLE.includes(submission.status) && unconfirmed === 0 && missingRequired.length === 0 && !(usesNewCustomer && clearance.newCustomerProblems.length),
+  }
 }
 
 // ── Approve and decline ───────────────────────────────────────────────────────

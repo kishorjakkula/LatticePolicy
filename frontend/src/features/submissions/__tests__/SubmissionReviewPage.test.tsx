@@ -9,6 +9,7 @@ import type { SubmissionDetail, SubmissionField } from '../../../api/submissions
 vi.mock('../../../auth/AuthContext', () => ({ useAuth: vi.fn() }))
 
 const mockUseSubmission = vi.fn()
+const mockCustomerProblems = vi.fn(() => [] as string[])
 const mockActionMutate = vi.fn()
 vi.mock('../../../api/hooks', () => ({
   useSubmission: (...args: any[]) => mockUseSubmission(...args),
@@ -19,7 +20,7 @@ vi.mock('../../../api/hooks', () => ({
     attestation: 'I checked the values against the source documents and approve creating the customer and draft quote.',
   } }),
   useSubmissionChecks: () => ({ data: {
-    clearance: { customerMatches: [], openSubmissions: [] },
+    clearance: { customerMatches: [], openSubmissions: [], newCustomerProblems: mockCustomerProblems() },
     appetite: { decision: 'Refer', reasons: ['Youngest driver under 21'], evaluated: true },
     missingRequired: [], unconfirmed: 0, readyToApprove: true,
   } }),
@@ -146,6 +147,19 @@ describe('SubmissionReviewPage', () => {
     expect(approve).toBeEnabled()
     fireEvent.click(approve)
     await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('sub-1'))
+  })
+
+  it('blocks approval and says why when the values cannot make a new customer', () => {
+    mockCustomerProblems.mockReturnValue(['At least one contact method or address is required'])
+    mockUseSubmission.mockReturnValue({ data: submission([field({ status: 'accepted' })]), isLoading: false })
+    renderPage()
+    expect(screen.getByText(/New customer:/).parentElement).toHaveTextContent('At least one contact method or address is required')
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to approval' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/cannot be created yet/)
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    expect(within(dialog).getByRole('button', { name: 'Approve and create quote' })).toBeDisabled()
+    mockCustomerProblems.mockReturnValue([])
   })
 
   it('lets a reviewer without approval permission prepare but not approve', () => {

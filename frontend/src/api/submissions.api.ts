@@ -73,6 +73,7 @@ export type SubmissionChecks = {
   clearance: {
     customerMatches: Array<{ customerId: string; customerKey: string; displayName: string; status: string; matchScore: number; reasons: string[] }>
     openSubmissions: Array<{ submissionId: string; submissionNumber: string; status: string; receivedAt: string }>
+    newCustomerProblems: string[]
   }
   appetite: { decision: string; reasons: string[]; evaluated: boolean; note?: string }
   missingRequired: Array<{ key: string; label: string }>

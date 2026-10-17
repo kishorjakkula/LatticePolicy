@@ -121,7 +121,7 @@ export function verifyEvidence(documents: ExtractionDocument[], evidence: Omit<E
 
 const LABEL_SYNONYMS: Record<string, string[]> = {
   effectiveDate: ['effective date', 'proposed eff. date', 'proposed effective date', 'eff. date', 'eff date', 'inception date', 'policy effective'],
-  state: ['rating state', 'state of operation', 'primary state'],
+  state: ['rating state', 'state of operation', 'primary state', 'state'],
   priorCarrier: ['prior carrier', 'current carrier', 'expiring carrier', 'incumbent carrier'],
   insuredName: ['named insured', 'first named insured', 'applicant', 'applicant name', 'insured name', 'business name', 'company name'],
   fein: ['fein', 'federal employer id', 'federal id', 'tax id', 'ein'],

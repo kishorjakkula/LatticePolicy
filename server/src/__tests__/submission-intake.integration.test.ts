@@ -29,6 +29,9 @@ const ACORD = [
   'ACORD 125 COMMERCIAL INSURANCE APPLICATION',
   'Applicant: Northline Logistics LLC',
   'FEIN: 84-2219031',
+  'Mailing address: 1180 Commerce Pkwy',
+  'City: Columbus',
+  'ZIP code: 43215',
   'Proposed eff. date: 12/01/2026      State: OH',
   'Primary Garaging ZIP: 43215',
   'Vehicle Count: 2',
@@ -73,7 +76,7 @@ async function confirmEverything(submissionId: string) {
     let value = field.value || undefined
     if (field.confidence === 'conflict') value = field.alternatives[0].value
     if (!value && field.required) {
-      value = field.type === 'select' ? field.options[0] : field.type === 'number' ? '3' : field.type === 'date' ? '2026-12-01' : 'Entered by reviewer'
+      value = field.type === 'select' ? field.options[0] : field.type === 'number' ? '3' : field.type === 'date' ? '2026-12-01' : /state/i.test(field.key) ? 'OH' : 'Entered by reviewer'
     }
     await updateSubmissionField(TENANT_ID, submissionId, field.key, 'uw1', { action: 'accept', value })
   }
@@ -187,6 +190,24 @@ describe('submission intake', () => {
 
     await expect(declineSubmission(TENANT_ID, submission.submissionId, 'uw1', {})).rejects.toMatchObject({ code: 'REASON_REQUIRED' })
     expect(await declineSubmission(TENANT_ID, submission.submissionId, 'uw1', { reason: 'Outside appetite' })).toMatchObject({ status: 'DECLINED' })
+  })
+
+  it('warns before approval when the values cannot make a valid new customer', async () => {
+    const submission = await createSubmission(TENANT_ID, 'agent1', { documents: [{ fileName: 'app.txt', dataBase64: b64('Applicant: Lonely Holdings LLC\nState: OH\nProposed eff. date: 12/01/2026') }] })
+    const { jobs, schedule } = capture()
+    await startReading(TENANT_ID, submission.submissionId, 'agent1', { schedule, productHint: 'cyber' })
+    await runExtraction(jobs[0], new BuiltinExtractor())
+    await confirmEverything(submission.submissionId)
+    const checks = await getSubmissionChecks(TENANT_ID, submission.submissionId)
+    expect(checks.clearance.newCustomerProblems.join(' ')).toMatch(/contact method or address/)
+    expect(checks.readyToApprove).toBe(false)
+    await expect(approveSubmission(TENANT_ID, submission.submissionId, 'uw1', { attestation: true })).rejects.toMatchObject({ code: 'CUSTOMER_INVALID' })
+    await updateSubmissionField(TENANT_ID, submission.submissionId, 'email', 'uw1', { action: 'accept', value: 'ops@lonely.example' })
+    // The carrier's customer rules also need a FEIN (or incorporation state) for a company.
+    expect((await getSubmissionChecks(TENANT_ID, submission.submissionId)).clearance.newCustomerProblems.join(' ')).toMatch(/FEIN/)
+    await updateSubmissionField(TENANT_ID, submission.submissionId, 'fein', 'uw1', { action: 'accept', value: '12-3456789' })
+    const after = await getSubmissionChecks(TENANT_ID, submission.submissionId)
+    expect({ ready: after.readyToApprove, problems: after.clearance.newCustomerProblems, missing: after.missingRequired, unconfirmed: after.unconfirmed }).toEqual({ ready: true, problems: [], missing: [], unconfirmed: 0 })
   })
 
   it('records a failed read when nothing can be read without an AI model', async () => {

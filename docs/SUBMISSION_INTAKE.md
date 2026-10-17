@@ -109,7 +109,10 @@ not retried.
 1. Checks: open for review, every value confirmed, required values present,
    product installed.
 2. Customer: the reviewer's chosen existing customer, or a new one created
-   with the customer service's duplicate check. A likely duplicate stops the
+   with the customer service's validation and duplicate check. The checks
+   panel runs the same validation beforehand (`newCustomerProblems`, for
+   example a company without a FEIN, or no contact method or address), and
+   the approve button stays disabled until it passes. A likely duplicate stops the
    approval (`409 POTENTIAL_DUPLICATE`); the reviewer picks the existing
    customer instead. Creating a duplicate anyway stays an administrator
    decision, as in the quote wizard.

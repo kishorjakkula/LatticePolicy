@@ -316,6 +316,12 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
                 {appetite?.reasons?.length ? <ul className="si-small" style={{ margin: '4px 0 0', paddingLeft: 18 }}>{appetite.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}
               </span>
             </div>
+            {submission.customerChoice?.mode !== 'existing' && (checks.clearance.newCustomerProblems || []).length > 0 && (
+              <div className="si-check">
+                <span className="si-check-mark is-bad" aria-hidden="true">✕</span>
+                <span><b>New customer:</b> {checks.clearance.newCustomerProblems.join('; ')}. Add the missing details, or link an existing customer.</span>
+              </div>
+            )}
             <div className="si-check">
               <span className={`si-check-mark ${checks.missingRequired.length ? 'is-warn' : 'is-ok'}`} aria-hidden="true">{checks.missingRequired.length ? '!' : '✓'}</span>
               <span><b>Required values:</b> {checks.missingRequired.length ? `missing ${checks.missingRequired.map((item) => item.label).join(', ')}.` : 'all present.'}</span>
@@ -443,6 +449,12 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
             )}
           </div>
 
+          {choice === 'new' && (checks?.clearance.newCustomerProblems || []).length > 0 && (
+            <div className="si-banner is-error" role="alert">
+              <p><b>A new customer cannot be created yet:</b> {checks!.clearance.newCustomerProblems.join('; ')}. Go back and add these details, or choose an existing customer.</p>
+            </div>
+          )}
+
           {checks?.appetite?.evaluated && checks.appetite.decision !== 'Eligible' && (
             <div className={`si-banner ${checks.appetite.decision === 'Decline' ? 'is-error' : 'is-info'}`}>
               <p><b>Underwriting rules: {checks.appetite.decision === 'Refer' ? 'referral' : 'outside appetite'}.</b> {checks.appetite.reasons.join(' ')} The quote is still created; the rules apply again when it is rated.</p>
@@ -468,7 +480,7 @@ function ApprovalDialog({ submission, checks, settings, canApprove, onClose }: {
         </div>
         <div className="si-dialog-foot">
           <button type="button" className="si-btn" onClick={onClose} disabled={busy}>Back to review</button>
-          <button type="button" className="si-btn si-btn-primary si-btn-lg" disabled={!canApprove || !attested || busy} onClick={() => void approve()}>
+          <button type="button" className="si-btn si-btn-primary si-btn-lg" disabled={!canApprove || !attested || busy || (choice === 'new' && (checks?.clearance.newCustomerProblems || []).length > 0)} onClick={() => void approve()}>
             {busy ? 'Approving…' : 'Approve and create quote'}
           </button>
         </div>
