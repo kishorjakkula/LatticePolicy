@@ -60,7 +60,11 @@ await check('Every document contains verified readable content', async () => {
     const { bytes, contentType } = await call('GET', `${prefix}/documents/${doc.documentId}/content`, { token, raw: true })
     assert(bytes.length > 100)
     if (contentType.includes('pdf')) assert.equal(bytes.subarray(0, 5).toString(), '%PDF-')
-    else assert.match(bytes.toString(), /Rating worksheet/)
+    else if (contentType.includes('wordprocessingml')) {
+      // A filled form template: a Word package with no merge token left unfilled.
+      assert.equal(bytes.subarray(0, 2).toString(), 'PK')
+      assert.ok(bytes.includes(Buffer.from('word/document.xml')))
+    } else assert.match(bytes.toString(), /Rating worksheet/)
     doc.measuredHash = crypto.createHash('sha256').update(bytes).digest('hex')
   }
 })

@@ -14,9 +14,14 @@ import { loadProductConfig } from '../../lib/products.js'
 const DIR = path.resolve(__dirname, '../../../../products/homeowners/documents')
 const TEMPLATES = ['HO-DEC.docx', 'HO-BINDER.docx', 'HO-EOI.docx', 'HO-QUOTE.docx']
 
+/** Paragraph text of a Word document: the w:t runs of each paragraph, one paragraph per line. */
 function documentText(buffer: Buffer): string {
   const xml = new PizZip(buffer).file('word/document.xml')!.asText()
-  return xml.replace(/<w:br\/>/g, '\n').replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&')
+  return xml
+    .split('</w:p>')
+    .map((paragraph) => Array.from(paragraph.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g), (match) => match[1]).join(''))
+    .join('\n')
+    .split('&amp;').join('&')
 }
 
 describe('homeowners document templates', () => {
