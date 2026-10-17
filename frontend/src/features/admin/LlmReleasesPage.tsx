@@ -98,50 +98,52 @@ export function LlmReleasesPage() {
           )}
         </form>
       )}
-      <div style={{ overflowX: 'auto' }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Version</th>
-              <th>Status</th>
-              <th>Model</th>
-              <th>Profile</th>
-              <th>Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {query.data?.items.map((item) => (
-              <tr key={item.release_id}>
-                <td>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    aria-pressed={selected?.release_id === item.release_id}
-                    onClick={() => setParams({ release: item.release_id })}
-                  >
-                    {item.version_label}
-                  </button>
-                </td>
-                <td>{label(item.status)}</td>
-                <td style={{ overflowWrap: 'anywhere' }}>
-                  {item.artifacts.model}
-                </td>
-                <td>
-                  {item.artifacts.profileId} {item.artifacts.profileVersion}
-                </td>
-                <td>
-                  {item.notifications
-                    .map((notice) => `${notice.email}: ${notice.status}`)
-                    .join('; ') ||
-                    (query.data?.emailEnabled === false
-                      ? 'Disabled'
-                      : 'Not queued')}
-                </td>
+      <CollapsibleSection title="Releases" className="card">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Model</th>
+                <th>Profile</th>
+                <th>Email</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {query.data?.items.map((item) => (
+                <tr key={item.release_id}>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      aria-pressed={selected?.release_id === item.release_id}
+                      onClick={() => setParams({ release: item.release_id })}
+                    >
+                      {item.version_label}
+                    </button>
+                  </td>
+                  <td>{label(item.status)}</td>
+                  <td style={{ overflowWrap: 'anywhere' }}>
+                    {item.artifacts.model}
+                  </td>
+                  <td>
+                    {item.artifacts.profileId} {item.artifacts.profileVersion}
+                  </td>
+                  <td>
+                    {item.notifications
+                      .map((notice) => `${notice.email}: ${notice.status}`)
+                      .join('; ') ||
+                      (query.data?.emailEnabled === false
+                        ? 'Disabled'
+                        : 'Not queued')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CollapsibleSection>
       {query.data && !query.data.items.length && <p>No release candidates.</p>}
       {query.data && params.get('release') && !selected && (
         <p role="alert">Release not found.</p>

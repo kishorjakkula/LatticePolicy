@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -35,7 +36,10 @@ test('synthetic compose config requires a read-only policy-directory mount and d
     assert.equal(mount.type, 'bind')
     assert.equal(mount.source, '/synthetic/release-policy')
     assert.equal(mount.read_only, true)
-    assert.equal(mount.bind.create_host_path, false)
+    // Compose versions differ in whether they render a false create_host_path, so
+    // check the rendered value is not true and the file declares it false.
+    assert.notEqual(mount.bind?.create_host_path, true)
+    assert.match(fs.readFileSync(new URL('./docker-compose.yml', import.meta.url), 'utf8'), /create_host_path:\s*false/)
     assert.equal(processor.read_only, true)
     assert.equal(rendered.networks.processing.internal, true)
     for (const service of Object.values(rendered.services))
