@@ -1,5 +1,6 @@
 import { brandingSchema, carrierBrandingSettings, saveCarrierBranding } from '../services/carrier-branding.service.js'
 import { Router } from 'express'
+import { seedProductDocumentTemplates } from '../services/product-document-templates.service.js'
 import { requirePermission } from '../auth.js'
 import { createUser, deleteUser, listByTenant, updateUser } from '../users.js'
 import { withTenantTx, getDb, toRawQuery } from '../db.js'
@@ -1022,7 +1023,8 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
     underwritingCompanies: { created: [] as string[], skipped: [] as string[] },
     forms: { created: [] as string[], skipped: [] as string[] },
     notificationTemplates: { created: [] as string[], skipped: [] as string[] },
-    agency: { created: false, skipped: false }
+    agency: { created: false, skipped: false },
+    documentTemplates: { created: [] as string[], attached: [] as string[], skipped: [] as string[] },
   }
 
   let seedStep = 'start'
@@ -1079,6 +1081,11 @@ adminRoutes.post('/seed-reference-data', requirePermission('admin.security.manag
           summary.forms.created.push(line.formNumber)
         }
       }
+
+      seedStep = 'product document templates'
+      const documentTemplates = await seedProductDocumentTemplates(q, tenantId, actor, { carrierCode: 'SAMPLE', authority: 'ISO', editionDate: SEED_FORM_EDITION_DATE })
+      summary.forms.created.push(...documentTemplates.created)
+      summary.documentTemplates = documentTemplates
 
       for (const tmpl of SEED_NOTIFICATION_TEMPLATES) {
         seedStep = `notification template: ${tmpl.templateCode}`

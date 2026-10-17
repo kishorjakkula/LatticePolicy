@@ -64,7 +64,7 @@ describe('document template variable catalog', () => {
       seen.add(variable.token)
       expect(variable.label.length).toBeGreaterThan(0)
       expect(variable.description.length).toBeGreaterThan(0)
-      expect(['Insured', 'Policy', 'Coverage', 'Premium', 'Agent']).toContain(variable.group)
+      expect(['Insured', 'Policy', 'Policy details', 'Coverage', 'Homeowners', 'Premium', 'Agent']).toContain(variable.group)
     }
     expect(DOCUMENT_TEMPLATE_VARIABLE_TOKENS.size).toBe(seen.size)
   })
