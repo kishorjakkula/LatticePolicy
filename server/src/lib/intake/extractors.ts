@@ -127,10 +127,10 @@ const LABEL_SYNONYMS: Record<string, string[]> = {
   fein: ['fein', 'federal employer id', 'federal id', 'tax id', 'ein'],
   email: ['insured email', 'applicant email', 'contact email'],
   phone: ['insured phone', 'applicant phone', 'phone', 'telephone'],
-  addressLine1: ['mailing address', 'street address', 'address'],
+  addressLine1: ['mailing address', 'street address', 'insured address'],
   city: ['city'],
   addressState: ['address state'],
-  postalCode: ['zip code', 'zip', 'postal code'],
+  postalCode: ['zip code', 'postal code', 'mailing zip'],
   brokerName: ['agency', 'agency name', 'broker', 'producer'],
   brokerEmail: ['agency email', 'broker email', 'producer email'],
 }
@@ -161,9 +161,14 @@ function labelVariants(field: IntakeTargetField): Array<{ text: string; exact: b
   return variants
 }
 
-/** "Label: value" on one line; the value stops at a run of spaces before the next label. */
+/**
+ * "Label: value" on one line; the value stops at a run of spaces before the
+ * next label. A label starts the line (after any numbering or bullet) or
+ * follows a column gap (two spaces, a tab, or "|"), so "Address" does not
+ * match inside "Mailing address".
+ */
 function matchLabel(line: string, label: string): { value: string; quote: string } | null {
-  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(label)}\\s*(\\([^)]*\\))?\\s*[:#]\\s*(.+)$`, 'i')
+  const pattern = new RegExp(`(^[\\s\\-*•\\d.)]*|\\s{2,}|\\|\\s*)${escapeRegex(label)}\\s*(\\([^)]*\\))?\\s*[:#]\\s*(.+)$`, 'i')
   const match = pattern.exec(line)
   if (!match) return null
   let value = match[3]

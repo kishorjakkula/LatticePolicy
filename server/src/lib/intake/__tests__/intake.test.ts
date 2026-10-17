@@ -69,6 +69,11 @@ describe('normalizeFieldValue', () => {
     const radius = { key: 'risk.radiusClass', type: 'select' as const, options: ['local', 'intermediate', 'long-haul'] }
     expect(normalizeFieldValue(radius, 'Long Haul')).toEqual({ value: 'long-haul', ok: true })
     expect(normalizeFieldValue(radius, 'regional').ok).toBe(false)
+    const alarm = { key: 'risk.fireAlarm', type: 'select' as const, options: ['true', 'false'] }
+    expect(normalizeFieldValue(alarm, 'Yes')).toEqual({ value: 'true', ok: true })
+    expect(normalizeFieldValue(alarm, 'no')).toEqual({ value: 'false', ok: true })
+    const occupancy = { key: 'risk.occupancy', type: 'select' as const, options: ['OwnerOccupied', 'TenantOccupied', 'Seasonal'] }
+    expect(normalizeFieldValue(occupancy, 'Owner occupied')).toEqual({ value: 'OwnerOccupied', ok: true })
   })
 
   it('matches quotes regardless of case, spacing, and quote marks', () => {
@@ -177,6 +182,18 @@ describe('BuiltinExtractor', () => {
     const zip = result.conflicts.find((conflict) => conflict.key === 'risk.garagingZip')
     expect(zip?.options.map((option) => option.value).sort()).toEqual(['43215', '43219'])
     expect(byKey.has('risk.garagingZip')).toBe(false)
+  })
+
+  it('matches labels at the start of a line or after a column gap, not inside a longer label', async () => {
+    const documents = [await doc('d1', 'app.txt', 'Mailing address: 1 Main St\nGaraging ZIP (all vehicles): 43219\nZIP code: 43215\nProposed eff. date: 12/01/2026      State: OH\n2. Applicant: Acme LLC')]
+    const result = await new BuiltinExtractor().extract({ documents, catalog: buildExtractionCatalog(), productHint: 'homeowners' })
+    const byKey = new Map(result.values.map((value) => [value.key, value]))
+    expect(byKey.get('addressLine1')?.value).toBe('1 Main St')
+    expect(byKey.has('risk.address')).toBe(false)
+    expect(byKey.get('postalCode')?.value).toBe('43215')
+    expect(byKey.get('state')?.value).toBe('OH')
+    expect(byKey.get('insuredName')?.value).toBe('Acme LLC')
+    expect(result.conflicts).toEqual([])
   })
 
   it('uses the reviewer product choice and never reads email headers as insured data', async () => {

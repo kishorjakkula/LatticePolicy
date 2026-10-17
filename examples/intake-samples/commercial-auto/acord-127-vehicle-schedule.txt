@@ -1,0 +1,17 @@
+ACORD 127 - BUSINESS AUTO SECTION (SAMPLE, NOT AN ACORD FORM)
+
+Named insured: Northline Logistics LLC
+
+VEHICLE SCHEDULE
+Veh 1: 2022 FREIGHTLINER M2 106   VIN 3ALACWFC4NDNA1234   GVW 26,000
+Veh 2: 2021 ISUZU NPR             VIN JALC4W160M7000123   GVW 14,500
+Garaging ZIP (all vehicles): 43219
+Primary Garaging ZIP: 43219
+Average Annual Mileage (per vehicle): 38,000
+
+DRIVER SCHEDULE
+Driver Count: 4
+Driver 1   DOB 03/22/1979   License OH
+Driver 2   DOB 11/05/1986   License OH
+Driver 3   DOB 04/11/2006   License OH
+Driver 4   DOB 07/30/1991   License OH

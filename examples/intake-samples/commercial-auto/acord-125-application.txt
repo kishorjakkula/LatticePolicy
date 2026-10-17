@@ -1,0 +1,29 @@
+ACORD 125 - COMMERCIAL INSURANCE APPLICATION (SAMPLE, NOT AN ACORD FORM)
+
+AGENCY
+Agency: Brightway Brokers
+Producer email: dana@brightwaybrokers.example
+
+APPLICANT INFORMATION
+Applicant: Northline Logistics LLC
+FEIN: 84-2219031
+Mailing address: 1180 Commerce Pkwy
+City: Columbus
+ZIP code: 43215
+Insured phone: (614) 555-0142
+Insured email: ops@northline-logistics.example
+Nature of business: ______________________
+
+POLICY INFORMATION
+Proposed eff. date: 12/01/2026      State: OH
+Prior carrier: Great Lakes Casualty
+Coverage requested: Auto liability CSL 1,000,000
+
+BUSINESS AUTO SUMMARY
+Primary Garaging ZIP: 43215
+Vehicle Count: 2
+Use Class: Wholesale distribution
+Operating Radius: Intermediate
+Primary Vehicle Type: Box truck
+GVW Class: Medium
+Years in Business: 7

@@ -59,12 +59,20 @@ function normalizeNumber(raw: string): Normalized {
   return { value: String(number), ok: true }
 }
 
+const YES = new Set(['yes', 'y', 'true'])
+const NO = new Set(['no', 'n', 'false'])
+
 function normalizeOption(raw: string, options: string[]): Normalized {
   const text = raw.trim()
   const lower = text.toLowerCase()
   const slug = lower.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  const exact = options.find((option) => option.toLowerCase() === lower || option.toLowerCase() === slug)
+  const squashed = lower.replace(/[^a-z0-9]+/g, '')
+  const exact = options.find((option) => option.toLowerCase() === lower || option.toLowerCase() === slug || option.toLowerCase().replace(/[^a-z0-9]+/g, '') === squashed)
   if (exact) return { value: exact, ok: true }
+  // Yes/no answers for true/false fields.
+  const lowered = options.map((option) => option.toLowerCase())
+  if (lowered.includes('true') && YES.has(lower)) return { value: options[lowered.indexOf('true')], ok: true }
+  if (lowered.includes('false') && NO.has(lower)) return { value: options[lowered.indexOf('false')], ok: true }
   const contained = options.filter((option) => {
     const words = option.toLowerCase().replace(/-/g, ' ')
     return lower.includes(words) || words.includes(lower)

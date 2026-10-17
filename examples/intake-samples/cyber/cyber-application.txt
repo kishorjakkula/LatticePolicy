@@ -1,0 +1,24 @@
+CYBER LIABILITY APPLICATION (SAMPLE)
+
+Applicant: Keystone Software Inc.
+FEIN: 47-3310982
+Mailing address: 500 Congress Ave, Suite 1200
+City: Austin
+ZIP code: 78701
+Insured email: risk@keystonesoftware.example
+Effective date: 01/01/2027
+State: TX
+
+INSURED PROFILE
+Industry: Technology
+Annual Revenue (USD): $12,500,000
+Employee Count: 85
+Sensitive Records Count: 240,000
+Primary Internet Domain: keystonesoftware.example
+Public-Facing Applications: 3
+
+SECURITY CONTROLS
+MFA Enabled for Admin/Remote Access: Yes
+Endpoint Protection / EDR Enabled: Yes
+Backup Frequency: Daily
+Prior Cyber Incidents (Last 3 Years): 1
