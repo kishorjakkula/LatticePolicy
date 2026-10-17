@@ -796,7 +796,7 @@ export function buildCustomerInput(values: Record<string, string>) {
     status: 'ACTIVE',
     identity: isCompany
       ? { company: { legalName: name, fein: values.fein || '' } }
-      : { person: splitPersonName(name) },
+      : { person: { ...splitPersonName(name), dob: values.insuredDob || '' } },
     contactPoints,
     addresses,
   })
@@ -882,7 +882,7 @@ export function buildQuotePayload(
       primary: {
         firstName: person.firstName,
         lastName: person.lastName,
-        dob: '',
+        dob: isCompany ? '' : values.insuredDob || '',
         prefix: '',
         displayName: name,
         email: values.email || '',

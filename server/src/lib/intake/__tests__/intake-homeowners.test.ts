@@ -32,6 +32,7 @@ describe('homeowners intake (HO-3 sample submission)', () => {
     expect(values).toMatchObject({
       insuredName: 'Maria Gonzalez',
       insuredType: 'person',
+      insuredDob: '1979-03-14',
       addressLine1: 'PO Box 4410',
       postalCode: '78765',
       effectiveDate: '2026-11-15',

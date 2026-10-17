@@ -714,6 +714,7 @@ export async function bindQuote(
       versionId,
       generatedAt: nowIso,
       inputSnapshot: quote.payload,
+      premium: premiumSummary,
       generatedBy: normalizedActorId,
       correlationId: transactionNumber,
     })

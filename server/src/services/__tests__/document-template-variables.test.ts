@@ -164,6 +164,18 @@ describe('resolveDocumentTemplateVariables', () => {
     }
   }
 
+  it('uses the bind premium when the policy version is not saved yet', async () => {
+    const q = createQuery({})
+    const result = await resolveDocumentTemplateVariables(q, {
+      tenantId: 'tenant-1',
+      policyId: 'policy-1',
+      productCode: 'homeowners',
+      payload: { productCode: 'homeowners', coverages: [{ code: 'A', limit: 300000 }] },
+      premium: { total: { amount: 775.21, currency: 'USD' }, fees: { amount: 35 }, taxes: { amount: 14.5 } },
+    })
+    expect(result).toMatchObject({ premiumTotal: '775.21', premiumFees: '35', premiumTaxes: '14.5', premiumCurrency: 'USD', coverageALimit: '$300,000' })
+  })
+
   it('resolves every catalog token to a string, defaulting missing data to empty string', async () => {
     const q = createQuery({})
     const result = await resolveDocumentTemplateVariables(q, {

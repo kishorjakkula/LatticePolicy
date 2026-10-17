@@ -44,6 +44,8 @@ export type PolicyDocumentContext = {
   versionId?: string | null
   generatedAt?: string | null
   inputSnapshot?: unknown
+  /** Premium of the transaction, for documents generated before its policy version is saved. */
+  premium?: { total?: { amount?: number; currency?: string } | null; fees?: { amount?: number } | null; taxes?: { amount?: number } | null } | null
   requiredFormCodes?: string[]
   requiredDeliveryMethods?: string[]
 }
@@ -526,6 +528,7 @@ async function buildFilledFormDocuments(
         transactionType: context.transactionType,
         transactionNumber: context.transactionNumber,
         payload: context.inputSnapshot,
+        premium: context.premium ?? null,
       })
       const filled = renderDocxTemplate(templateContent, variables)
       const documentId = uuidv4()

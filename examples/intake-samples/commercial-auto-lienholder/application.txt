@@ -1,0 +1,48 @@
+COMMERCIAL AUTO APPLICATION (SAMPLE)
+
+Agency: Brightway Brokers
+Broker email: dana@brightwaybrokers.example
+Named insured: Pecos Valley Landscaping LLC
+Insured type: company
+FEIN: 85-3019944
+Insured email: office@pecosvalley.example
+Insured phone: (432) 555-0170
+Mailing address: 900 N Grant Ave
+City: Odessa
+Address state: TX
+ZIP code: 79761
+
+Effective date: 02/01/2027
+Rating state: TX
+Billing method: Direct bill
+Payment plan: Monthly
+Prior carrier: Permian Casualty
+Prior policy number: PC-CA-40981
+Prior policy expiration: 02/01/2027
+Years with prior carrier: 5
+
+Primary Garaging ZIP: 79761
+Vehicle Count: 4
+Driver Count: 5
+Use Class: Artisan contractor
+Operating Radius: Local
+Primary Vehicle Type: Pickup
+GVW Class: Light
+Average Annual Mileage (per vehicle): 22,000
+Years in Business: 9
+Prior Auto Losses (3 Years): 0
+
+Commercial Auto Liability limit: 1,000,000
+Collision deductible: 1,000
+Comprehensive deductible: 500
+
+Additional interest type: Lienholder
+Mortgagee or lienholder: West Texas Equipment Finance
+Loan number: WTEF-311-4420
+Lienholder address: 4100 E 42nd St, Odessa TX 79762
+
+All listed/operators are properly licensed for vehicle classes operated? Yes
+Vehicles are maintained on a documented preventive maintenance schedule? Yes
+No hazardous materials hauling or specialized hazardous operations? Yes
+No severe/fatality losses in the last 3 years? Yes
+DOT/compliance controls and driver file management are in place (if applicable)? Yes

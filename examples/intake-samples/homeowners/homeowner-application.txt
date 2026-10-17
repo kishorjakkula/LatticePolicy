@@ -7,6 +7,7 @@ Broker email: luis@hillcountryinsurance.example
 APPLICANT
 Named insured: Maria Gonzalez
 Insured type: person
+Date of birth: 03/14/1979
 Insured email: maria.gonzalez@example.com
 Insured phone: (512) 555-0187
 Mailing address: PO Box 4410

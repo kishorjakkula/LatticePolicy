@@ -34,6 +34,7 @@ const COMMON_FIELDS: IntakeTargetField[] = [
   { key: 'insuredName', label: 'Named insured', section: 'Insured', type: 'text', options: [], required: true },
   { key: 'insuredType', label: 'Insured type', section: 'Insured', type: 'select', options: ['company', 'person'], required: true },
   { key: 'fein', label: 'FEIN', section: 'Insured', type: 'text', options: [], required: false, help: 'Companies only, NN-NNNNNNN' },
+  { key: 'insuredDob', label: 'Insured date of birth', section: 'Insured', type: 'date', options: [], required: false, help: 'People only', aliases: ['date of birth', 'dob', 'applicant date of birth'] },
   { key: 'email', label: 'Insured email', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'phone', label: 'Insured phone', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'addressLine1', label: 'Mailing address', section: 'Insured', type: 'text', options: [], required: false },

@@ -403,6 +403,8 @@ export type TemplateVariableResolverContext = {
   // endorsement.service.ts), and the same shape policy.service.ts's
   // getFullPolicyPayload returns for an already-bound policy.
   payload?: any
+  /** Fallback when the policy version (and its premium) is not saved yet, as during bind. */
+  premium?: { total?: { amount?: number; currency?: string } | null; fees?: { amount?: number } | null; taxes?: { amount?: number } | null } | null
 }
 
 function text(value: unknown): string {
@@ -708,10 +710,10 @@ export async function resolveDocumentTemplateVariables(
     coverageSummary,
     ...buildCoverageSlotValues(coverages),
 
-    premiumTotal: formatNumeric(versionRow?.premium_total),
-    premiumFees: formatNumeric(versionRow?.premium_fees),
-    premiumTaxes: formatNumeric(versionRow?.premium_taxes),
-    premiumCurrency: text(versionRow?.currency),
+    premiumTotal: formatNumeric(versionRow?.premium_total ?? ctx.premium?.total?.amount),
+    premiumFees: formatNumeric(versionRow?.premium_fees ?? ctx.premium?.fees?.amount),
+    premiumTaxes: formatNumeric(versionRow?.premium_taxes ?? ctx.premium?.taxes?.amount),
+    premiumCurrency: text(versionRow?.currency ?? ctx.premium?.total?.currency),
 
     agentName: firstNonEmpty(
       producerRecord ? [producerRecord.first_name, producerRecord.last_name].filter(Boolean).join(' ') : '',

@@ -45,7 +45,7 @@ describe('common quote sections', () => {
     expect(screen.getByText('Mortgagee: First Federal Bank (L-77)')).toBeInTheDocument()
     expect(screen.getByText('Direct bill · Quarterly (4 payments)')).toBeInTheDocument()
 
-    const last = onState.mock.calls.at(-1)![0] as CommonQuoteFields
+    const last = onState.mock.calls[onState.mock.calls.length - 1][0] as CommonQuoteFields
     expect(last).toMatchObject({ billingMethod: 'direct', paymentPlan: 'quarterly', mailingAddress: { street: '9 Oak St', zip: '78704' } })
     fireEvent.click(screen.getByRole('button', { name: 'Remove additional interest 1' }))
     expect(screen.getByText('No additional interests.')).toBeInTheDocument()
