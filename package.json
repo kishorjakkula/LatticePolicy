@@ -60,6 +60,7 @@
     "pilot:browser": "node scripts/pilot-browser.mjs",
     "pilot:drill": "node scripts/pilot-drill.mjs",
     "pilot:monitor": "node scripts/pilot-monitor.mjs",
+    "pilot:rebrand-documents": "node scripts/pilot-rebrand-documents.mjs",
     "pilot:handoff": "node scripts/pilot-handoff.mjs"
   },
   "optionalDependencies": {
@@ -76,6 +77,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
-    "jsdom": "^29.1.1"
+    "jsdom": "^29.1.1",
+    "pdfjs-dist": "4.10.38"
   }
 }
