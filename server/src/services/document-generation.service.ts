@@ -1,3 +1,4 @@
+import { loadCarrierBranding } from './carrier-branding.service.js'
 import crypto from 'crypto'
 import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
@@ -269,14 +270,17 @@ function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPoli
 }
 
 async function attachRenderedArtifact(
+  q: QueryFn,
   context: PolicyDocumentContext,
   forms: SelectedPolicyForm[],
   document: GeneratedPolicyDocument
 ): Promise<GeneratedPolicyDocument> {
+  const branding = await loadCarrierBranding(context.tenantId, q)
   const artifact = await renderAndStoreDocument({
     tenantId: context.tenantId,
     documentId: document.documentId,
     metadata: {
+      branding,
       policyId: context.policyId,
       policyNumber: context.policyNumber,
       transactionId: context.transactionId,
@@ -307,6 +311,7 @@ async function attachRenderedArtifact(
     hash: artifact.contentHash,
     metadata: {
       ...document.metadata,
+      branding,
       artifact: {
         storageUri: artifact.storageUri,
         contentType: artifact.contentType,
@@ -589,7 +594,7 @@ export async function buildPolicyDocumentPacket(
     )
   }
   const documents = await Promise.all(
-    buildPacketDocument(context, forms).map((document) => attachRenderedArtifact(context, forms, document))
+    buildPacketDocument(context, forms).map((document) => attachRenderedArtifact(q, context, forms, document))
   )
   const formDocuments = await buildFilledFormDocuments(q, context, forms)
   return { forms, documents: [...documents, ...formDocuments] }

@@ -267,7 +267,7 @@ dependence on freshly seeded names.
 | `uw-referrals`, `pre-bind-checks` | Referral queue decisions; internal-consistency referral on prior non-payment cancellation |
 | `customer-portal` | Customer-safe projection, cross-customer isolation, portal summary and documents |
 | `policy-documents` | Distinct Bind/Issue packet labels; every listed document opens with nonempty PDF or worksheet content, including headless PDF downloads |
-| `pilot-product-pinning` (separate pilot config) | Real mounted pack changes, pinned core/additive and absent screens, endorsement persistence, and button-triggered mandatory validation |
+| `pilot-product-pinning` (separate pilot config) | Real mounted pack changes, pinned core/additive and absent screens, endorsement persistence, button-triggered mandatory validation, and carrier branding in administration/login, stored packets and browser worksheet PDFs |
 | `dashboard-search`, `workflows` | Dashboard KPIs, quick lookup, filters, customers tab, CSV export API, sort/page-size URL state, mobile nav |
 | `forms-management` | Seeded forms, draft form creation, Word template upload, template variable reference |
 | `admin-users-security`, `admin-customers`, `admin-reference-config`, `admin-workflows` | Users, roles, customers and PII reveal, underwriting companies, tenant, compliance, notification templates, agency onboarding, operations dashboard, reinsurance, exposure, bordereaux, import, jobs |

@@ -1,3 +1,4 @@
+import { loadCarrierBranding } from './services/carrier-branding.service.js'
 import express from 'express'
 import type { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
@@ -183,6 +184,11 @@ export function createApp() {
   })
 
   registerProbeRoutes(app)
+
+  // Deliberately public identity only, so the login screen can carry the tenant brand.
+  app.get('/brand', requireTenant, async (req, res, next) => {
+    try { res.json(await loadCarrierBranding(req.tenant!.tenantId)) } catch (err) { next(err) }
+  })
 
   app.post('/auth/login', loginLimiter, handleLogin)
   app.post('/auth/mfa/verify', authLimiter, handleMfaVerify)

@@ -23,6 +23,7 @@ import { sql } from 'drizzle-orm'
 export const tenants = pgTable('tenants', {
   tenantId: text('tenant_id').primaryKey(),
   name: text('name').notNull(),
+  branding: jsonb('branding').notNull().default(sql`'{}'::jsonb`),
   defaultLocale: text('default_locale'),
   defaultCurrency: char('default_currency', { length: 3 }),
   mfaRequired: boolean('mfa_required').notNull().default(false),
