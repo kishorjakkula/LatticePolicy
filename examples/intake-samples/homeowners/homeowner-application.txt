@@ -1,0 +1,55 @@
+HOMEOWNER APPLICATION (SAMPLE, ILLUSTRATIVE LAYOUT)
+
+AGENCY
+Agency: Hill Country Insurance Group
+Broker email: luis@hillcountryinsurance.example
+
+APPLICANT
+Named insured: Maria Gonzalez
+Insured type: person
+Insured email: maria.gonzalez@example.com
+Insured phone: (512) 555-0187
+Mailing address: PO Box 4410
+City: Austin
+Address state: TX
+ZIP code: 78765
+
+POLICY
+Effective date: 11/15/2026
+Rating state: TX
+Payment plan: Monthly
+Billing method: Direct bill
+
+PRIOR INSURANCE
+Prior carrier: Lone Star Home Insurance
+Prior policy number: LSH-HO-2231987
+Prior policy expiration: 11/15/2026
+Years with prior carrier: 6
+
+DWELLING
+Address: 2214 Live Oak Dr, Austin TX 78704
+Year Built: 1998
+Construction: Masonry
+Square Feet: 2,150
+Stories: 2
+Dwelling Units (families): 1
+Roof Type: Metal
+Roof Age (years): 6
+Protection Class: 3
+Distance to Fire Station (miles): 2
+Occupancy: Owner occupied
+Fire Alarm: Yes
+Burglar Alarm: No
+
+ADDITIONAL INTEREST
+Additional interest type: Mortgagee
+Mortgagee or lienholder: Capital City Mortgage Corp ISAOA/ATIMA
+Loan number: CCM-88412-07
+Mortgagee address: 800 Brazos St, Austin TX 78701
+
+QUALIFICATION QUESTIONS
+No property claims in last 5 years? Yes
+Roof is in good condition with no active leaks? Yes
+No business operations on premises? Yes
+Home not vacant for more than 30 days? Yes
+Smoke/CO detectors and basic protection devices installed? Yes
