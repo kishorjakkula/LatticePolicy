@@ -36,7 +36,7 @@ export function parseFrontMatter(text) {
     if (raw.startsWith('[') && raw.endsWith(']')) {
       data[pair[1]] = raw.slice(1, -1).split(',').map((item) => item.trim()).filter(Boolean)
     } else if (/^\d+$/.test(raw)) data[pair[1]] = Number(raw)
-    else data[pair[1]] = raw
+    else data[pair[1]] = raw.replace(/^(['"])(.*)\1$/, '$2')
   }
   return { data, body: text.slice(match[0].length) }
 }
@@ -118,7 +118,7 @@ export function nextId(root) {
 /** Suggests a track from the request text; the orchestrator confirms or overrides. */
 export function suggestTrack(request) {
   const text = String(request).toLowerCase()
-  const major = /\b(tenant|rls|auth|login|sso|mfa|permission|rating|rate table|filed|filing|forms?\b|migration|schema|customer data|pii|privacy|ai\b|llm|model|security|new product|product line|billing|reinsurance)/
+  const major = /\b(tenant\w*|rls|auth|authentication|authorization|login|sso|mfa|permissions?|rating|rate tables?|filed|filings?|forms?|migrations?|schema|customer data|pii|privacy|ai|llm|models?|security|new product|product lines?|billing|reinsurance)\b/
   const quick = /\b(typo|copy|wording|label|rename text|readme|docs? only|comment|test only|lint)\b/
   if (major.test(text)) return { track: 'major', reason: 'touches an area that is always major (security, tenancy, rating, forms, data, AI or migrations)' }
   if (quick.test(text)) return { track: 'quick', reason: 'small copy, docs or test-only change' }
@@ -181,7 +181,9 @@ export function startPackage(root, request, options = {}) {
   const trackReason = options.track ? options.reason || 'chosen by the requester' : suggestion.reason
   const plan = planFor(agents, track)
   for (const gate of options.waive || []) {
-    if (!WAIVABLE_GATES.includes(String(gate).toUpperCase())) throw new Error(`Gate ${gate} cannot be waived; only ${WAIVABLE_GATES.join(' and ')} can`)
+    const name = String(gate).toUpperCase()
+    if (!WAIVABLE_GATES.includes(name)) throw new Error(`Gate ${gate} cannot be waived; only ${WAIVABLE_GATES.join(' and ')} can`)
+    if (!TRACK_GATES[track].includes(name)) throw new Error(`Gate ${name} is not part of the ${track} track`)
     if (!String(options.waiver || '').trim()) throw new Error('Quote the requester: --note "<their words saying approval is not needed>"')
   }
   const id = options.id || nextId(root)
@@ -242,6 +244,21 @@ export function placeholderCount(file) {
   return fs.readFileSync(file, 'utf8').split(PLACEHOLDER).length - 1
 }
 
+/**
+ * Rows of a findings table (code review, security) that are severe and still
+ * open. A row is severe when its first cell is blocker, major, high or
+ * critical, and open when its last cell says open.
+ */
+export function openSevereFindings(file) {
+  if (!fs.existsSync(file)) return []
+  return fs
+    .readFileSync(file, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().startsWith('|'))
+    .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim().toLowerCase()))
+    .filter((cells) => cells.length >= 2 && /^(blocker|major|high|critical)\b/.test(cells[0]) && /^open\b/.test(cells[cells.length - 1]))
+}
+
 export function completeStage(dir, agentId, options = {}) {
   const status = readStatus(dir)
   const step = nextStep(status)
@@ -252,6 +269,8 @@ export function completeStage(dir, agentId, options = {}) {
   const left = placeholderCount(output)
   if (outputRequired && left === null) throw new Error(`${step.stage.writes} does not exist`)
   if (outputRequired && left > 0) throw new Error(`${step.stage.writes} still has ${left} ${PLACEHOLDER} placeholder(s)`)
+  const open = openSevereFindings(output)
+  if (open.length) throw new Error(`${step.stage.writes} still has ${open.length} open blocker/major/high/critical finding(s); fix them or return the package`)
   step.stage.status = 'done'
   status.history.push({ at: now(options.clock), event: `${step.stage.name} completed` })
   if (nextStep(status).kind === 'done') {
@@ -302,18 +321,51 @@ export function waiveGate(dir, gateName, requester, words, options = {}) {
 
 export function returnToStage(dir, agentId, reason, options = {}) {
   const status = readStatus(dir)
+  if (status.state === 'needs-human')
+    throw new Error(`${status.id} is stopped for a person (${status.needsHumanReason}); they continue it with: npm run flow -- resolve ${status.id} --by "<name>" --note "<decision>"`)
   const index = status.stages.findIndex((stage) => stage.id === agentId)
   if (index < 0) throw new Error(`${agentId} is not a stage of this work package`)
+  if (agentId === 'orchestrator') throw new Error('The orchestrator has no output to redo; return to the stage whose work is wrong')
   if (!String(reason || '').trim()) throw new Error('Say why: --reason "<what is wrong>"')
   const target = status.stages[index]
   target.returns += 1
-  // Everything from the returned stage onward runs again.
-  for (const stage of status.stages.slice(index)) if (stage.id !== 'orchestrator') stage.status = 'pending'
-  status.history.push({ at: now(options.clock), event: `returned to ${target.name}: ${String(reason).trim()}` })
+  // Everything from the returned stage onward runs again, and approvals of that
+  // work no longer stand: the approver must see the rewritten output. Waivers
+  // the requester gave in their own words still apply.
+  const rerun = status.stages.slice(index)
+  for (const stage of rerun) stage.status = 'pending'
+  const reopened = []
+  for (const stage of rerun) {
+    const gate = stage.gateAfter && status.gates.find((entry) => entry.gate === stage.gateAfter)
+    if (gate?.approvedBy) {
+      reopened.push(gate.gate)
+      gate.approvedBy = null
+      gate.approvedAt = null
+      gate.note = null
+    }
+  }
+  status.history.push({
+    at: now(options.clock),
+    event: `returned to ${target.name}: ${String(reason).trim()}${reopened.length ? ` (Gate ${reopened.join(', ')} reopened)` : ''}`,
+  })
   if (target.returns > MAX_RETURNS) {
     status.state = 'needs-human'
     status.needsHumanReason = `${target.name} has been returned ${target.returns} times (latest: ${String(reason).trim()})`
   } else status.state = 'in-progress'
+  writeStatus(dir, status)
+  return status
+}
+
+/** A person's decision that lets a stopped (needs-human) package continue. */
+export function resolveNeedsHuman(dir, person, decision, options = {}) {
+  const status = readStatus(dir)
+  if (status.state !== 'needs-human') throw new Error(`${status.id} is not waiting for a person`)
+  if (!String(person || '').trim()) throw new Error('Record who decided: --by "<name>"')
+  if (!String(decision || '').trim()) throw new Error('Record the decision: --note "<what they decided>"')
+  for (const stage of status.stages) stage.returns = 0
+  status.state = 'in-progress'
+  status.history.push({ at: now(options.clock), event: `${String(person).trim()} resolved the stop: "${String(decision).trim()}"` })
+  delete status.needsHumanReason
   writeStatus(dir, status)
   return status
 }
@@ -325,7 +377,8 @@ export function promptFor(root, dir) {
   const rel = path.relative(root, dir)
   if (step.kind === 'gate')
     return `${status.id} is waiting for human approval at Gate ${step.gate} (see docs/delivery/WORKFLOW.md#gates).\nAsk the approver: summarize ${rel}/ for them and wait for their answer. Record it with:\n  npm run flow -- approve ${status.id} ${step.gate} --by "<name>" --note "<what they said>"${WAIVABLE_GATES.includes(step.gate) ? `\nOnly if the requester said this approval is not needed:\n  npm run flow -- waive ${status.id} ${step.gate} --by "<requester>" --note "<their words>"` : ''}`
-  if (step.kind === 'human') return `${status.id} needs a person to decide: ${step.reason}`
+  if (step.kind === 'human')
+    return `${status.id} needs a person to decide: ${step.reason}\nAsk them, then record their decision with:\n  npm run flow -- resolve ${status.id} --by "<name>" --note "<what they decided>"`
   if (step.kind === 'done') return `${status.id} is complete.`
   const agent = loadAgents(root).find((entry) => entry.id === step.stage.id)
   const earlier = status.stages
@@ -386,9 +439,11 @@ export function packageProblems(root, dir) {
  */
 export function pullRequestProblems(root, body, author = '') {
   if (/\[bot\]$/.test(author) || author === 'dependabot') return []
-  const text = String(body || '')
-  const quick = /Delivery track:\s*quick\s*[—–-]\s*\S/i.test(text)
-  const reference = /Work package:\s*(WP-\d{4})/i.exec(text)
+  // Template guidance lives in HTML comments; only what the author wrote counts.
+  const text = String(body || '').replace(/<!--[\s\S]*?-->/g, '')
+  const quickReason = /Delivery track:\s*quick\s*[—–-]\s*(.+)/i.exec(text)
+  const quick = Boolean(quickReason && !/^</.test(quickReason[1].trim()))
+  const reference = /Work package:\s*(WP-\d{4})\b/i.exec(text)
   if (!reference && quick) return []
   if (!reference)
     return ['The pull request description must contain "Work package: WP-NNNN" or "Delivery track: quick — <reason>" (docs/delivery/WORKFLOW.md#pull-requests).']

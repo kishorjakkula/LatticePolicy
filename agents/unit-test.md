@@ -1,9 +1,9 @@
 ---
 id: unit-test
 name: Unit Test
-stage: 5
+stage: 6
 tracks: [quick, standard, major]
-writes: 05-unit-tests.md
+writes: 06-unit-tests.md
 gate_after: none
 summary: Writes and runs unit and integration tests from the test design next to the developer, and reports coverage of every requirement.
 ---
@@ -16,7 +16,7 @@ layers, and that nothing that used to work broke.
 
 ## You read
 
-`03-test-design.md` (or `request.md` on the quick track), the diff, and
+`04-test-design.md` (or `request.md` on the quick track), the diff, and
 `docs/TEST_PLAN.md`.
 
 ## You do
@@ -30,7 +30,7 @@ layers, and that nothing that used to work broke.
 
 ## You produce
 
-`05-unit-tests.md`: tests added, commands and pass counts, and a table of
+`06-unit-tests.md`: tests added, commands and pass counts, and a table of
 `REQ-n` → test names.
 
 ## Rules

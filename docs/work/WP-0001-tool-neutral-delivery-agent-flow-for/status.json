@@ -45,7 +45,7 @@
       "writes": "04-implementation.md",
       "gateAfter": null,
       "status": "done",
-      "returns": 0
+      "returns": 1
     },
     {
       "id": "unit-test",
@@ -159,6 +159,18 @@
     },
     {
       "at": "2026-10-18T04:03:22.608Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T04:15:32.452Z",
+      "event": "returned to Developer: Code review found 5 major and 11 minor issues (06-code-review.md)"
+    },
+    {
+      "at": "2026-10-18T04:20:31.688Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T04:20:31.822Z",
       "event": "Unit Test completed"
     }
   ]

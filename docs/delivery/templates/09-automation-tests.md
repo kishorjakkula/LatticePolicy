@@ -1,6 +1,6 @@
 # Automation tests — {{id}}
 
-> Automation test agent. Replace every `TODO(agent)` before completing the stage.
+> Automation test agent. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 ## Specs added or changed
 

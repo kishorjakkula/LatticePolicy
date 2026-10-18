@@ -20,7 +20,8 @@ writes the code.
 - `scripts/delivery/sync-agents.mjs` generates each tool's files from the
   contracts; CI fails when they drift.
 - Added to the requested agents: orchestrator, test designer, independent code
-  reviewer, security and compliance, knowledge curator.
+  reviewer, security and compliance, knowledge curator; a UI/UX designer was
+  added at the product owner's request.
 - Three tracks (quick, standard, major) and four human gates (A requirements,
   B design, C merge, D business sign-off). Agents never approve gates, merge or
   deploy to production.

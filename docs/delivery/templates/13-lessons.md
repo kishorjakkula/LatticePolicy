@@ -1,6 +1,6 @@
 # Lessons — {{id}}
 
-> Knowledge curator. Replace every `TODO(agent)` before completing the stage.
+> Knowledge curator. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 ## What went well
 

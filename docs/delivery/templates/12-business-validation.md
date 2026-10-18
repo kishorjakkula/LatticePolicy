@@ -1,6 +1,6 @@
 # Business validation — {{id}}
 
-> Business validation agent. Replace every `TODO(agent)` before completing the stage. Gate D is recorded only when the business owner signs off.
+> Business validation agent. Fill every placeholder below (the flow will not complete the stage while any remain). Gate D is recorded only when the business owner signs off.
 
 | Criterion | Role | Steps | Expected | Actual | Evidence | Result |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -28,24 +28,25 @@ flowchart TD
   BA -->|questions| R
   BA --> GA{{Gate A: requirements}}
   GA --> SA[2 Software architect]
-  SA --> TD[3 Test designer]
-  TD --> GB{{Gate B: design and tests, major track}}
-  GB --> DEV[4 Developer]
-  DEV <--> UT[5 Unit test]
-  UT --> CR[6 Code reviewer: separate session, started automatically]
+  SA --> UX[3 UI/UX designer]
+  UX --> TD[4 Test designer]
+  TD --> GB{{Gate B: design, UI design and tests, major track}}
+  GB --> DEV[5 Developer]
+  DEV <--> UT[6 Unit test]
+  UT --> CR[7 Code reviewer: separate session, started automatically]
   CR -.->|changes| DEV
-  CR --> SEC[7 Security and compliance]
+  CR --> SEC[8 Security and compliance]
   SEC -.->|findings| DEV
-  SEC --> AT[8 Automation test]
+  SEC --> AT[9 Automation test]
   AT -.->|failures| DEV
   AT --> GC{{Gate C: pull request approved and merged}}
-  GC --> DEP[9 Deployment: staging]
-  DEP --> E2E[10 End-to-end test]
+  GC --> DEP[10 Deployment: staging]
+  DEP --> E2E[11 End-to-end test]
   E2E -.->|defects| DEV
-  E2E --> BV[11 Business validation]
+  E2E --> BV[12 Business validation]
   BV --> GD{{Gate D: business sign-off}}
   GD --> PROD[Deployment: production]
-  PROD --> KC[12 Knowledge curator]
+  PROD --> KC[13 Knowledge curator]
 ```
 
 | Stage | Agent | Output in the work package |
@@ -53,16 +54,17 @@ flowchart TD
 | 0 | Orchestrator | `status.json`, `status.md` |
 | 1 | Business analyst | `01-requirements.md` |
 | 2 | Software architect | `02-design.md` |
-| 3 | Test designer | `03-test-design.md` |
-| 4 | Developer | code, `docs/tasks/` note, `04-implementation.md` |
-| 5 | Unit test | tests, `05-unit-tests.md` |
-| 6 | Code reviewer | `06-code-review.md` |
-| 7 | Security and compliance | `07-security-compliance.md` |
-| 8 | Automation test | `e2e/` specs, `08-automation-tests.md` |
-| 9 | Deployment | `09-release.md` |
-| 10 | End-to-end test | `10-e2e-results.md` |
-| 11 | Business validation | `11-business-validation.md` |
-| 12 | Knowledge curator | `12-lessons.md` |
+| 3 | UI/UX designer | `03-ui-design.md` (or "No user-facing change") |
+| 4 | Test designer | `04-test-design.md` |
+| 5 | Developer | code, `docs/tasks/` note, `05-implementation.md` |
+| 6 | Unit test | tests, `06-unit-tests.md` |
+| 7 | Code reviewer | `07-code-review.md` |
+| 8 | Security and compliance | `08-security-compliance.md` |
+| 9 | Automation test | `e2e/` specs, `09-automation-tests.md` |
+| 10 | Deployment | `10-release.md` |
+| 11 | End-to-end test | `11-e2e-results.md` |
+| 12 | Business validation | `12-business-validation.md` |
+| 13 | Knowledge curator | `13-lessons.md` |
 
 `traceability.md` links each requirement to its design, code, tests, release
 and validation evidence; each agent fills its column.
@@ -74,7 +76,7 @@ The orchestrator chooses a track and says why; the requester can override it.
 | Track | Use for | Stages | Human gates |
 | --- | --- | --- | --- |
 | `quick` | Copy or typo fixes, a small bug with an obvious cause, test-only or docs-only changes | 0, 4, 5, 6, 9 | C |
-| `standard` | A feature or behavior change inside one area | all (architect writes a short design) | A, C, D |
+| `standard` | A feature or behavior change inside one area | all (architect writes a short design; the UI/UX designer writes "No user-facing change" when nothing is visible) | A, C, D |
 | `major` | New product line, migrations, security, tenancy, authentication, rating, filed forms, customer data, AI, or cross-module change | all, with an ADR for lasting decisions | A, B, C, D |
 
 Anything touching tenant isolation, authentication, rating, filed forms,
@@ -85,9 +87,9 @@ customer data, migrations or AI data boundaries is **major**, whatever its size.
 | Gate | Approves | Evidence | Approver |
 | --- | --- | --- | --- |
 | A | Requirements | `01-requirements.md`, answered questions | Product owner |
-| B | Design and test plan (major) | `02-design.md`, `03-test-design.md` | Product owner or lead engineer |
+| B | Design, UI design and test plan (major) | `02-design.md`, `03-ui-design.md`, `04-test-design.md` | Product owner or lead engineer |
 | C | Merge | Pull request, review, security findings, green CI | Code owner (GitHub branch protection) |
-| D | Production release | `10-e2e-results.md`, `11-business-validation.md`, `09-release.md` | Business owner (carrier business user for carrier-specific work) |
+| D | Production release | `11-e2e-results.md`, `12-business-validation.md`, `10-release.md` | Business owner (carrier business user for carrier-specific work) |
 
 At each gate the orchestrator summarizes the handoff and **asks the approver**.
 Approvals are recorded with the approver's name and their words:
@@ -100,6 +102,12 @@ waiver with the requester's words instead of asking:
 `npm run flow -- waive WP-0002 A --by "<requester>" --note "<their words>"`.
 Only Gates A and B can be waived. Gate C (merge) and Gate D (business sign-off)
 always need a person. A waiver is never inferred.
+
+**Where approvals are enforced.** Gate C is GitHub's required code-owner review.
+Approvals and waivers for A, B and D are recorded in the work package's
+`status.json`; `.github/CODEOWNERS` makes `docs/work/`, `agents/`,
+`scripts/delivery/` and `docs/delivery/` code-owner files, so a recorded
+approval reaches `main` only through the code owner's review of that change.
 
 ## Decisions (October 2026)
 
@@ -129,8 +137,17 @@ revised here:
 
 When an agent finds a problem in earlier work it returns the package to that
 stage with a reason (`npm run flow -- return WP-0002 developer --reason "…"`).
-After **two** returns to the same stage the package becomes `needs-human` and
-the orchestrator stops to ask.
+That stage and every later stage run again, and any approval given after those
+stages is reopened so the approver sees the rewritten work (waivers stated by
+the requester still apply).
+
+A stage can be returned **twice**; the **third** return stops the package as
+`needs-human`. Nothing moves until a person decides and the orchestrator records
+it: `npm run flow -- resolve WP-0002 --by "<name>" --note "<decision>"`.
+
+The code reviewer's stage cannot complete while its findings table lists an
+open blocker or major finding, and the security stage while it lists an open
+high or critical finding.
 
 ## Pull requests
 
@@ -164,7 +181,8 @@ confirmation. `npm run knowledge:report` lists files due for review.
 | Tool | Generated files |
 | --- | --- |
 | Codex, Jules, Aider, and agents that read `AGENTS.md` | delivery section of `AGENTS.md` |
-| Claude Code | `.claude/agents/<agent>.md` (one sub-agent per role) |
+| Claude Code | `CLAUDE.md` (points to `AGENTS.md`), `.claude/agents/<agent>.md` (one sub-agent per role) |
+| Gemini CLI | `GEMINI.md` (points to `AGENTS.md`) |
 | GitHub Copilot | `.github/copilot-instructions.md`, `.github/prompts/<agent>.prompt.md` |
 | Cursor | `.cursor/rules/delivery-flow.mdc` |
 

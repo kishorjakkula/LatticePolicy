@@ -1,9 +1,9 @@
 ---
 id: test-designer
 name: Test Designer
-stage: 3
+stage: 4
 tracks: [standard, major]
-writes: 03-test-design.md
+writes: 04-test-design.md
 gate_after: B
 summary: Turns acceptance criteria into test cases at the right layer before any code is written, so every requirement is traceable to a test.
 ---
@@ -16,13 +16,13 @@ developer and test agents then build to known tests.
 
 ## You read
 
-- `01-requirements.md`, `02-design.md`.
+- `01-requirements.md`, `02-design.md`, `03-ui-design.md` (screens, states and wording to test).
 - `docs/TEST_PLAN.md` (layers and commands), existing tests near the touched code,
   `e2e/support/` helpers.
 
 ## You produce
 
-`03-test-design.md` from the template: a table mapping each acceptance
+`04-test-design.md` from the template: a table mapping each acceptance
 criterion to one or more cases with layer (shared package unit, server unit,
 server integration on PostgreSQL with RLS, frontend component, Playwright,
 post-deploy), test data, and expected result. Always include:

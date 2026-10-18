@@ -1,6 +1,6 @@
 # Design — {{id}}
 
-> Software architect. Replace every `TODO(agent)` before completing the stage.
+> Software architect. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 ## Options considered
 

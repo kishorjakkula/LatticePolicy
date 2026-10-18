@@ -26,16 +26,17 @@ tenancy, authentication, rating, filed forms, customer data, migrations or AI is
 | 0 | Orchestrator | `agents/orchestrator.md` | `status.json` |
 | 1 | Business Analyst | `agents/business-analyst.md` | `01-requirements.md` |
 | 2 | Software Architect | `agents/software-architect.md` | `02-design.md` |
-| 3 | Test Designer | `agents/test-designer.md` | `03-test-design.md` |
-| 4 | Developer | `agents/developer.md` | `04-implementation.md` |
-| 5 | Unit Test | `agents/unit-test.md` | `05-unit-tests.md` |
-| 6 | Code Reviewer | `agents/code-reviewer.md` | `06-code-review.md` |
-| 7 | Security and Compliance | `agents/security-compliance.md` | `07-security-compliance.md` |
-| 8 | Automation Test | `agents/automation-test.md` | `08-automation-tests.md` |
-| 9 | Deployment | `agents/deployment.md` | `09-release.md` |
-| 10 | End-to-End Test | `agents/e2e-test.md` | `10-e2e-results.md` |
-| 11 | Business Validation | `agents/business-validation.md` | `11-business-validation.md` |
-| 12 | Knowledge Curator | `agents/knowledge-curator.md` | `12-lessons.md` |
+| 3 | UI/UX Designer | `agents/ui-designer.md` | `03-ui-design.md` |
+| 4 | Test Designer | `agents/test-designer.md` | `04-test-design.md` |
+| 5 | Developer | `agents/developer.md` | `05-implementation.md` |
+| 6 | Unit Test | `agents/unit-test.md` | `06-unit-tests.md` |
+| 7 | Code Reviewer | `agents/code-reviewer.md` | `07-code-review.md` |
+| 8 | Security and Compliance | `agents/security-compliance.md` | `08-security-compliance.md` |
+| 9 | Automation Test | `agents/automation-test.md` | `09-automation-tests.md` |
+| 10 | Deployment | `agents/deployment.md` | `10-release.md` |
+| 11 | End-to-End Test | `agents/e2e-test.md` | `11-e2e-results.md` |
+| 12 | Business Validation | `agents/business-validation.md` | `12-business-validation.md` |
+| 13 | Knowledge Curator | `agents/knowledge-curator.md` | `13-lessons.md` |
 
 Domain and engineering knowledge: `docs/knowledge/` (check each file's
 `last_reviewed`). Pull requests state `Work package: WP-NNNN` or

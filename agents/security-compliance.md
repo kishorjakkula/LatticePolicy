@@ -1,9 +1,9 @@
 ---
 id: security-compliance
 name: Security and Compliance
-stage: 7
+stage: 8
 tracks: [standard, major]
-writes: 07-security-compliance.md
+writes: 08-security-compliance.md
 gate_after: none
 summary: Checks tenant isolation, authorization, PII, secrets, audit, AI data boundaries and insurance regulatory requirements before merge.
 ---
@@ -39,7 +39,7 @@ and CI results from CodeQL, dependency audit and container scan.
 
 ## You produce
 
-`07-security-compliance.md`: each check with pass, finding, or not applicable,
+`08-security-compliance.md`: each check with pass, finding, or not applicable,
 and every finding's resolution. Code scanning alerts introduced by the change
 must be fixed or explicitly accepted by a person.
 

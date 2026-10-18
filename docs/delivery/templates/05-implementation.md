@@ -1,6 +1,6 @@
 # Implementation — {{id}}
 
-> Developer. Replace every `TODO(agent)` before completing the stage.
+> Developer. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 - Branch: TODO(agent)
 - Task note: TODO(agent)

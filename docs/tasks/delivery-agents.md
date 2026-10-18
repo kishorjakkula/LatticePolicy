@@ -8,7 +8,7 @@
 ## Summary
 
 Every coding request now follows a fixed flow of specialist agents — orchestrator,
-business analyst, software architect, test designer, developer, unit test, code
+business analyst, software architect, UI/UX designer, test designer, developer, unit test, code
 reviewer, security and compliance, automation test, deployment, end-to-end test,
 business validation, knowledge curator — with four human gates. It works with any
 AI assistant because the agents are Markdown contracts in `agents/`, handoffs are
@@ -31,16 +31,21 @@ the contracts.
 
 - Agents never approve a gate, merge, or deploy to production; approvals record a
   named person and their words.
-- A stage cannot complete while its handoff has placeholders, or out of order.
-- Two returns to one stage stop the package for a person.
-- The code reviewer runs in a separate session from the developer.
+- A stage cannot complete while its handoff has placeholders, or out of order;
+  code review and security cannot complete with open severe findings.
+- Gates A and B are asked for by default and can be waived only in the
+  requester's own words; C and D never.
+- Returning to a stage reruns it and later stages and reopens their approvals.
+- A third return to one stage stops the package; a person resolves it.
+- The orchestrator starts the code reviewer itself in a separate session.
 - Pull requests carry `Work package: WP-NNNN` or `Delivery track: quick — <reason>`;
   the `delivery-checks` workflow enforces it (bots exempt).
 - Knowledge changes reach agents only through reviewed pull requests.
 
 ## Automated Tests
 
-- Tests added: `scripts/delivery/delivery.test.mjs` (12).
+- Tests added: `scripts/delivery/delivery.test.mjs` (22), including regressions
+  for every finding of the WP-0001 independent code review.
 - Test layer used: Node unit tests on temporary repositories.
 - Why this layer is enough: the flow is file-based tooling; no application runtime changes.
 

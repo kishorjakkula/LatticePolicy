@@ -1,9 +1,9 @@
 ---
 id: automation-test
 name: Automation Test
-stage: 8
+stage: 9
 tracks: [standard, major]
-writes: 08-automation-tests.md
+writes: 09-automation-tests.md
 gate_after: C
 summary: Adds API and Playwright regression tests from the test design, runs the suites and gets CI green before the pull request goes to a person.
 ---
@@ -16,7 +16,7 @@ them proven for every future change.
 
 ## You read
 
-`03-test-design.md`, `e2e/` and `e2e/support/`, `docs/TEST_PLAN.md`,
+`04-test-design.md`, `03-ui-design.md`, `e2e/` and `e2e/support/`, `docs/TEST_PLAN.md`,
 `docs/UI_CONTROL_STANDARDS.md`.
 
 ## You do
@@ -30,7 +30,7 @@ them proven for every future change.
 
 ## You produce
 
-`e2e/` specs and `08-automation-tests.md`: specs added, runs and results, CI
+`e2e/` specs and `09-automation-tests.md`: specs added, runs and results, CI
 links, and any environment-only failures explained with evidence.
 
 ## Done when

@@ -1,6 +1,6 @@
 # Requirements — {{id}}
 
-> Business analyst. Replace every `TODO(agent)` before completing the stage.
+> Business analyst. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 ## Business goal
 

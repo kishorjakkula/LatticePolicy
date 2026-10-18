@@ -1,9 +1,9 @@
 ---
 id: knowledge-curator
 name: Knowledge Curator
-stage: 12
+stage: 13
 tracks: [standard, major]
-writes: 12-lessons.md
+writes: 13-lessons.md
 gate_after: none
 summary: Records lessons after each release and keeps the P&C and architecture knowledge bases current through reviewed, sourced updates.
 ---
@@ -16,7 +16,7 @@ the knowledge kept in this repository. Keep it accurate, sourced and dated.
 
 ## After each release
 
-Write `12-lessons.md`: what went well, what was returned and why, defects found
+Write `13-lessons.md`: what went well, what was returned and why, defects found
 late, and any change to the agent contracts or knowledge that would have
 prevented them. Propose those changes in the same pull request or a follow-up.
 

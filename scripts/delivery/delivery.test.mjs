@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 import {
   approveGate,
   completeStage,
@@ -16,6 +17,9 @@ import {
   pullRequestProblems,
   readStatus,
   returnToStage,
+  openSevereFindings,
+  parseFrontMatter,
+  resolveNeedsHuman,
   slugify,
   startPackage,
   waiveGate,
@@ -54,7 +58,7 @@ test('every contract has a valid header and the stages are in order', () => {
   const agents = loadAgents(realRoot)
   assert.deepEqual(
     agents.map((agent) => agent.id),
-    ['orchestrator', 'business-analyst', 'software-architect', 'test-designer', 'developer', 'unit-test', 'code-reviewer', 'security-compliance', 'automation-test', 'deployment', 'e2e-test', 'business-validation', 'knowledge-curator'],
+    ['orchestrator', 'business-analyst', 'software-architect', 'ui-designer', 'test-designer', 'developer', 'unit-test', 'code-reviewer', 'security-compliance', 'automation-test', 'deployment', 'e2e-test', 'business-validation', 'knowledge-curator'],
   )
   for (const agent of agents) assert.ok(agent.summary && agent.body.includes('## '), `${agent.id} needs a summary and sections`)
 })
@@ -65,7 +69,7 @@ test('tracks run the right stages with the right gates', () => {
   assert.deepEqual(quick.map((stage) => stage.id), ['orchestrator', 'developer', 'unit-test', 'code-reviewer', 'deployment'])
   assert.deepEqual(quick.filter((stage) => stage.gateAfter).map((stage) => `${stage.id}:${stage.gateAfter}`), ['code-reviewer:C'])
   const standard = planFor(agents, 'standard')
-  assert.equal(standard.length, 13)
+  assert.equal(standard.length, 14)
   assert.deepEqual(standard.filter((stage) => stage.gateAfter).map((stage) => `${stage.id}:${stage.gateAfter}`), ['business-analyst:A', 'automation-test:C', 'business-validation:D'])
   const major = planFor(agents, 'major')
   assert.deepEqual(major.filter((stage) => stage.gateAfter).map((stage) => stage.gateAfter), ['A', 'B', 'C', 'D'])
@@ -230,4 +234,120 @@ test('tool adapters are generated from the contracts and drift is detected', (t)
 
 test('the committed adapters match the contracts', () => {
   assert.deepEqual(drift(realRoot), [])
+})
+
+// Regression tests for the WP-0001 code review findings.
+
+test('an unedited pull request template does not pass the PR check', (t) => {
+  const root = sandbox(t)
+  const template = fs.readFileSync(path.join(realRoot, '.github/pull_request_template.md'), 'utf8')
+  assert.equal(pullRequestProblems(root, template).length, 1)
+  assert.equal(pullRequestProblems(root, 'Delivery track: quick — <one-line reason>').length, 1)
+  assert.deepEqual(pullRequestProblems(root, `${template}\nDelivery track: quick — fix label typo`), [])
+  startPackage(root, 'Show the agent name on the quote list')
+  assert.match(pullRequestProblems(root, 'Work package: WP-00012').join(), /must contain/)
+})
+
+test('a stopped package cannot be restarted by returning to another stage; a person resolves it', (t) => {
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Fix typo on the dashboard')
+  runUntilGate(dir)
+  for (const reason of ['one', 'two', 'three']) returnToStage(dir, 'developer', reason)
+  assert.equal(readStatus(dir).state, 'needs-human')
+  assert.throws(() => returnToStage(dir, 'unit-test', 'sneak past'), /stopped for a person/)
+  assert.throws(() => completeStage(dir, 'developer'), /Nothing to complete/)
+  assert.throws(() => resolveNeedsHuman(dir, '', 'go'), /who decided/)
+  resolveNeedsHuman(dir, 'Product owner', 'Use the shorter label')
+  const status = readStatus(dir)
+  assert.equal(status.state, 'in-progress')
+  assert.equal(nextStep(status).stage.id, 'developer')
+  assert.ok(status.history.some((entry) => entry.event.includes('Product owner resolved the stop: "Use the shorter label"')))
+})
+
+test('returning to a stage reopens approvals of the redone work but keeps requester waivers', (t) => {
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Show the agent name on the quote list')
+  runUntilGate(dir)
+  approveGate(dir, 'A', 'Product owner')
+  runUntilGate(dir)
+  returnToStage(dir, 'business-analyst', 'Missed the renewal case')
+  let status = readStatus(dir)
+  assert.equal(status.gates[0].approvedBy, null)
+  assert.ok(status.history.at(-1).event.includes('Gate A reopened'))
+  assert.equal(runUntilGate(dir).gate, 'A')
+  // A return to a later stage leaves Gate A alone.
+  approveGate(dir, 'A', 'Product owner')
+  runUntilGate(dir)
+  returnToStage(dir, 'developer', 'Bug')
+  assert.equal(readStatus(dir).gates[0].approvedBy, 'Product owner')
+
+  const waived = startPackage(root, 'Show the agent email on the quote list', { waive: ['A'], waivedBy: 'Owner', waiver: 'No approval needed' })
+  runUntilGate(waived.dir)
+  returnToStage(waived.dir, 'business-analyst', 'Rework')
+  status = readStatus(waived.dir)
+  assert.equal(status.gates[0].waivedBy, 'Owner')
+  assert.equal(runUntilGate(waived.dir).gate, 'C')
+})
+
+test('the orchestrator cannot be returned to, and invalid waivers leave no folder behind', (t) => {
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Fix typo on the dashboard')
+  assert.throws(() => returnToStage(dir, 'orchestrator', 'x'), /no output to redo/)
+  assert.throws(() => startPackage(root, 'Show the agent name', { waive: ['B'], waiver: 'skip design' }), /not part of the standard track/)
+  assert.equal(fs.readdirSync(path.join(root, 'docs/work')).length, 1)
+})
+
+test('code review and security stages cannot complete with open severe findings', (t) => {
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Fix typo on the dashboard')
+  for (const id of ['developer', 'unit-test']) {
+    fillOutput(dir, readStatus(dir).stages.find((stage) => stage.id === id).writes)
+    completeStage(dir, id)
+  }
+  const review = path.join(dir, '07-code-review.md')
+  fs.writeFileSync(review, '| Severity | File:line | Finding | Failure scenario | Outcome |\n| --- | --- | --- | --- | --- |\n| Major | a.mjs:1 | Bug | Breaks | open |\n| Minor | b.mjs:2 | Nit | None | open |\n')
+  assert.equal(openSevereFindings(review).length, 1)
+  assert.throws(() => completeStage(dir, 'code-reviewer'), /open blocker\/major/)
+  fs.writeFileSync(review, fs.readFileSync(review, 'utf8').replace('| Breaks | open |', '| Breaks | fixed in abc123 |'))
+  completeStage(dir, 'code-reviewer')
+})
+
+test('front matter accepts quoted values and generated descriptions are valid YAML strings', (t) => {
+  assert.deepEqual(parseFrontMatter('---\nlast_reviewed: "2026-10-01"\ntitle: \'A: b\'\n---\nx').data, { last_reviewed: '2026-10-01', title: 'A: b' })
+  const root = sandbox(t)
+  const contract = path.join(root, 'agents/developer.md')
+  fs.writeFileSync(contract, fs.readFileSync(contract, 'utf8').replace(/^summary: .*$/m, () => 'summary: Builds it: carefully # and costs $& nothing'))
+  const files = renderAdapters(root)
+  assert.match(files['.claude/agents/developer.md'], /^description: "Builds it: carefully # and costs \$& nothing"$/m)
+  assert.ok(files['AGENTS.md'].includes('delivery-flow:start'))
+})
+
+test('drift reports generated files whose contract was removed', (t) => {
+  const root = sandbox(t)
+  writeAdapters(root)
+  fs.rmSync(path.join(root, 'agents/knowledge-curator.md'))
+  const stale = drift(root)
+  assert.ok(stale.includes('.claude/agents/knowledge-curator.md'))
+  assert.ok(stale.includes('.github/prompts/knowledge-curator.prompt.md'))
+})
+
+test('track suggestions match whole words only', () => {
+  assert.equal(suggestTrack('Show the author name on notes').track, 'standard')
+  assert.equal(suggestTrack('Update the modeling guide wording').track, 'quick')
+  assert.equal(suggestTrack('Add an authorization check').track, 'major')
+})
+
+test('agents:sync --check works from a path with spaces', (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'delivery spaced '))
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }))
+  const root = path.join(base, 'repo copy')
+  fs.mkdirSync(root)
+  for (const dir of ['agents', 'docs/delivery', 'scripts/delivery']) fs.cpSync(path.join(realRoot, dir), path.join(root, dir), { recursive: true })
+  fs.copyFileSync(path.join(realRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'))
+  const run = (args) => spawnSync(process.execPath, [path.join(root, 'scripts/delivery/sync-agents.mjs'), ...args], { cwd: root, encoding: 'utf8' })
+  const check = run(['--check'])
+  assert.equal(check.status, 1, check.stdout + check.stderr)
+  assert.match(check.stderr, /out of date/)
+  assert.equal(run([]).status, 0)
+  assert.equal(run(['--check']).status, 0)
 })

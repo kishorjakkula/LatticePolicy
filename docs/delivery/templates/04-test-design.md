@@ -1,6 +1,6 @@
 # Test design — {{id}}
 
-> Test designer. Replace every `TODO(agent)` before completing the stage.
+> Test designer. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 | Criterion | Case | Layer | Data | Expected |
 | --- | --- | --- | --- | --- |

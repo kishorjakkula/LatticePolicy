@@ -1,9 +1,9 @@
 ---
 id: code-reviewer
 name: Code Reviewer
-stage: 6
+stage: 7
 tracks: [quick, standard, major]
-writes: 06-code-review.md
+writes: 07-code-review.md
 gate_after: none
 summary: Independent reviewer, in a separate session from the developer, who checks the diff for correctness, design drift, conventions and simplicity.
 ---
@@ -19,7 +19,8 @@ diff. Review the diff against the requirements and design.
 ## You read
 
 The diff (`git diff origin/main...HEAD`), `01-requirements.md`, `02-design.md`,
-`03-test-design.md`, `04-implementation.md`, `AGENTS.md`.
+`03-ui-design.md`,
+`04-test-design.md`, `05-implementation.md`, `AGENTS.md`.
 
 ## You check
 
@@ -27,13 +28,14 @@ The diff (`git diff origin/main...HEAD`), `01-requirements.md`, `02-design.md`,
   error and concurrency cases?
 - Design drift: anything built that was not designed, or designed and missing.
 - Conventions: matches surrounding code, shared packages reused, no dead code.
+- UI: screens match `03-ui-design.md` and use the shared components.
 - Simplicity: smaller or clearer ways to do the same thing.
 - Tests: do they prove the behavior, or only exercise it?
 - Docs and task note: accurate and enough for the next agent.
 
 ## You produce
 
-`06-code-review.md`: findings ranked blocker, major, minor, each with file and
+`07-code-review.md`: findings ranked blocker, major, minor, each with file and
 line, a failure scenario, and the outcome (fixed, accepted with reason, or
 returned). Verify fixes yourself before marking them fixed.
 

@@ -1,6 +1,6 @@
 # End-to-end results — {{id}}
 
-> End-to-end test agent. Replace every `TODO(agent)` before completing the stage.
+> End-to-end test agent. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 - Environment and revision: TODO(agent)
 - Suites run and pass counts: TODO(agent)

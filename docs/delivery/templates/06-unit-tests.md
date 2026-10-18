@@ -1,6 +1,6 @@
 # Unit and integration tests — {{id}}
 
-> Unit test agent. Replace every `TODO(agent)` before completing the stage.
+> Unit test agent. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 ## Tests added
 

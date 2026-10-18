@@ -1,6 +1,6 @@
 # Release — {{id}}
 
-> Deployment agent. Replace every `TODO(agent)` before completing the stage.
+> Deployment agent. Fill every placeholder below (the flow will not complete the stage while any remain).
 
 - Revision / version: TODO(agent)
 - Migrations: TODO(agent)

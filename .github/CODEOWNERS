@@ -20,3 +20,9 @@ docs/ @kishorjakkula
 README.md @kishorjakkula
 CONTRIBUTING.md @kishorjakkula
 SECURITY.md @kishorjakkula
+
+# Delivery flow: agent contracts, workflow, tooling and recorded gate approvals
+agents/ @kishorjakkula
+docs/delivery/ @kishorjakkula
+docs/work/ @kishorjakkula
+scripts/delivery/ @kishorjakkula

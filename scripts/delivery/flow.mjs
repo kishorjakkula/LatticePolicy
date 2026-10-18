@@ -10,6 +10,7 @@ import {
   readStatus,
   renderStatus,
   repoRoot,
+  resolveNeedsHuman,
   returnToStage,
   startPackage,
   waiveGate,
@@ -24,6 +25,7 @@ const USAGE = `Usage: npm run flow -- <command>
   approve <WP> <A|B|C|D> --by "<name>" [--note "<their words>"]
   waive <WP> <A|B> --by "<requester>" --note "<their words saying it is not needed>"
   return <WP> <agent-id> --reason "<why>"
+  resolve <WP> --by "<name>" --note "<decision>"   a person continues a stopped package
   list                            all work packages`
 
 function option(args, name) {
@@ -93,6 +95,14 @@ function main(argv) {
       const dir = findPackage(root, args[0])
       const status = returnToStage(dir, args[1], reason)
       console.log(status.state === 'needs-human' ? `Stopped: ${status.needsHumanReason}. A person must decide.` : promptFor(root, dir))
+      return
+    }
+    case 'resolve': {
+      const by = option(args, 'by')
+      const note = option(args, 'note')
+      const dir = findPackage(root, args[0])
+      resolveNeedsHuman(dir, by, note)
+      console.log(promptFor(root, dir))
       return
     }
     case 'list':

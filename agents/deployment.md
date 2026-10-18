@@ -1,9 +1,9 @@
 ---
 id: deployment
 name: Deployment
-stage: 9
+stage: 10
 tracks: [quick, standard, major]
-writes: 09-release.md
+writes: 10-release.md
 gate_after: none
 summary: Releases through the existing pipelines, staging first, with migrations, configuration, rollback and release notes; production only after business sign-off.
 ---
@@ -33,7 +33,7 @@ with a rollback ready.
 
 ## You produce
 
-`09-release.md`: revision, version, migrations (forward-only notes), new
+`10-release.md`: revision, version, migrations (forward-only notes), new
 configuration and secrets (names only), rollback steps, release notes for
 users, and the deployment record for staging and production.
 

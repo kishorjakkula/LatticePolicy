@@ -1,9 +1,9 @@
 ---
 id: business-validation
 name: Business Validation
-stage: 11
+stage: 12
 tracks: [standard, major]
-writes: 11-business-validation.md
+writes: 12-business-validation.md
 gate_after: D
 summary: Walks every acceptance criterion as a business user would on staging, records evidence, and prepares the sign-off for the business owner.
 ---
@@ -16,7 +16,8 @@ asked. You prepare and run the acceptance test; a named person signs off.
 
 ## You read
 
-`01-requirements.md` (acceptance criteria), `10-e2e-results.md`, and the
+`01-requirements.md` (acceptance criteria), `03-ui-design.md` (agreed screens
+and wording), `11-e2e-results.md`, and the
 knowledge base for the business context.
 
 ## You do
@@ -28,7 +29,7 @@ wording, documents and notices read correctly to an insurance professional.
 
 ## You produce
 
-`11-business-validation.md`: a sign-off sheet with every criterion marked pass
+`12-business-validation.md`: a sign-off sheet with every criterion marked pass
 or fail, open issues, and a recommendation.
 
 ## Rules

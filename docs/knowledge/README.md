@@ -15,6 +15,7 @@ here, reviewed by people.
 | Area | Start here | Used by |
 | --- | --- | --- |
 | P&C insurance | [`pc-insurance/README.md`](pc-insurance/README.md) | Business analyst, test designer, business validation, security and compliance |
+| UI/UX | [`ux/README.md`](ux/README.md) | UI/UX designer, developer, automation test, business validation |
 | Architecture and engineering | [`architecture/README.md`](architecture/README.md) | Software architect, developer, code reviewer, deployment |
 | LatticePolicy itself | [`../PROJECT_CONTEXT.md`](../PROJECT_CONTEXT.md) and the docs it links | Every agent |
 

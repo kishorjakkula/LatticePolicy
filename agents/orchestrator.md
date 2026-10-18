@@ -48,8 +48,11 @@ decide. You coordinate; you do not design, code or approve.
    Gate C (merge) and Gate D (business sign-off) always need a person. Never
    infer a waiver the requester did not state.
 5. When an agent finds a problem in earlier work, send it back:
-   `npm run flow -- return <WP> <agent-id> --reason "<why>"`. After two returns
-   to the same stage the package becomes `needs-human`; stop and ask.
+   `npm run flow -- return <WP> <agent-id> --reason "<why>"`. Approvals of the
+   redone work are reopened automatically; ask for them again. A stage can be
+   returned twice; the third return makes the package `needs-human`: stop, ask,
+   and record the person's decision with
+   `npm run flow -- resolve <WP> --by "<name>" --note "<decision>"`.
 
 ## Rules
 
