@@ -32,7 +32,7 @@ flowchart TD
   TD --> GB{{Gate B: design and tests, major track}}
   GB --> DEV[4 Developer]
   DEV <--> UT[5 Unit test]
-  UT --> CR[6 Code reviewer]
+  UT --> CR[6 Code reviewer: separate session, started automatically]
   CR -.->|changes| DEV
   CR --> SEC[7 Security and compliance]
   SEC -.->|findings| DEV
@@ -89,9 +89,17 @@ customer data, migrations or AI data boundaries is **major**, whatever its size.
 | C | Merge | Pull request, review, security findings, green CI | Code owner (GitHub branch protection) |
 | D | Production release | `10-e2e-results.md`, `11-business-validation.md`, `09-release.md` | Business owner (carrier business user for carrier-specific work) |
 
+At each gate the orchestrator summarizes the handoff and **asks the approver**.
 Approvals are recorded with the approver's name and their words:
 `npm run flow -- approve WP-0002 A --by "<name>" --note "<what they said>"`.
 An agent never records an approval nobody gave, and never approves its own work.
+
+**Waivers.** If the request says an approval is not needed — for example
+"no need to ask me to approve the requirements" — the orchestrator records a
+waiver with the requester's words instead of asking:
+`npm run flow -- waive WP-0002 A --by "<requester>" --note "<their words>"`.
+Only Gates A and B can be waived. Gate C (merge) and Gate D (business sign-off)
+always need a person. A waiver is never inferred.
 
 ## Decisions (October 2026)
 
@@ -103,7 +111,8 @@ revised here:
    deploy to production.
 2. **Approvers.** The product owner approves Gates A, B and D; the code owner
    approves Gate C through GitHub. Carrier-specific work adds a carrier business
-   user at Gate D.
+   user at Gate D. The orchestrator asks for requirements approval (Gate A) by
+   default; the requester skips it by saying so in the request.
 3. **Staging.** Use a persistent staging environment when one is configured
    (`E2E_BASE_URL`, `E2E_API_BASE_URL`); until then the local Docker stack built
    from `main` is staging. Tests never use a pilot or demo database.
@@ -111,8 +120,9 @@ revised here:
    for files past their review date; the knowledge curator proposes sourced
    updates in a pull request that a person reviews. Security advisories are
    handled when they appear.
-5. **Reviewer independence.** The code reviewer always runs in a separate session
-   from the developer. A different model or tool is recommended, not required.
+5. **Code review is automatic and independent.** The orchestrator starts the code
+   reviewer itself as a fresh agent session, separate from the developer; the
+   requester does nothing. A different model or tool is recommended, not required.
 6. **Tracks** as defined above.
 
 ## Returns and loops

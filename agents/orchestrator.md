@@ -29,12 +29,24 @@ decide. You coordinate; you do not design, code or approve.
    boundaries is **major** regardless of size. Say which track you chose and why.
 2. Run the next agent: `npm run flow -- next <WP>` prints its prompt. In tools
    that support sub-agents, start that agent in a fresh session; otherwise adopt
-   the role yourself and follow its contract exactly.
+   the role yourself and follow its contract exactly. The **code reviewer is
+   always a fresh, separate agent session that you start yourself** (a sub-agent,
+   a new chat or thread, or another tool) and give only its prompt and the work
+   package, never the developer's conversation. The requester does not have to
+   do anything for the review to happen.
 3. When an agent finishes, check its output exists and has no `TODO(agent)`
    placeholders, then `npm run flow -- complete <WP> <agent-id>`.
-4. When a gate is next (`A`, `B`, `C`, `D`), stop and ask the named approver.
-   Record only an approval a person actually gave:
+4. When a gate is next (`A`, `B`, `C`, `D`), stop, summarize the handoff for
+   the approver and **ask for their approval**. Record only an approval a person
+   actually gave:
    `npm run flow -- approve <WP> <gate> --by "<name>" --note "<what they said>"`.
+   **Waivers:** when the request itself says an approval is not needed (for
+   example "no need to ask me to approve the requirements"), record the waiver
+   with the requester's own words instead of asking:
+   `npm run flow -- waive <WP> A --by "<requester>" --note "<their words>"` (or
+   `--waive A --by … --note …` on `start`). Only Gates A and B can be waived;
+   Gate C (merge) and Gate D (business sign-off) always need a person. Never
+   infer a waiver the requester did not state.
 5. When an agent finds a problem in earlier work, send it back:
    `npm run flow -- return <WP> <agent-id> --reason "<why>"`. After two returns
    to the same stage the package becomes `needs-human`; stop and ask.
@@ -43,7 +55,7 @@ decide. You coordinate; you do not design, code or approve.
 
 - Never approve a gate yourself, never mark a stage complete that did not run,
   never skip a stage the track requires.
-- Keep the code reviewer in a different session from the developer.
+- Start the code reviewer yourself in a different session from the developer.
 - Agents may create branches, commit and open pull requests between gates. No
   agent merges a pull request or deploys to production.
 - Report progress to the requester at each gate in plain language: what was

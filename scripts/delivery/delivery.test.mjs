@@ -18,6 +18,7 @@ import {
   returnToStage,
   slugify,
   startPackage,
+  waiveGate,
   suggestTrack,
 } from './lib.mjs'
 import { drift, renderAdapters, writeAdapters } from './sync-agents.mjs'
@@ -112,6 +113,41 @@ test('a standard package runs stage by stage, stops at gates, and finishes', (t)
   assert.equal(done.state, 'released')
   assert.deepEqual(packageProblems(root, dir), [])
   assert.ok(done.history.some((entry) => entry.event.includes('Gate A approved by Product owner: "Approved as written"')))
+})
+
+test('requirements approval is asked for unless the requester waives it in words', (t) => {
+  const root = sandbox(t)
+  // Default: the flow stops and asks at Gate A.
+  const asked = startPackage(root, 'Show the agent name on the quote list')
+  assert.equal(runUntilGate(asked.dir).gate, 'A')
+  assert.match(promptFor(root, asked.dir), /Ask the approver/)
+  assert.match(promptFor(root, asked.dir), /Only if the requester said this approval is not needed/)
+
+  // Waived at start with the requester's words: no stop at A.
+  assert.throws(() => startPackage(root, 'Another change', { waive: ['A'] }), /Quote the requester/)
+  assert.throws(() => startPackage(root, 'Another change', { waive: ['C'], waiver: 'skip' }), /cannot be waived/)
+  const waived = startPackage(root, 'Show the agent email on the quote list', {
+    waive: ['A'],
+    waivedBy: 'Product owner',
+    waiver: 'No need to ask me to approve the requirements',
+  })
+  assert.equal(runUntilGate(waived.dir).gate, 'C')
+  const status = readStatus(waived.dir)
+  assert.deepEqual(
+    { by: status.gates[0].waivedBy, note: status.gates[0].note },
+    { by: 'Product owner', note: 'No need to ask me to approve the requirements' },
+  )
+  assert.match(fs.readFileSync(path.join(waived.dir, 'status.md'), 'utf8'), /\| A \| waived \| Product owner/)
+  assert.deepEqual(packageProblems(root, waived.dir), [])
+  assert.deepEqual(pullRequestProblems(root, `Work package: ${waived.id}`), [])
+
+  // Merge and business sign-off can never be waived; a waiver needs the words.
+  assert.throws(() => waiveGate(asked.dir, 'C', 'Owner', 'skip'), /cannot be waived/)
+  assert.throws(() => waiveGate(asked.dir, 'D', 'Owner', 'skip'), /cannot be waived/)
+  assert.throws(() => waiveGate(asked.dir, 'A', 'Owner', ''), /Quote the requester/)
+  waiveGate(asked.dir, 'A', 'Owner', 'Requirements approval not required')
+  assert.throws(() => waiveGate(asked.dir, 'A', 'Owner', 'again'), /already waived/)
+  assert.equal(runUntilGate(asked.dir).gate, 'C')
 })
 
 test('returns re-run later stages and stop for a person after two', (t) => {

@@ -11,9 +11,10 @@ summary: Independent reviewer, in a separate session from the developer, who che
 
 ## Mission
 
-Catch what the author cannot see. You did not write this code and you must run
-in a different session from the developer (preferably a different model or
-tool). Review the diff against the requirements and design.
+Catch what the author cannot see. You did not write this code. The orchestrator
+starts you automatically as a fresh agent session, separate from the developer
+(preferably a different model or tool), with only the work package and the
+diff. Review the diff against the requirements and design.
 
 ## You read
 

@@ -6,6 +6,10 @@ import path from 'node:path'
 export const TRACKS = ['quick', 'standard', 'major']
 export const GATES = ['A', 'B', 'C', 'D']
 export const MAX_RETURNS = 2
+/** Gates the requester may waive in their request; merge (C) and sign-off (D) never are. */
+export const WAIVABLE_GATES = ['A', 'B']
+/** A gate no longer blocks once a person approved it or the requester waived it. */
+export const gateCleared = (gate) => Boolean(gate && (gate.approvedBy || gate.waivedBy))
 /** Gates each track requires, in order. */
 export const TRACK_GATES = { quick: ['C'], standard: ['A', 'C', 'D'], major: ['A', 'B', 'C', 'D'] }
 const PLACEHOLDER = 'TODO(agent)'
@@ -151,7 +155,11 @@ export function renderStatus(status) {
     '',
     '| Gate | Status | Approved by | Note |',
     '| --- | --- | --- | --- |',
-    ...status.gates.map((gate) => `| ${gate.gate} | ${gate.approvedBy ? 'approved' : 'pending'} | ${gate.approvedBy ? `${gate.approvedBy} (${gate.approvedAt})` : ''} | ${gate.note || ''} |`),
+    ...status.gates.map((gate) =>
+      gate.waivedBy
+        ? `| ${gate.gate} | waived | ${gate.waivedBy} (${gate.waivedAt}) | ${gate.note || ''} |`
+        : `| ${gate.gate} | ${gate.approvedBy ? 'approved' : 'pending'} | ${gate.approvedBy ? `${gate.approvedBy} (${gate.approvedAt})` : ''} | ${gate.note || ''} |`,
+    ),
     '',
     '## History',
     '',
@@ -172,6 +180,10 @@ export function startPackage(root, request, options = {}) {
   const track = options.track || suggestion.track
   const trackReason = options.track ? options.reason || 'chosen by the requester' : suggestion.reason
   const plan = planFor(agents, track)
+  for (const gate of options.waive || []) {
+    if (!WAIVABLE_GATES.includes(String(gate).toUpperCase())) throw new Error(`Gate ${gate} cannot be waived; only ${WAIVABLE_GATES.join(' and ')} can`)
+    if (!String(options.waiver || '').trim()) throw new Error('Quote the requester: --note "<their words saying approval is not needed>"')
+  }
   const id = options.id || nextId(root)
   const title = String(request).trim().split(/\r?\n/)[0].slice(0, 120)
   const dir = path.join(workDir(root), `${id}-${slugify(title)}`)
@@ -195,11 +207,12 @@ export function startPackage(root, request, options = {}) {
     state: 'in-progress',
     createdAt: at,
     stages: plan.map((stage) => ({ ...stage, status: stage.id === 'orchestrator' ? 'done' : 'pending', returns: 0 })),
-    gates: TRACK_GATES[track].map((gate) => ({ gate, approvedBy: null, approvedAt: null, note: null })),
+    gates: TRACK_GATES[track].map((gate) => ({ gate, approvedBy: null, approvedAt: null, waivedBy: null, waivedAt: null, note: null })),
     history: [{ at, event: `started on the ${track} track (${trackReason})` }],
   }
   writeStatus(dir, status)
-  return { id, dir, status }
+  for (const gate of options.waive || []) waiveGate(dir, gate, options.waivedBy || 'requester', options.waiver, options)
+  return { id, dir, status: readStatus(dir) }
 }
 
 /** The stage or gate that must happen next. */
@@ -209,7 +222,7 @@ export function nextStep(status) {
     if (stage.status !== 'done') return { kind: 'stage', stage }
     if (stage.gateAfter) {
       const gate = status.gates.find((entry) => entry.gate === stage.gateAfter)
-      if (gate && !gate.approvedBy) return { kind: 'gate', gate: gate.gate, after: stage.id }
+      if (gate && !gateCleared(gate)) return { kind: 'gate', gate: gate.gate, after: stage.id }
     }
   }
   return { kind: 'done' }
@@ -265,6 +278,28 @@ export function approveGate(dir, gateName, approver, note, options = {}) {
   return status
 }
 
+/**
+ * Records that the requester said a gate is not needed (for example "no need to
+ * ask for requirements approval"). Only A and B; the requester's own words are
+ * required. May be recorded before the gate is reached.
+ */
+export function waiveGate(dir, gateName, requester, words, options = {}) {
+  const status = readStatus(dir)
+  const name = String(gateName).toUpperCase()
+  if (!WAIVABLE_GATES.includes(name)) throw new Error(`Gate ${name} cannot be waived; only ${WAIVABLE_GATES.join(' and ')} can`)
+  const gate = status.gates.find((entry) => entry.gate === name)
+  if (!gate) throw new Error(`Gate ${name} is not part of the ${status.track} track`)
+  if (gateCleared(gate)) throw new Error(`Gate ${name} is already ${gate.approvedBy ? 'approved' : 'waived'}`)
+  if (!String(requester || '').trim()) throw new Error('Record who waived it: --by "<requester>"')
+  if (!String(words || '').trim()) throw new Error('Quote the requester: --note "<their words saying approval is not needed>"')
+  gate.waivedBy = String(requester).trim()
+  gate.waivedAt = now(options.clock).slice(0, 10)
+  gate.note = String(words).trim()
+  status.history.push({ at: now(options.clock), event: `Gate ${name} waived by ${gate.waivedBy}: "${gate.note}"` })
+  writeStatus(dir, status)
+  return status
+}
+
 export function returnToStage(dir, agentId, reason, options = {}) {
   const status = readStatus(dir)
   const index = status.stages.findIndex((stage) => stage.id === agentId)
@@ -289,7 +324,7 @@ export function promptFor(root, dir) {
   const step = nextStep(status)
   const rel = path.relative(root, dir)
   if (step.kind === 'gate')
-    return `${status.id} is waiting for human approval at Gate ${step.gate} (see docs/delivery/WORKFLOW.md#gates).\nShow the approver ${rel}/ and record their decision with:\n  npm run flow -- approve ${status.id} ${step.gate} --by "<name>" --note "<what they said>"`
+    return `${status.id} is waiting for human approval at Gate ${step.gate} (see docs/delivery/WORKFLOW.md#gates).\nAsk the approver: summarize ${rel}/ for them and wait for their answer. Record it with:\n  npm run flow -- approve ${status.id} ${step.gate} --by "<name>" --note "<what they said>"${WAIVABLE_GATES.includes(step.gate) ? `\nOnly if the requester said this approval is not needed:\n  npm run flow -- waive ${status.id} ${step.gate} --by "<requester>" --note "<their words>"` : ''}`
   if (step.kind === 'human') return `${status.id} needs a person to decide: ${step.reason}`
   if (step.kind === 'done') return `${status.id} is complete.`
   const agent = loadAgents(root).find((entry) => entry.id === step.stage.id)
@@ -334,10 +369,13 @@ export function packageProblems(root, dir) {
     }
     if (stage.status === 'done' && stage.gateAfter) {
       const gate = (status.gates || []).find((entry) => entry.gate === stage.gateAfter)
-      if (gate && !gate.approvedBy) blockedBy = blockedBy || gate.gate
+      if (gate && !gateCleared(gate)) blockedBy = blockedBy || gate.gate
     }
   }
-  for (const gate of status.gates || []) if (gate.approvedBy && !gate.approvedAt) problems.push(`${name}: Gate ${gate.gate} has no approval date`)
+  for (const gate of status.gates || []) {
+    if (gate.approvedBy && !gate.approvedAt) problems.push(`${name}: Gate ${gate.gate} has no approval date`)
+    if (gate.waivedBy && (!WAIVABLE_GATES.includes(gate.gate) || !gate.note)) problems.push(`${name}: Gate ${gate.gate} cannot be waived without the requester's words, and only A or B can be`)
+  }
   return problems
 }
 
@@ -364,7 +402,7 @@ export function pullRequestProblems(root, body, author = '') {
   const beforeMerge = status.gates.filter((gate) => gate.gate === 'A' || gate.gate === 'B')
   return [
     ...packageProblems(root, dir),
-    ...beforeMerge.filter((gate) => !gate.approvedBy).map((gate) => `${status.id}: Gate ${gate.gate} must be approved before merge`),
+    ...beforeMerge.filter((gate) => !gateCleared(gate)).map((gate) => `${status.id}: Gate ${gate.gate} must be approved (or waived by the requester) before merge`),
   ]
 }
 
