@@ -17,6 +17,21 @@ agent to understand:
 The goal is not more paperwork. The goal is a repo that can be understood from
 the files in the repo, without relying on private chat history.
 
+## Delivery Flow
+
+Coding requests go through the delivery agents in
+[`docs/delivery/WORKFLOW.md`](delivery/WORKFLOW.md): business analyst, software
+architect, test designer, developer, unit test, code reviewer, security and
+compliance, automation test, deployment, end-to-end test, business validation
+and knowledge curator, with human gates for requirements, design, merge and
+business sign-off. Any assistant can run it:
+
+```text
+Start the LatticePolicy delivery flow for: <your request>
+```
+
+The task notes and AI-readable Markdown rules below still apply to every change.
+
 ## First Prompt For A Fresh Agent
 
 After forking and cloning the repository, a contributor should be able to give

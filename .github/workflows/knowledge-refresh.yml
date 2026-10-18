@@ -1,0 +1,45 @@
+name: Knowledge Refresh
+
+# Monthly: list delivery knowledge files past their review date and open (or
+# update) one issue for the knowledge curator. The curator's updates go through
+# a reviewed pull request; this workflow never changes the knowledge itself.
+on:
+  schedule:
+    - cron: '0 13 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    name: Knowledge due for review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Open or update the refresh issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/delivery/knowledge-report.mjs
+          if node scripts/delivery/knowledge-report.mjs --fail > /dev/null; then
+            echo "All knowledge files are current."
+            exit 0
+          fi
+          node scripts/delivery/knowledge-report.mjs --markdown > refresh.md
+          title="Knowledge refresh due"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file refresh.md
+          else
+            gh label create knowledge-refresh --color 1F5F8B --description "Delivery knowledge base review" 2>/dev/null || true
+            gh issue create --title "$title" --label knowledge-refresh --body-file refresh.md
+          fi

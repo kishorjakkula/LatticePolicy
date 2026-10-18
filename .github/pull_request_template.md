@@ -1,3 +1,10 @@
+## Delivery
+
+Work package: WP-NNNN
+<!-- or, for a quick change without a work package: -->
+<!-- Delivery track: quick — <one-line reason> -->
+<!-- See docs/delivery/WORKFLOW.md. -->
+
 ## Summary
 
 ## Linked Issue

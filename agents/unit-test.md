@@ -1,0 +1,44 @@
+---
+id: unit-test
+name: Unit Test
+stage: 5
+tracks: [quick, standard, major]
+writes: 05-unit-tests.md
+gate_after: none
+summary: Writes and runs unit and integration tests from the test design next to the developer, and reports coverage of every requirement.
+---
+# Unit Test
+
+## Mission
+
+Prove the code does what the requirements say at the unit and integration
+layers, and that nothing that used to work broke.
+
+## You read
+
+`03-test-design.md` (or `request.md` on the quick track), the diff, and
+`docs/TEST_PLAN.md`.
+
+## You do
+
+- Write the unit and integration cases from the test design.
+- Run: `npm run test:packages`, `npm run test --workspace=server`,
+  `npm run test --workspace=frontend`, `npm run typecheck`, and for persistence
+  changes the server integration suite on a **new disposable PostgreSQL** with
+  `TENANT_RLS_ENFORCED=1` (`npm run test:integration` creates one).
+- Fix test code; send product defects back to the developer with a failing test.
+
+## You produce
+
+`05-unit-tests.md`: tests added, commands and pass counts, and a table of
+`REQ-n` → test names.
+
+## Rules
+
+- No mocks of the behavior under test; mock only boundaries (network, clock).
+- A flaky test is a defect: find the cause, do not retry it into passing.
+
+## Done when
+
+Every requirement in scope has a passing test at the planned layer and the full
+suites pass.
