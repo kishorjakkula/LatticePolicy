@@ -4,7 +4,7 @@
   "title": "Tool-neutral delivery agent flow for LatticePolicy coding requests",
   "track": "standard",
   "trackReason": "process, tooling and documentation change; no product data, tenancy, rating or AI runtime behavior",
-  "state": "in-progress",
+  "state": "released",
   "createdAt": "2026-10-18T04:02:40.216Z",
   "stages": [
     {
@@ -108,7 +108,7 @@
       "name": "Knowledge Curator",
       "writes": "12-lessons.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     }
   ],
@@ -127,9 +127,9 @@
     },
     {
       "gate": "D",
-      "approvedBy": null,
-      "approvedAt": null,
-      "note": null
+      "approvedBy": "Kishor Kumar Jakkula (product owner)",
+      "approvedAt": "2026-10-18",
+      "note": "Yes, I sign off"
     }
   ],
   "history": [
@@ -228,6 +228,18 @@
     {
       "at": "2026-10-18T15:26:01.064Z",
       "event": "Business Validation completed"
+    },
+    {
+      "at": "2026-10-18T15:27:47.112Z",
+      "event": "Gate D approved by Kishor Kumar Jakkula (product owner): \"Yes, I sign off\""
+    },
+    {
+      "at": "2026-10-18T15:28:05.915Z",
+      "event": "Knowledge Curator completed"
+    },
+    {
+      "at": "2026-10-18T15:28:05.915Z",
+      "event": "work package complete"
     }
   ]
 }

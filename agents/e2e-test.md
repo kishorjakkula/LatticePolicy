@@ -19,6 +19,8 @@ Prove the deployed system works end to end, not just the code in CI.
   `E2E_API_BASE_URL` pointing at staging) for the smoke suite and the journeys
   in `04-test-design.md` marked post-deploy.
 - Use synthetic data only; never real customer data.
+- Before rerunning a failed test, copy its screenshots, trace and log into the
+  work package (`evidence/`); a rerun clears Playwright's `test-results/`.
 
 ## You produce
 

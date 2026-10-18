@@ -2,8 +2,8 @@
 # WP-0001: Tool-neutral delivery agent flow for LatticePolicy coding requests
 
 - Track: **standard** — process, tooling and documentation change; no product data, tenancy, rating or AI runtime behavior
-- State: **in-progress**
-- Next: human approval at Gate D
+- State: **released**
+- Next: nothing — complete
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@
 | Deployment | `09-release.md` | done | 0 |
 | End-to-End Test | `10-e2e-results.md` | done | 0 |
 | Business Validation | `11-business-validation.md` | done | 0 |
-| Knowledge Curator | `12-lessons.md` | pending | 0 |
+| Knowledge Curator | `12-lessons.md` | done | 0 |
 
 ## Gates
 
@@ -27,7 +27,7 @@
 | --- | --- | --- | --- |
 | A | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | I like that, good job … as per the standards you can decide which suits us and add value to the project and implement |
 | C | approved | kishorjakkula (code owner) (2026-10-18) | Merged PR #383 (4b4c068): "merged" |
-| D | pending |  |  |
+| D | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Yes, I sign off |
 
 ## History
 
@@ -55,3 +55,6 @@
 - 2026-10-18T15:23:48.519Z — Deployment completed
 - 2026-10-18T15:25:13.505Z — End-to-End Test completed
 - 2026-10-18T15:26:01.064Z — Business Validation completed
+- 2026-10-18T15:27:47.112Z — Gate D approved by Kishor Kumar Jakkula (product owner): "Yes, I sign off"
+- 2026-10-18T15:28:05.915Z — Knowledge Curator completed
+- 2026-10-18T15:28:05.915Z — work package complete
