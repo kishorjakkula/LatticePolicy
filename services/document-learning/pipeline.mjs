@@ -248,8 +248,8 @@ export async function registerCandidate(
       )
   )
     throw new Error('Candidate/report identity mismatch or failed evaluation')
-  if (!token || typeof token !== 'string')
-    throw new Error('A scoped automation identity token is required')
+  if (!token || typeof token !== 'string' || !token.startsWith('lpa_'))
+    throw new Error('A scoped automation service credential (lpa_...) is required')
   const base = new URL(apiUrl)
   if (
     base.pathname !== '/' ||
@@ -261,7 +261,8 @@ export async function registerCandidate(
     throw new Error('Use a private API origin')
   const endpoint = new URL('/api/v1/admin/llm/releases', base)
   endpoint.searchParams.set('tenant', tenantId)
-  const result = await request(endpoint.toString(), candidate, {
+  // The API re-checks the report against its hash and recomputes the metrics.
+  const result = await request(endpoint.toString(), { ...candidate, evaluationReport: report }, {
     token,
     timeoutMs: 30000,
   })

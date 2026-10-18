@@ -148,8 +148,11 @@ after evaluation when independent evaluation assurance is required.
 npm run document:learning -- register /private/learning-runs/RUN_ID http://policy-api:3000 synthetic-carrier
 ```
 
-Supply `LEARNING_API_TOKEN` for a scoped `llm_release_automation` identity using
-the carrier's existing authentication process. Alternatively set
+Supply `LEARNING_API_TOKEN` as a scoped release automation service credential
+(`lpa_...`), issued by an administrator on **LLM Releases > Release Automation
+Credentials** for an account holding only `llm_release_automation`. Password
+session tokens are refused. Registration sends the full held-out
+`evaluation.json` so the API can re-check its hash and recompute the metrics. Alternatively set
 `registerOnSuccess:true` and private `apiUrl` in the job config for automatic
 registration after evaluation. Tokens stay in the process environment, never
 configuration/output files. Candidate registration is server-idempotent.

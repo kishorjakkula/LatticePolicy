@@ -8,6 +8,7 @@ import {
   profileDigest,
   verifyAuthorization,
   releasePolicyFromEnv,
+  revokedReleaseIds,
 } from './release-authorization.mjs'
 import { publishProfile, activateProfile } from './profiles.mjs'
 import { createProcessor } from './processor.mjs'
@@ -205,4 +206,27 @@ test('production cannot silently fall back to an ungoverned environment', async 
     await releasePolicyFromEnv({ RELEASE_ENVIRONMENT: 'development' }),
     null,
   )
+  // Unset is not development: the checks are never turned off by omission.
+  await assert.rejects(releasePolicyFromEnv({}), /RELEASE_ENVIRONMENT/)
+  await assert.rejects(
+    releasePolicyFromEnv({ RELEASE_ENVIRONMENT: 'development', NODE_ENV: 'production' }),
+    /not allowed/,
+  )
+})
+test('signed revocation lists are verified for signature and carrier', () => {
+  const signed = (payload, key = privateKey) => ({
+    schemaVersion: 1,
+    releaseIds: payload.releaseIds,
+    payload,
+    signature: sign(null, Buffer.from(JSON.stringify(payload)), key).toString('base64url'),
+  })
+  const payload = { schemaVersion: 1, tenantId: 'carrier-a', issuedAt: new Date().toISOString(), releaseIds: ['release-1'] }
+  assert.deepEqual(revokedReleaseIds(signed(payload), publicKey, 'carrier-a'), ['release-1'])
+  assert.throws(() => revokedReleaseIds(signed(payload), publicKey, 'carrier-b'), /revocation policy/)
+  const other = generateKeyPairSync('ed25519').privateKey
+  assert.throws(() => revokedReleaseIds(signed(payload, other), publicKey, 'carrier-a'), /revocation signature/)
+  const tampered = signed(payload)
+  tampered.payload = { ...payload, releaseIds: [] }
+  assert.throws(() => revokedReleaseIds(tampered, publicKey, 'carrier-a'), /revocation signature/)
+  assert.deepEqual(revokedReleaseIds({ schemaVersion: 1, releaseIds: ['x'] }, publicKey, 'carrier-a'), ['x'])
 })

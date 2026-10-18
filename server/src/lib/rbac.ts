@@ -60,6 +60,9 @@ const PERMISSION_CATALOG: PermissionDefinition[] = [
   { permissionCode:'llm.releases.read',scope:'api',resourceKey:'llm.releases',actionKey:'read',label:'LLM Releases: Read',description:'Read tenant model releases',sortOrder:802 },
   { permissionCode:'llm.releases.register',scope:'api',resourceKey:'llm.releases',actionKey:'manage',label:'LLM Releases: Register',description:'Register evaluated candidates; no approval rights',sortOrder:803 },
   { permissionCode:'llm.releases.review',scope:'api',resourceKey:'llm.releases',actionKey:'approve',label:'LLM Releases: Review',description:'Test candidates and authorize production',sortOrder:804 },
+  { permissionCode:'menu.admin.ai_audit.view',scope:'menu',resourceKey:'admin.ai_audit',actionKey:'view',label:'Admin Menu: AI Audit',description:'View the AI and person activity audit',sortOrder:805 },
+  { permissionCode:'page.admin.ai_audit.view',scope:'page',resourceKey:'admin.ai_audit',actionKey:'view',label:'Page: AI Audit',description:'Review what the AI did and what people did',sortOrder:806 },
+  { permissionCode:'ai.audit.read',scope:'api',resourceKey:'ai.audit',actionKey:'read',label:'AI Audit: Read',description:'Read the AI governance audit trail and verify its integrity',sortOrder:807 },
   { permissionCode: 'menu.search.view', scope: 'menu', resourceKey: 'search', actionKey: 'view', label: 'Menu: Search', description: 'View Search menu entry', sortOrder: 10 },
   { permissionCode: 'menu.portal.view', scope: 'menu', resourceKey: 'portal', actionKey: 'view', label: 'Menu: Customer Portal', description: 'View customer portal menu entry', sortOrder: 12 },
   { permissionCode: 'menu.rating.view', scope: 'menu', resourceKey: 'rating', actionKey: 'view', label: 'Menu: Rating', description: 'View Rating workbench menu entry', sortOrder: 15 },
@@ -181,7 +184,7 @@ const ALL_PERMISSION_CODES = PERMISSION_CATALOG.map((x) => x.permissionCode)
 
 const DEFAULT_ROLE_SEEDS: RoleSeed[] = [
   { roleCode:'carrier_technical_admin',roleName:'Carrier Technical Administrator',description:'Validates private LLM releases and authorizes production',isSystem:true,
-    permissionCodes:['menu.admin.view','menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.review'] },
+    permissionCodes:['menu.admin.view','menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.review','menu.admin.ai_audit.view','page.admin.ai_audit.view','ai.audit.read'] },
   { roleCode:'llm_release_automation',roleName:'LLM Release Automation',description:'Registers evaluated candidates; cannot approve',isSystem:true,
     permissionCodes:['llm.releases.read','llm.releases.register'] },
   {

@@ -20,7 +20,7 @@ export class ValidationError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(code = 'FORBIDDEN') { super(403, code, 'Forbidden') }
+  constructor(code = 'FORBIDDEN', message = 'Forbidden') { super(403, code, message) }
 }
 
 export class ConflictError extends AppError {

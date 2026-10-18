@@ -110,9 +110,14 @@ processing network. Use a unique `DOCUMENT_NETWORK` and token for each stack.
    `{"schemaVersion":1,"releaseIds":[]}` initially. The directory is mounted
    read-only at `/release-policy`, with automatic host-directory creation disabled.
    Keep `LLM_RELEASE_REVOCATION_FILE=/release-policy/revocations.json` for the
-   container. Atomically replace the host file to revoke release IDs; the
-   directory mount makes replacements visible on each inference. Missing or
-   malformed configured policy and expired receipts deny processing.
+   container. To revoke, download the signed list from **LLM Releases >
+   Download Revocation List** and atomically replace the host file; the
+   processor verifies its signature and carrier, and the directory mount makes
+   replacements visible on each inference. Missing or malformed configured
+   policy, a bad list signature, and expired receipts deny processing.
+   `RELEASE_ENVIRONMENT` has no default: set `validation` or `production`
+   (`development` only for isolated synthetic work, never with
+   `NODE_ENV=production`).
 4. Build/start the isolated services from the repository root:
 
 ```bash

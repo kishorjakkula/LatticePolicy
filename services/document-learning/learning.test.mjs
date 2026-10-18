@@ -443,15 +443,26 @@ test('learning pipeline evaluates through real local HTTP, resumes and registers
   await registerCandidate(first.directory, {
     apiUrl: 'http://127.0.0.1:3300',
     tenantId: dataset.tenantId,
-    token: 'scoped-token',
+    token: 'lpa_scoped-credential',
     request: async (url, body) => {
       registered++
       assert.ok(url.includes('tenant=synthetic-carrier'))
       assert.equal(body.versionLabel, first.candidate.versionLabel)
+      // The full report travels with the candidate so the API can re-check it.
+      assert.equal(digest(body.evaluationReport), body.evaluation.reportSha256)
       return { release_id: 'test' }
     },
   })
   assert.equal(registered, 1)
+  await assert.rejects(
+    registerCandidate(first.directory, {
+      apiUrl: 'http://127.0.0.1:3300',
+      tenantId: dataset.tenantId,
+      token: 'password-session-jwt',
+      request: async () => ({}),
+    }),
+    /service credential/,
+  )
   await assert.rejects(
     registerCandidate(first.directory, {
       apiUrl: 'http://127.0.0.1:3300',

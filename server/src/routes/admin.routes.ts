@@ -3,6 +3,8 @@ import { Router } from 'express'
 import { seedProductDocumentTemplates } from '../services/product-document-templates.service.js'
 import { requirePermission } from '../auth.js'
 import { createUser, deleteUser, listByTenant, updateUser } from '../users.js'
+import { checkGovernanceRoleChange, isGovernanceRefusal, recordGovernanceRoleChange } from '../services/llm-governance-roles.service.js'
+import { requestIdOf } from '../lib/request-id.js'
 import { withTenantTx, getDb, toRawQuery } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { rate } from '../rating.js'
@@ -137,7 +139,10 @@ adminRoutes.post('/users', requirePermission('admin.users.manage'), async (req, 
         message: `Unknown or inactive role(s): ${roleValidation.missingRoleCodes.join(', ')}`
       })
     }
+    const governance = await checkGovernanceRoleChange(tenantId, req.user?.id, null, roleValidation.validRoleCodes)
+    if (isGovernanceRefusal(governance)) return res.status(governance.status).json({ code: governance.code, message: governance.message })
     const user = await createUser({ username, password, tenantId, roles: roleValidation.validRoleCodes, customerRef, enforcePasswordPolicy: true })
+    await recordGovernanceRoleChange(tenantId, req.user?.id, user.id, governance, requestIdOf(req, res))
     return res.status(201).json(user)
   } catch (e: any) {
     if (String(e?.message) === 'USERNAME_EXISTS') return res.status(409).json({ code: 'USERNAME_EXISTS' })
@@ -166,9 +171,12 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
       }
       validatedRoles = roleValidation.validRoleCodes
     }
+    const governance = await checkGovernanceRoleChange(tenantId, req.user?.id, id, validatedRoles, disabled)
+    if (isGovernanceRefusal(governance)) return res.status(governance.status).json({ code: governance.code, message: governance.message })
     const patch: any = { password, roles: validatedRoles, disabled, enforcePasswordPolicy: true }
     if (Object.prototype.hasOwnProperty.call(body, 'customerRef')) patch.customerRef = body.customerRef
     const user = await updateUser(tenantId, id, patch)
+    await recordGovernanceRoleChange(tenantId, req.user?.id, id, governance, requestIdOf(req, res))
     return res.json(user)
   } catch (e: any) {
     if (String(e?.message) === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
@@ -181,10 +189,18 @@ adminRoutes.patch('/users/:id', requirePermission('admin.users.manage'), async (
 
 adminRoutes.delete('/users/:id', requirePermission('admin.users.manage'), (req, res) => {
   const tenantId = req.tenant!.tenantId
-  deleteUser(tenantId, routeParam(req.params.id))
-    .then(() => res.status(204).end())
+  const id = routeParam(req.params.id)
+  checkGovernanceRoleChange(tenantId, req.user?.id, id, [])
+    .then(async (governance) => {
+      if (isGovernanceRefusal(governance)) return res.status(governance.status).json({ code: governance.code, message: governance.message })
+      await deleteUser(tenantId, id)
+      await recordGovernanceRoleChange(tenantId, req.user?.id, id, governance, requestIdOf(req, res))
+      return res.status(204).end()
+    })
     .catch((e:any) => {
       if (String(e?.message) === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
+      // Accounts named in governance or audit records are kept; disable them instead.
+      if (e?.code === '23503') return res.status(409).json({ code: 'USER_HAS_AUDIT_HISTORY', message: 'This account appears in audit records; disable it instead of deleting it' })
       return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
     })
 })

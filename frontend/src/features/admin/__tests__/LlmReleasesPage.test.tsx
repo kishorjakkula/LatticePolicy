@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { LlmReleasesPage } from '../LlmReleasesPage'
-import { llmReleasesApi } from '../../../api/llm-releases.api'
+import { llmReleasesApi, reportDigest } from '../../../api/llm-releases.api'
 
 const query = vi.hoisted(() => ({
   data: null as any,
@@ -11,8 +11,9 @@ const query = vi.hoisted(() => ({
   refetch: vi.fn(),
 }))
 vi.mock('@tanstack/react-query', () => ({ useQuery: () => query }))
-vi.mock('../../../api/llm-releases.api', () => ({
-  llmReleasesApi: { list: vi.fn(), transition: vi.fn(), contact: vi.fn() },
+vi.mock('../../../api/llm-releases.api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../api/llm-releases.api')>()),
+  llmReleasesApi: { list: vi.fn(), transition: vi.fn(), contact: vi.fn(), revocations: vi.fn() },
 }))
 function show(
   status: string,
@@ -22,6 +23,7 @@ function show(
 ) {
   query.data = {
     canReview,
+    currentUserId: 'current-admin',
     emailEnabled,
     contactEmail: 'technical@example.test',
     items: [
@@ -189,12 +191,15 @@ describe('carrier technical-admin LLM releases', () => {
     show('IN_VALIDATION')
     const record = screen.getByRole('button', { name: 'Record Validation' })
     expect(record).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Test run ID'), {
-      target: { value: 'test-42' },
+    const report = { schemaVersion: 1, runId: 'test-42', environment: 'test', artifactDigest: 'a'.repeat(64), passed: true }
+    fireEvent.change(screen.getByLabelText('Test report (JSON)'), {
+      target: { files: [new File([JSON.stringify(report)], 'report.json', { type: 'application/json' })] },
     })
-    fireEvent.change(screen.getByLabelText('Test report SHA-256'), {
-      target: { value: 'b'.repeat(64) },
-    })
+    const expectedHash = await reportDigest(report)
+    // The SHA-256 is calculated from the uploaded report, not typed in.
+    await waitFor(() => expect(screen.getByLabelText('Test report SHA-256')).toHaveValue(expectedHash))
+    expect(screen.getByLabelText('Test report SHA-256')).toHaveAttribute('readonly')
+    expect(screen.getByLabelText('Test run ID')).toHaveValue('test-42')
     fireEvent.change(screen.getByLabelText('Validation notes'), {
       target: { value: 'Synthetic corpus passed' },
     })
@@ -214,6 +219,8 @@ describe('carrier technical-admin LLM releases', () => {
           attestation: true,
           environment: 'test',
           artifactDigest: 'a'.repeat(64),
+          reportSha256: expectedHash,
+          report,
         }),
       ),
     )
@@ -248,5 +255,35 @@ describe('carrier technical-admin LLM releases', () => {
     expect(
       screen.queryByRole('button', { name: 'Save Email' }),
     ).not.toBeInTheDocument()
+  })
+  it('tells the validator that a different technical admin must authorize production', () => {
+    show('VALIDATED', true, true, { validated_by: 'current-admin' })
+    expect(screen.getByText(/A different carrier technical administrator must authorize production/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Authorize Production Publication' })).not.toBeInTheDocument()
+    expect(screen.getByText('You')).toBeInTheDocument()
+  })
+  it('revokes only with a reason and an explicit confirmation', async () => {
+    show('PRODUCTION_AUTHORIZED', true, false, {
+      approved_by: 'other-admin-id',
+      approver_active: false,
+      production_authorization: { payload: { approvedAt: '2026-10-17T00:00:00.000Z', expiresAt: '2026-10-24T00:00:00.000Z' }, signature: 's' },
+      production_quality: { submissions: 4, drafted: 40, corrected: 2, correctionRate: 0.05 },
+    })
+    expect(screen.getByText(/no longer a technical administrator/)).toBeInTheDocument()
+    expect(screen.getByText(/5.0% of 40 AI-drafted values corrected/)).toBeInTheDocument()
+    const revoke = screen.getByRole('button', { name: 'Revoke Release' })
+    fireEvent.change(screen.getByLabelText('Revocation reason'), { target: { value: 'Accuracy drift' } })
+    expect(revoke).toBeDisabled()
+    fireEvent.click(screen.getByLabelText(/Stop this release everywhere/))
+    fireEvent.click(revoke)
+    await waitFor(() =>
+      expect(llmReleasesApi.transition).toHaveBeenCalledWith('r1', 'revoke', { reason: 'Accuracy drift', attestation: true }),
+    )
+  })
+  it('shows revocation details for a revoked release without approval controls', () => {
+    show('REVOKED', true, false, { revoked_by: 'current-admin', revoked_at: '2026-10-17T00:00:00.000Z', revocation_reason: 'Drift' })
+    expect(screen.getByText(/by You: Drift/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Revoke Release' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Renew Authorization' })).not.toBeInTheDocument()
   })
 })

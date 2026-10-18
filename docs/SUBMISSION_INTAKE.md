@@ -37,7 +37,13 @@ Migrations: `server/migrations/061_submission_intake.sql`, `062_submission_confi
 6. **Everything is recorded.** `submission_events` keeps who did what: the
    reader's draft (actor type `ai`), each confirmation and edit with the AI
    value it replaced, the approval with its attestation text, and what
-   LatticePolicy created (actor type `system`).
+   LatticePolicy created (actor type `system`). AI entries record the model,
+   extraction profile and approved release that drafted the values. The log is
+   append-only and hash-chained per carrier, and the database refuses an `ai`
+   entry for anything but `drafted`/`reading_failed`, and any confirmation,
+   edit, customer choice, approval or decline that is not a person's (migration
+   `064_ai_governance_audit.sql`). **Administration > AI Audit** shows it with
+   the model-release log, separated into AI, automation, person and system.
 
 ## Lifecycle
 

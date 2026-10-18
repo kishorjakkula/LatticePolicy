@@ -1,0 +1,14 @@
+# Overlay for deploy/carrier-stack/docker-compose.yml. Only the API signs; the
+# worker and dispatcher never join the signer network.
+services:
+  api:
+    environment:
+      LLM_RELEASE_SIGNER_URL: http://release-signer:8090
+      LLM_RELEASE_SIGNER_TOKEN: ${LLM_RELEASE_SIGNER_TOKEN:?A private signer token is required}
+      # The API checks every signature it receives against this public key.
+      LLM_RELEASE_PUBLIC_KEY: ${LLM_RELEASE_PUBLIC_KEY:?The release public key (PEM) is required}
+    networks: [default, release-signer]
+networks:
+  release-signer:
+    external: true
+    name: ${RELEASE_SIGNER_NETWORK:-lattice-release-signer}

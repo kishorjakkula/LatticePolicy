@@ -59,6 +59,7 @@ for (const viewport of [
           json: {
             items: [release],
             canReview: true,
+            currentUserId: 'technical-admin-a',
             contactEmail: '',
             emailEnabled: false,
           },
@@ -81,8 +82,13 @@ for (const viewport of [
           expect(body.attestation).toBe(true)
           expect(body.passed).toBe(true)
           expect(body.environment).toBe('test')
+          // The uploaded report travels with its browser-computed SHA-256.
+          expect(body.report.runId).toBe('test-run-42')
+          expect(body.reportSha256).toMatch(/^[a-f0-9]{64}$/)
           release.status = 'VALIDATED'
           release.validation = body
+          // A different technical admin validated, so this user may authorize (four eyes).
+          release.validated_by = 'technical-admin-b'
         }
         if (action === 'authorize-production') {
           expect(route.request().postDataJSON().attestation).toBe(true)
@@ -118,8 +124,21 @@ for (const viewport of [
     await page
       .getByRole('button', { name: 'Authorize Lower-Environment Test' })
       .click()
-    await page.getByLabel('Test run ID').fill('test-run-42')
-    await page.getByLabel('Test report SHA-256').fill('b'.repeat(64))
+    await page.getByLabel('Test report (JSON)').setInputFiles({
+      name: 'lower-environment-report.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(
+        JSON.stringify({
+          schemaVersion: 1,
+          runId: 'test-run-42',
+          environment: 'test',
+          artifactDigest: 'a'.repeat(64),
+          passed: true,
+        }),
+      ),
+    })
+    await expect(page.getByLabel('Test run ID')).toHaveValue('test-run-42')
+    await expect(page.getByLabel('Test report SHA-256')).toHaveValue(/^[a-f0-9]{64}$/)
     await page
       .getByLabel('Validation notes')
       .fill('Synthetic application mappings and evidence checked')

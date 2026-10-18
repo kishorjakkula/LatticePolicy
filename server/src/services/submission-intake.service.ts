@@ -586,7 +586,8 @@ export async function runExtraction(
         JSON.stringify({ finishedAt, summary: result.summary, productReason: result.productReason, warnings, counts, documentsRead: readable.length, documentsTotal: documents.length, processing: result.processing || null }),
       ]
     )
-    await recordEvent(q, tenantId, submissionId, 'ai', extractor.label, 'drafted', { ...counts, productCode, documentsRead: readable.length })
+    // Which model, extraction profile and approved release drafted the values.
+    await recordEvent(q, tenantId, submissionId, 'ai', extractor.label, 'drafted', { ...counts, productCode, documentsRead: readable.length, processing: result.processing || null })
     return { outcome: 'drafted' as const }
   })
 }

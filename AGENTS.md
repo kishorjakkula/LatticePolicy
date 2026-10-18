@@ -93,3 +93,7 @@ and workspace scripts from the repository root.
 - Only a currently assigned carrier technical admin may authorize LLM
   validation/production; a training identity cannot approve its own release.
   Never disable signed activation in a carrier validation/production stack.
+- AI governance audit logs (`submission_events`, `llm_release_audit`) are
+  append-only and hash-chained; never add UPDATE/DELETE paths. Record who acted
+  as `ai`/`automation`/`system`/`user`; the AI and automation never perform a
+  person's confirmation or approval. See `docs/LLM_RELEASE_GOVERNANCE.md`.

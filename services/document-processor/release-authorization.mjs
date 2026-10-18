@@ -69,14 +69,34 @@ export function verifyAuthorization(
     throw new Error('Release authorization expired or has invalid lifetime')
   if (revocationFile) {
     // Intentionally uncached: emergency revocation takes effect on the next run.
-    const revoked = JSON.parse(readFileSync(revocationFile, 'utf8'))
-    if (revoked?.schemaVersion !== 1 || !Array.isArray(revoked.releaseIds) ||
-        revoked.releaseIds.some(id => typeof id !== 'string' || !id))
-      throw new Error('Invalid release revocation policy')
-    if (revoked.releaseIds.includes(payload.releaseId))
+    const revoked = revokedReleaseIds(JSON.parse(readFileSync(revocationFile, 'utf8')), key, tenantId)
+    if (revoked.includes(payload.releaseId))
       throw new Error('Release authorization revoked')
   }
   return payload
+}
+
+/**
+ * Revocation lists downloaded from LatticePolicy are signed by the release
+ * signer; their signature and carrier are checked. A hand-written unsigned
+ * list ({schemaVersion, releaseIds}) is still honored, because it can only
+ * stop releases from running, never allow one.
+ */
+export function revokedReleaseIds(list, key, tenantId) {
+  const ids = value => Array.isArray(value) && value.every(id => typeof id === 'string' && id)
+  if (list?.signature !== undefined || list?.payload !== undefined) {
+    const payload = list.payload
+    if (typeof list.signature !== 'string' || !payload ||
+        !verify(null, Buffer.from(JSON.stringify(payload)), key, Buffer.from(list.signature, 'base64url')))
+      throw new Error('Invalid release revocation signature')
+    if (payload.schemaVersion !== 1 || payload.tenantId !== tenantId || !ids(payload.releaseIds) ||
+        !Number.isFinite(Date.parse(payload.issuedAt)))
+      throw new Error('Invalid release revocation policy')
+    return payload.releaseIds
+  }
+  if (list?.schemaVersion !== 1 || !ids(list.releaseIds))
+    throw new Error('Invalid release revocation policy')
+  return list.releaseIds
 }
 
 export async function loadAuthorization(directory, profile, policy) {
@@ -90,8 +110,15 @@ export async function loadAuthorization(directory, profile, policy) {
 }
 
 export async function releasePolicyFromEnv(env = process.env) {
-  const environment = env.RELEASE_ENVIRONMENT || 'development'
-  if (environment === 'development') return null
+  // No default: an unset environment must never silently disable the checks.
+  const environment = env.RELEASE_ENVIRONMENT
+  if (!environment)
+    throw new Error('Set RELEASE_ENVIRONMENT to validation or production (development only on a workstation)')
+  if (environment === 'development') {
+    if (env.NODE_ENV === 'production')
+      throw new Error('RELEASE_ENVIRONMENT=development is not allowed in a production image run')
+    return null
+  }
   if (
     !['validation', 'production'].includes(environment) ||
     !env.CARRIER_TENANT_ID ||

@@ -19,11 +19,19 @@ import { ensureTenantRbacDefaults } from '../rbac.js'
 import { createApp } from '../app.js'
 import { issueToken } from '../auth.js'
 import {
+  issueRevocationList,
   listLlmReleases,
   registerLlmRelease,
+  reportDigest,
   saveLlmContact,
+  saveLlmPolicy,
   transitionLlmRelease,
 } from '../services/llm-release.service.js'
+import {
+  issueAutomationCredential,
+  revokeAutomationCredential,
+} from '../services/llm-automation-credentials.service.js'
+import { listAiAudit, verifyAiAuditIntegrity, exportAiAuditCsv } from '../services/ai-audit.service.js'
 import { sendLlmReleaseEmail } from '../services/llm-release-email.service.js'
 import { dispatchOutboxRow, loadConfig } from '../asyncMessageWorker.js'
 
@@ -32,25 +40,50 @@ const tenant = `llm-release-carrier-${randomUUID().slice(0, 8)}`,
 const automation = randomUUID(),
   admin = randomUUID(),
   ordinary = randomUUID(),
-  otherAdmin = randomUUID()
-const candidate = () => ({
-  versionLabel: `candidate-${randomUUID()}`,
-  artifacts: {
-    profileId: 'submission',
-    profileVersion: '1.0.0',
-    profileSha256: 'a'.repeat(64),
-    model: 'private-model-v1',
-    modelSha256: 'b'.repeat(64),
-  },
-  evaluation: {
-    sampleCount: 50,
-    fieldAccuracy: 0.98,
-    evidenceAccuracy: 0.99,
-    criticalErrors: 0,
-    datasetSha256: 'c'.repeat(64),
-    reportSha256: 'd'.repeat(64),
-  },
-})
+  otherAdmin = randomUUID(),
+  // A second technical admin: the production approver must differ from the validator.
+  approver = randomUUID()
+const artifacts = {
+  profileId: 'submission',
+  profileVersion: '1.0.0',
+  profileSha256: 'a'.repeat(64),
+  model: 'private-model-v1',
+  modelSha256: 'b'.repeat(64),
+}
+// Candidate plus the held-out report the API re-checks (shape of services/document-learning output).
+const candidate = () => {
+  const metrics = { sampleCount: 50, fieldAccuracy: 0.98, evidenceAccuracy: 0.99, criticalErrors: 0, datasetSha256: 'c'.repeat(64) }
+  const evaluationReport = {
+    schemaVersion: 1,
+    tenantId: tenant,
+    artifacts,
+    metrics,
+    totals: { checks: 100, correct: 98, evidenceChecks: 100, validEvidence: 99, criticalErrors: 0, extractionErrors: 0, variantChecks: 50, variantCorrect: 50 },
+    outcomes: Array.from({ length: 50 }, (_, i) => ({ sampleId: `s${i}`, status: 'PASSED', failedFields: [] })),
+    passed: true,
+  }
+  return {
+    versionLabel: `candidate-${randomUUID()}`,
+    artifacts,
+    evaluation: { ...metrics, reportSha256: reportDigest(evaluationReport) },
+    evaluationReport,
+  }
+}
+// Lower-environment test evidence: the uploaded report must hash to reportSha256.
+const validation = (release: any, overrides: Record<string, any> = {}) => {
+  const base = {
+    passed: true,
+    environment: 'test',
+    runId: `run-${randomUUID().slice(0, 8)}`,
+    artifactDigest: release.artifact_digest,
+    attestation: true,
+    notes: 'Verified synthetic applications in isolated test deployment',
+    ...overrides,
+  }
+  const report = { schemaVersion: 1, runId: base.runId, environment: base.environment, artifactDigest: base.artifactDigest, passed: base.passed }
+  return { ...base, reportSha256: reportDigest(report), report }
+}
+const recorded = ({ report: _report, ...rest }: Record<string, any>) => rest
 async function q(sql: string, params: any[] = [], tenantId = tenant) {
   return withTenantTx(tenantId, async (db) => toRawQuery(db)(sql, params))
 }
@@ -83,6 +116,7 @@ describe('carrier technical-admin LLM release governance', () => {
       [admin, tenant, 'carrier_technical_admin'],
       [ordinary, tenant, 'admin'],
       [otherAdmin, other, 'carrier_technical_admin'],
+      [approver, tenant, 'carrier_technical_admin'],
     ]) {
       await getDb()!.query(
         'INSERT INTO users(user_id,tenant_id,username,password_hash) VALUES($1,$2,$3,$4)',
@@ -100,10 +134,16 @@ describe('carrier technical-admin LLM release governance', () => {
         'DELETE FROM async_message_outbox WHERE tenant_id = ANY($1::text[])',
         [[tenant, other]],
       )
-      await getDb()?.query(
-        'DELETE FROM tenants WHERE tenant_id = ANY($1::text[])',
-        [[tenant, other]],
-      )
+      // Audit logs are append-only; only explicit carrier offboarding may remove them.
+      const client = await (getDb() as any).connect()
+      try {
+        await client.query('BEGIN')
+        await client.query("SELECT set_config('app.audit_purge', 'tenant-offboarding', true)")
+        await client.query('DELETE FROM tenants WHERE tenant_id = ANY($1::text[])', [[tenant, other]])
+        await client.query('COMMIT')
+      } finally {
+        client.release()
+      }
     } finally {
       vi.unstubAllEnvs()
       await closeDb()
@@ -237,12 +277,21 @@ describe('carrier technical-admin LLM release governance', () => {
         )
       ).rows[0].status,
     ).toBe('Sent')
+    // A self-consistent candidate (report re-made for the changed model) reusing the label.
+    const changedArtifacts = { ...input.artifacts, model: 'changed' }
+    const changedReport = { ...input.evaluationReport, artifacts: changedArtifacts }
     await expect(
       registerLlmRelease(tenant, automation, {
         ...input,
-        artifacts: { ...input.artifacts, model: 'changed' },
+        artifacts: changedArtifacts,
+        evaluation: { ...input.evaluation, reportSha256: reportDigest(changedReport) },
+        evaluationReport: changedReport,
       }),
     ).rejects.toMatchObject({ code: 'LLM_VERSION_IMMUTABLE' })
+    // A stale report for changed artifacts is refused before anything else.
+    await expect(
+      registerLlmRelease(tenant, automation, { ...input, artifacts: changedArtifacts }),
+    ).rejects.toMatchObject({ code: 'LLM_EVALUATION_REPORT_REJECTED' })
   })
   it.each(['true', 'false'])(
     'requires lower-environment evidence and explicit technical-admin approval before production with email %s',
@@ -286,15 +335,7 @@ describe('carrier technical-admin LLM release governance', () => {
       expect(testing.validation_authorization.payload.environment).toBe(
         'validation',
       )
-      const report = {
-        passed: true,
-        environment: 'test',
-        runId: 'synthetic-test-run',
-        reportSha256: 'e'.repeat(64),
-        artifactDigest: release.artifact_digest,
-        attestation: true,
-        notes: 'Verified synthetic applications in isolated test deployment',
-      }
+      const report = validation(release)
       await expect(
         transitionLlmRelease(
           tenant,
@@ -324,26 +365,37 @@ describe('carrier technical-admin LLM release governance', () => {
         transitionLlmRelease(
           tenant,
           release.release_id,
-          admin,
+          approver,
           'authorize-production',
           { attestation: false },
         ),
       ).rejects.toMatchObject({ code: 'INVALID_LLM_RELEASE_INPUT' })
+      // Four eyes: the validator cannot also authorize production.
+      await expect(
+        transitionLlmRelease(
+          tenant,
+          release.release_id,
+          admin,
+          'authorize-production',
+          { attestation: true },
+        ),
+      ).rejects.toMatchObject({ code: 'LLM_FOUR_EYES_REQUIRED' })
       const approved = await transitionLlmRelease(
         tenant,
         release.release_id,
-        admin,
+        approver,
         'authorize-production',
         { attestation: true },
       )
       expect(approved).toMatchObject({
         status: 'PRODUCTION_AUTHORIZED',
-        approved_by: admin,
+        approved_by: approver,
+        validated_by: admin,
       })
       expect(approved.production_authorization.payload).toMatchObject({
         tenantId: tenant,
         environment: 'production',
-        approvedBy: admin,
+        approvedBy: approver,
         validationReportSha256: report.reportSha256,
       })
       expect(
@@ -358,7 +410,7 @@ describe('carrier technical-admin LLM release governance', () => {
         transitionLlmRelease(
           tenant,
           release.release_id,
-          admin,
+          approver,
           'authorize-production',
           { attestation: true },
         ),
@@ -401,19 +453,12 @@ describe('carrier technical-admin LLM release governance', () => {
     ).toBeGreaterThan(
       Date.parse(testing.validation_authorization.payload.approvedAt),
     )
-    const report = {
-      passed: true,
-      environment: 'test',
-      runId: 'renewal-run',
-      reportSha256: 'e'.repeat(64),
-      artifactDigest: release.artifact_digest,
-      attestation: true,
-      notes: 'Synthetic validation evidence retained',
-    }
+    const report = validation(release, { runId: 'renewal-run', notes: 'Synthetic validation evidence retained' })
+    // The approver validates here, so the renewing admin is not the validator.
     await transitionLlmRelease(
       tenant,
       release.release_id,
-      admin,
+      approver,
       'record-validation',
       report,
     )
@@ -428,8 +473,8 @@ describe('carrier technical-admin LLM release governance', () => {
     const productionReceipt = (await renew().expect(200)).body
     expect(productionReceipt).toMatchObject({
       status: 'PRODUCTION_AUTHORIZED',
-      validation: report,
-      validated_by: admin,
+      validation: recorded(report),
+      validated_by: approver,
       approved_by: admin,
       artifacts: release.artifacts,
     })
@@ -497,7 +542,7 @@ describe('carrier technical-admin LLM release governance', () => {
           'renew-authorization',
           { attestation: true },
         ),
-      ).rejects.toMatchObject({ code: 'LLM_MAKER_CHECKER_REQUIRED' })
+      ).rejects.toMatchObject({ code: 'LLM_GOVERNANCE_ROLE_CONFLICT' })
     } finally {
       await q(
         "DELETE FROM user_roles WHERE user_id=$1 AND role_code='carrier_technical_admin'",
@@ -563,15 +608,7 @@ describe('carrier technical-admin LLM release governance', () => {
       release.release_id,
       admin,
       'record-validation',
-      {
-        passed: false,
-        environment: 'staging',
-        runId: 'failed-run',
-        reportSha256: 'e'.repeat(64),
-        artifactDigest: release.artifact_digest,
-        attestation: true,
-        notes: 'Missing source evidence',
-      },
+      validation(release, { passed: false, environment: 'staging', runId: 'failed-run', notes: 'Missing source evidence' }),
     )
     await expect(
       transitionLlmRelease(
@@ -694,5 +731,213 @@ describe('carrier technical-admin LLM release governance', () => {
         [admin],
       )
     }
+  })
+  describe('audit integrity and AI/person segregation', () => {
+    async function authorizedRelease() {
+      vi.stubEnv('LLM_EMAIL_ENABLED', 'false')
+      const release = await registerLlmRelease(tenant, automation, candidate())
+      await transitionLlmRelease(tenant, release.release_id, admin, 'start-validation', {})
+      await transitionLlmRelease(tenant, release.release_id, admin, 'record-validation', validation(release))
+      return transitionLlmRelease(tenant, release.release_id, approver, 'authorize-production', { attestation: true })
+    }
+    it('keeps the governance log append-only and detects tampering through the hash chain', async () => {
+      const release = await authorizedRelease()
+      await expect(
+        q('UPDATE llm_release_audit SET action=$2 WHERE release_id=$1', [release.release_id, 'forged']),
+      ).rejects.toThrow(/AUDIT_APPEND_ONLY/)
+      await expect(q('DELETE FROM llm_release_audit WHERE release_id=$1', [release.release_id])).rejects.toThrow(
+        /AUDIT_APPEND_ONLY/,
+      )
+      const integrity = await verifyAiAuditIntegrity(tenant)
+      expect(integrity.releases).toMatchObject({ intact: true, firstBrokenEntry: null })
+      expect(integrity.releases.entries).toBeGreaterThan(3)
+      // Simulate someone with database-owner access bypassing the trigger; roll it back.
+      const client = await (getDb() as any).connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('ALTER TABLE llm_release_audit DISABLE TRIGGER audit_append_only')
+        const target = await client.query(
+          "SELECT chain_seq FROM llm_release_audit WHERE tenant_id=$1 AND release_id=$2 AND action='authorize-production'",
+          [tenant, release.release_id],
+        )
+        await client.query(
+          "UPDATE llm_release_audit SET detail = detail || '{\"validatedBy\":\"someone-else\"}' WHERE tenant_id=$1 AND chain_seq=$2",
+          [tenant, target.rows[0].chain_seq],
+        )
+        const broken = await client.query("SELECT audit_chain_first_break('llm_release_audit', $1) AS first", [tenant])
+        expect(Number(broken.rows[0].first)).toBe(Number(target.rows[0].chain_seq))
+      } finally {
+        await client.query('ROLLBACK')
+        client.release()
+      }
+      expect((await verifyAiAuditIntegrity(tenant)).releases.intact).toBe(true)
+    })
+    it('lets the database refuse automation approvals and AI decisions', async () => {
+      const release = await registerLlmRelease(tenant, automation, candidate())
+      await expect(
+        q(
+          `INSERT INTO llm_release_audit(tenant_id,release_id,actor_id,actor_type,action) VALUES($1,$2,$3,'automation','authorize-production')`,
+          [tenant, release.release_id, automation],
+        ),
+      ).rejects.toThrow(/llm_release_audit_segregation/)
+      const submission = randomUUID()
+      await q(`INSERT INTO submissions(submission_id,tenant_id,submission_number) VALUES($1,$2,$3)`, [
+        submission,
+        tenant,
+        `SUB-${submission.slice(0, 8)}`,
+      ])
+      await expect(
+        q(`INSERT INTO submission_events(tenant_id,submission_id,actor_type,actor,action) VALUES($1,$2,'ai','model','approved')`, [
+          tenant,
+          submission,
+        ]),
+      ).rejects.toThrow(/submission_events_segregation/)
+      await q(`INSERT INTO submission_events(tenant_id,submission_id,actor_type,actor,action) VALUES($1,$2,'ai','Private model','drafted')`, [
+        tenant,
+        submission,
+      ])
+      await q(`INSERT INTO submission_events(tenant_id,submission_id,actor_type,actor,action) VALUES($1,$2,'user','underwriter','approved')`, [
+        tenant,
+        submission,
+      ])
+      await expect(q('UPDATE submission_events SET actor_type=$2 WHERE submission_id=$1', [submission, 'user'])).rejects.toThrow(
+        /AUDIT_APPEND_ONLY/,
+      )
+      const ai = await listAiAudit(tenant, { source: 'intake', actor: 'ai' })
+      expect(ai.items.map((item) => item.action)).toContain('drafted')
+      expect(ai.items.every((item) => item.actorKind === 'ai')).toBe(true)
+      const people = await listAiAudit(tenant, { source: 'intake', actor: 'person' })
+      expect(people.items.map((item) => item.action)).toContain('approved')
+      expect((await verifyAiAuditIntegrity(tenant)).intake.intact).toBe(true)
+    })
+    it('classifies automation and people in the unified trail and audits exports', async () => {
+      await authorizedRelease()
+      const automationEntries = await listAiAudit(tenant, { source: 'releases', actor: 'automation' })
+      expect(automationEntries.items.length).toBeGreaterThan(0)
+      expect(automationEntries.items.every((item) => item.action === 'CANDIDATE_READY')).toBe(true)
+      const people = await listAiAudit(tenant, { source: 'releases', actor: 'person' })
+      const authorization = people.items.find((item) => item.action === 'authorize-production')!
+      expect(authorization.actorRoles).toContain('carrier_technical_admin')
+      expect(authorization.entryHash).toMatch(/^[a-f0-9]{64}$/)
+      const csv = await exportAiAuditCsv(tenant, ordinary, { source: 'releases' })
+      expect(csv.split('\n')[0]).toContain('actor_kind')
+      const exported = await listAiAudit(tenant, { source: 'releases', search: 'AUDIT_EXPORTED' })
+      expect(exported.items[0]).toMatchObject({ actorKind: 'person', action: 'AUDIT_EXPORTED' })
+    })
+    it('revokes authorized releases and signs the revocation list', async () => {
+      const release = await authorizedRelease()
+      await expect(
+        transitionLlmRelease(tenant, release.release_id, admin, 'revoke', { reason: 'Field drift', attestation: true }),
+      ).resolves.toMatchObject({ status: 'REVOKED', revoked_by: admin, revocation_reason: 'Field drift' })
+      const list = await issueRevocationList(tenant, admin)
+      expect(list.releaseIds).toContain(release.release_id)
+      expect(
+        verify(
+          null,
+          Buffer.from(JSON.stringify(list.payload)),
+          createPublicKey(process.env.LLM_RELEASE_SIGNING_KEY!),
+          Buffer.from(list.signature, 'base64url'),
+        ),
+      ).toBe(true)
+      const verifierUrl = new URL('../../../services/document-processor/release-authorization.mjs', import.meta.url).href
+      const { revokedReleaseIds } = await import(verifierUrl)
+      expect(revokedReleaseIds(list, createPublicKey(process.env.LLM_RELEASE_SIGNING_KEY!), tenant)).toContain(release.release_id)
+      await expect(
+        transitionLlmRelease(tenant, release.release_id, approver, 'renew-authorization', { attestation: true }),
+      ).rejects.toMatchObject({ code: 'INVALID_LLM_RELEASE_TRANSITION' })
+    })
+    it('enforces carrier gates that can only be raised', async () => {
+      await expect(
+        saveLlmPolicy(tenant, admin, { minSampleCount: 10, minFieldAccuracy: 0.95, minEvidenceAccuracy: 0.98, authorizationDays: 7, roleCooldownHours: 24 }),
+      ).rejects.toMatchObject({ code: 'INVALID_LLM_RELEASE_INPUT' })
+      await saveLlmPolicy(tenant, admin, { minSampleCount: 20, minFieldAccuracy: 0.99, minEvidenceAccuracy: 0.98, authorizationDays: 3, roleCooldownHours: 24 })
+      try {
+        await expect(registerLlmRelease(tenant, automation, candidate())).rejects.toMatchObject({ code: 'LLM_EVALUATION_REPORT_REJECTED' })
+      } finally {
+        await saveLlmPolicy(tenant, admin, { minSampleCount: 20, minFieldAccuracy: 0.95, minEvidenceAccuracy: 0.98, authorizationDays: 7, roleCooldownHours: 24 })
+      }
+      const changes = await listAiAudit(tenant, { source: 'releases', search: 'POLICY_CHANGED' })
+      expect(changes.items).toHaveLength(2)
+    })
+  })
+  describe('service credentials and governance role changes', () => {
+    const admin2 = randomUUID()
+    const newcomer = randomUUID()
+    beforeAll(async () => {
+      for (const [id, role] of [
+        [admin2, 'admin'],
+        [newcomer, 'underwriter'],
+      ]) {
+        await getDb()!.query('INSERT INTO users(user_id,tenant_id,username,password_hash) VALUES($1,$2,$3,$4)', [
+          id,
+          tenant,
+          `llm-${id}`,
+          'test-no-login',
+        ])
+        await getDb()!.query('INSERT INTO user_roles(user_id,role_code) VALUES($1,$2)', [id, role])
+      }
+    })
+    const tokenFor = (id: string, roles: string[]) =>
+      issueToken({ id, username: `llm-${id}`, tenantId: tenant, roles, permissions: [] })
+    it('registers through a scoped credential and refuses it once revoked', async () => {
+      vi.stubEnv('LLM_EMAIL_ENABLED', 'false')
+      await expect(
+        issueAutomationCredential(tenant, ordinary, { userId: ordinary, label: 'self', expiresInDays: 30 }),
+      ).rejects.toMatchObject({ code: 'CREDENTIAL_SELF_ISSUE' })
+      await expect(
+        issueAutomationCredential(tenant, ordinary, { userId: admin, label: 'approver', expiresInDays: 30 }),
+      ).rejects.toMatchObject({ code: 'LLM_AUTOMATION_ROLE_REQUIRED' })
+      await expect(
+        issueAutomationCredential(tenant, ordinary, { userId: automation, label: 'too long', expiresInDays: 365 }),
+      ).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL_INPUT' })
+      const credential = await issueAutomationCredential(tenant, ordinary, {
+        userId: automation,
+        label: 'Training pipeline',
+        expiresInDays: 30,
+      })
+      expect(credential.token).toMatch(/^lpa_/)
+      const stored = await q('SELECT * FROM llm_automation_credentials WHERE credential_id=$1', [credential.credentialId])
+      expect(JSON.stringify(stored.rows[0])).not.toContain(credential.token.split('_').pop())
+      const register = (token: string) =>
+        request(createApp())
+          .post('/api/v1/admin/llm/releases')
+          .set('Authorization', `Bearer ${token}`)
+          .set('X-Tenant', tenant)
+          .send(candidate())
+      const created = (await register(credential.token).expect(201)).body
+      const audit = await q("SELECT * FROM llm_release_audit WHERE release_id=$1 AND action='CANDIDATE_READY'", [created.release_id])
+      expect(audit.rows[0]).toMatchObject({ actor_type: 'automation', actor_id: automation, detail: { authenticatedWith: 'credential' } })
+      await register(`${credential.token.slice(0, -2)}xx`).expect(401)
+      await revokeAutomationCredential(tenant, ordinary, credential.credentialId)
+      await register(credential.token).expect(401)
+      const events = await listAiAudit(tenant, { source: 'releases', search: 'CREDENTIAL_' })
+      expect(events.items.map((item) => item.action).sort()).toEqual(['CREDENTIAL_ISSUED', 'CREDENTIAL_REVOKED'])
+    })
+    it('refuses self-granted governance roles, audits grants, and holds new approvers to the cooldown', async () => {
+      const patch = (actor: string, target: string, roles: string[]) =>
+        request(createApp())
+          .patch(`/api/v1/admin/users/${target}`)
+          .set('Authorization', `Bearer ${tokenFor(actor, ['admin'])}`)
+          .set('X-Tenant', tenant)
+          .send({ roles })
+      expect((await patch(ordinary, ordinary, ['admin', 'carrier_technical_admin']).expect(403)).body.code).toBe(
+        'GOVERNANCE_SELF_ASSIGNMENT',
+      )
+      expect((await patch(admin2, newcomer, ['carrier_technical_admin', 'llm_release_automation']).expect(400)).body.code).toBe(
+        'GOVERNANCE_ROLE_CONFLICT',
+      )
+      await patch(admin2, newcomer, ['underwriter', 'carrier_technical_admin']).expect(200)
+      const grant = await q("SELECT * FROM llm_release_audit WHERE subject_user_id=$1 AND action='ROLE_GRANTED'", [newcomer])
+      expect(grant.rows[0]).toMatchObject({ actor_id: admin2, actor_type: 'user', detail: { role: 'carrier_technical_admin' } })
+      expect(grant.rows[0].actor_roles).toContain('admin')
+      vi.stubEnv('LLM_EMAIL_ENABLED', 'false')
+      const release = await registerLlmRelease(tenant, automation, candidate())
+      await expect(transitionLlmRelease(tenant, release.release_id, newcomer, 'start-validation', {})).rejects.toMatchObject({
+        code: 'LLM_ROLE_COOLDOWN',
+      })
+      await patch(admin2, newcomer, ['underwriter']).expect(200)
+      const revoked = await q("SELECT * FROM llm_release_audit WHERE subject_user_id=$1 AND action='ROLE_REVOKED'", [newcomer])
+      expect(revoked.rows).toHaveLength(1)
+    })
   })
 })

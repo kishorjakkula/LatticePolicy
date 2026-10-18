@@ -14,10 +14,13 @@ Authorized pipeline: evaluated candidate
     -> READY_FOR_VALIDATION + optional email (explicit opt-in)
 Carrier technical admin: authorize lower-environment deployment
     -> IN_VALIDATION + signed validation authorization
-Carrier technical admin: test exact artifacts, record evidence and attestation
+Carrier technical admin A: test exact artifacts, upload the test report, attest
     -> VALIDATED (or REJECTED)
-Carrier technical admin: separately authorize production publication
-    -> PRODUCTION_AUTHORIZED + signed production authorization
+Carrier technical admin B (never A, never the registering identity):
+authorize production publication
+    -> PRODUCTION_AUTHORIZED + signed, expiring production authorization
+Any current technical admin: revoke at any time
+    -> REVOKED + included in the signed revocation list
 Deployment pipeline/operator: verify artifacts and authorization, then activate
     -> actual deployment (separate from authorization status)
 ```
@@ -34,8 +37,11 @@ output, or an approval token. Opening an email never approves anything.
   cannot approve without this explicit, current database role.
 - Assign `llm_release_automation` to the authorized candidate-registration
   identity. It can register/read releases but cannot authorize validation or
-  production. Protect its credentials and configure carrier-approved CI
-  authentication; this change does not introduce a new machine-auth protocol.
+  production. In managed deployments it must authenticate with a **scoped
+  service credential** (see Governance Controls); password sessions are refused.
+- One account never holds both governance roles, and nobody grants or removes a
+  governance role on their own account. Every grant, removal and disabling of a
+  governance account is audited with the administrator who did it.
 - Technical admins register their notification address in
   **Administration > LLM Releases**. An address is an administrator-supplied
   contact, not an email-verification or identity-proofing mechanism. At least
@@ -128,13 +134,21 @@ was guaranteed. Existing outbox failure/repair tooling applies.
 }
 ```
 
-The current minimum gate is 20 held-out samples, 95% field accuracy, 98%
-evidence accuracy, and zero critical errors. These are initial software gates,
-not a certification of carrier suitability. The carrier must approve metric
-definitions and representative test coverage. Reports are assertions from the
-trusted evaluation pipeline, not independently recomputed by this endpoint.
-Archive the actual reports/datasets privately under their hashes; do not use
-training examples as the held-out evaluation corpus.
+The body also carries `evaluationReport`, the full held-out report written by
+`services/document-learning` (no source values, only totals and per-sample
+outcomes). The API refuses the candidate unless the report hashes to
+`reportSha256`, belongs to this carrier and these exact artifacts, passed, has
+no extraction or critical errors, and its totals **recompute** to the submitted
+field and evidence accuracy and sample count. The report is stored with the
+release, together with the gate policy in force.
+
+The platform floor is 20 held-out samples, 95% field accuracy, 98% evidence
+accuracy, and zero critical errors. A carrier technical admin can raise these
+gates (**Release Gates** on the page, `PUT /api/v1/admin/llm/policy`); the
+database refuses any value below the floor, and every change is audited. These
+are software gates, not a certification of carrier suitability; the carrier
+approves metric definitions and representative coverage. Do not use training
+examples as the held-out evaluation corpus.
 
 Compute the profile digest using `profileDigest` exported from
 `services/document-processor/release-authorization.mjs` (canonical JSON SHA-256),
@@ -152,15 +166,25 @@ Technical-admin actions use
 
 - `start-validation`: issues a signed lower-environment authorization.
 - `record-validation`: `{passed, environment, runId, reportSha256,
-artifactDigest, attestation:true, notes}`. Environment must be `test`, `qa`,
-  or `staging`; the artifact digest must equal the candidate's digest.
-- `authorize-production`: `{attestation:true}`, only after passed validation.
+artifactDigest, attestation:true, notes, report}`. Environment must be `test`,
+  `qa`, or `staging`; the artifact digest must equal the candidate's digest.
+  `report` is the lower-environment test report (JSON, at most 1 MB) with at
+  least `{schemaVersion:1, runId, environment, artifactDigest, passed}`; it must
+  hash (canonical JSON SHA-256) to `reportSha256` and agree with the recorded
+  run, environment, artifacts and result. The page computes the hash from the
+  uploaded file. The report is stored.
+- `authorize-production`: `{attestation:true}`, only after passed validation,
+  and only by a technical admin **other than the validator** (four eyes; also a
+  database constraint).
+- `revoke`: `{reason, attestation:true}` from `IN_VALIDATION`, `VALIDATED` or
+  `PRODUCTION_AUTHORIZED`. Revocation is never blocked by the cooldown.
 - `renew-authorization`: `{attestation:true}`, only in `IN_VALIDATION` or
   `PRODUCTION_AUTHORIZED`. Reissues the validation or production receipt for
   that exact current state with a fresh signature, `approvedAt`, and current
   technical-admin signer. It never promotes status, changes artifacts or
   validation evidence/report, or reruns validation. Current active role and
-  maker/checker checks still apply. The audit records the renewal actor,
+  maker/checker checks still apply; the validator cannot renew a production
+  receipt. The audit records the renewal actor,
   environment, attestation, artifact digest, and old/new approval timestamps.
 - `reject`: `{reason}`, before production authorization. Failed validation
   also rejects the candidate; subsequent attempts need a new release version.
@@ -178,9 +202,24 @@ openssl genpkey -algorithm ED25519 -out /secure/llm-release-private.pem
 openssl pkey -in /secure/llm-release-private.pem -pubout -out /secure/llm-release-public.pem
 ```
 
-Inject the private PEM as `LLM_RELEASE_SIGNING_KEY` **only on the API** through
-the carrier's secret manager. Literal `\n` escapes are supported. Never put
-it in the processor, model, training job, browser, repo, or email.
+In managed deployments (test, validation, staging, production) the private key
+lives **only in the separate release signer** (`deploy/release-signer`,
+`services/release-signer`). The API asks it to sign over an internal network
+(`LLM_RELEASE_SIGNER_URL`, `LLM_RELEASE_SIGNER_TOKEN`) and checks every returned
+signature against `LLM_RELEASE_PUBLIC_KEY` before storing it. The signer applies
+its own rules (carrier, current approval time, expiry within 31 days, production
+requires a validation report hash) and appends every signature to a
+hash-chained log before returning it. The API **refuses** an inline
+`LLM_RELEASE_SIGNING_KEY` in managed deployments; that variable is accepted only
+for local development. A cloud KMS/HSM can replace the signer behind the same
+`/sign` contract. Never put the key in the processor, model, training job,
+browser, repo, or email.
+
+```bash
+docker compose -f deploy/release-signer/docker-compose.yml --env-file signer.env up -d
+docker compose -f deploy/carrier-stack/docker-compose.yml \
+  -f deploy/release-signer/application.signer.yml --env-file carrier.env up -d
+```
 
 Configure each processor/deployment operator:
 
@@ -195,9 +234,10 @@ LLM_RELEASE_PUBLIC_KEY_FILE=/secure/llm-release-public.pem
 Use **different** profile directories, model stores, networks, service tokens,
 and application deployments for lower and production environments. Keep the
 signing authority/public-key trust relationship controlled by the carrier.
-The production compose stack defaults to signed `production` gating. Do not
-set `RELEASE_ENVIRONMENT=development` in a carrier validation/production stack;
-that explicit unmanaged mode exists only for isolated synthetic development.
+The production compose stack defaults to signed `production` gating.
+`RELEASE_ENVIRONMENT` has **no default** in the processor: unset fails at
+startup. `development` must be set explicitly, is refused when
+`NODE_ENV=production`, and exists only for isolated synthetic development.
 Protect deployment configuration so a training identity cannot disable gating.
 
 The technical admin downloads the appropriate signed JSON authorization from
@@ -226,13 +266,20 @@ Receipts expire at activation and every inference under the carrier's local
 policy. `LLM_RELEASE_MAX_AGE_SECONDS` defaults to **604800 (seven days)** and
 accepts integer values from 1 through **31536000 (one year)** on the operator
 and processor. Expiry is inclusive at the boundary; invalid timestamps and
-approvals more than 60 seconds in the future fail closed. A signed `expiresAt`,
-if present, may shorten but cannot extend the local maximum age. Disabling
+approvals more than 60 seconds in the future fail closed. Every receipt carries
+a signed `expiresAt` (the carrier's authorization lifetime, default 7 days,
+1–30); it may shorten but cannot extend the local maximum age. The release page
+shows the expiry and warns two days before it. Disabling
 expiry is unsupported. Keep clocks synchronized and apply the same policy to
 the operator and processor.
 
-Configure `LLM_RELEASE_REVOCATION_FILE` as a carrier-controlled JSON file with
-`{"schemaVersion":1,"releaseIds":[]}`. Verification reads it uncached on
+Configure `LLM_RELEASE_REVOCATION_FILE` as a carrier-controlled JSON file.
+Use **Download Revocation List** on the release page
+(`GET /api/v1/admin/llm/revocations`): it is signed by the release signer and
+lists every revoked release plus rejected releases that had a validation
+receipt. The processor verifies its signature and carrier. A hand-written
+unsigned `{"schemaVersion":1,"releaseIds":[]}` is still honored because it can
+only stop releases. Verification reads it uncached on
 activation and every inference; a configured missing, unreadable, or malformed
 file fails closed. A revoked release ID invalidates both environments, including
 renewed receipts. Renewal does not clear revocation. Role removal stops future
@@ -259,6 +306,49 @@ v1 signatures verify against the exact serialized payload. Receipts previously
 invalidated by storage reordering must be renewed in an eligible state and
 downloaded again; this does not change the verifier's v1 signature protocol.
 
+## Governance Controls And Audit
+
+| Control | Where it is enforced |
+| --- | --- |
+| Automation only registers; only people approve | Service role checks and `llm_release_audit_segregation` CHECK |
+| Validator ≠ production approver ≠ registering identity | Service and `llm_releases_four_eyes` CHECK |
+| No self-granted governance roles; never both roles | `PATCH/POST/DELETE /admin/users` guard |
+| New technical admin cooldown (default 24 h, floor 24 h) before approving | Service, from the `ROLE_GRANTED` audit entry |
+| Evaluation and test reports stored and re-checked | Registration and `record-validation` |
+| Key outside the API in managed deployments | `llm-release-signer.ts`, release signer service |
+| Revocation from the app, signed list for processors | `revoke`, `/admin/llm/revocations` |
+| Scoped automation credential | `llm_automation_credentials`, `lpa_<id>_<secret>` |
+
+**Service credentials.** An administrator (not the automation account itself)
+issues a credential on **Release Automation Credentials**: bound to one account
+that holds only `llm_release_automation`, expiring within 90 days, optionally
+limited to network ranges, revocable, shown once and stored only as a SHA-256.
+The learning pipeline sends it as `LEARNING_API_TOKEN`. It is accepted only on
+`POST /admin/llm/releases`. Managed deployments require it; local development
+may set `LLM_AUTOMATION_CREDENTIAL_REQUIRED=false`.
+
+**Audit log.** `llm_release_audit` records every governance event with
+`actor_type` (`user`, `automation`, `system`), the actor's roles at the time,
+the subject account for role/credential events, and the request id. Like
+`submission_events` it is **append-only** (UPDATE/DELETE raise
+`AUDIT_APPEND_ONLY`; only explicit carrier offboarding with
+`app.audit_purge='tenant-offboarding'` may delete) and **hash-chained** per
+carrier (`prev_hash`, `entry_hash`, `chain_seq`). `audit_chain_first_break()`
+re-computes a chain. **Administration > AI Audit** (`/admin/ai-audit`,
+permission `ai.audit.read`) shows both logs in one trail, separated into AI,
+automation, person and system, verifies the chains, and exports CSV (the export
+itself is audited). Accounts named in audit records cannot be deleted; disable
+them instead.
+
+**Live quality.** For each release, the page shows the production correction
+rate: the share of AI-drafted values reviewers changed in approved
+submissions read by that release. Nothing from intake becomes training data.
+
+**Remaining limits.** No proof of which weights an inference server actually
+loaded; consent flags on profiles and datasets are declared by the operator;
+role assignment still depends on the carrier's identity provider and
+administrator accounts (use SSO and MFA).
+
 ## Tests
 
 - Node tests: receipt signatures, carrier/environment/artifact binding,
@@ -273,6 +363,11 @@ downloaded again; this does not change the verifier's v1 signature protocol.
   maker/checker, tenant isolation, audit, and downloading the current receipt.
 - Frontend/Playwright: staged controls, attestations, pass/fail radios, approval
   download, and desktop/mobile layout using synthetic responses.
+- Governance hardening: report recomputation and tampering, carrier gates,
+  four-eyes, cooldown, revocation and signed lists, remote signer verification,
+  service credentials (issue, use, revoke, self-issue refused), governance role
+  guards, append-only and hash-chain tamper detection, database segregation
+  constraints, unified AI/person audit trail and audited export.
 
 No real carrier documents, SMTP credentials, actual mail recipients, or trained
 model weights are used by these tests.

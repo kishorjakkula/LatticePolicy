@@ -41,6 +41,9 @@ jobs:
       - name: Test private document processor
         run: npm run test:document-processor
 
+      - name: Test release signer
+        run: npm run test:release-signer
+
       - name: Test private document learning and offline trainer contracts
         run: npm run test:document-learning && npm run test:document-training && npm run test:document-deployment
 
