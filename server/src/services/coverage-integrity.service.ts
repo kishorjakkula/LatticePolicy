@@ -9,9 +9,9 @@ import { coverageViolations } from './product-rules.service.js'
  * their product (version). Nothing is changed: correcting a policy is the
  * carrier's decision (it may need an endorsement or a notice to the insured).
  *
- * The database selects candidates itself — records of an unknown product,
- * pinned to a missing product version, or with any coverage code outside the
- * codes common to every version of their product — so nothing is missed
+ * The database selects candidates itself — records pinned to a missing
+ * product version, or with any coverage code outside the codes common to
+ * every known version of their product — so nothing is missed
  * however many records exist. Each candidate is then checked exactly against
  * its own pinned product version; one that cannot be checked is reported.
  */
@@ -59,14 +59,13 @@ export async function coverageIntegrityReport(tenantId: string): Promise<{ items
   const rows = await withTenantTx(tenantId, async (db) => {
     const q = toRawQuery(db)
     const common = JSON.stringify(await codesInEveryVersion(q, tenantId))
-    // Candidates: the product is unknown, the pinned product version is
-    // missing, or a coverage code is not defined by every version of the
-    // product. Only the fields the check reads are loaded. Sequential: one client.
+    // Candidates: the pinned product version is missing, or a coverage code is
+    // not defined by every known version of the product. A product with no
+    // known version at all cannot be checked and is not listed. Only the fields the check reads are loaded. Sequential: one client.
     const slim = (payload: string) =>
       `jsonb_strip_nulls(jsonb_build_object('productCode', ${payload}->'productCode', 'coverages', ${payload}->'coverages', 'productSnapshot', ${payload}->'productSnapshot'))`
     const candidate = (product: string, payload: string) =>
-      `(NOT ($2::jsonb ? ${product})
-        OR (${payload}->'productSnapshot'->>'id' IS NOT NULL AND NOT EXISTS (
+      `((${payload}->'productSnapshot'->>'id' IS NOT NULL AND NOT EXISTS (
               SELECT 1 FROM product_snapshots s WHERE s.tenant_id = $1 AND s.snapshot_id::text = ${payload}->'productSnapshot'->>'id'))
         OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${payload}->'coverages') = 'array' THEN ${payload}->'coverages' ELSE '[]'::jsonb END) c
               WHERE NOT (($2::jsonb -> ${product}) ? (c->>'code'))))`

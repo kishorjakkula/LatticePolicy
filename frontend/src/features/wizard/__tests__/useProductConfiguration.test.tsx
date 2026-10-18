@@ -71,6 +71,18 @@ describe('useProductConfiguration', () => {
     expect(getProductConfig).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores a late risk form for a product that is no longer selected', async () => {
+    const homeForm = deferred<any>()
+    getProductConfig.mockImplementation((code: string) => Promise.resolve(code === 'homeowners' ? homeConfig : autoConfig))
+    getProductForm.mockImplementation((code: string) => (code === 'homeowners' ? homeForm.promise : Promise.resolve({ fields: [{ path: 'vin' }] })))
+    const { result, rerender } = renderHook(({ code }) => useProductConfiguration(code), { initialProps: { code: 'homeowners' } })
+    rerender({ code: 'personal-auto' })
+    await waitFor(() => expect(result.current.riskFields).toEqual([{ path: 'vin' }]))
+    await act(async () => homeForm.resolve({ fields: [{ path: 'dwelling.yearBuilt' }], screen: { id: 'home' } }))
+    expect(result.current.riskFields).toEqual([{ path: 'vin' }])
+    expect(result.current.riskScreen).toBeNull()
+  })
+
   it("clears the previous product's configuration and risk form as soon as the product changes", async () => {
     getProductConfig.mockImplementation((code: string) => (code === 'homeowners' ? new Promise(() => {}) : Promise.resolve(autoConfig)))
     getProductForm.mockImplementation((code: string) => (code === 'homeowners' ? new Promise(() => {}) : Promise.resolve({ fields: [{ path: 'vin' }], screen: { id: 'auto' } })))
@@ -84,8 +96,9 @@ describe('useProductConfiguration', () => {
 })
 
 describe('useHomeownersAutoDefaults', () => {
+  // Returns a new array like the real builder, so every application re-renders.
   const buildDefaults = (cfg: any, current: any[]) =>
-    current.length ? current : cfg.coverages.map((coverage: any) => ({ code: coverage.code, selected: true }))
+    current.length ? current.map((coverage) => ({ ...coverage })) : cfg.coverages.map((coverage: any) => ({ code: coverage.code, selected: true }))
 
   function useHarness(productCode: string, cfg: any, initial: any[] = []) {
     const [coverages, setCoverages] = useState<any[]>(initial)
