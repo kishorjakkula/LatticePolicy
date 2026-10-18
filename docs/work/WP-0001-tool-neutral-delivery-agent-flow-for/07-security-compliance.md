@@ -10,10 +10,12 @@
 | Audit (AI vs person actions) | Pass | Gate approvals, waivers, returns and resolutions are recorded with name, date and quoted words in `status.json` history; agents may not approve gates. |
 | AI data boundary | Pass | Contracts restate that carrier-private inference never falls back to external AI; the knowledge refresh uses public sources only. |
 | Regulatory (filings, notices, disclosures, privacy) | Not applicable | Process change; the business analyst and security contracts now require these checks on future work. |
-| Code scanning and dependency results | Pass | CodeQL, dependency audit and dependency review passed on the PR's first commit; no new dependencies (scripts use Node built-ins only). Workflow permissions: `contents: read` (PR check), `contents: read` + `issues: write` (refresh). |
+| Code scanning and dependency results | Pass (after fix) | Post-merge CodeQL alert 36 (js/incomplete-multi-character-sanitization) in the PR check fixed in 70ccadf with a comment scanner; independently re-reviewed (fuzzed, no opener can remain). |
+| Code scanning and dependency results (original) | Pass | CodeQL, dependency audit and dependency review passed on the PR's first commit; no new dependencies (scripts use Node built-ins only). Workflow permissions: `contents: read` (PR check), `contents: read` + `issues: write` (refresh). |
 
 ## Findings
 
 | Severity | Finding | Resolution | Outcome |
 | --- | --- | --- | --- |
 | Low | Branch protection has `enforce_admins` off, so a repository admin can merge without the code-owner review that protects recorded approvals (noted by the re-review). | Recommend enabling "Do not allow bypassing the above settings" for `main`; a repository setting the product owner decides. | accepted — recommendation to the product owner |
+| Medium | CodeQL alert 36: single-pass regex could leave an HTML comment opener in the parsed PR body (text is never rendered). | Replaced with `stripHtmlComments` (70ccadf), repeated to a fixed point; regression test added. | fixed (verified by independent re-review and CodeQL on the follow-up PR) |

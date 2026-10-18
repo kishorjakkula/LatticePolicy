@@ -43,7 +43,18 @@ lists CLAUDE.md and GEMINI.md.
 
 ## Checks run
 
-- `npm run test:delivery` — 22 passed
+- `npm run test:delivery` — 27 passed
 - `npm run agents:sync -- --check` — in sync
 - `npm run delivery:check` — passed
 - `npm run knowledge:report` — 9 current, 0 due, 0 missing
+
+## Post-merge fix (return after Gate C)
+
+CodeQL alert 36 (`js/incomplete-multi-character-sanitization`, warning) at
+`scripts/delivery/lib.mjs:454`: the PR check stripped HTML comments with one
+regex pass, so nested markers could leave a `<!--` behind. Replaced with
+`stripHtmlComments`, a scanner that also drops unterminated comments and
+repeats until nothing changes, so joined neighbours cannot form a new opener.
+The PR body is only parsed, never rendered, so the practical impact was low.
+Merge approval (Gate C) reopened automatically with the return; the fix goes
+to `main` in a follow-up pull request.

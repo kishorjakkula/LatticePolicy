@@ -39,3 +39,11 @@ Re-review, verified as correct:
 - **UI/UX designer:** every shared component the contract names exists in `frontend/src/components/`, as do `frontend/src/styles/` and `docs/UI_CONTROL_STANDARDS.md`. `docs/knowledge/ux/README.md` has valid review metadata.
 - **`resolve`:** it resets every stage's return counter, not only the stopped one. This is acceptable as a fresh start after a person's decision.
 - **Older packages:** WP-0001 predates the renumbering. Its `status.json` keeps the old stage list and file names, and `delivery:check` still passes on it.
+
+## Re-review: post-merge CodeQL fix (70ccadf)
+
+Scope: `git diff origin/main..HEAD -- scripts/` (`stripHtmlComments` in `scripts/delivery/lib.mjs:446-472`, its use at `lib.mjs:482`, and the test at `delivery.test.mjs:393-402`).
+
+| Severity | File:line | Finding | Failure scenario | Outcome |
+| --- | --- | --- | --- | --- |
+| none | — | No findings | — | n/a (verified: (1) Correctness by argument: a pass returns its input unchanged only when it holds no `<!--`, and any pass that finds one returns a strictly shorter string, so the loop terminates and the result never contains `<!--`. (2) Fuzzed 300,000 random strings of length 1-16 over `< ! - > a`: no output contained `<!--`, and wherever the old regex left no opener, the new output matched the old exactly, so `pullRequestProblems` behaves the same for well-formed bodies. The only intended change is that an unterminated comment now hides the rest of the body, which fails closed. Iterative removal can also hide text that GitHub would render, for example `<!-<!-- x -->- b`. That only shrinks what the check reads, so it also fails closed. (3) Performance at about 64 KB: 16,000 openers 0.3 ms, 8,000 closed comments 0.7 ms, unterminated opener plus 65,000 characters <0.1 ms, 21,000 `<!-` 0.2 ms. The worst case is quadratic, with nested `<!-`×k `<!---->` `-->`×k needing k passes: k=10,800 (64.8 KB) takes 565 ms. That is acceptable for a CI check on a body capped at about 65 KB. (4) The test covers simple removal, unterminated comments, four join-into-opener cases, and both comment-hidden quick declarations through `pullRequestProblems`. `npm run test:delivery`: 27/27 pass.) |

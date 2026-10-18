@@ -22,6 +22,7 @@ import {
   resolveNeedsHuman,
   slugify,
   startPackage,
+  stripHtmlComments,
   waiveGate,
   suggestTrack,
 } from './lib.mjs'
@@ -387,4 +388,15 @@ test('a UI design can be a single no-user-facing-change line', (t) => {
   completeStage(dir, 'software-architect')
   fs.writeFileSync(path.join(dir, '03-ui-design.md'), '# UI design\n\nNo user-facing change: server-side audit only.\n')
   completeStage(dir, 'ui-designer')
+})
+
+test('HTML comments are fully removed, including nested and unterminated ones', (t) => {
+  assert.equal(stripHtmlComments('a<!-- x -->b'), 'ab')
+  assert.equal(stripHtmlComments('keep <!-- open forever Work package: WP-0001'), 'keep ')
+  for (const tricky of ['a<!-<!-- x -->- b', '<!<!---->--x', '<!--<!---->-->x', '<!-<!-<!---->-->--'])
+    assert.ok(!stripHtmlComments(tricky).includes('<!--'), tricky)
+  const root = sandbox(t)
+  startPackage(root, 'Fix typo on the dashboard')
+  assert.equal(pullRequestProblems(root, '<!-- Delivery track: quick — hidden -->').length, 1)
+  assert.equal(pullRequestProblems(root, 'text <!-- Delivery track: quick — hidden').length, 1)
 })

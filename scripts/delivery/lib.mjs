@@ -444,6 +444,34 @@ export function packageProblems(root, dir) {
 }
 
 /**
+ * Removes HTML comments, scanning rather than pattern-matching so nested or
+ * overlapping markers cannot leave a comment opener behind. An unterminated
+ * comment hides the rest of the text, as it would when rendered.
+ */
+export function stripHtmlComments(text) {
+  const once = (input) => {
+    let out = ''
+    let index = 0
+    for (;;) {
+      const open = input.indexOf('<!--', index)
+      if (open < 0) return out + input.slice(index)
+      out += input.slice(index, open)
+      const close = input.indexOf('-->', open + 4)
+      if (close < 0) return out
+      index = close + 3
+    }
+  }
+  // Removing a comment can join its neighbours into a new opener ("<!-" + "-"),
+  // so repeat until nothing changes. Each pass removes at least one opener.
+  let current = text
+  for (;;) {
+    const next = once(current)
+    if (next === current) return current
+    current = next
+  }
+}
+
+/**
  * Checks a pull request description: it must name a work package whose gates
  * before merge (A, and B on the major track) are approved, or declare a quick
  * change with a reason.
@@ -451,7 +479,7 @@ export function packageProblems(root, dir) {
 export function pullRequestProblems(root, body, author = '') {
   if (/\[bot\]$/.test(author) || author === 'dependabot') return []
   // Template guidance lives in HTML comments; only what the author wrote counts.
-  const text = String(body || '').replace(/<!--[\s\S]*?-->/g, '')
+  const text = stripHtmlComments(String(body || ''))
   const quickReason = /Delivery track:[ \t]*quick[ \t]*[—–-][ \t]*([^\r\n]*)/i.exec(text)
   const reason = quickReason ? quickReason[1].trim() : ''
   const quick = reason.length > 0 && !/^</.test(reason) && !/^one-line reason$/i.test(reason)
