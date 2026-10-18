@@ -21,9 +21,14 @@ every transaction), with a read-only Coverage Integrity report.
   policy's current payload so carried codes are allowed on changes.
 - `server/src/services/coverage-integrity.service.ts`, route
   `GET /api/v1/admin/dashboard/coverage-integrity`.
-- `frontend/src/features/wizard/QuoteWizard.tsx`: `configRequestRef` guard in
-  `loadConfig`, `CoverageSelector` product match, `ProductChangeDialog`,
-  `coverageErrorMessage`.
+- `frontend/src/features/wizard/useProductConfiguration.ts`: product config and
+  risk form loading with a stale-response guard; homeowners auto-defaults only
+  from homeowners' own configuration.
+- `frontend/src/features/wizard/QuoteWizard.tsx`: uses those hooks;
+  `CoverageSelector` product match, `ProductChangeDialog`, `coverageErrorMessage`;
+  policy-mode ratings send `policyId`.
+- `server/src/routes/quotes.routes.ts`: `POST /quotes?transaction=…&policyId=`
+  carries a policy's codes only for a policy transaction on the same product.
 - `frontend/src/features/admin/OperationsDashboardPage.tsx`: Coverage Integrity panel.
 - `e2e/support/products.ts`: homeowners fixture uses coverage `A` (was the undefined `DWELLING`).
 
@@ -37,21 +42,22 @@ every transaction), with a read-only Coverage Integrity report.
 ## Automated Tests
 
 - Server unit: `product-rules-coverage.test.ts` (7).
-- Server integration: `coverage-integrity.integration.test.ts` (5) on PostgreSQL with RLS.
-- Frontend: `productCoverageGuard.test.tsx` (4), `CoverageIntegrityPanel.test.tsx` (2).
+- Server integration: `coverage-integrity.integration.test.ts` (9) on PostgreSQL with RLS.
+- Frontend: `useProductConfiguration.test.tsx` (7), `productCoverageGuard.test.tsx` (8), `CoverageIntegrityPanel.test.tsx` (3).
 - Playwright: smoke spec repeated in parallel (see the work package).
 
 ## Validation
 
 ```bash
 npm run test --workspace=server
-npm run test:integration --workspace=server   # fresh database
+DATABASE_URL=<disposable db> npm run test:integration --workspace=server
 npm run test --workspace=frontend
 ```
 
 ## Follow-ups
 
-- The wizard's rating step for a renewal or rewrite rates through `POST /quotes`
-  without the policy's current payload, so a legacy undefined code must be
-  removed there before rating; the final renewal or rewrite transaction allows
-  carried codes as designed.
+- Drafts (save, copy, intake) are stored without the coverage check by design;
+  rate, bind and issue refuse undefined codes, and the report lists such drafts.
+- The report narrows candidates by the codes common to all known versions, not
+  per pinned version; a product whose versions differ widely yields more
+  candidates (results capped at 500, endpoint rate-limited).

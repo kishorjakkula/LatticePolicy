@@ -58,3 +58,24 @@
 - Accepted: drafts stay unchecked by design (rate, bind and issue refuse).
 - Tests added for the stale-response guard, the homeowners condition, dialog
   focus, renewal, rewrite, cancellation and report isolation.
+
+## Re-review fixes (commit 88b06a4)
+
+- Config loading and the homeowners auto-defaults effect moved into
+  `frontend/src/features/wizard/useProductConfiguration.ts`; QuoteWizard uses
+  the hooks. Clearing happens only when the product code changes, with a
+  per-request token. This also fixes a regression from b6ed111, found by the
+  browser rerun: re-choosing the current product left the coverage step on
+  "Loading product config..." forever.
+- `POST /quotes`: a policy's carried codes apply only to an endorsement,
+  cancellation, reinstatement, renewal or rewrite on a policy of the same
+  product; the policy id must pass `isUuidLike`.
+- Report: also selects records of unknown products and records whose pinned
+  version is missing; latest policy version through `LATERAL … LIMIT 1`; only
+  `productCode`, `coverages` and `productSnapshot` are loaded.
+- Reopened homeowners quotes' saved coverages are never recorded as
+  auto-applied defaults.
+- `queryKeys.dashboard.coverageIntegrity()` and `queryKeys.products.list(tenant)`.
+- Browser evidence was invalid until disk space was freed: the Mac had 321 MB
+  free (ENOSPC), and the bind writes failed. `docker builder prune` freed
+  5.5 GB; no volumes were touched.
