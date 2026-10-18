@@ -3,7 +3,7 @@
 
 - Track: **standard** — process, tooling and documentation change; no product data, tenancy, rating or AI runtime behavior
 - State: **in-progress**
-- Next: Code Reviewer (`06-code-review.md`)
+- Next: human approval at Gate C
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
@@ -13,9 +13,9 @@
 | Test Designer | `03-test-design.md` | done | 0 |
 | Developer | `04-implementation.md` | done | 2 |
 | Unit Test | `05-unit-tests.md` | done | 0 |
-| Code Reviewer | `06-code-review.md` | pending | 0 |
-| Security and Compliance | `07-security-compliance.md` | pending | 0 |
-| Automation Test | `08-automation-tests.md` | pending | 0 |
+| Code Reviewer | `06-code-review.md` | done | 0 |
+| Security and Compliance | `07-security-compliance.md` | done | 0 |
+| Automation Test | `08-automation-tests.md` | done | 0 |
 | Deployment | `09-release.md` | pending | 0 |
 | End-to-End Test | `10-e2e-results.md` | pending | 0 |
 | Business Validation | `11-business-validation.md` | pending | 0 |
@@ -48,3 +48,6 @@
 - 2026-10-18T04:33:21.392Z — returned to Developer: CodeQL alert 36 (js/incomplete-multi-character-sanitization) at scripts/delivery/lib.mjs:454 after merge (Gate C reopened)
 - 2026-10-18T04:34:06.804Z — Developer completed
 - 2026-10-18T04:34:06.975Z — Unit Test completed
+- 2026-10-18T04:35:27.751Z — Code Reviewer completed
+- 2026-10-18T04:35:27.932Z — Security and Compliance completed
+- 2026-10-18T04:35:28.061Z — Automation Test completed

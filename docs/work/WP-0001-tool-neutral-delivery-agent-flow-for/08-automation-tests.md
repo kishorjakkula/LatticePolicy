@@ -3,7 +3,7 @@
 ## Specs added or changed
 
 No browser journeys change (no application UI). Automation for this change is
-the delivery tooling suite `scripts/delivery/delivery.test.mjs` (26 tests) and
+the delivery tooling suite `scripts/delivery/delivery.test.mjs` (27 tests) and
 the CI steps that enforce the flow on every pull request:
 
 - `ci.yml` — "Delivery flow contracts, adapters and work packages": tests,
@@ -13,7 +13,7 @@ the CI steps that enforce the flow on every pull request:
 
 ## Runs
 
-- Local: `npm run test:delivery` (26 passed), `npm run agents:sync -- --check`,
+- Local: `npm run test:delivery` (27 passed), `npm run agents:sync -- --check`,
   `npm run delivery:check`, PR check against the PR description.
 - CI on the first commit: all 10 checks passed, including "Work package and gates".
   The final revision runs the same checks on push.
@@ -21,3 +21,4 @@ the CI steps that enforce the flow on every pull request:
 ## Environment-only failures
 
 None.
+- Post-merge: CodeQL flagged alert 36 on the merged revision; fixed in the follow-up pull request, where CI (including CodeQL) must pass before Gate C.
