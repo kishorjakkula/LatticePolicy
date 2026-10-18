@@ -26,6 +26,10 @@ area you are changing.
 - For broker submission intake (AI drafting with human approval), read
   `docs/SUBMISSION_INTAKE.md`.
 
+- For required fields, warnings and checks at screen, rate, bind and issue
+  level for any transaction, use the carrier-configured framework in
+  `docs/VALIDATION_RULES.md` rather than adding hard-coded checks.
+
 - For frontend controls, follow `docs/UI_CONTROL_STANDARDS.md`; use the shared
   `RadioGroup` for all radio choices and include new screens in the UI audit.
 

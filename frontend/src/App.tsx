@@ -39,6 +39,7 @@ const AgencyOnboardingPage = lazy(() => import('./features/admin/AgencyOnboardin
 const NotificationTemplatesPage = lazy(() => import('./features/admin/NotificationTemplatesPage').then(m => ({ default: m.NotificationTemplatesPage })))
 const LlmReleasesPage = lazy(() => import('./features/admin/LlmReleasesPage').then(m => ({ default: m.LlmReleasesPage })))
 const AiAuditPage = lazy(() => import('./features/admin/AiAuditPage').then(m => ({ default: m.AiAuditPage })))
+const ValidationRulesPage = lazy(() => import('./features/admin/ValidationRulesPage').then(m => ({ default: m.ValidationRulesPage })))
 const CompliancePage = lazy(() => import('./features/admin/CompliancePage').then(m => ({ default: m.CompliancePage })))
 const DataImportPage = lazy(() => import('./features/admin/DataImportPage').then(m => ({ default: m.DataImportPage })))
 const OperationsDashboardPage = lazy(() => import('./features/admin/OperationsDashboardPage').then(m => ({ default: m.OperationsDashboardPage })))
@@ -142,6 +143,7 @@ export default function App() {
               <Route path="notification-templates" element={<RequirePermission permission="page.admin.notifications.view"><NotificationTemplatesPage /></RequirePermission>} />
               <Route path="llm-releases" element={<RequirePermission permission="page.admin.llm.view"><LlmReleasesPage /></RequirePermission>} />
               <Route path="ai-audit" element={<RequirePermission permission="page.admin.ai_audit.view"><AiAuditPage /></RequirePermission>} />
+              <Route path="validation-rules" element={<RequirePermission permission="page.admin.validation_rules.view"><ValidationRulesPage /></RequirePermission>} />
               <Route path="compliance" element={<RequirePermission permission="page.admin.compliance.view"><CompliancePage /></RequirePermission>} />
               <Route path="import" element={<RequirePermission permission="page.admin.import.view"><DataImportPage /></RequirePermission>} />
               <Route path="dashboard" element={<RequirePermission permission="page.admin.dashboard.view"><OperationsDashboardPage /></RequirePermission>} />

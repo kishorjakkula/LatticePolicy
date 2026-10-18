@@ -76,6 +76,7 @@ export function AdminShell() {
           )}
           {hasPermission(user, 'menu.admin.llm.view') && <NavLink to="/admin/llm-releases" className={adminMenuClass}>LLM Releases</NavLink>}
           {hasPermission(user, 'menu.admin.ai_audit.view') && <NavLink to="/admin/ai-audit" className={adminMenuClass}>AI Audit</NavLink>}
+          {hasPermission(user, 'menu.admin.validation_rules.view') && <NavLink to="/admin/validation-rules" className={adminMenuClass}>Validation Rules</NavLink>}
           {hasPermission(user, 'menu.admin.compliance.view') && (
             <NavLink to="/admin/compliance" className={adminMenuClass}>Compliance</NavLink>
           )}

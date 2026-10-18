@@ -29,7 +29,9 @@ import { deriveWizardTransactionStatus } from '../policies/statusModel'
 import type { Field } from './schema'
 import { setByPath, validateFields } from './schema'
 import type { LookupTable, ProductScreen, QualificationAnswer, QualificationAnswers, QualificationQuestion } from '@lattice-policy/rules'
-import { QUALIFICATION_QUESTIONS } from '@lattice-policy/rules'
+import { QUALIFICATION_QUESTIONS, evaluateValidationRules, normalizeValidationTransaction, type ValidationFinding, type ValidationRule, type ValidationScreen } from '@lattice-policy/rules'
+import { validationRulesApi, validationStopFrom } from '../../api/validation-rules.api'
+import { ValidationAcknowledgeDialog, ValidationFindings } from '../validation/ValidationFindings'
 import { AdditionalInterestsFields, BillingFields, commonFieldsFromPayload, CommonQuoteSummary, MailingAddressFields, PriorInsuranceExtras, type CommonQuoteFields } from './CommonQuoteSections'
 import { ConfiguredRiskForm, ConfiguredRiskSummary, screenErrors } from './ConfiguredRiskForm'
 import { useAuth } from '../../auth/AuthContext'
@@ -505,6 +507,16 @@ const POLICY_OFFERINGS: Record<ProductCode, string[]> = {
   ]
 }
 
+/** The wizard screen each step shows, for screen-level validation rules. */
+const STEP_SCREENS: Record<number, ValidationScreen> = {
+  1: 'product', 2: 'qualification', 3: 'insureds', 4: 'risk', 5: 'coverages', 6: 'rating', 7: 'premium', 8: 'forms',
+}
+
+/** Acknowledged rule codes passed to bind/issue, ignoring a click event. */
+function acknowledgementList(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
+}
+
 function parseWizardMode(value: string | null): WizardMode {
   const mode = (value || 'quote').toLowerCase()
   if (mode === 'endorse' || mode === 'cancel' || mode === 'reinstate' || mode === 'rewrite' || mode === 'renew') {
@@ -805,6 +817,12 @@ export function QuoteWizard() {
   const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Carrier validation rules: screen checks as the user types, and the result
+  // of the last rate, bind or issue attempt.
+  const [validationRules, setValidationRules] = useState<ValidationRule[]>([])
+  const [screenChecksShown, setScreenChecksShown] = useState<Set<number>>(() => new Set())
+  const [validationResult, setValidationResult] = useState<{ title: string; errors: ValidationFinding[]; warnings: ValidationFinding[] } | null>(null)
+  const [ackRequest, setAckRequest] = useState<{ action: 'bind' | 'issue'; warnings: ValidationFinding[] } | null>(null)
   const [quoteResp, setQuoteResp] = useState<any | null>(null)
   const [endorsementPreview, setEndorsementPreview] = useState<EndorsementPreviewResponse | null>(null)
   const [boundPolicy, setBoundPolicy] = useState<{ policyId: string; policyNumber: string } | null>(null)
@@ -1964,6 +1982,56 @@ export function QuoteWizard() {
     }
   }
 
+  // Load the carrier's validation rules for this product and state.
+  useEffect(() => {
+    const productCode = String(q.productCode || '')
+    if (!productCode || isReadOnlyView) {
+      setValidationRules([])
+      return
+    }
+    let cancelled = false
+    validationRulesApi
+      .applicable(productCode, String(q.state || ''))
+      .then((result) => { if (!cancelled) setValidationRules(Array.isArray(result?.items) ? result.items : []) })
+      .catch(() => { if (!cancelled) setValidationRules([]) })
+    return () => { cancelled = true }
+  }, [q.productCode, q.state, isReadOnlyView])
+
+  const validationTransaction = normalizeValidationTransaction(wizardMode)
+  // Screen-level results, recomputed as the user types; the same code runs on the server.
+  const screenValidation = useMemo(() => {
+    if (!validationRules.length) return { errors: [] as ValidationFinding[], warnings: [] as ValidationFinding[] }
+    const effectiveDate = isPolicyTransactionMode ? transactionEffectiveDate || q.effectiveDate : q.effectiveDate
+    return evaluateValidationRules(
+      validationRules,
+      buildQuotePayload(q),
+      { level: 'screen', transactionType: validationTransaction, productCode: q.productCode, stateCode: q.state, asOf: effectiveDate || null },
+      { transaction: { effectiveDate, reason: isCancellationMode ? cancelReasonNotes : endorseReason, reasonCode: cancelReasonCode || undefined } },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validationRules, q, normalizedInsureds, validationTransaction, transactionEffectiveDate, cancelReasonCode, cancelReasonNotes, endorseReason])
+  const currentScreen = STEP_SCREENS[step]
+  const stepScreenFindings = {
+    errors: screenValidation.errors.filter((finding) => finding.screen === currentScreen),
+    warnings: screenValidation.warnings.filter((finding) => finding.screen === currentScreen),
+  }
+
+  /** Shows a rate/bind/issue stop from the validation rules; true when the error was one. */
+  function showValidationStop(err: unknown, action: 'rate' | 'bind' | 'issue'): boolean {
+    const stop = validationStopFrom(err)
+    if (!stop) return false
+    if (stop.code === 'VALIDATION_WARNINGS_UNACKNOWLEDGED' && action !== 'rate') {
+      setValidationResult(null)
+      setError(null)
+      setAckRequest({ action, warnings: stop.pending.length ? stop.pending : stop.warnings })
+      return true
+    }
+    const label = action === 'rate' ? 'Rating' : action === 'bind' ? 'Binding' : 'Issuing'
+    setValidationResult({ title: `${label} stopped by validation rules`, errors: stop.errors, warnings: stop.warnings })
+    setError(stop.errors[0]?.message || 'Validation rules stopped this step.')
+    return true
+  }
+
   async function attemptStepChange(target: number) {
     if (target === step) return
     if (isViewOnly) {
@@ -2005,7 +2073,15 @@ export function QuoteWizard() {
       setError('Rate premium before continuing to Premium.')
       return
     }
+    if (target > step) {
+      setScreenChecksShown((shown) => new Set(shown).add(step))
+      if (stepScreenFindings.errors.length > 0) {
+        setError('Fix the errors on this screen before continuing.')
+        return
+      }
+    }
     setError(null)
+    setValidationResult(null)
     const saved = await ensureDraftAtStep(target)
     if (!saved) return
     setStep(target)
@@ -2709,8 +2785,10 @@ export function QuoteWizard() {
         resp = { ...preview, quoteId: draft?.quoteId || '', quoteNumber: draft?.quoteNumber || '', status: 'Rated', progressStep: 7 }
       } else {
         setEndorsementPreview(null)
-        resp = await api.createQuote(payload)
+        resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode)
       }
+      const rateWarnings: ValidationFinding[] = Array.isArray(resp?.validation?.warnings) ? resp.validation.warnings : []
+      setValidationResult(rateWarnings.length ? { title: 'Rating checks', errors: [], warnings: rateWarnings } : null)
       const ratedResponse = resp
       setQuoteResp(ratedResponse)
       if (wizardMode === 'quote') {
@@ -2736,31 +2814,35 @@ export function QuoteWizard() {
         setSearchParams(params, { replace: true })
       }
     } catch (e: any) {
-      setError(e.message || String(e))
+      if (!showValidationStop(e, 'rate')) setError(e.message || String(e))
     } finally { setAction(null) }
   }
 
-  async function bindQuote() {
+  async function bindQuote(acknowledged?: unknown) {
     if (isReadOnlyView) return
     if (!quoteResp?.quoteId || boundPolicy || locked) return
-    setAction('bind'); setError(null)
+    setAction('bind'); setError(null); setValidationResult(null)
     try {
-      const payload = (quoteResp.underwriting && quoteResp.underwriting.decision === 'Refer' && canUwOverride && overrideReason.trim()) ? { overrideReason: overrideReason.trim() } : undefined
+      const override = (quoteResp.underwriting && quoteResp.underwriting.decision === 'Refer' && canUwOverride && overrideReason.trim()) ? { overrideReason: overrideReason.trim() } : undefined
+      const acks = acknowledgementList(acknowledged)
+      const payload = override || acks ? { ...(override || {}), ...(acks ? { validationAcknowledgements: acks } : {}) } : undefined
       const res = await api.bindQuote(quoteResp.quoteId, payload)
       setBoundPolicy({ policyId: res.policyId, policyNumber: res.policyNumber })
       setIssued(false)
       setDraft(prev => prev ? { ...prev, status: 'Converted', progressStep: steps.length } : prev)
       applyLocalQuoteAudit('Converted', steps.length)
     } catch (e: any) {
-      setError(e.message || String(e))
+      if (!showValidationStop(e, 'bind')) setError(e.message || String(e))
     } finally { setAction(null) }
   }
 
-  async function issuePolicy() {
+  async function issuePolicy(acknowledged?: unknown) {
     if (isReadOnlyView) return
     if (!boundPolicy || issued) return
     if (isPolicyTransactionMode && wizardMode !== 'reinstate' && !quoteResp) return
-    setAction('issue'); setError(null)
+    setAction('issue'); setError(null); setValidationResult(null)
+    const acks = acknowledgementList(acknowledged)
+    const ackBody = acks ? { validationAcknowledgements: acks } : {}
     try {
       if (isPolicyTransactionMode) {
         const payload = buildQuotePayload(q)
@@ -2774,8 +2856,9 @@ export function QuoteWizard() {
           if (endorseReason.trim()) endorsePayload.reason = endorseReason.trim()
           if (endorseNotes.trim()) endorsePayload.notes = endorseNotes.trim()
           version = await api.endorsePolicy(boundPolicy.policyId, {
-            ...endorsePayload
-          })
+            ...endorsePayload,
+            ...ackBody
+          } as any)
         } else if (wizardMode === 'cancel') {
           const cancelPayload: { effectiveDate: string; payload: any; transactionNumber?: string; reason?: string; cancellationReasonCode?: string } = {
             effectiveDate: transactionEffectiveDate,
@@ -2784,14 +2867,14 @@ export function QuoteWizard() {
           if (transactionNumber) cancelPayload.transactionNumber = transactionNumber
           if (cancelReasonCode) cancelPayload.cancellationReasonCode = cancelReasonCode
           if (cancelReasonNotes.trim()) cancelPayload.reason = cancelReasonNotes.trim()
-          version = await api.cancelPolicy(boundPolicy.policyId, cancelPayload)
+          version = await api.cancelPolicy(boundPolicy.policyId, { ...cancelPayload, ...ackBody } as any)
         } else if (wizardMode === 'reinstate') {
           const reinstatePayload: { effectiveDate: string; payload: any; transactionNumber?: string } = {
             effectiveDate: transactionEffectiveDate,
             payload
           }
           if (transactionNumber) reinstatePayload.transactionNumber = transactionNumber
-          version = await api.reinstatePolicy(boundPolicy.policyId, reinstatePayload)
+          version = await api.reinstatePolicy(boundPolicy.policyId, { ...reinstatePayload, ...ackBody } as any)
         } else if (wizardMode === 'rewrite') {
           const rewritePayload: { effectiveDate: string; payload: any; overrideReason?: string; transactionNumber?: string } = {
             effectiveDate: transactionEffectiveDate,
@@ -2799,7 +2882,7 @@ export function QuoteWizard() {
             overrideReason: overrideReason.trim() || undefined
           }
           if (transactionNumber) rewritePayload.transactionNumber = transactionNumber
-          version = await api.rewritePolicy(boundPolicy.policyId, rewritePayload)
+          version = await api.rewritePolicy(boundPolicy.policyId, { ...rewritePayload, ...ackBody } as any)
         } else {
           const renewPayload: { effectiveDate: string; payload: any; overrideReason?: string; transactionNumber?: string } = {
             effectiveDate: transactionEffectiveDate,
@@ -2807,7 +2890,7 @@ export function QuoteWizard() {
             overrideReason: overrideReason.trim() || undefined
           }
           if (transactionNumber) renewPayload.transactionNumber = transactionNumber
-          version = await api.renewPolicy(boundPolicy.policyId, renewPayload)
+          version = await api.renewPolicy(boundPolicy.policyId, { ...renewPayload, ...ackBody } as any)
         }
         clearPendingTransaction(boundPolicy.policyId, wizardMode as PendingTransactionMode)
         setIssuedTransactionVersion(version)
@@ -2829,7 +2912,7 @@ export function QuoteWizard() {
         }
         return
       }
-      const res = await api.issuePolicy(boundPolicy.policyId)
+      const res = await api.issuePolicy(boundPolicy.policyId, acks ? ackBody : undefined)
       setBoundPolicy({ policyId: res.policyId, policyNumber: res.policyNumber })
       setIssued(true)
       toast.success('Policy issued', `Policy #${res.policyNumber} has been issued successfully.`)
@@ -2844,6 +2927,7 @@ export function QuoteWizard() {
         }
       }
     } catch (e: any) {
+      if (showValidationStop(e, 'issue')) return
       const msg = e.message || String(e)
       setError(msg)
       toast.error('Action failed', msg)
@@ -3395,6 +3479,30 @@ export function QuoteWizard() {
         <div className="wizard-content">
       <div className="wizard-stage-card">
         <div className="wizard-stage-card-body">
+      {!isViewOnly && (screenChecksShown.has(step) || stepScreenFindings.warnings.length > 0) && (
+        <ValidationFindings
+          title="Checks for this screen"
+          errors={screenChecksShown.has(step) ? stepScreenFindings.errors : []}
+          warnings={stepScreenFindings.warnings}
+        />
+      )}
+      {validationResult && (
+        <ValidationFindings title={validationResult.title} errors={validationResult.errors} warnings={validationResult.warnings} />
+      )}
+      {ackRequest && (
+        <ValidationAcknowledgeDialog
+          action={ackRequest.action}
+          warnings={ackRequest.warnings}
+          busy={!!action}
+          onCancel={() => setAckRequest(null)}
+          onConfirm={(codes) => {
+            const pending = ackRequest
+            setAckRequest(null)
+            if (pending.action === 'bind') void bindQuote(codes)
+            else void issuePolicy(codes)
+          }}
+        />
+      )}
       {step === 1 && (
         <section>
           {(isPolicyTransactionMode || isEndorsementMode || isCancellationMode) && (
@@ -4919,14 +5027,14 @@ export function QuoteWizard() {
         <ReviewFooter
           onBack={() => attemptStepChange(Math.max(1, step - 1))}
           canGoBack={isViewOnly || !locked}
-          onBind={bindQuote}
+          onBind={() => { void bindQuote() }}
           bindDisabled={isReadOnlyView || !!bindDisabledReason || isBinding}
           bindBusy={isBinding}
           bindDisabledReason={bindDisabledReason}
           boundPolicy={boundPolicy}
           onModify={wizardMode === 'quote' && !issued && !isReadOnlyView ? toggleBoundModifyMode : undefined}
           modifyMode={boundModifyMode}
-          onIssue={issuePolicy}
+          onIssue={() => { void issuePolicy() }}
           issueDisabled={isReadOnlyView || !!issueDisabledReason || isIssuing}
           issueBusy={isIssuing}
           issueDisabledReason={issueDisabledReason}

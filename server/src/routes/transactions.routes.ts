@@ -25,6 +25,10 @@ import { today, asDateOnly, addMonths, diffMonths, round2, proRataFactor } from 
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { routeParam } from '../lib/utils.js'
 import { BadRequestError, NotFoundError } from '../errors/domain.errors.js'
+import { runPolicyValidationGate, takeAcknowledgements } from '../lib/validation-gate.js'
+
+/** Who acted, as recorded on warning acknowledgements. */
+const actorOf = (req: any) => String(req.user?.username || req.user?.id || 'system')
 
 // ── local helpers ─────────────────────────────────────────────────────────────
 
@@ -98,9 +102,13 @@ transactionRoutes.post('/policies/:id/issue', requirePermission('page.policy.vie
     const db = getDb()
 
     if (db) {
-      const result = await req.tx((db) =>
-        lifecycleService.issuePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-      )
+      const { acknowledged, body } = takeAcknowledgements(req.body)
+      const result = await req.tx(async (db) => {
+        await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+          level: 'issue', transaction: 'new_business', acknowledged, actor: actorOf(req),
+        })
+        return lifecycleService.issuePolicy(db, tenantId, routeParam(req.params.id), body, req.user)
+      })
       return res.json(result)
     }
 
@@ -191,9 +199,15 @@ transactionRoutes.post('/policies/:id/endorse/preview', requirePermission('page.
       throw new BadRequestError('NO_DB', 'Requires database mode')
     }
 
-    const result = await req.tx((db) =>
-      endorsementService.previewEndorsement(db, tenantId, routeParam(req.params.id), req.body || {})
-    )
+    const { body } = takeAcknowledgements(req.body)
+    const result = await req.tx(async (db) => {
+      const validation = await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+        level: 'rate', transaction: 'endorsement', payload: body.payload,
+        transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason }, actor: actorOf(req),
+      })
+      const preview = await endorsementService.previewEndorsement(db, tenantId, routeParam(req.params.id), body)
+      return preview && typeof preview === 'object' ? { ...preview, validation } : preview
+    })
     return res.json(result)
   } catch (err: any) {
     next(err)
@@ -214,9 +228,14 @@ transactionRoutes.post(
         throw new BadRequestError('NO_DB', 'Requires database mode')
       }
 
-      const result = await req.tx((db) =>
-        endorsementService.executeEndorsement(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-      )
+      const { acknowledged, body } = takeAcknowledgements(req.body)
+      const result = await req.tx(async (db) => {
+        await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+          level: 'issue', transaction: 'endorsement', payload: body.payload, acknowledged, actor: actorOf(req),
+          transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason, notes: body.notes },
+        })
+        return endorsementService.executeEndorsement(db, tenantId, routeParam(req.params.id), body, req.user)
+      })
       return res.json(result)
     } catch (err: any) {
       next(err)
@@ -235,9 +254,20 @@ transactionRoutes.post(
       const db = getDb()
 
       if (db) {
-        const result = await req.tx((db) =>
-          lifecycleService.cancelPolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-        )
+        const { acknowledged, body } = takeAcknowledgements(req.body)
+        const result = await req.tx(async (db) => {
+          await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+            level: 'issue', transaction: 'cancellation', payload: body.payload, acknowledged, actor: actorOf(req),
+            transactionFacts: {
+              effectiveDate: body.effectiveDate,
+              reason: body.reason,
+              reasonCode: body.reasonCode ?? body.cancellationReasonCode,
+              cancellationReasonCode: body.cancellationReasonCode ?? body.reasonCode,
+              method: body.method,
+            },
+          })
+          return lifecycleService.cancelPolicy(db, tenantId, routeParam(req.params.id), body, req.user)
+        })
         return res.json(result)
       }
 
@@ -284,9 +314,14 @@ transactionRoutes.post(
       const db = getDb()
 
       if (db) {
-        const result = await req.tx((db) =>
-          lifecycleService.reinstatePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-        )
+        const { acknowledged, body } = takeAcknowledgements(req.body)
+        const result = await req.tx(async (db) => {
+          await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+            level: 'issue', transaction: 'reinstatement', payload: body.payload, acknowledged, actor: actorOf(req),
+            transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason },
+          })
+          return lifecycleService.reinstatePolicy(db, tenantId, routeParam(req.params.id), body, req.user)
+        })
         return res.json(result)
       }
 
@@ -328,9 +363,14 @@ transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.v
     const db = getDb()
 
     if (db) {
-      const result = await req.tx((db) =>
-        lifecycleService.rewritePolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-      )
+      const { acknowledged, body } = takeAcknowledgements(req.body)
+      const result = await req.tx(async (db) => {
+        await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+          level: 'issue', transaction: 'rewrite', payload: body.payload, acknowledged, actor: actorOf(req),
+          transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason, overrideReason: body.overrideReason },
+        })
+        return lifecycleService.rewritePolicy(db, tenantId, routeParam(req.params.id), body, req.user)
+      })
       return ok(res, result)
     }
 
@@ -417,9 +457,14 @@ transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.vie
     const db = getDb()
 
     if (db) {
-      const result = await req.tx((db) =>
-        lifecycleService.renewPolicy(db, tenantId, routeParam(req.params.id), req.body || {}, req.user)
-      )
+      const { acknowledged, body } = takeAcknowledgements(req.body)
+      const result = await req.tx(async (db) => {
+        await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+          level: 'issue', transaction: 'renewal', payload: body.payload, acknowledged, actor: actorOf(req),
+          transactionFacts: { effectiveDate: body.effectiveDate, overrideReason: body.overrideReason },
+        })
+        return lifecycleService.renewPolicy(db, tenantId, routeParam(req.params.id), body, req.user)
+      })
       return res.json(result)
     }
 
@@ -502,9 +547,15 @@ transactionRoutes.post('/policies/:id/renew/preview', requirePermission('page.po
     const db = getDb()
 
     if (db) {
-      const result = await req.tx((db) =>
-        lifecycleService.previewRenewal(db, tenantId, routeParam(req.params.id), req.body || {})
-      )
+      const { body } = takeAcknowledgements(req.body)
+      const result = await req.tx(async (db) => {
+        const validation = await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
+          level: 'rate', transaction: 'renewal', payload: body.payload,
+          transactionFacts: { effectiveDate: body.effectiveDate }, actor: actorOf(req),
+        })
+        const preview = await lifecycleService.previewRenewal(db, tenantId, routeParam(req.params.id), body)
+        return preview && typeof preview === 'object' ? { ...preview, validation } : preview
+      })
       return res.json(result)
     }
 
@@ -542,9 +593,14 @@ transactionRoutes.post(
       const db = getDb()
 
       if (db) {
-        const result = await req.tx((db) =>
-          lifecycleService.nonRenewPolicy(db, tenantId, policyId, req.body || {}, req.user)
-        )
+        const { acknowledged, body } = takeAcknowledgements(req.body)
+        const result = await req.tx(async (db) => {
+          await runPolicyValidationGate(db, tenantId, policyId, {
+            level: 'issue', transaction: 'non_renewal', acknowledged, actor: actorOf(req),
+            transactionFacts: { reasonCode: body.reasonCode, reason: body.reasonDescription, noticeDate: body.noticeDate },
+          })
+          return lifecycleService.nonRenewPolicy(db, tenantId, policyId, body, req.user)
+        })
         return res.json(result)
       }
 

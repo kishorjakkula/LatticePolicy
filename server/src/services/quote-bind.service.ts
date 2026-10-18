@@ -1,3 +1,4 @@
+import { runValidationGate } from '../lib/validation-gate.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { mapProductRiskKind, requireProductCapability } from '../lib/product-registry.js'
 import { withTenantTx, toRawQuery, type DrizzleDB } from '../db.js'
@@ -369,6 +370,19 @@ export async function bindQuote(
   // The quote is bound on the product version it was rated on.
   await ensureProductSnapshots(tenantId, [quote.payload])
   assertProductRules(tenantId, quote.payload, 'bind')
+  // Carrier validation rules for binding new business; warnings must be acknowledged.
+  await withTenantTx(tenantId, (innerDb) =>
+    runValidationGate(innerDb, tenantId, {
+      level: 'bind',
+      transaction: 'new_business',
+      payload: quote.payload,
+      premium: quote.premium,
+      transactionFacts: { overrideReason: overrideReason || undefined },
+      acknowledged: body?.validationAcknowledgements,
+      entity: { type: 'quote', id: quoteId },
+      actor: updatedBy,
+    }),
+  )
   const existingStatusHistory = normalizeQuoteAuditHistory(row.status_history)
   const existingStepHistory = normalizeQuoteAuditHistory(row.step_history)
 
