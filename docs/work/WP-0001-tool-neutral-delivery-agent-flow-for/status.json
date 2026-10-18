@@ -84,7 +84,7 @@
       "name": "Deployment",
       "writes": "09-release.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -92,7 +92,7 @@
       "name": "End-to-End Test",
       "writes": "10-e2e-results.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -100,7 +100,7 @@
       "name": "Business Validation",
       "writes": "11-business-validation.md",
       "gateAfter": "D",
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -121,9 +121,9 @@
     },
     {
       "gate": "C",
-      "approvedBy": null,
-      "approvedAt": null,
-      "note": null
+      "approvedBy": "kishorjakkula (code owner)",
+      "approvedAt": "2026-10-18",
+      "note": "Merged PR #383 (4b4c068): \"merged\""
     },
     {
       "gate": "D",
@@ -212,6 +212,22 @@
     {
       "at": "2026-10-18T04:35:28.061Z",
       "event": "Automation Test completed"
+    },
+    {
+      "at": "2026-10-18T15:23:11.763Z",
+      "event": "Gate C approved by kishorjakkula (code owner): \"Merged PR #383 (4b4c068): \"merged\"\""
+    },
+    {
+      "at": "2026-10-18T15:23:48.519Z",
+      "event": "Deployment completed"
+    },
+    {
+      "at": "2026-10-18T15:25:13.505Z",
+      "event": "End-to-End Test completed"
+    },
+    {
+      "at": "2026-10-18T15:26:01.064Z",
+      "event": "Business Validation completed"
     }
   ]
 }
