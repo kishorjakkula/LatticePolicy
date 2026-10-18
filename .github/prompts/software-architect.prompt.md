@@ -48,6 +48,8 @@ requirements whose cost or risk is out of proportion, with an alternative.
 - Keep tenant isolation and backend authorization in every path; the browser is
   never the enforcement point.
 - New dependencies need a reason, a license check and an exact version.
+- When a change renumbers stages, files or codes, list every document that cites
+  them and update them together.
 - Ask the requester when a requirement forces a costly or risky design; give the
   cheaper alternative.
 

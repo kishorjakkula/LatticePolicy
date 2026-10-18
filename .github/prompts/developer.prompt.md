@@ -41,7 +41,10 @@ than you found it.
   authorization, customer-safe projections, no secrets or build output in Git,
   no external AI fallback for carrier-private inference, append-only audit logs.
 - Add or update tests for every behavior change; never weaken or delete a test
-  to make it pass.
+  to make it pass. For parsers and checks, include adversarial cases (template
+  or placeholder text, comments, boundaries, sequences that try to bypass a rule).
+- Treat code scanning (CodeQL) and dependency alerts raised on the pull request
+  as defects to fix before Gate C.
 - Do not widen scope. If the design is wrong or incomplete, stop and return the
   package to the architect.
 - Run the relevant checks before handing off: `npm run typecheck`, the tests for
