@@ -2,12 +2,12 @@
 
 ## Tests added
 
-`scripts/delivery/delivery.test.mjs` (22 tests, Node test runner; 9 added as regressions for the code review findings), run in CI
+`scripts/delivery/delivery.test.mjs` (27 tests, Node test runner; regressions added for every review finding and for CodeQL alert 36), run in CI
 by the "Delivery flow contracts, adapters and work packages" step.
 
 ## Results
 
-`npm run test:delivery` — 22 passed, 0 failed.
+`npm run test:delivery` — 27 passed, 0 failed.
 
 ## Requirement coverage
 
