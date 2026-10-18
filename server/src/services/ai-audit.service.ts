@@ -72,7 +72,7 @@ function parseFilter(filter: unknown) {
   return result.data
 }
 
-async function query(q: any, tenantId: string, filter: ReturnType<typeof parseFilter>, limit: number) {
+async function query(q: any, tenantId: string, filter: ReturnType<typeof parseFilter>, limit: number): Promise<AiAuditEntry[]> {
   const params: unknown[] = [tenantId]
   const where: string[] = []
   const add = (sql: string, value: unknown) => {

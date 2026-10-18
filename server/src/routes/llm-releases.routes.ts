@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
+import rateLimit from 'express-rate-limit'
 import { requirePermission } from '../auth.js'
 import { getDb } from '../db.js'
 import { routeParam } from '../lib/utils.js'
@@ -21,6 +22,8 @@ import {
 } from '../services/llm-automation-credentials.service.js'
 
 export const llmReleaseRoutes = Router()
+const releaseReadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
+const releaseActionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
 function handle(operation: (req: Request, ctx: LlmActorContext) => Promise<unknown>, status = 200) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!getDb()) return res.status(503).json({ code: 'DB_REQUIRED' })
@@ -72,6 +75,7 @@ function automationCredential(req: Request, res: Response, next: NextFunction) {
 
 llmReleaseRoutes.get(
   '/admin/llm/releases',
+  releaseReadLimiter,
   requirePermission('llm.releases.read'),
   handle((req) =>
     listLlmReleases(
@@ -83,6 +87,7 @@ llmReleaseRoutes.get(
 )
 llmReleaseRoutes.put(
   '/admin/llm/contact',
+  releaseActionLimiter,
   requirePermission('llm.releases.review'),
   handle((req) =>
     saveLlmContact(req.tenant!.tenantId, req.user!.id, req.body?.email),
@@ -90,31 +95,37 @@ llmReleaseRoutes.put(
 )
 llmReleaseRoutes.put(
   '/admin/llm/policy',
+  releaseActionLimiter,
   requirePermission('llm.releases.review'),
   handle((req, ctx) => saveLlmPolicy(req.tenant!.tenantId, req.user!.id, req.body, ctx)),
 )
 llmReleaseRoutes.get(
   '/admin/llm/revocations',
+  releaseActionLimiter,
   requirePermission('llm.releases.review'),
   handle((req, ctx) => issueRevocationList(req.tenant!.tenantId, req.user!.id, ctx)),
 )
 llmReleaseRoutes.get(
   '/admin/llm/credentials',
+  releaseReadLimiter,
   requirePermission('admin.users.manage'),
   handle((req) => listAutomationCredentials(req.tenant!.tenantId, req.user!.id)),
 )
 llmReleaseRoutes.post(
   '/admin/llm/credentials',
+  releaseActionLimiter,
   requirePermission('admin.users.manage'),
   handle((req, ctx) => issueAutomationCredential(req.tenant!.tenantId, req.user!.id, req.body, ctx), 201),
 )
 llmReleaseRoutes.post(
   '/admin/llm/credentials/:id/revoke',
+  releaseActionLimiter,
   requirePermission('admin.users.manage'),
   handle((req, ctx) => revokeAutomationCredential(req.tenant!.tenantId, req.user!.id, routeParam(req.params.id), ctx)),
 )
 llmReleaseRoutes.post(
   '/admin/llm/releases',
+  releaseActionLimiter,
   automationCredential,
   requirePermission('llm.releases.register'),
   handle(
@@ -124,6 +135,7 @@ llmReleaseRoutes.post(
 )
 llmReleaseRoutes.post(
   '/admin/llm/releases/:id/:action',
+  releaseActionLimiter,
   requirePermission('llm.releases.review'),
   handle((req, ctx) =>
     transitionLlmRelease(

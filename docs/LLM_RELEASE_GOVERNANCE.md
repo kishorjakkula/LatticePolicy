@@ -351,6 +351,18 @@ administrator accounts (use SSO and MFA).
 
 ## Tests
 
+Audit/release endpoints also have per-IP route budgets before authorization and
+credential lookup, in addition to the global API limiter. Per 15 minutes, audit
+reads allow 120 requests; integrity checks and exports share 20; release and
+credential reads share 120; release actions/credential writes share 60. Limits
+are per API instance and return 429 with Retry-After when exhausted.
+
+Migration 065 assigns audit sequence positions inside the predecessor/hash
+lock rather than in column defaults. Concurrent inserts therefore remain in
+chain order; rollback gaps are valid and supplied positions cannot reorder the
+chain. The migration preserves historical audit rows. Any existing integrity
+failure requires investigation, not re-hashing to conceal it.
+
 - Node tests: receipt signatures, carrier/environment/artifact binding,
   unsigned activation and inference denial, changed-pointer denial.
 - Server tests: evaluation thresholds, role separation, signature interoperability,

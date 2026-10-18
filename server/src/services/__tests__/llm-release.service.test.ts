@@ -39,7 +39,7 @@ describe('LLM release contracts', () => {
   }
   // A held-out evaluation report shaped like services/document-learning's output.
   function evaluated(changes: Record<string, unknown> = {}, tenantId = 'carrier') {
-    const metrics = { sampleCount: 20, fieldAccuracy: 0.97, evidenceAccuracy: 0.99, criticalErrors: 0, datasetSha256: 'c'.repeat(64) }
+    const metrics = { sampleCount: 20, fieldAccuracy: 0.97, evidenceAccuracy: 0.99, criticalErrors: 0 as const, datasetSha256: 'c'.repeat(64) }
     const report: Record<string, any> = {
       schemaVersion: 1,
       tenantId,

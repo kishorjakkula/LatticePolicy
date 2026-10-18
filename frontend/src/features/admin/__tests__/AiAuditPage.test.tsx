@@ -73,7 +73,7 @@ describe('AI audit trail', () => {
   it('filters by who acted from the summary cards', () => {
     render(<AiAuditPage />)
     fireEvent.click(screen.getByRole('button', { name: /^1\s*AI/ }))
-    expect(state.keys.at(-2)).toEqual(['ai-audit', expect.any(String), { source: 'all', actor: 'ai' }])
+    expect(state.keys[state.keys.length - 2]).toEqual(['ai-audit', expect.any(String), { source: 'all', actor: 'ai' }])
   })
   it('shows the recorded detail and hash for an entry', () => {
     render(<AiAuditPage />)
