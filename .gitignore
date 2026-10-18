@@ -35,6 +35,9 @@ coverage/
 playwright-report/
 test-results/
 .pilot/
+.document-learning/
+__pycache__/
+*.pyc
 
 # Vite
 *.local

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "submission",
+  "version": "1.0.0",
+  "dataPolicy": "synthetic-or-consented",
+  "reviewed": true,
+  "instructions": "Extract insurance application data against the supplied schema. Applicant, Named Insured, and Business Name can mean insuredName; use context rather than assuming they always do. Preserve disagreements across documents as conflicts. Do not infer eligibility answers from absent information.",
+  "examples": [
+    {
+      "text": "Named Insured: Example Synthetic Company LLC",
+      "result": {"values":[{"key":"insuredName","value":"Example Synthetic Company LLC","confidence":90,"documentId":"example","line":1,"page":null,"quote":"Named Insured: Example Synthetic Company LLC","reason":"Explicit named insured label."}],"conflicts":[]}
+    }
+  ]
+}

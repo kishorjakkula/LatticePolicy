@@ -2,6 +2,20 @@
 
 This plan organizes automated testing by risk and execution cost. Keep fast unit and component tests in Vitest, then add DB-backed integration tests and Playwright E2E tests as separate layers.
 
+The independent private document processor uses Node's built-in test runner:
+`npm run test:document-processor`. This is included in local/Docker unit test
+runs and CI. Its real Poppler/Tesseract smoke test is opt-in inside the
+processor image with `RUN_OCR_SMOKE=1`; see `docs/PRIVATE_DOCUMENT_PROCESSING.md`.
+CI builds that image and runs the real OCR and signed-activation smoke tests
+with networking disabled, using synthetic documents only.
+Model transport mocks are not extraction-quality evaluations. A selected
+self-hosted model must pass a held-out, privacy-reviewed corpus before use.
+The separate learning suite (`npm run test:document-learning`) covers approved
+dataset contracts, leakage, exact held-out evidence/field metrics, drift,
+private local HTTP execution and registration gating. Offline trainer contracts
+run with `npm run test:document-training` (Python 3, no ML dependencies).
+CI runs both; neither substitutes for actual GPU/model accuracy validation.
+
 ## Contributor Testing Policy
 
 Automated tests are part of the definition of done for behavior changes. Any

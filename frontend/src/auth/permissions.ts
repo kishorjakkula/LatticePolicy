@@ -4,7 +4,11 @@ type UserLike = {
 } | null | undefined
 
 const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
+  carrier_technical_admin:['menu.admin.view','menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.review','menu.admin.ai_audit.view','page.admin.ai_audit.view','ai.audit.read'],
+  llm_release_automation:['llm.releases.read','llm.releases.register'],
   admin: [
+    'menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.register','llm.releases.review',
+    'menu.admin.ai_audit.view','page.admin.ai_audit.view','ai.audit.read',
     'menu.search.view',
     'menu.portal.view',
     'menu.rating.view',

@@ -1,5 +1,8 @@
 import ExcelJS from 'exceljs'
 import PizZip from 'pizzip'
+import { createRequire } from 'node:module'
+import { promisify } from 'node:util'
+import { inflateRaw } from 'node:zlib'
 
 /**
  * Reads a submission document into text lines, so a drafted value can point
@@ -14,6 +17,122 @@ export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 export const MAX_DOCUMENTS = 10
 const MAX_LINES = 4000
 const MAX_LINE_LENGTH = 500
+
+export const OFFICE_ARCHIVE_LIMITS = Object.freeze({
+  entries: 1024,
+  centralDirectoryBytes: 256 * 1024,
+  entryBytes: 8 * 1024 * 1024,
+  totalBytes: 32 * 1024 * 1024,
+  expansionRatio: 200,
+})
+
+interface OfficeZipEntry {
+  fileName: Uint8Array
+  fileNameStr: string
+  bitFlag: number
+  compressionMethod: string
+  compressedSize: number
+  uncompressedSize: number
+  crc32: number
+  diskNumberStart: number
+  localHeaderOffset: number
+  extraFields: Record<number, unknown>
+  unixPermissions: number | null
+  dir: boolean
+  decompressed: { getCompressedContent(): Uint8Array }
+}
+
+// PizZip's public load API collapses duplicate entries and its inflater has no
+// output cap. Use its structured reader without calling getContent/checkCRC32.
+const require = createRequire(import.meta.url)
+const ZipEntries = require('pizzip/js/zipEntries.js') as new (data: undefined, options: object) => {
+  files: OfficeZipEntry[]
+  prepareReader(data: Buffer): void
+  readEndOfCentral(): void
+  readCentralDir(): void
+  readLocalFiles(): void
+}
+const crc32 = require('pizzip/js/crc32.js') as (data: Uint8Array) => number
+const inflate = promisify(inflateRaw)
+
+async function boundedOfficeArchive(buffer: Buffer): Promise<PizZip> {
+  const reject = () => { throw new Error('Unsafe Office archive') }
+  if (buffer.length > MAX_DOCUMENT_BYTES || buffer.length < 22) reject()
+
+  // Reject unsupported containers before the ZIP reader can follow ZIP64
+  // offsets. Only the fixed end record is inspected here; PizZip reads entries.
+  const end = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+  if (end < 0 || end + 22 > buffer.length) reject()
+  const count = buffer.readUInt16LE(end + 10)
+  const directoryBytes = buffer.readUInt32LE(end + 12)
+  const directoryOffset = buffer.readUInt32LE(end + 16)
+  if (end + 22 + buffer.readUInt16LE(end + 20) !== buffer.length
+    || buffer.readUInt16LE(end + 4) !== 0 || buffer.readUInt16LE(end + 6) !== 0
+    || buffer.readUInt16LE(end + 8) !== count || count === 0 || count > OFFICE_ARCHIVE_LIMITS.entries
+    || directoryBytes > OFFICE_ARCHIVE_LIMITS.centralDirectoryBytes
+    || directoryOffset + directoryBytes !== end) reject()
+
+  const archive = new ZipEntries(undefined, { checkCRC32: false, decodeFileName: (bytes: Uint8Array) => Buffer.from(bytes).toString('utf8') })
+  archive.prepareReader(buffer)
+  archive.readEndOfCentral()
+  archive.readCentralDir()
+  if (archive.files.length !== count) reject()
+
+  let total = 0
+  const centralNames = archive.files.map((entry) => {
+    const { compressedSize, uncompressedSize } = entry
+    total += uncompressedSize
+    if (entry.diskNumberStart !== 0 || entry.extraFields[1]
+      || (entry.bitFlag & ~0x080e) !== 0
+      || !['\x00\x00', '\x08\x00'].includes(entry.compressionMethod)
+      || !Number.isSafeInteger(compressedSize) || compressedSize < 0
+      || !Number.isSafeInteger(uncompressedSize) || uncompressedSize < 0
+      || (entry.compressionMethod === '\x00\x00' && compressedSize !== uncompressedSize)
+      || uncompressedSize > OFFICE_ARCHIVE_LIMITS.entryBytes || total > OFFICE_ARCHIVE_LIMITS.totalBytes
+      || uncompressedSize > Math.max(1, compressedSize) * OFFICE_ARCHIVE_LIMITS.expansionRatio
+      || entry.localHeaderOffset < 0 || entry.localHeaderOffset + 30 > directoryOffset) reject()
+    return Buffer.from(entry.fileName)
+  })
+  archive.readLocalFiles()
+
+  const ranges = archive.files.map((entry) => {
+    const local = entry.localHeaderOffset
+    const dataStart = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28)
+    const end = dataStart + entry.compressedSize
+    if (end > directoryOffset) reject()
+    if ((entry.bitFlag & 8) === 0 && (
+      buffer.readInt32LE(local + 14) !== entry.crc32
+      || buffer.readUInt32LE(local + 18) !== entry.compressedSize
+      || buffer.readUInt32LE(local + 22) !== entry.uncompressedSize
+    )) reject()
+    return { start: local, end }
+  }).sort((a, b) => a.start - b.start)
+  if (ranges[0].start !== 0 || ranges.some((range, i) => i > 0 && range.start < ranges[i - 1].end)) reject()
+
+  const safe = new PizZip()
+  const names = new Set<string>()
+  for (const [index, entry] of archive.files.entries()) {
+    const name = entry.fileNameStr
+    const local = entry.localHeaderOffset
+    const fileType = (entry.unixPermissions ?? 0) & 0xf000
+    if (!centralNames[index].equals(Buffer.from(entry.fileName))
+      || buffer.readUInt16LE(local + 6) !== entry.bitFlag
+      || buffer.readUInt16LE(local + 8) !== entry.compressionMethod.charCodeAt(0)
+      || (fileType !== 0 && fileType !== 0x8000 && fileType !== 0x4000)
+      || !name || /[\\:\x00-\x1f\x7f]/.test(name) || name.startsWith('/')
+      || name.split('/').some((part, i, parts) => part === '.' || part === '..' || part === '__proto__' || (!part && i !== parts.length - 1))
+      || names.has(name.toLowerCase())) reject()
+    names.add(name.toLowerCase())
+    const compressed = entry.decompressed.getCompressedContent()
+    const content = entry.compressionMethod === '\x08\x00'
+      ? await inflate(compressed, { maxOutputLength: Math.max(1, entry.uncompressedSize) })
+      : Buffer.from(compressed)
+    if (content.length !== entry.uncompressedSize || crc32(content) !== entry.crc32
+      || (entry.dir && content.length !== 0)) reject()
+    safe.file(name, content, { dir: entry.dir, createFolders: false })
+  }
+  return safe
+}
 
 export type DocumentKind = 'text' | 'spreadsheet' | 'word' | 'pdf' | 'image' | 'unsupported'
 
@@ -46,10 +165,15 @@ export function contentTypeFor(fileName: string): string {
   return KIND_CONTENT_TYPE[extensionOf(fileName)] || 'text/plain'
 }
 
-function cleanLines(lines: string[]): string[] {
-  return lines
+function cleanLines(lines: string[], strictLimits = false): string[] {
+  const cleaned = lines
     .map((line) => line.replace(/\t/g, '  ').replace(/\s+$/g, ''))
     .filter((line) => line.trim().length > 0)
+  if (strictLimits) {
+    if (cleaned.length > MAX_LINES || cleaned.join('\n').length > 120000) throw new Error('Document text exceeds private processing limits; split the document')
+    return cleaned
+  }
+  return cleaned
     .map((line) => (line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)}…` : line))
     .slice(0, MAX_LINES)
 }
@@ -174,19 +298,25 @@ function wordToLines(buffer: Buffer): string[] {
  * an AI model. Never throws for a damaged file: it is kept and reported as
  * unreadable, so the reviewer still sees it.
  */
-export async function readDocumentLines(fileName: string, buffer: Buffer): Promise<{ lines: string[]; readable: boolean }> {
+export async function readDocumentLines(fileName: string, buffer: Buffer, { strictLimits = false } = {}): Promise<{ lines: string[]; readable: boolean }> {
   const kind = documentKind(fileName)
+  const clean = (lines: string[]) => cleanLines(lines, strictLimits)
   try {
     if (kind === 'text') {
       const raw = buffer.toString('utf8')
       const ext = extensionOf(fileName)
-      if (ext === 'eml') return { lines: cleanLines(emailToLines(raw)), readable: true }
-      if (ext === 'html' || ext === 'htm') return { lines: cleanLines(htmlToText(raw).split(/\r?\n/)), readable: true }
-      return { lines: cleanLines(raw.split(/\r?\n/)), readable: true }
+      if (ext === 'eml') return { lines: clean(emailToLines(raw)), readable: true }
+      if (ext === 'html' || ext === 'htm') return { lines: clean(htmlToText(raw).split(/\r?\n/)), readable: true }
+      return { lines: clean(raw.split(/\r?\n/)), readable: true }
     }
-    if (kind === 'spreadsheet') return { lines: cleanLines(await spreadsheetToLines(buffer)), readable: true }
-    if (kind === 'word') return { lines: cleanLines(wordToLines(buffer)), readable: true }
+    if (kind === 'spreadsheet' || kind === 'word') {
+      const archive = await boundedOfficeArchive(buffer)
+      // Never give the original untrusted headers/compressed bytes to a parser.
+      const safeBuffer = archive.generate({ type: 'nodebuffer', compression: 'STORE' })
+      return { lines: clean(kind === 'spreadsheet' ? await spreadsheetToLines(safeBuffer) : wordToLines(safeBuffer)), readable: true }
+    }
   } catch {
+    if (strictLimits) throw new Error('Document is damaged or exceeds private processing limits; split or replace it')
     return { lines: [], readable: false }
   }
   return { lines: [], readable: false }

@@ -14,6 +14,7 @@ import {
   listSubmissions,
   setCustomerChoice,
   startReading,
+  startManualReview,
   updateSubmissionField,
 } from '../services/submission-intake.service.js'
 import { scheduleExtraction } from '../services/submission-intake-scheduler.js'
@@ -92,6 +93,10 @@ submissionRoutes.get('/submissions/:id/documents/:documentId', requirePermission
 submissionRoutes.post('/submissions/:id/read', requirePermission('submissions.manage'), requireDb, handle((req, tenantId, actor) =>
   startReading(tenantId, routeParam(req.params.id), actor, { productHint: req.body?.productCode || null, schedule: scheduleExtraction })
 , 202))
+
+submissionRoutes.post('/submissions/:id/manual-review', requirePermission('submissions.manage'), requireDb, handle((req, tenantId, actor) =>
+  startManualReview(tenantId, routeParam(req.params.id), actor)
+))
 
 submissionRoutes.patch('/submissions/:id/fields/:key', requirePermission('submissions.manage'), requireDb, handle((req, tenantId, actor) =>
   updateSubmissionField(tenantId, routeParam(req.params.id), routeParam(req.params.key), actor, req.body || {})

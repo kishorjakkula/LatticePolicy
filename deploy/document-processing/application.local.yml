@@ -1,0 +1,15 @@
+# Overlay for the root docker-compose.yml. The API can call the processor;
+# neither the processor nor the model joins the application's default network.
+services:
+  server:
+    environment:
+      INTAKE_AI_PROVIDER: private
+      INTAKE_DATA_BOUNDARY: private
+      DOCUMENT_PROCESSOR_URL: http://document-processor:8080
+      DOCUMENT_PROCESSOR_TOKEN: ${DOCUMENT_PROCESSOR_TOKEN:?A private service token is required}
+      DOCUMENT_EXTRACTION_PROFILE: submission
+    networks: [default, document-processing]
+networks:
+  document-processing:
+    external: true
+    name: ${DOCUMENT_NETWORK:-lattice-documents-private}

@@ -36,7 +36,8 @@ it('upgrades an existing branding database without skipping intake migrations', 
     })
     expect(result.status, result.stderr).toBe(0)
     const applied = await client.query("SELECT name FROM schema_migrations WHERE tenant_id='system' AND version >= 60 ORDER BY version")
-    expect(applied.rows.map(row => row.name)).toEqual(['060_tenant_branding.sql', '061_submission_intake.sql', '062_submission_confidence_score.sql'])
+    expect(applied.rows.map(row => row.name)).toEqual(expect.arrayContaining(['060_tenant_branding.sql', '061_submission_intake.sql', '062_submission_confidence_score.sql','063_llm_release_governance.sql', '064_ai_governance_audit.sql', '065_audit_chain_serialized_sequence.sql']))
+    expect((await client.query("SELECT to_regclass('llm_releases') AS relation")).rows[0].relation).toBe('llm_releases')
     const columns = await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND ((table_name='tenants' AND column_name='branding') OR (table_name='submission_fields' AND column_name='confidence_score'))")
     expect(columns.rows).toHaveLength(2)
   } finally {

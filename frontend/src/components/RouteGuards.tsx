@@ -15,6 +15,7 @@ export function resolveHomePath(user: any): string {
   if (hasPermission(user, 'page.policy.view')) return '/search'
   if (hasPermission(user, 'page.uw_queue.view')) return '/uw/queue'
   if (hasPermission(user, 'page.admin.forms.view')) return '/admin/forms'
+  if (hasPermission(user, 'page.admin.llm.view')) return '/admin/llm-releases'
   if (hasPermission(user, 'page.admin.uw_company.view')) return '/admin/uw-company'
   if (hasPermission(user, 'page.admin.users.view')) return '/admin/users'
   if (hasPermission(user, 'page.admin.tenant.view')) return '/admin/tenant'
@@ -53,6 +54,7 @@ export function RequireCustomerIdentity({ children }: { children: ReactElement }
 export function AdminIndexRedirect() {
   const { user } = useAuth()
   if (hasPermission(user, 'page.admin.forms.view')) return <Navigate to="/admin/forms" replace />
+  if (hasPermission(user, 'page.admin.llm.view')) return <Navigate to="/admin/llm-releases" replace />
   if (hasPermission(user, 'page.admin.uw_company.view')) return <Navigate to="/admin/uw-company" replace />
   if (hasPermission(user, 'page.admin.users.view')) return <Navigate to="/admin/users" replace />
   if (hasPermission(user, 'page.admin.tenant.view')) return <Navigate to="/admin/tenant" replace />

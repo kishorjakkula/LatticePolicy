@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { api } from '../client'
+import { apiSubmissions } from '../submissions.api'
 
 // Mock the config module
 vi.mock('../../config', () => ({
@@ -18,6 +19,15 @@ describe('API client', () => {
     vi.clearAllMocks()
     localStorage.clear()
     localStorage.setItem('tenantId', 'test-tenant')
+  })
+
+  it('posts manual intake recovery with tenant and authentication headers', async () => {
+    localStorage.setItem('authToken', 'bearer-xyz')
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ submissionId: 'sub-1', status: 'IN_REVIEW' }) })
+    expect(await apiSubmissions.manualReview('sub-1')).toMatchObject({ status: 'IN_REVIEW' })
+    expect(mockFetch).toHaveBeenCalledWith('http://test-api/api/v1/submissions/sub-1/manual-review', expect.objectContaining({
+      method: 'POST', headers: expect.objectContaining({ 'X-Tenant': 'test-tenant', Authorization: 'Bearer bearer-xyz' }),
+    }))
   })
 
   it('getPolicy — builds correct URL with /api prefix', async () => {

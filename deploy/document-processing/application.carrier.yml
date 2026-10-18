@@ -1,0 +1,18 @@
+# Overlay for deploy/carrier-stack/docker-compose.yml. Apply to BOTH API and
+# worker; the API schedules, and the worker performs extraction.
+services:
+  api:
+    environment: &private-inference
+      INTAKE_AI_PROVIDER: private
+      INTAKE_DATA_BOUNDARY: private
+      DOCUMENT_PROCESSOR_URL: http://document-processor:8080
+      DOCUMENT_PROCESSOR_TOKEN: ${DOCUMENT_PROCESSOR_TOKEN:?A private service token is required}
+      DOCUMENT_EXTRACTION_PROFILE: submission
+    networks: [default, document-processing]
+  worker:
+    environment: *private-inference
+    networks: [default, document-processing]
+networks:
+  document-processing:
+    external: true
+    name: ${DOCUMENT_NETWORK:-lattice-documents-private}

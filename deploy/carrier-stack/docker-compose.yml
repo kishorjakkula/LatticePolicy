@@ -53,12 +53,20 @@ services:
         # Set only when a carrier pack is mounted (CARRIER_PACK_PATH in the env file).
         CARRIER_PACK_DIR: ${CARRIER_PACK_PATH:+/carrier-pack}
         SENTRY_DSN: ${SENTRY_DSN:-}
+        # Keep API registration and dispatcher delivery on the same opt-in.
+        LLM_EMAIL_ENABLED: ${LLM_EMAIL_ENABLED:-false}
         # Submission intake reader; the worker runs the reads. See docs/SUBMISSION_INTAKE.md.
         INTAKE_AI_PROVIDER: ${INTAKE_AI_PROVIDER:-builtin}
+        INTAKE_DATA_BOUNDARY: ${INTAKE_DATA_BOUNDARY:-private}
+        DOCUMENT_PROCESSOR_URL: ${DOCUMENT_PROCESSOR_URL:-}
+        DOCUMENT_PROCESSOR_TOKEN: ${DOCUMENT_PROCESSOR_TOKEN:-}
+        DOCUMENT_EXTRACTION_PROFILE: ${DOCUMENT_EXTRACTION_PROFILE:-submission}
         INTAKE_AI_MODEL: ${INTAKE_AI_MODEL:-}
         INTAKE_AI_BASE_URL: ${INTAKE_AI_BASE_URL:-}
         ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LATTICE_ROLE: api
+      # Release signing goes through deploy/release-signer (application.signer.yml).
+      LLM_REVIEW_UI_URL: ${LLM_REVIEW_UI_URL:-}
       # Only read by `stack.sh bootstrap`.
       CARRIER_NAME: ${CARRIER_NAME:-}
       CARRIER_ADMIN_USERNAME: ${CARRIER_ADMIN_USERNAME:-}
@@ -91,6 +99,11 @@ services:
       <<: *app-environment
       # Where outbox messages are delivered: a webhook (default) or Kafka.
       EVENT_TRANSPORT: ${EVENT_TRANSPORT:-webhook}
+      LLM_SMTP_HOST: ${LLM_SMTP_HOST:-}
+      LLM_SMTP_PORT: ${LLM_SMTP_PORT:-587}
+      LLM_SMTP_FROM: ${LLM_SMTP_FROM:-}
+      LLM_SMTP_USER: ${LLM_SMTP_USER:-}
+      LLM_SMTP_PASSWORD: ${LLM_SMTP_PASSWORD:-}
       # Webhook. An empty URL writes messages to the dispatcher's log.
       ASYNC_PUSH_WEBHOOK_URL: ${ASYNC_PUSH_WEBHOOK_URL:-}
       ASYNC_PUSH_AUTH_HEADER: ${ASYNC_PUSH_AUTH_HEADER:-}

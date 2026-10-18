@@ -6,6 +6,9 @@ area you are changing.
 
 ## Project Orientation
 
+- For the current private document/LLM work, read `docs/ACTIVE_WORK_HANDOFF.md`
+  first. It records the implementation location, uncommitted state, decisions,
+  verification, and remaining work; confirm these against the current checkout.
 - Start with `docs/PROJECT_CONTEXT.md` for the domain, architecture, major
   modules, security model, and common commands.
 - Use `docs/TEST_PLAN.md` to choose the right automated test layer.
@@ -31,6 +34,15 @@ area you are changing.
 - `frontend/`: React, Vite, React Query, Zustand, route guards, and UI flows.
 - `server/`: Express TypeScript API, auth, tenancy, RBAC, lifecycle, rating,
   persistence, migrations, and background worker startup.
+- `services/document-processor/`: separately deployed private OCR/LLM service.
+  Read `docs/PRIVATE_DOCUMENT_PROCESSING.md` before changing inference,
+  extraction profiles, or the service boundary.
+  For candidate readiness emails, technical-admin approval, or activation,
+  also read `docs/LLM_RELEASE_GOVERNANCE.md`.
+- `services/document-learning/`: operator-run approved datasets, profile learning,
+  held-out evaluation and optional offline weight training. Read
+  `docs/DOCUMENT_LEARNING.md`; raw submissions never become training data
+  automatically, and test email defaults off.
 - `packages/types/`: shared TypeScript types and Zod schemas.
 - `packages/rules/`: shared runtime package (rule expressions, screen rules)
   imported by both server and frontend. See `docs/MODULES.md`.
@@ -75,3 +87,13 @@ and workspace scripts from the repository root.
 - Do not commit secrets, `.env`, build output, local logs, or `node_modules`.
 - Do not remove or rewrite unrelated user changes.
 - Keep demo credentials documented as local/demo-only.
+- Carrier-private inference must not fall back to external AI. Never turn
+  uploads/reviewer corrections into training examples automatically; profile
+  publication requires reviewed synthetic or explicitly consented data.
+- Only a currently assigned carrier technical admin may authorize LLM
+  validation/production; a training identity cannot approve its own release.
+  Never disable signed activation in a carrier validation/production stack.
+- AI governance audit logs (`submission_events`, `llm_release_audit`) are
+  append-only and hash-chained; never add UPDATE/DELETE paths. Record who acted
+  as `ai`/`automation`/`system`/`user`; the AI and automation never perform a
+  person's confirmation or approval. See `docs/LLM_RELEASE_GOVERNANCE.md`.

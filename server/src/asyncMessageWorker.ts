@@ -7,6 +7,7 @@ import { createEventTransport, getEventTransportName, type EventTransport } from
 import { createWebhookTransport } from './events/transports/webhook.js'
 import { asyncMessageOutbox } from './schema.js'
 import { logger } from './logger.js'
+import { sendLlmReleaseEmail } from './services/llm-release-email.service.js'
 
 type AsyncOutboxStatus = 'Pending' | 'Processing' | 'Retry' | 'Sent' | 'Failed'
 
@@ -251,6 +252,10 @@ export async function closeEventTransport(): Promise<void> {
 }
 
 async function pushMessage(row: AsyncOutboxRow, config: AsyncPushConfig, attemptNumber: number): Promise<void> {
+  if (row.topic === 'notification.llm_candidate_ready') {
+    await sendLlmReleaseEmail(row.tenant_id, String((row.payload as any)?.notificationId || ''), attemptNumber, row.max_attempts)
+    return
+  }
   await transportFor(config).publish(buildEventEnvelope(row, attemptNumber))
 }
 

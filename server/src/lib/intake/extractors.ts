@@ -1,6 +1,7 @@
 import type { DocumentKind } from './document-text.js'
 import { PRODUCT_FIELD_KEY, type IntakeProductOption, type IntakeTargetField } from './target-fields.js'
 import { normalizeFieldValue, textContains } from './normalize.js'
+import { callDocumentProcessor } from './private-client.js'
 
 /**
  * Extractors read a submission's documents and propose a value for each
@@ -53,6 +54,7 @@ export type ExtractionDocument = {
   kind: DocumentKind
   lines: string[]
   content: Buffer
+  pages?: Array<{ page: number | null; lines: string[] }>
 }
 
 export type ExtractionCatalog = {
@@ -78,10 +80,11 @@ export type ExtractionResult = {
   values: ExtractedValue[]
   conflicts: ExtractedConflict[]
   warnings: string[]
+  processing?: { model: string; profileId: string; profileVersion: string; releaseId?: string }
 }
 
 export interface IntakeExtractor {
-  readonly provider: 'builtin' | 'anthropic'
+  readonly provider: 'builtin' | 'anthropic' | 'private'
   readonly model: string | null
   readonly label: string
   /** Whether this extractor can read a document of this kind. */
@@ -121,6 +124,10 @@ function fieldsForProduct(catalog: ExtractionCatalog, productCode: string | null
  */
 export function verifyEvidence(documents: ExtractionDocument[], evidence: Omit<Evidence, 'verified'>): Evidence {
   const document = documents.find((item) => item.documentId === evidence.documentId)
+  if (document?.pages?.length) {
+    const page = document.pages.find(item => item.page === evidence.page)
+    return { ...evidence, line: null, verified: !!page?.lines.some(line => textContains(line, evidence.quote || '')) }
+  }
   if (!document || !document.lines.length) return { ...evidence, line: null, verified: false }
   const quote = evidence.quote || ''
   if (evidence.line != null && document.lines[evidence.line] != null && textContains(document.lines[evidence.line], quote)) {
@@ -521,7 +528,10 @@ export function parseModelOutput(raw: any, input: ExtractionInput): ExtractionRe
     const page = Number.isInteger(item?.page) && item.page > 0 ? item.page : null
     return verifyEvidence(input.documents, { documentId, line, page, quote: String(item?.quote || '').slice(0, 500) })
   }
-  const hasText = (documentId: string) => (input.documents.find((document) => document.documentId === documentId)?.lines.length || 0) > 0
+  const hasText = (documentId: string) => {
+    const document = input.documents.find(item => item.documentId === documentId)
+    return !!(document?.lines.length || document?.pages?.length)
+  }
 
   const values: ExtractedValue[] = []
   const seen = new Set<string>()
@@ -580,7 +590,7 @@ export function parseModelOutput(raw: any, input: ExtractionInput): ExtractionRe
 // ── Selection ─────────────────────────────────────────────────────────────────
 
 export type IntakeAiSettings = {
-  provider: 'builtin' | 'anthropic'
+  provider: 'builtin' | 'anthropic' | 'private'
   model: string | null
   label: string
   configured: boolean
@@ -591,8 +601,13 @@ export const DEFAULT_INTAKE_MODEL = 'claude-sonnet-5-5'
 
 export function readIntakeAiSettings(env: NodeJS.ProcessEnv = process.env): IntakeAiSettings {
   const provider = String(env.INTAKE_AI_PROVIDER || 'builtin').trim().toLowerCase()
+  if (provider === 'private') {
+    const configured = !!env.DOCUMENT_PROCESSOR_URL?.trim() && (env.DOCUMENT_PROCESSOR_TOKEN?.trim().length || 0) >= 32
+    return { provider: 'private', model: null, label: 'Private document processor', configured, problem: configured ? null : 'Set DOCUMENT_PROCESSOR_URL and DOCUMENT_PROCESSOR_TOKEN (at least 32 characters).' }
+  }
   if (provider === 'anthropic') {
     const model = String(env.INTAKE_AI_MODEL || DEFAULT_INTAKE_MODEL).trim()
+    if (env.INTAKE_DATA_BOUNDARY !== 'external') return { provider: 'anthropic', model, label: `Claude (${model})`, configured: false, problem: 'External AI is disabled by the private data boundary. Use INTAKE_AI_PROVIDER=private or builtin.' }
     const configured = !!String(env.ANTHROPIC_API_KEY || '').trim()
     return { provider: 'anthropic', model, label: `Claude (${model})`, configured, problem: configured ? null : 'INTAKE_AI_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.' }
   }
@@ -607,6 +622,10 @@ export function readIntakeAiSettings(env: NodeJS.ProcessEnv = process.env): Inta
 
 export function createIntakeExtractor(env: NodeJS.ProcessEnv = process.env): IntakeExtractor {
   const settings = readIntakeAiSettings(env)
+  if (settings.provider === 'private') {
+    if (!settings.configured) throw new Error(settings.problem!)
+    return new PrivateDocumentExtractor(env.DOCUMENT_PROCESSOR_URL!.trim(), env.DOCUMENT_PROCESSOR_TOKEN!.trim(), env.DOCUMENT_EXTRACTION_PROFILE || 'submission')
+  }
   if (settings.provider === 'anthropic') {
     if (!settings.configured) throw new Error(settings.problem || 'AI model is not configured.')
     return new AnthropicExtractor({
@@ -619,3 +638,39 @@ export function createIntakeExtractor(env: NodeJS.ProcessEnv = process.env): Int
   return new BuiltinExtractor()
 }
 
+/** The document service owns inference; this adapter owns submission mapping. */
+export class PrivateDocumentExtractor implements IntakeExtractor {
+  readonly provider = 'private' as const
+  readonly model = null
+  readonly label = 'Private document processor'
+
+  constructor(private readonly url: string, private readonly token: string, private readonly profile: string,
+    private readonly request: typeof callDocumentProcessor = callDocumentProcessor) {}
+
+  canRead(kind: DocumentKind): boolean { return kind !== 'unsupported' }
+
+  async extract(input: ExtractionInput): Promise<ExtractionResult> {
+    const response = await this.request(`${this.url.replace(/\/$/, '')}/v1/extract`, this.token, {
+      schemaVersion: 1, profile: this.profile,
+      documents: input.documents.map(document => ({
+        id: document.documentId, fileName: document.fileName, mediaType: document.contentType, textLines: document.lines,
+        ...(!document.lines.length ? { dataBase64: document.content.toString('base64') } : {}),
+      })),
+      schema: {
+        fields: input.catalog.common.filter(field => field.key !== PRODUCT_FIELD_KEY),
+        variants: input.catalog.products.map(product => ({ id: product.code, label: product.label, fields: product.fields })),
+        variantHint: input.productHint || null,
+      }, notes: input.notes || null,
+    })
+    if (response?.schemaVersion !== 1 || !response.result || !response.profile || response.profile.id !== this.profile || !/^\d+\.\d+\.\d+$/.test(response.profile.version || '') || typeof response.model !== 'string' || !Array.isArray(response.documents)) throw new Error('Invalid document processor response')
+    const documents = input.documents.map(document => {
+      // Text lines already held by LatticePolicy remain the evidence source.
+      if (document.lines.length) return document
+      const pages = response.documents.find((item: any) => item.id === document.documentId)?.pages
+      if (!Array.isArray(pages) || !pages.length || pages.length > 8 || pages.some((page: any) => !Number.isInteger(page.page) || page.page < 1 || !Array.isArray(page.lines) || page.lines.some((line: any) => typeof line !== 'string'))) throw new Error('Missing document processor evidence')
+      return { ...document, pages }
+    })
+    const result = parseModelOutput({ ...response.result, productCode: response.result.variant, productConfidence: response.result.variantConfidence, productReason: response.result.variantReason }, { ...input, documents })
+    return { ...result, processing: { model: response.model, profileId: response.profile.id, profileVersion: response.profile.version, ...(response.releaseId ? {releaseId:response.releaseId} : {}) } }
+  }
+}

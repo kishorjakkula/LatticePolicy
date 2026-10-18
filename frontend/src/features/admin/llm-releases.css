@@ -1,0 +1,70 @@
+.llm-releases {
+  min-width: 0;
+}
+.llm-releases form > label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.llm-releases input:not([type='checkbox']):not([type='radio']),
+.llm-releases textarea,
+.llm-releases select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.llm-releases form > label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: flex-start;
+}
+.llm-releases dd {
+  margin-left: 0;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+.llm-releases button {
+  max-width: 100%;
+  white-space: normal;
+}
+.llm-releases .radio-group--binary {
+  width: 200px;
+  max-width: 100%;
+}
+.llm-releases__lede,
+.llm-releases__hint {
+  color: var(--ps-text-muted, #5b6472);
+  max-width: 760px;
+}
+.llm-releases__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.llm-releases__grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.llm-releases__danger {
+  display: grid;
+  gap: 12px;
+  max-width: 680px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ps-border, #d9dee6);
+}
+.llm-releases__token {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ps-border, #d9dee6);
+  border-radius: 8px;
+}
+.llm-releases__token code {
+  overflow-wrap: anywhere;
+}

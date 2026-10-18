@@ -26,12 +26,14 @@ vi.mock('../../../api/hooks', () => ({
     appetite: { decision: 'Refer', reasons: ['Youngest driver under 21'], evaluated: true },
     missingRequired: [], unconfirmed: 0, readyToApprove: true, underwritingCompanies: mockCompanies(),
   } }),
-  useSubmissionAction: () => ({ mutateAsync: mockActionMutate, isPending: false }),
+  useSubmissionAction: (_id: string, action: (...args: any[]) => Promise<unknown>) => ({ mutateAsync: (...args: any[]) => { mockActionMutate(...args); return action(...args) }, isPending: false }),
   setSubmissionField: vi.fn(),
 }))
 
 const mockUpdateField = vi.fn()
 const mockApprove = vi.fn()
+const mockManualReview = vi.fn()
+const mockRead = vi.fn()
 vi.mock('../../../api/submissions.api', async (importOriginal) => {
   const actual: any = await importOriginal()
   return {
@@ -40,6 +42,8 @@ vi.mock('../../../api/submissions.api', async (importOriginal) => {
       ...actual.apiSubmissions,
       updateField: (...args: any[]) => mockUpdateField(...args),
       approve: (...args: any[]) => mockApprove(...args),
+      manualReview: (...args: any[]) => mockManualReview(...args),
+      read: (...args: any[]) => mockRead(...args),
       setCustomer: vi.fn(),
     },
   }
@@ -88,6 +92,14 @@ describe('SubmissionReviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseAuth.mockReturnValue(underwriter)
+  })
+
+  it('labels private model output as an AI draft and retains the review gate', () => {
+    mockUseSubmission.mockReturnValue({ data: submission([field({})], { aiRun: { provider: 'private', label: 'Private document processor' } }), isLoading: false })
+    renderPage()
+    expect(screen.getAllByText('AI draft').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Continue to approval' })).toBeDisabled()
+    expect(screen.queryByText(/does not understand free text/)).not.toBeInTheDocument()
   })
 
   it('labels AI drafts, shows confidence in words, and highlights the source line of the selected value', () => {
@@ -226,5 +238,42 @@ describe('SubmissionReviewPage', () => {
     renderPage()
     expect(screen.getByRole('link', { name: 'Open quote Q-2026-1' })).toHaveAttribute('href', '/wizard?quoteId=q-1')
     expect(screen.queryByRole('button', { name: 'Continue to approval' })).not.toBeInTheDocument()
+  })
+
+  it('allows failed-read manual recovery and retries with the selected product', async () => {
+    mockManualReview.mockResolvedValue({ status: 'IN_REVIEW' })
+    mockRead.mockResolvedValue({ status: 'READING' })
+    mockUseSubmission.mockReturnValue({ data: submission([], { status: 'READ_FAILED' }), isLoading: false })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Enter values by hand' }))
+    await waitFor(() => expect(mockManualReview).toHaveBeenCalledWith('sub-1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(mockRead).toHaveBeenCalledWith('sub-1', 'commercial-auto'))
+  })
+
+  it('requires a warning before retrying a failed read with existing confirmations', async () => {
+    mockUseSubmission.mockReturnValue({ data: submission([field({ status: 'accepted' })], { status: 'READ_FAILED' }), isLoading: false })
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(screen.getByText('Reading again discards 1 confirmation.')).toBeInTheDocument()
+    expect(mockRead).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Read again' }))
+    await waitFor(() => expect(mockRead).toHaveBeenCalled())
+  })
+
+  it('offers restart only for a stale read and hides recovery from read-only users', () => {
+    mockUseSubmission.mockReturnValue({ data: submission([], { status: 'READING', aiRun: { startedAt: new Date().toISOString() } }), isLoading: false })
+    const fresh = renderPage()
+    expect(screen.queryByRole('button', { name: 'Read again' })).not.toBeInTheDocument()
+    fresh.unmount()
+    mockUseSubmission.mockReturnValue({ data: submission([], { status: 'READING', aiRun: { startedAt: new Date(Date.now() - 16 * 60 * 1000).toISOString() } }), isLoading: false })
+    const stale = renderPage()
+    expect(screen.getByRole('button', { name: 'Read again' })).toBeEnabled()
+    stale.unmount()
+    mockUseAuth.mockReturnValue({ user: { id: 'reader', roles: [], permissions: ['submissions.read'] } } as any)
+    mockUseSubmission.mockReturnValue({ data: submission([], { status: 'READ_FAILED' }), isLoading: false })
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Enter values by hand' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
   })
 })

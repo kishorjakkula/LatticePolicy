@@ -1,0 +1,33 @@
+# Carrier-owned release signer: the only place the Ed25519 release key lives.
+# Its network is internal; only the LatticePolicy API joins it (see
+# application.signer.yml). Keep the key and the signature log on carrier-owned
+# storage, separate from the application host where possible.
+services:
+  release-signer:
+    build:
+      context: ../..
+      dockerfile: services/release-signer/Dockerfile
+    restart: unless-stopped
+    environment:
+      SIGNER_TOKEN: ${LLM_RELEASE_SIGNER_TOKEN:?A private signer token of at least 32 characters is required}
+      CARRIER_TENANT_ID: ${CARRIER_TENANT_ID:?The carrier tenant is required}
+      SIGNER_KEY_FILE: /run/secrets/release-key.pem
+      SIGNER_LOG_FILE: /var/log/release-signer/signatures.jsonl
+    volumes:
+      - ${LLM_RELEASE_PRIVATE_KEY_FILE:?The carrier-owned Ed25519 private key file is required}:/run/secrets/release-key.pem:ro
+      - type: bind
+        source: ${LLM_RELEASE_SIGNER_LOG_DIR:?An absolute carrier-owned signature log directory is required}
+        target: /var/log/release-signer
+        bind:
+          create_host_path: false
+    networks: [signing]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 128m
+
+networks:
+  signing:
+    name: ${RELEASE_SIGNER_NETWORK:-lattice-release-signer}
+    internal: true

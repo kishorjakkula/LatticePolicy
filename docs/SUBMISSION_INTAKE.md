@@ -37,7 +37,13 @@ Migrations: `server/migrations/061_submission_intake.sql`, `062_submission_confi
 6. **Everything is recorded.** `submission_events` keeps who did what: the
    reader's draft (actor type `ai`), each confirmation and edit with the AI
    value it replaced, the approval with its attestation text, and what
-   LatticePolicy created (actor type `system`).
+   LatticePolicy created (actor type `system`). AI entries record the model,
+   extraction profile and approved release that drafted the values. The log is
+   append-only and hash-chained per carrier, and the database refuses an `ai`
+   entry for anything but `drafted`/`reading_failed`, and any confirmation,
+   edit, customer choice, approval or decline that is not a person's (migration
+   `064_ai_governance_audit.sql`). **Administration > AI Audit** shows it with
+   the model-release log, separated into AI, automation, person and system.
 
 ## Lifecycle
 
@@ -51,6 +57,10 @@ any open state → DECLINED (reason required)
 - Reading again replaces the drafted values; the UI warns how many
   confirmations it discards.
 - A run whose token was superseded by a newer read writes nothing.
+- `POST /submissions/:id/manual-review` (`submissions.manage`) moves a
+  `READ_FAILED` submission into `IN_REVIEW`. Existing fields and confirmations
+  are preserved; a first failed read gets blank, pending target fields. Every
+  value still requires human confirmation and approval still needs attestation.
 
 ## What gets drafted
 
@@ -86,6 +96,13 @@ old ones (empty), and the UI offers to read the documents again for it.
 | --- | --- | --- | --- |
 | `builtin` (default) | Label matcher ("Applicant: …") | Text, email, Word, Excel, CSV | No |
 | `anthropic` | Claude via the Messages API, forced tool call | Also PDFs and images | Yes, to the Anthropic API (or `INTAKE_AI_BASE_URL`) |
+| `private` | Independent self-hosted document processor | Text plus local PDF/image OCR | No external AI provider; carrier-owned private service only |
+
+External AI is blocked by default. The legacy `anthropic` provider requires an
+explicit `INTAKE_DATA_BOUNDARY=external` opt-out; never use that opt-out for
+carrier-private processing. The private service and model deploy independently,
+and new reviewed examples can be published without an application release.
+See `docs/PRIVATE_DOCUMENT_PROCESSING.md` for setup, limits, and profile releases.
 
 The built-in reader needs nothing and suits self-hosted carriers that cannot
 send documents out. It does not understand free text, and says so in its
@@ -95,7 +112,11 @@ Settings (see `docs/PRODUCTION_RUNTIME_CONFIGURATION.md`):
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `INTAKE_AI_PROVIDER` | `builtin` | `builtin` or `anthropic` |
+| `INTAKE_AI_PROVIDER` | `builtin` | `builtin`, `private`, or explicitly allowed `anthropic` |
+| `INTAKE_DATA_BOUNDARY` | `private` | External AI requires an explicit `external` opt-out |
+| `DOCUMENT_PROCESSOR_URL` | none | Private service base URL |
+| `DOCUMENT_PROCESSOR_TOKEN` | none | Service bearer token, at least 32 characters |
+| `DOCUMENT_EXTRACTION_PROFILE` | `submission` | Independently versioned extraction profile id |
 | `ANTHROPIC_API_KEY` | none | Required for `anthropic` |
 | `INTAKE_AI_MODEL` | `claude-sonnet-5-5` | Model id |
 | `INTAKE_AI_BASE_URL` | `https://api.anthropic.com` | API base, for a gateway |
@@ -119,6 +140,11 @@ batch worker runs separately (`LATTICE_ROLE=api`) or in-process
 after the upload request returns. `INTAKE_EXTRACTION_MODE` overrides.
 Failures are recorded on the submission (`READ_FAILED` with the message),
 not retried.
+If scheduling fails after the upload commits, the upload response still returns
+the saved submission id and its durable `READ_FAILED` state. The failed run
+cannot write late results. The review page offers retry or manual entry, and
+also allows restarting a read abandoned for 15 minutes. Retry preserves the
+product hint and warns before discarding existing confirmations.
 
 ## Approval
 
