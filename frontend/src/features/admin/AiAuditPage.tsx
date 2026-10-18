@@ -219,7 +219,7 @@ export function AiAuditPage() {
         {trail.data && !trail.data.items.length && <p>No activity matches these filters.</p>}
         {!!trail.data?.items.length && (
           <div style={{ overflowX: 'auto' }}>
-            <table className="table ai-audit__table">
+            <table className="table table-no-sticky-head ai-audit__table">
               <thead>
                 <tr>
                   <th>When</th>
