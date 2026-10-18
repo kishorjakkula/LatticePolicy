@@ -1,5 +1,8 @@
 # LatticePolicy Delivery Workflow
 
+An illustrated overview with the agent cards, tracks, gates and decisions is in
+[`delivery-agents.html`](delivery-agents.html) (open it in a browser).
+
 How every coding request moves from idea to validated release, whichever AI
 assistant (or person) does the work. The agents are role contracts in
 [`agents/`](../../agents/README.md); their handoffs are files in a work package

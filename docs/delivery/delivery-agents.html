@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LatticePolicy Delivery Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column with a sticky table of contents on wide screens; agent cards in a two-column grid. */
+:root {
+  --ink: #17212b;
+  --ink-soft: #4a5867;
+  --paper: #f7f8f9;
+  --surface: #ffffff;
+  --rule: #d9dee3;
+  --accent: #1f5f8b;
+  --accent-soft: #e5eef5;
+  --gate: #8a4b08;
+  --gate-soft: #fbf0e2;
+  --new: #2e6b3f;
+  --new-soft: #e6f2e9;
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e4e9ee; --ink-soft: #a9b5c1; --paper: #11171d; --surface: #182029; --rule: #2c3743;
+    --accent: #7fb6dc; --accent-soft: #1d2f3e; --gate: #e8b06a; --gate-soft: #33261a; --new: #8fcf9e; --new-soft: #1c3023;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #e4e9ee; --ink-soft: #a9b5c1; --paper: #11171d; --surface: #182029; --rule: #2c3743;
+  --accent: #7fb6dc; --accent-soft: #1d2f3e; --gate: #e8b06a; --gate-soft: #33261a; --new: #8fcf9e; --new-soft: #1c3023;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; padding-inline: 16px; padding-block: 0 64px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 880px) { .wrap { grid-template-columns: minmax(0, 1fr); } nav.toc { display: none; } }
+header.top { max-width: 1120px; margin: 0 auto; padding-block: 40px 24px; border-bottom: 1px solid var(--rule); margin-bottom: 32px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; font-weight: 600; }
+h1 { font-size: clamp(30px, 4.5vw, 42px); margin: 6px 0 10px; }
+h2 { font-size: 26px; margin: 48px 0 12px; padding-top: 8px; }
+h3 { font-size: 19px; margin: 0 0 6px; }
+.lede { max-width: 68ch; color: var(--ink-soft); font-size: 17px; margin: 0; }
+p, li { max-width: 72ch; }
+main { min-width: 0; }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; font-size: 13.5px; }
+nav.toc ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; border-left: 2px solid var(--rule); }
+nav.toc a { color: var(--ink-soft); text-decoration: none; padding-left: 12px; display: block; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; padding: 1px 8px; border-radius: 999px; vertical-align: 2px; }
+.pill.new { background: var(--new-soft); color: var(--new); }
+.pill.gate { background: var(--gate-soft); color: var(--gate); }
+.pill.yours { background: var(--accent-soft); color: var(--accent); }
+.verdict { display: grid; gap: 10px; margin: 18px 0 8px; }
+.verdict div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+@media (max-width: 560px) { .verdict div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.verdict b { font-weight: 600; }
+.diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; overflow-x: auto; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+@media (max-width: 760px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; display: grid; gap: 8px; align-content: start; }
+.card .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
+.card .num { font-family: var(--font-mono); color: var(--ink-soft); font-size: 12.5px; }
+.card p { margin: 0; color: var(--ink-soft); font-size: 14.5px; }
+.card dl { margin: 0; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 4px 10px; font-size: 13.5px; }
+.card dt { color: var(--ink-soft); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+.card dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 600; background: var(--accent-soft); }
+tr:last-child td { border-bottom: 0; }
+td.yes { color: var(--new); font-weight: 600; }
+pre.tree { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; margin: 12px 0; }
+.callout { border-left: 3px solid var(--gate); background: var(--gate-soft); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+.callout p { margin: 0; }
+.status { display: inline-block; margin: 0 0 12px; padding: 6px 12px; border-radius: 6px; background: var(--new-soft); color: var(--new); font-weight: 600; font-size: 14px; }
+.status a { color: inherit; }
+ol.steps { padding-left: 20px; display: grid; gap: 8px; }
+.questions li { margin-bottom: 10px; }
+footer { max-width: 1120px; margin: 48px auto 0; color: var(--ink-soft); font-size: 13px; border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="eyebrow">Adopted October 2026 · LatticePolicy engineering process</div>
+  <h1>LatticePolicy Delivery Agents</h1>
+  <p class="status">Approved by the product owner and implemented in <a href="https://github.com/kishorjakkula/LatticePolicy/pull/382">pull request #382</a>. The workflow lives in the repository at <code>docs/delivery/WORKFLOW.md</code>.</p>
+  <p class="lede">A tool-neutral, multi-agent workflow that takes a coding request from business analysis to validated deployment. It works the same whether Claude, Codex, Copilot, Cursor or another assistant writes the code, because the agents are role contracts and handoff files kept in the repository, not features of one product.</p>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#changes">What I would change</a></li>
+    <li><a href="#flow">The flow</a></li>
+    <li><a href="#agents">The agents</a></li>
+    <li><a href="#tracks">Right-sized tracks</a></li>
+    <li><a href="#knowledge">Keeping knowledge current</a></li>
+    <li><a href="#neutral">How it stays tool-neutral</a></li>
+    <li><a href="#repo">What gets added to the repo</a></li>
+    <li><a href="#gates">Human approvals</a></li>
+    <li><a href="#rollout">Rollout</a></li>
+    <li><a href="#decisions">Decisions</a></li>
+    <li><a href="#built">What was built</a></li>
+  </ol>
+</nav>
+
+<main>
+<section id="summary">
+  <h2>Summary</h2>
+  <p>Your nine agents are the right backbone. I recommend keeping all of them and adding five things that real delivery teams in regulated insurance rely on: an orchestrator that runs the flow, test design before coding, an independent code reviewer, a security and compliance reviewer, and a knowledge curator. I also recommend three sizes of flow, so a one-line fix does not pass through eleven agents.</p>
+  <p>Each agent is a Markdown contract in the repo that states what it reads, what it must produce, what it may not do, and when it is done. Every stage writes its output to a work-package folder, so the next agent, a different AI tool, or a person can pick up the work from files alone. People approve at four gates; agents never approve their own work.</p>
+</section>
+
+<section id="changes">
+  <h2>What I would change in your proposal</h2>
+  <div class="verdict">
+    <div><b>Add an orchestrator <span class="pill new">new</span></b><span>Someone has to route the request, size it, track state, send failures back to the right stage and stop endless loops. Without it, each tool improvises the order.</span></div>
+    <div><b>Test design moves up front <span class="pill new">new</span></b><span>The business analyst writes acceptance criteria as Given/When/Then scenarios, and a test designer turns them into test cases before any code exists. The developer then codes to known tests, and every requirement is traceable to a test.</span></div>
+    <div><b>Independent code reviewer <span class="pill new">new</span></b><span>The developer agent should never be the only one to judge its code. A separate reviewer checks it against the design, the repo conventions and the safety rules in <code>AGENTS.md</code>. This is the same maker-checker rule the product already enforces for model releases.</span></div>
+    <div><b>Security and compliance reviewer <span class="pill new">new</span></b><span>Insurance software handles PII and is state-regulated. Tenant isolation, customer-safe projections, audit trails, filed rates and forms, AI data boundaries and secrets need a dedicated check before merge.</span></div>
+    <div><b>Knowledge curator <span class="pill new">new</span></b><span>AI models do not keep learning on their own. "Regularly updates its knowledge" has to be a process: curated knowledge files with sources and review dates, refreshed by a scheduled job that proposes changes for a person to approve.</span></div>
+    <div><b>Unit and automation testing <span class="pill yours">kept</span></b><span>Both stay as separate agents. The unit test agent works next to the developer on unit and integration tests; the automation agent owns API and browser regression suites.</span></div>
+    <div><b>Business user validation <span class="pill gate">changed</span></b><span>The agent prepares the acceptance test script, runs it on staging, and reports evidence against each acceptance criterion. A named business person still signs off. An agent cannot be the business owner.</span></div>
+    <div><b>Deployment agent <span class="pill yours">kept</span></b><span>Also writes release notes, the migration and rollback plan, and checks that the release matches what was approved.</span></div>
+  </div>
+</section>
+
+<section id="flow">
+  <h2>The flow</h2>
+  <p>Solid arrows are the normal path. Dotted arrows send work back when a stage finds a problem; work sent back reopens any approval of the redone work, and a third return to the same stage stops for a person. Diamonds are human approvals; Gates A and B can be waived only in the requester's own words.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  R([Your request]) --> O[Orchestrator: size and route]
+  O --> BA[1 Business analyst]
+  BA -->|questions| R
+  BA --> G1{{Gate A: requirements approved}}
+  G1 --> SA[2 Software architect]
+  SA -->|questions| R
+  SA --> UX[UI/UX designer]
+  UX --> TD[3 Test designer]
+  TD --> G2{{Gate B: design approved}}
+  G2 --> DEV[4 Developer]
+  DEV <--> UT[5 Unit test agent]
+  UT --> CR[6 Code reviewer]
+  CR -.->|changes needed| DEV
+  CR --> SEC[7 Security and compliance]
+  SEC -.->|findings| DEV
+  SEC --> AT[8 Automation test agent]
+  AT -.->|failures| DEV
+  AT --> G3{{Gate C: PR approved and merged}}
+  G3 --> CD[9 Deployment agent: staging]
+  CD --> E2E[10 End-to-end test agent]
+  E2E -.->|defects| DEV
+  E2E --> BV[11 Business validation agent]
+  BV --> G4{{Gate D: business sign-off}}
+  G4 --> PROD[Deployment agent: production]
+  PROD --> KC[12 Knowledge curator: lessons and knowledge updates]
+</pre>
+  </div>
+</section>
+
+<section id="agents">
+  <h2>The agents</h2>
+  <p>Each card is the core of that agent's contract file in <code>agents/</code>. "Writes" is the handoff file in the work package; the next agent starts from it. Handoff files are numbered by stage: 01 requirements, 02 design, 03 UI design, 04 test design, 05 implementation, 06 unit tests, 07 code review, 08 security and compliance, 09 automation tests, 10 release, 11 end-to-end results, 12 business validation, 13 lessons.</p>
+  <div class="cards">
+    <article class="card">
+      <div class="head"><h3>Orchestrator</h3><span class="pill new">new</span></div>
+      <p>Owns the flow. Sizes the request into a track, creates the work package, decides which agent runs next, and stops loops.</p>
+      <dl><dt>Reads</dt><dd>Your prompt, <code>docs/delivery/WORKFLOW.md</code>, current <code>status.md</code></dd>
+      <dt>Writes</dt><dd><code>status.md</code>: track, stage, owner, open questions, return count</dd>
+      <dt>May not</dt><dd>Write code or approve any gate</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Business analyst</h3><span class="num">1</span></div>
+      <p>P&amp;C domain expert. Restates the request in insurance terms, finds gaps, and asks questions before anything is designed.</p>
+      <dl><dt>Reads</dt><dd>P&amp;C knowledge base, <code>docs/DOMAIN.md</code>, <code>GLOSSARY.md</code>, product packs, related issues</dd>
+      <dt>Writes</dt><dd><code>01-requirements.md</code>: business goal, affected lines, states and transactions, rules, numbered requirements, Given/When/Then acceptance criteria, regulatory notes, out of scope</dd>
+      <dt>Asks about</dt><dd>Lines and states, transaction types (NB, endorsement, cancel, reinstate, renewal), rating and forms impact, who uses it, compliance</dd>
+      <dt>Done when</dt><dd>No open questions; you approve at Gate A</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Software architect</h3><span class="num">2</span></div>
+      <p>Knows LatticePolicy's architecture and current industry practice. Chooses the approach and challenges the requirements where the cost or risk is high.</p>
+      <dl><dt>Reads</dt><dd><code>01-requirements.md</code>, <code>ARCHITECTURE.md</code>, <code>MODULES.md</code>, <code>MULTITENANCY.md</code>, ADRs, architecture knowledge base</dd>
+      <dt>Writes</dt><dd><code>02-design.md</code>: options considered, chosen design, data and migration changes, API contracts, security and tenancy impact, performance, rollout and rollback, ADR if a lasting decision</dd>
+      <dt>Done when</dt><dd>Every requirement maps to a design element</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>UI/UX designer</h3><span class="pill new">added</span></div>
+      <p>Designs screens, flows, states and wording for any user-facing change with the LatticePolicy design system, WCAG 2.2 AA and insurance UX conventions, before tests are planned and code is written.</p>
+      <dl><dt>Reads</dt><dd>Requirements, design, <code>docs/knowledge/ux/</code>, <code>UI_CONTROL_STANDARDS.md</code>, shared components and tokens</dd>
+      <dt>Writes</dt><dd><code>03-ui-design.md</code>: journeys, screens, wireframes, components, states, wording, accessibility, phone layout; or "No user-facing change"</dd>
+      <dt>Done when</dt><dd>Every visible requirement has a designed screen and state; reviewed at Gate B on the major track</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Test designer</h3><span class="pill new">new</span></div>
+      <p>Turns acceptance criteria into test cases at the right layer before coding, using <code>docs/TEST_PLAN.md</code>.</p>
+      <dl><dt>Writes</dt><dd><code>03-test-design.md</code>: each requirement → unit, integration, API, browser and post-deploy cases; test data; negative and tenant-isolation cases</dd>
+      <dt>Done when</dt><dd>Every acceptance criterion has at least one test; you approve design and tests together at Gate B</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Developer</h3><span class="num">4</span></div>
+      <p>Knows the codebase and how each AI feature works (submission intake, private document processing, model governance, validation rules). Implements the approved design only.</p>
+      <dl><dt>Reads</dt><dd>Design, test design, <code>AGENTS.md</code>, area docs, existing patterns found with search</dd>
+      <dt>Writes</dt><dd>Code on a <code>latticepolicy/</code> branch, task note in <code>docs/tasks/</code>, doc updates, <code>04-implementation.md</code> with files changed and any design deviations</dd>
+      <dt>May not</dt><dd>Change scope silently, weaken tests, skip safety rules</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Unit test agent</h3><span class="num">5</span></div>
+      <p>Writes and runs unit and integration tests from the test design, working alongside the developer.</p>
+      <dl><dt>Runs</dt><dd><code>npm run test</code>, <code>typecheck</code>, the server integration suite on a fresh database</dd>
+      <dt>Writes</dt><dd><code>05-unit-results.md</code>: tests added, results, coverage of each requirement</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Code reviewer</h3><span class="pill new">new</span></div>
+      <p>Independent of the developer. Reviews the diff for correctness, conventions, simplicity, and drift from the design.</p>
+      <dl><dt>Writes</dt><dd><code>06-code-review.md</code>: findings ranked by severity, each resolved or sent back</dd>
+      <dt>Rule</dt><dd>Started automatically by the orchestrator as a fresh session, separate from the developer</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Security and compliance</h3><span class="pill new">new</span></div>
+      <p>Checks tenant isolation and RLS, customer-portal projections, PII handling, secrets, audit trails, AI data boundaries, and regulatory items such as filed rates, forms and notice periods.</p>
+      <dl><dt>Uses</dt><dd>CodeQL and dependency results, <code>SECURITY.md</code>, <code>ENTERPRISE_IDENTITY_SECURITY.md</code>, compliance knowledge</dd>
+      <dt>Writes</dt><dd><code>07-security.md</code></dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Automation test agent</h3><span class="num">8</span></div>
+      <p>Adds API and Playwright tests from the test design and runs the regression suites, including UI standards checks.</p>
+      <dl><dt>Writes</dt><dd>Specs under <code>e2e/</code>, <code>08-automation-results.md</code></dd>
+      <dt>Done when</dt><dd>CI is green and the PR is ready for you at Gate C</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Deployment agent</h3><span class="num">9</span></div>
+      <p>Releases through the existing pipelines (<code>publish-ghcr</code>, AWS ECS, Azure Container Apps). Staging first, production only after Gate D.</p>
+      <dl><dt>Writes</dt><dd><code>09-release.md</code>: version, migrations, configuration changes, rollback steps, release notes</dd>
+      <dt>May not</dt><dd>Deploy to production without Gate D, or skip a failing check</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>End-to-end test agent</h3><span class="num">10</span></div>
+      <p>Runs <code>e2e-post-deploy.yml</code> and journey tests against the deployed staging environment, with synthetic data only.</p>
+      <dl><dt>Writes</dt><dd><code>10-e2e-results.md</code> with screenshots and run links</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Business validation agent</h3><span class="num">11</span></div>
+      <p>Walks each acceptance criterion as a business user would, on staging, and records evidence. Prepares the sign-off sheet.</p>
+      <dl><dt>Writes</dt><dd><code>11-business-validation.md</code>: criterion, steps, expected, actual, evidence, pass or fail</dd>
+      <dt>Hands to</dt><dd>A named business owner, who signs off at Gate D</dd></dl>
+    </article>
+    <article class="card">
+      <div class="head"><h3>Knowledge curator</h3><span class="pill new">new</span></div>
+      <p>After release, records lessons learned and updates the knowledge bases. On a schedule, researches industry, regulatory and architecture changes and proposes updates.</p>
+      <dl><dt>Writes</dt><dd><code>12-lessons.md</code>; pull requests to <code>docs/knowledge/</code> with sources and review dates</dd>
+      <dt>May not</dt><dd>Merge its own knowledge changes</dd></dl>
+    </article>
+  </div>
+</section>
+
+<section id="tracks">
+  <h2>Right-sized tracks</h2>
+  <p>The orchestrator picks a track from the request and tells you which one it chose; you can override it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Track</th><th>Use for</th><th>Agents</th><th>Human gates</th></tr></thead>
+    <tbody>
+      <tr><td><b>Quick</b></td><td>Typos, copy, small bug with an obvious cause, test-only change</td><td>Orchestrator, developer, unit test, code reviewer, deployment</td><td>C</td></tr>
+      <tr><td><b>Standard</b></td><td>A feature or behavior change inside one area</td><td>All except the scheduled knowledge refresh; architect writes a short design</td><td>A, C, D</td></tr>
+      <tr><td><b>Major</b></td><td>New product line, migration, security, tenancy, rating, AI, or cross-module change</td><td>All fourteen, full design with an ADR</td><td>A, B, C, D</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><p>Anything that touches tenant isolation, authentication, rating, filed forms, customer data or AI data boundaries is always Major, whatever its size.</p></div>
+</section>
+
+<section id="knowledge">
+  <h2>Keeping knowledge current</h2>
+  <p>An AI model's knowledge is fixed when it is trained, and it forgets everything between sessions. Agents stay current only by reading knowledge kept in the repo. I propose three knowledge bases, each file carrying its sources and a <code>last_reviewed</code> date that agents check before relying on it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Knowledge base</th><th>Contents</th><th>Refresh</th></tr></thead>
+    <tbody>
+      <tr><td><b>P&amp;C insurance</b><br><code>docs/knowledge/pc-insurance/</code></td><td>Lines of business and coverages, policy lifecycle and transactions, rating concepts, forms and ISO/AAIS conventions, ACORD data standards, NAIC model laws, state rules (cancellation and non-renewal notice periods, surplus lines, rate and form filing), claims and billing touchpoints, market trends (CAT exposure, CA/FL property market, cyber)</td><td>Weekly scan for regulatory and market changes; quarterly full review</td></tr>
+      <tr><td><b>Architecture and engineering</b><br><code>docs/knowledge/architecture/</code></td><td>LatticePolicy ADRs, tech radar (adopt, trial, hold), dependency and platform currency (Node, Postgres, React, Playwright), security advisories, cloud reference patterns, AI engineering practice</td><td>Monthly; immediately for security advisories</td></tr>
+      <tr><td><b>LatticePolicy project</b><br>existing <code>docs/</code></td><td>Project context, modules, API, data model, test plan, task notes, handoffs</td><td>Every merged change, enforced by the existing task-note rule</td></tr>
+    </tbody>
+  </table></div>
+  <p>The refresh is a scheduled GitHub Actions job that runs the knowledge curator with web research. It opens a pull request listing each proposed change with its source link. A person reviews and merges it. Nothing reaches the agents' knowledge without that review, so a wrong web page cannot quietly change how agents build regulated software.</p>
+</section>
+
+<section id="neutral">
+  <h2>How it stays tool-neutral</h2>
+  <p>One canonical set of agent contracts lives in <code>agents/</code>. A small sync script generates the thin files each tool looks for, and a CI check fails if they drift.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tool</th><th>Reads</th><th>Generated from <code>agents/</code></th></tr></thead>
+    <tbody>
+      <tr><td>Codex, Jules, Aider and most agents</td><td><code>AGENTS.md</code></td><td class="yes">Yes: a "Delivery flow" section pointing to the contracts</td></tr>
+      <tr><td>Claude Code</td><td><code>CLAUDE.md</code>, <code>.claude/agents/*.md</code></td><td class="yes">Yes: one subagent per role</td></tr>
+      <tr><td>GitHub Copilot</td><td><code>.github/copilot-instructions.md</code>, <code>.github/prompts/</code></td><td class="yes">Yes</td></tr>
+      <tr><td>Cursor</td><td><code>.cursor/rules/*.mdc</code></td><td class="yes">Yes</td></tr>
+      <tr><td>Anything else, or a person</td><td><code>docs/delivery/WORKFLOW.md</code></td><td>Canonical, hand-written</td></tr>
+    </tbody>
+  </table></div>
+  <p>You start a request the same way in any tool:</p>
+  <pre class="tree">Start the LatticePolicy delivery flow for: &lt;your request&gt;</pre>
+  <p>Or from a terminal, which creates the work package and prints the prompt for the next agent:</p>
+  <pre class="tree">npm run flow -- start "Add mortgagee change endorsement for HO-3"
+npm run flow -- status WP-0042
+npm run flow -- next WP-0042      # prints the next agent's prompt for any AI tool</pre>
+</section>
+
+<section id="repo">
+  <h2>What gets added to the repo</h2>
+<pre class="tree">agents/                         canonical role contracts (one file per agent)
+  orchestrator.md  business-analyst.md  software-architect.md  test-designer.md
+  developer.md  unit-test.md  code-reviewer.md  security-compliance.md
+  automation-test.md  deployment.md  e2e-test.md  business-validation.md
+  knowledge-curator.md
+docs/delivery/
+  WORKFLOW.md                   stages, tracks, gates, return rules
+  templates/                    one template per handoff file
+docs/knowledge/
+  pc-insurance/                 sourced, dated domain knowledge
+  architecture/                 ADRs, tech radar, platform currency
+docs/work/WP-0042-mortgagee-endorsement/
+  status.md  01-requirements.md  02-design.md  03-test-design.md
+  04-implementation.md  ...  12-lessons.md
+  traceability.md               requirement → design → code → tests → release → validation
+scripts/delivery/
+  flow.mjs                      start, status, next
+  sync-agents.mjs               generates tool adapters; CI checks they are current
+.github/workflows/
+  knowledge-refresh.yml         scheduled; opens a PR, never merges
+  delivery-checks.yml           PR must link a work package with gates recorded</pre>
+</section>
+
+<section id="gates">
+  <h2>Human approvals</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Gate</th><th>Approves</th><th>Evidence shown</th><th>Default approver</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill gate">A</span></td><td>Requirements</td><td>Requirements, acceptance criteria, answered questions</td><td>You (product owner)</td></tr>
+      <tr><td><span class="pill gate">B</span></td><td>Design and test plan</td><td>Design, options, risks, test design</td><td>You or a lead engineer (Major track)</td></tr>
+      <tr><td><span class="pill gate">C</span></td><td>Merge</td><td>PR, review and security findings, CI results, traceability</td><td>Code owner (the existing branch protection)</td></tr>
+      <tr><td><span class="pill gate">D</span></td><td>Production release</td><td>Staging E2E results, business validation evidence, release and rollback plan</td><td>Business owner, plus whoever approves production deploys</td></tr>
+    </tbody>
+  </table></div>
+  <p>Each approval is recorded in <code>status.md</code> with name and date, and the PR check refuses to merge a Standard or Major change without gates A and B recorded.</p>
+</section>
+
+<section id="rollout">
+  <h2>Rollout</h2>
+  <ol class="steps">
+    <li><b>Foundation (done).</b> Agent contracts, <code>WORKFLOW.md</code>, handoff templates, tool adapters with the sync check, and the <code>flow</code> CLI. Trial it on one Standard change end to end.</li>
+    <li><b>Knowledge (done).</b> Seed the P&amp;C and architecture knowledge bases from the existing domain primer and docs, with sources and review dates. Add the scheduled refresh job.</li>
+    <li><b>Enforcement (done for pull requests).</b> PR check for work packages and gates; staging-first deployment with business sign-off is defined in the contracts and applies from the next release.</li>
+    <li><b>Measure.</b> Track returns per stage, defects found after merge, and time per track. Tune the contracts where agents keep failing.</li>
+  </ol>
+</section>
+
+<section id="decisions">
+  <h2>Decisions</h2>
+  <p>The product owner asked for these to be decided by industry practice. They are recorded in <code>docs/delivery/WORKFLOW.md</code> and can be revised there.</p>
+  <div class="verdict">
+    <div><b>Agent autonomy</b><span>Agents may create branches, commit and open pull requests between gates. They stop at every gate, never merge a pull request and never deploy to production.</span></div>
+    <div><b>Approvers</b><span>The product owner approves Gates A, B and D. The code owner approves Gate C through GitHub branch protection. Carrier-specific work adds a carrier business user at Gate D.</span></div>
+    <div><b>Requirements approval</b><span>The orchestrator asks you to approve the requirements by default. If your request says approval is not needed, it records a waiver with your words and continues. Only the requirements and design gates can be waived; merge and business sign-off always need a person.</span></div>
+    <div><b>Staging</b><span>A persistent staging environment when one is configured; until then the local Docker stack built from <code>main</code>. Tests never use a pilot or demo database.</span></div>
+    <div><b>Knowledge refresh</b><span>Monthly, from primary sources (state insurance departments, NAIC, ISO/AAIS, ACORD, CAS, NCCI, official release notes, security advisories). A workflow opens an issue; the curator's updates go through a reviewed pull request. Security advisories are handled when they appear.</span></div>
+    <div><b>Code review</b><span>Automatic and independent. The orchestrator starts the code reviewer itself as a fresh agent session, separate from the developer, so you do not have to do anything. A different model or tool is recommended, not required.</span></div>
+    <div><b>Tracks</b><span>Quick, standard and major as described above.</span></div>
+  </div>
+</section>
+
+<section id="built">
+  <h2>What was built</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>14 agent contracts, including the UI/UX designer</td><td><code>agents/</code></td></tr>
+      <tr><td>Workflow, tracks, gates, decisions, handoff templates</td><td><code>docs/delivery/</code></td></tr>
+      <tr><td>Work package CLI: start, next, complete, approve, return, status, list</td><td><code>npm run flow</code></td></tr>
+      <tr><td>Generated instructions for Codex and AGENTS.md readers, Claude Code, Gemini CLI, GitHub Copilot and Cursor; CI fails on drift</td><td><code>npm run agents:sync</code></td></tr>
+      <tr><td>P&amp;C knowledge (quick reference, requirements checklist, sourced research) and architecture knowledge (principles, tech radar, platform currency, ADRs)</td><td><code>docs/knowledge/</code></td></tr>
+      <tr><td>Monthly knowledge refresh issue</td><td><code>.github/workflows/knowledge-refresh.yml</code></td></tr>
+      <tr><td>Pull request rule: work package with gates approved, or a declared quick change</td><td><code>.github/workflows/delivery-checks.yml</code></td></tr>
+      <tr><td>First trial: this change, run as WP-0001 through business analysis, design, test design, development and unit tests; next is the code reviewer in a separate session</td><td><code>docs/work/WP-0001-…</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Start any request in any AI tool with <code>Start the LatticePolicy delivery flow for: &lt;request&gt;</code>, or <code>npm run flow -- start "&lt;request&gt;"</code>.</p>
+</section>
+</main>
+</div>
+
+<footer>Prepared for the LatticePolicy repository. It builds on what already exists: <code>AGENTS.md</code>, <code>docs/AI_CONTRIBUTOR_PROCESS.md</code>, task notes, <code>docs/TEST_PLAN.md</code>, and the CI, CodeQL, publish and post-deploy E2E workflows.</footer>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>window.mermaid && mermaid.initialize({ startOnLoad: true, theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" })</script>
+</body>
+</html>
