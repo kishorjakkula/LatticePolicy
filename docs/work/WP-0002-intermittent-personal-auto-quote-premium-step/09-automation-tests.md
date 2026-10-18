@@ -19,7 +19,7 @@ Stack built from 88b06a4 (the spec assertion was added after it; spec-only chang
 
 The first rebuild (from 44e3b74) failed the smoke spec 10/10: the coverage step stayed on "Loading product config...". That was a real regression from b6ed111, fixed in 88b06a4 (07-code-review.md, last row). The excluded spec "limits the product list" selects the underwriting company "Sample Carrier Property". In the long-lived local database the companies are named "CA UW Company", "HO UW Company" and so on, so the option does not exist and the spec times out (run alone: 1 failed, page snapshot shows those options). Environment data only; CI seeds a fresh database.
 
-CI: TODO(agent) — Playwright E2E job result from the PR.
+CI: PR #385 (head 0ac9585, includes the new assertion) — Playwright E2E pass: https://github.com/kishorjakkula/LatticePolicy/actions/runs/39146112985/job/117730179355 ; DB Integration Tests pass: https://github.com/kishorjakkula/LatticePolicy/actions/runs/39146112985/job/117730179402
 
 ## Environment-only failures
 

@@ -68,7 +68,7 @@
       "name": "Code Reviewer",
       "writes": "07-code-review.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -76,7 +76,7 @@
       "name": "Security and Compliance",
       "writes": "08-security-compliance.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -84,7 +84,7 @@
       "name": "Automation Test",
       "writes": "09-automation-tests.md",
       "gateAfter": "C",
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -214,6 +214,18 @@
     {
       "at": "2026-10-18T16:33:01.763Z",
       "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T16:40:41.055Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-18T16:45:45.331Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-18T16:45:45.481Z",
+      "event": "Automation Test completed"
     }
   ]
 }

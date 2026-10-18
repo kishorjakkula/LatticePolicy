@@ -3,7 +3,7 @@
 
 - Track: **major** — coverages and premium shown to users (rating area is always major)
 - State: **in-progress**
-- Next: Code Reviewer (`07-code-review.md`)
+- Next: human approval at Gate C
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
@@ -14,9 +14,9 @@
 | Test Designer | `04-test-design.md` | done | 0 |
 | Developer | `05-implementation.md` | done | 2 |
 | Unit Test | `06-unit-tests.md` | done | 0 |
-| Code Reviewer | `07-code-review.md` | pending | 0 |
-| Security and Compliance | `08-security-compliance.md` | pending | 0 |
-| Automation Test | `09-automation-tests.md` | pending | 0 |
+| Code Reviewer | `07-code-review.md` | done | 0 |
+| Security and Compliance | `08-security-compliance.md` | done | 0 |
+| Automation Test | `09-automation-tests.md` | done | 0 |
 | Deployment | `10-release.md` | pending | 0 |
 | End-to-End Test | `11-e2e-results.md` | pending | 0 |
 | Business Validation | `12-business-validation.md` | pending | 0 |
@@ -48,3 +48,6 @@
 - 2026-10-18T16:33:01.509Z — returned to Developer: Re-review: policyId on POST /quotes not tied to a policy transaction of the same product (major); frontend tests never render the config wiring; 5 minors (07-code-review.md rows 25-29)
 - 2026-10-18T16:33:01.638Z — Developer completed
 - 2026-10-18T16:33:01.763Z — Unit Test completed
+- 2026-10-18T16:40:41.055Z — Code Reviewer completed
+- 2026-10-18T16:45:45.331Z — Security and Compliance completed
+- 2026-10-18T16:45:45.481Z — Automation Test completed

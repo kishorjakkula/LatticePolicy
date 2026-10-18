@@ -12,7 +12,7 @@
 | Audit (AI vs person actions) | pass | The change adds refusals and a read-only report; no data is written, so there is no new audit event. Refused rate/bind/issue attempts leave the record unchanged, as before. Audit tables untouched. No AI involvement. |
 | AI data boundary | not applicable | No AI or LLM path changed. |
 | Regulatory (filings, notices, disclosures, privacy) | pass | Enforces the filed product definition: a quote or policy can no longer be rated, bound or issued with coverages the product version does not offer. No rate or form changes. In-force policies already carrying undefined codes are not modified: the report lists them for the carrier, because correcting one may need an endorsement and notice to the insured (REQ-5). Cancellation and reinstatement keep the policy's existing coverages, so servicing is never blocked by legacy data. |
-| Code scanning and dependency results | TODO(agent) | No dependency, Dockerfile or workflow changes in the diff. CodeQL, dependency review and container scan results to be recorded from the PR's CI run. |
+| Code scanning and dependency results | pass | No dependency, Dockerfile or workflow changes in the diff. PR #385 (head 0ac9585): CodeQL and Analyze JavaScript/TypeScript pass, 0 open code scanning alerts on the PR ref; Dependency Audit, Dependency Review and Container Scan pass. |
 
 ## Findings
 
