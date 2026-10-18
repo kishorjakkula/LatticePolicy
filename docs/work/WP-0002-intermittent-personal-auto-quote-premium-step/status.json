@@ -53,7 +53,7 @@
       "writes": "05-implementation.md",
       "gateAfter": null,
       "status": "done",
-      "returns": 0
+      "returns": 1
     },
     {
       "id": "unit-test",
@@ -189,6 +189,18 @@
     },
     {
       "at": "2026-10-18T15:51:12.076Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T15:59:16.267Z",
+      "event": "returned to Developer: Code review: 1 blocker (homeowners auto-defaults use previous product config), 3 majors, 7 minors (07-code-review.md)"
+    },
+    {
+      "at": "2026-10-18T16:04:48.306Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T16:04:48.432Z",
       "event": "Unit Test completed"
     }
   ]

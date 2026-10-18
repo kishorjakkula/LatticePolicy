@@ -31,11 +31,30 @@
 - The stale-response race is proven by the `CoverageSelector` product-match test
   plus repeated parallel Playwright runs, rather than a component test of the
   whole wizard (the wizard has no component harness).
-- Known limit (task note): the wizard's rating step for renewal or rewrite
-  checks all codes because `POST /quotes` has no policy context.
+- `POST /quotes` accepts `policyId` (policy transactions in the wizard) so the
+  rating step carries codes already on the policy; this replaces the earlier
+  "known limit".
 
 ## Checks run
 
 - `npx tsc` server and frontend: clean.
 - Server unit: 673 passed. Frontend: 268 passed.
 - Server integration on a fresh PostgreSQL with RLS: 172 passed (after the two fixture fixes).
+
+## Code review fixes (return from `07-code-review.md`, commit b6ed111)
+
+- Blocker: homeowners auto-defaults build only from homeowners' own
+  configuration (`homeownersDefaultsReady`); every product change clears the
+  previous configuration and risk form immediately.
+- Cancel, renew and rewrite in the wizard rate with the policy's context
+  (`POST /quotes?policyId=`), so codes already on the policy are carried.
+- Integrity report: candidates selected in SQL against the codes common to
+  every product version (current and pinned), no scan cap, correct latest
+  policy version, accurate total; own rate limit.
+- Dialog: stable callbacks, focus no longer jumps on re-render, Tab trapped.
+- Auto-applied homeowners defaults no longer count as agent data for the dialog.
+- In-memory renew/rewrite carry codes like the database path.
+- Panel uses `StatusBadge` and product names.
+- Accepted: drafts stay unchecked by design (rate, bind and issue refuse).
+- Tests added for the stale-response guard, the homeowners condition, dialog
+  focus, renewal, rewrite, cancellation and report isolation.
