@@ -129,7 +129,7 @@ export function LlmReleasesPage() {
       )}
       <CollapsibleSection title="Releases" className="card">
         <div style={{ overflowX: 'auto' }}>
-          <table className="table">
+          <table className="table table-no-sticky-head">
             <thead>
               <tr>
                 <th>Version</th>
@@ -747,7 +747,7 @@ function AutomationCredentials() {
         <button type="submit">Issue Credential</button>
       </form>
       <div style={{ overflowX: 'auto' }}>
-        <table className="table">
+        <table className="table table-no-sticky-head">
           <thead>
             <tr>
               <th>Label</th>
