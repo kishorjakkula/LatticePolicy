@@ -179,6 +179,22 @@ describe('coverage codes belong to the product', () => {
     await withTenantTx(tenantId, (db) => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2026-09-01', reason: 'insured request', payload: current }, actor))
   })
 
+  it('a policy id lends its carried codes only to a transaction on that policy of the same product', async () => {
+    const { policyId, current } = await issuedPolicyCarrying(['A', 'END_WB'])
+    const rate = (query: string, body: any) =>
+      request(app).post(`/api/v1/quotes${query}`).set('Authorization', `Bearer ${adminToken}`).set('X-Tenant', tenantId).send(body)
+    // New business is never a transaction on an existing policy.
+    await rate(`?policyId=${policyId}`, current).expect(422)
+    await rate(`?transaction=new_business&policyId=${policyId}`, current).expect(422)
+    // A malformed id is ignored, not a database error.
+    await rate(`?transaction=cancel&policyId=${'-'.repeat(36)}`, current).expect(422)
+    // A personal auto rating cannot borrow the codes of another product's policy.
+    const other = await issuedPolicyCarrying(['A', 'END_WB'])
+    await getDb()!.query(`UPDATE policies SET product_code = 'homeowners' WHERE tenant_id=$1 AND policy_id=$2`, [tenantId, other.policyId])
+    const refused = await rate(`?transaction=cancel&policyId=${other.policyId}`, current).expect(422)
+    expect(JSON.stringify(refused.body)).toContain('END_WB')
+  })
+
   it('reports records with foreign coverages to administrators only, per tenant, without changing them', async () => {
     const quote = await createOrRateQuote({} as any, tenantId, payload(['BI', 'PD']), null, 'integration-test')
     await getDb()!.query(
@@ -202,5 +218,17 @@ describe('coverage codes belong to the product', () => {
     await http(agentToken).expect(403)
     const listed = await http(adminToken).expect(200)
     expect(listed.body.items.some((item: any) => item.id === quote.quoteId)).toBe(true)
+  })
+
+  it('reports a record pinned to a product version that is no longer available, even with valid coverages', async () => {
+    const quote = await createOrRateQuote({} as any, tenantId, payload(['BI', 'PD']), null, 'integration-test')
+    const pinned = (await getDb()!.query('SELECT payload FROM quotes WHERE quote_id=$1', [quote.quoteId])).rows[0].payload
+    expect(pinned.productSnapshot?.id).toBeTruthy()
+    await getDb()!.query(
+      `UPDATE quotes SET payload = jsonb_set(payload, '{productSnapshot,id}', to_jsonb($3::text)) WHERE tenant_id=$1 AND quote_id=$2`,
+      [tenantId, quote.quoteId, '00000000-0000-4000-8000-000000000000'],
+    )
+    const report = await coverageIntegrityReport(tenantId)
+    expect(report.items.find((item) => item.id === quote.quoteId)).toMatchObject({ kind: 'quote', unexpectedCodes: [], note: expect.stringContaining('not available') })
   })
 })

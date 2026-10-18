@@ -15,6 +15,7 @@ import {
 } from '../../api/hooks'
 import { fetchCarrierBranding } from '../../tenant/carrierBranding'
 import { normalizePayloadCoverages } from './coverageUtils'
+import { configMatchesProduct, useHomeownersAutoDefaults, useProductConfiguration } from './useProductConfiguration'
 import {
   defaultAutoRisk,
   defaultCommercialAutoRisk,
@@ -512,32 +513,7 @@ const STEP_SCREENS: Record<number, ValidationScreen> = {
   1: 'product', 2: 'qualification', 3: 'insureds', 4: 'risk', 5: 'coverages', 6: 'rating', 7: 'premium', 8: 'forms',
 }
 
-/** Homeowners defaults may only be built from homeowners' own configuration. */
-export function homeownersDefaultsReady(productCode: string | null | undefined, cfg: any): boolean {
-  return productCode === 'homeowners' && cfg?.product === 'homeowners'
-}
-
-/** True when a loaded product configuration belongs to the given product. */
-export function configMatchesProduct(cfg: any, productCode: string | null | undefined): boolean {
-  return Boolean(cfg && productCode && (!cfg.product || cfg.product === productCode))
-}
-
-/**
- * Remembers the last request started; a response for an earlier request is
- * stale. Used so a late product configuration never replaces the current one.
- */
-export function createLatestGuard() {
-  let latest: string | null = null
-  return {
-    begin(key: string) {
-      latest = key
-      return () => latest === key
-    },
-    reset() {
-      latest = null
-    },
-  }
-}
+export { configMatchesProduct, createLatestGuard, homeownersDefaultsReady } from './useProductConfiguration'
 
 /**
  * Messages for coverages the product does not offer, from a rating, bind or
@@ -849,21 +825,10 @@ function normalizeInsuredState(raw: any, applicant?: QuoteState['applicant']): I
 export function QuoteWizard() {
   const [, setProductRegistryRevision] = useState(0)
   const [step, setStep] = useState(1)
-  const [cfg, setCfg] = useState<any | null>(null)
-  // The product whose configuration was requested last. A response for any
-  // other product arrived late and is ignored, so the wizard never shows or
-  // applies another product's coverages (WP-0002).
-  const configGuardRef = useRef(createLatestGuard())
   // The homeowners defaults the wizard applied itself (not the agent's choices).
   const autoDefaultCoveragesRef = useRef('')
   const [pendingProductChange, setPendingProductChange] = useState<QuoteProductCode | null>(null)
-  const [riskFields, setRiskFields] = useState<Field[]>([])
-  // Screen a carrier pack defines for the product: the whole risk step for a
-  // pack product, or extra sections under a core product's built-in step.
-  const [riskScreen, setRiskScreen] = useState<ProductScreen | null>(null)
   const [riskScreenChecked, setRiskScreenChecked] = useState(false)
-  // Lookup tables the screen's rules read, sent with the screen.
-  const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [setupChecked, setSetupChecked] = useState(false)
   const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
@@ -981,27 +946,28 @@ export function QuoteWizard() {
     insureds: createDefaultInsuredState()
   })
 
-  useEffect(() => {
-    if (!q.productCode) {
-      configGuardRef.current.reset()
-      setCfg(null)
-      setRiskFields([])
-      setRiskScreen(null)
-      return
-    }
-    void loadConfig(q.productCode)
-  }, [q.productCode])
-  useEffect(() => {
-    // Only homeowners' own configuration; on a product change the previous
-    // product's configuration is still in this render's closure (WP-0002).
-    if (!homeownersDefaultsReady(q.productCode, cfg)) return
-    const hasSelections = Array.isArray(q.coverages) && q.coverages.length > 0
-    if (hoDefaultsApplied.current && hasSelections) return
-    const defaults = buildHomeownerDefaults(cfg, q.coverages)
-    hoDefaultsApplied.current = true
-    autoDefaultCoveragesRef.current = JSON.stringify(defaults)
-    setQ(prev => ({ ...prev, coverages: defaults }))
-  }, [cfg, q.productCode, q.coverages])
+  // Product configuration and risk form: cfg is null until the selected
+  // product's own configuration has loaded, so the wizard never shows or
+  // applies another product's coverages (WP-0002). Endorse, cancel, and
+  // reinstate stay on the product version the term was written on; a renewal
+  // or rewrite starts a new term on the current one.
+  const midTermForm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
+  // riskScreen: the screen a carrier pack defines for the product (the whole
+  // risk step for a pack product, or extra sections under a core product's
+  // built-in step); riskTables: the lookup tables its rules read.
+  const { cfg, riskFields, riskScreen, riskTables } = useProductConfiguration(q.productCode, {
+    formPolicyId: midTermForm && policyIdParam ? policyIdParam : undefined,
+    onLoaded: () => setRiskScreenChecked(false),
+  })
+  useHomeownersAutoDefaults({
+    productCode: q.productCode,
+    cfg,
+    coverages: q.coverages,
+    setCoverages: (coverages) => setQ(prev => ({ ...prev, coverages })),
+    buildDefaults: buildHomeownerDefaults,
+    appliedRef: hoDefaultsApplied,
+    autoDefaultsRef: autoDefaultCoveragesRef,
+  })
 
   useEffect(() => {
     if (isReadOnlyView) return
@@ -1911,35 +1877,6 @@ export function QuoteWizard() {
     overrideReason
   ])
 
-  async function loadConfig(code: ProductCode) {
-    const isCurrent = configGuardRef.current.begin(code)
-    setCfg(null)
-    try {
-      const loaded = await api.getProductConfig(code)
-      if (!isCurrent()) return
-      setCfg(loaded)
-    } catch {
-      if (!isCurrent()) return
-      setCfg(null)
-    }
-    try {
-      // Endorse, cancel, and reinstate stay on the product version the term was
-      // written on; a renewal or rewrite starts a new term on the current one.
-      const midTerm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
-      const form = await api.getProductForm(code, midTerm && policyIdParam ? policyIdParam : undefined)
-      if (!isCurrent()) return
-      setRiskFields(form?.fields || [])
-      setRiskScreen(form?.screen || null)
-      setRiskTables(form?.tables || {})
-    } catch {
-      if (!isCurrent()) return
-      setRiskFields([])
-      setRiskScreen(null)
-      setRiskTables({})
-    }
-    setRiskScreenChecked(false)
-  }
-
   async function loadQuoteFromServer(quoteId: string) {
     if (!quoteId) return
     setLoadingDraft(true)
@@ -2199,14 +2136,10 @@ export function QuoteWizard() {
     setQuoteDocumentModel(null)
     resetBindingState()
     setQualificationErrors({})
-    // Drop the previous product's configuration and risk form now, so nothing
-    // (defaults, rules, fields) runs on it while the new product loads.
-    configGuardRef.current.reset()
+    // The previous product's configuration and risk form are dropped by
+    // useProductConfiguration when the product code actually changes. Resetting
+    // here would orphan an in-flight load when the same product is chosen again.
     autoDefaultCoveragesRef.current = ''
-    setCfg(null)
-    setRiskFields([])
-    setRiskScreen(null)
-    setRiskTables({})
   }
 
   async function searchPrimaryInsured(query: string) {

@@ -9,10 +9,11 @@ import { coverageViolations } from './product-rules.service.js'
  * their product (version). Nothing is changed: correcting a policy is the
  * carrier's decision (it may need an endorsement or a notice to the insured).
  *
- * The database selects candidates itself — records with any coverage code
- * outside the codes common to every version of their product — so nothing is
- * missed however many records exist. Each candidate is then checked exactly
- * against its own pinned product version.
+ * The database selects candidates itself — records of an unknown product,
+ * pinned to a missing product version, or with any coverage code outside the
+ * codes common to every version of their product — so nothing is missed
+ * however many records exist. Each candidate is then checked exactly against
+ * its own pinned product version; one that cannot be checked is reported.
  */
 export type CoverageIntegrityItem = {
   kind: 'quote' | 'policy'
@@ -58,26 +59,33 @@ export async function coverageIntegrityReport(tenantId: string): Promise<{ items
   const rows = await withTenantTx(tenantId, async (db) => {
     const q = toRawQuery(db)
     const common = JSON.stringify(await codesInEveryVersion(q, tenantId))
-    // A coverage is a candidate when its product is known and the code is not
-    // defined by every version of that product. Sequential: one client.
-    const candidate = (alias: string) =>
-      `EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${alias}.payload->'coverages') = 'array' THEN ${alias}.payload->'coverages' ELSE '[]'::jsonb END) c
-         WHERE ($2::jsonb ? ${alias}.product_code) AND NOT (($2::jsonb -> ${alias}.product_code) ? (c->>'code')))`
+    // Candidates: the product is unknown, the pinned product version is
+    // missing, or a coverage code is not defined by every version of the
+    // product. Only the fields the check reads are loaded. Sequential: one client.
+    const slim = (payload: string) =>
+      `jsonb_strip_nulls(jsonb_build_object('productCode', ${payload}->'productCode', 'coverages', ${payload}->'coverages', 'productSnapshot', ${payload}->'productSnapshot'))`
+    const candidate = (product: string, payload: string) =>
+      `(NOT ($2::jsonb ? ${product})
+        OR (${payload}->'productSnapshot'->>'id' IS NOT NULL AND NOT EXISTS (
+              SELECT 1 FROM product_snapshots s WHERE s.tenant_id = $1 AND s.snapshot_id::text = ${payload}->'productSnapshot'->>'id'))
+        OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${payload}->'coverages') = 'array' THEN ${payload}->'coverages' ELSE '[]'::jsonb END) c
+              WHERE NOT (($2::jsonb -> ${product}) ? (c->>'code'))))`
     const quotes = await q(
-      `SELECT 'quote' AS kind, quote_id::text AS id, quote_number AS number, product_code, status, created_at, payload
-         FROM quotes x WHERE tenant_id = $1 AND ${candidate('x')}`,
+      `SELECT 'quote' AS kind, quote_id::text AS id, quote_number AS number, product_code, status, created_at, ${slim('x.payload')} AS payload
+         FROM quotes x WHERE tenant_id = $1 AND ${candidate('x.product_code', 'x.payload')}`,
       [tenantId, common],
     )
+    // Each policy's latest version only, via the (tenant, policy, processed_at) index.
     const policies = await q(
-      `SELECT 'policy' AS kind, x.policy_id::text AS id, x.policy_number AS number, x.product_code, x.status, x.created_at, x.payload
-         FROM (
-           SELECT DISTINCT ON (p.policy_id) p.policy_id, p.policy_number, p.product_code, p.status::text AS status,
-                  pv.processed_at AS created_at, pv.payload
-             FROM policies p JOIN policy_versions pv ON pv.tenant_id = p.tenant_id AND pv.policy_id = p.policy_id
-            WHERE p.tenant_id = $1
-            ORDER BY p.policy_id, pv.processed_at DESC
-         ) x
-        WHERE ${candidate('x')}`,
+      `SELECT 'policy' AS kind, p.policy_id::text AS id, p.policy_number AS number, p.product_code, p.status::text AS status,
+              v.processed_at AS created_at, ${slim('v.payload')} AS payload
+         FROM policies p
+         CROSS JOIN LATERAL (
+           SELECT pv.processed_at, pv.payload FROM policy_versions pv
+            WHERE pv.tenant_id = p.tenant_id AND pv.policy_id = p.policy_id
+            ORDER BY pv.processed_at DESC LIMIT 1
+         ) v
+        WHERE p.tenant_id = $1 AND ${candidate('p.product_code', 'v.payload')}`,
       [tenantId, common],
     )
     return [...quotes.rows, ...policies.rows]

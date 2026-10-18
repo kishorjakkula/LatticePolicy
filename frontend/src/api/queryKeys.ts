@@ -49,6 +49,10 @@ export const queryKeys = {
     outbox: (status?: string) => ['dashboard', 'outbox', status ?? null] as const,
     notifications: (status?: string) => ['dashboard', 'notifications', status ?? null] as const,
     policyIntegrity: (status?: string) => ['dashboard', 'policy-integrity', status ?? null] as const,
+    coverageIntegrity: () => ['dashboard', 'coverage-integrity'] as const,
+  },
+  products: {
+    list: (tenant: string) => ['products', tenant] as const,
   },
   jobs: {
     definitions: () => ['jobs', 'definitions'] as const,

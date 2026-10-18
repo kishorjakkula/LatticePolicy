@@ -298,7 +298,7 @@ export function useDashboardNotifications(status?: string) {
 
 export function useCoverageIntegrity() {
   return useQuery({
-    queryKey: ['dashboard', 'coverage-integrity'],
+    queryKey: queryKeys.dashboard.coverageIntegrity(),
     queryFn: () => adminApi.coverageIntegrity(),
   })
 }

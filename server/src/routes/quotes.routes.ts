@@ -19,9 +19,10 @@ import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuoteDetailed } from '../contracts.js'
 import { runValidationGate } from '../lib/validation-gate.js'
+import { normalizeValidationTransaction } from '@lattice-policy/rules'
 import { loadPolicyContext } from '../persistence.js'
 import { addMonths } from '../lib/date.utils.js'
-import { csvEscape, routeParam } from '../lib/utils.js'
+import { csvEscape, isUuidLike, routeParam } from '../lib/utils.js'
 
 export const quoteRoutes = Router()
 
@@ -121,13 +122,17 @@ quoteRoutes.post(
       // Rate-level validation rules. The wizard names the transaction it rates
       // for (renewal, rewrite); a plain quote is new business.
       const transaction = typeof req.query.transaction === 'string' ? req.query.transaction : 'new_business'
-      const policyId = typeof req.query.policyId === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.policyId) ? req.query.policyId : null
+      // A policy's carried coverage codes apply only to a transaction on that
+      // policy (endorse, cancel, reinstate, renew, rewrite) of the same product.
+      const policyTransaction = POLICY_TRANSACTIONS.has(normalizeValidationTransaction(transaction))
+      const policyId = policyTransaction && typeof req.query.policyId === 'string' && isUuidLike(req.query.policyId) ? req.query.policyId : null
       const result = await req.tx(async (db) => {
         const validation = await runValidationGate(db, tenantId, {
           level: 'rate', transaction, payload: body, actor: updatedBy,
         })
         // The policy's current payload (tenant-scoped), for codes it already carries.
-        const previousPayload = policyId ? (await loadPolicyContext(db, tenantId, policyId))?.latestPayload : undefined
+        const context = policyId ? await loadPolicyContext(db, tenantId, policyId) : null
+        const previousPayload = context && context.policy?.productCode === body?.productCode ? context.latestPayload : undefined
         const rated = await quoteService.createOrRateQuote(db, tenantId, body, requestedQuoteId, updatedBy, { previousPayload })
         return rated && typeof rated === 'object' ? { ...rated, validation } : rated
       })
@@ -137,6 +142,8 @@ quoteRoutes.post(
     }
   }
 )
+
+const POLICY_TRANSACTIONS = new Set(['endorsement', 'cancellation', 'reinstatement', 'renewal', 'rewrite'])
 
 // ── GET /quotes/:id ───────────────────────────────────────────────────────────
 quoteRoutes.get('/quotes/:id', requirePermission(['page.wizard.view', 'page.search.view']), async (req, res, next) => {

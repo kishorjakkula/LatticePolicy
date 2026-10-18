@@ -16,6 +16,8 @@ import { adminApi } from '../../api/admin.api'
 import { listProducts } from '../../api/references.api'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '../../api/queryKeys'
+import { tenantId } from '../../api/request'
 
 type OutboxRow = {
   message_id: string
@@ -140,7 +142,7 @@ function PolicyIntegrityPanel() {
 /** Records whose coverages are not offered by their product (WP-0002). Report only. */
 export function CoverageIntegrityPanel() {
   const { data, isLoading, error } = useCoverageIntegrity()
-  const products = useQuery({ queryKey: ['products'], queryFn: () => listProducts() })
+  const products = useQuery({ queryKey: queryKeys.products.list(tenantId()), queryFn: () => listProducts() })
   const productLabel = (code: string) => products.data?.items?.find((product) => product.code === code)?.label || code
   const rows = data?.items || []
   return (
