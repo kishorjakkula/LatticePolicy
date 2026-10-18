@@ -1,33 +1,27 @@
 # Active Work Handoff
 
-Snapshot: 2026-10-17. This is a repository-readable continuation guide, not global
+Snapshot: 2026-10-17 (refreshed after #378/#379 merged). This is a repository-readable continuation guide, not global
 agent memory. Read `AGENTS.md`, this file, and the linked guides before editing.
 Recheck Git and runtime state; recorded checks are historical, not a guarantee
 that later changes still pass. Do not assume previous chat history is available.
 
 ## Find The Work First
 
-- Repository: `kishorjakkula/LatticePolicy`.
-- Implementation branch: `latticepolicy/private-document-engine`.
-- Base HEAD at handoff: `28a43e1a8a92979e921c911493efa89fe4ae6543`.
-- Implementation checkout on this machine:
-  `/Users/srividyajakkula/.codex/worktrees/private-document-engine/LatticePolicy`.
-- Primary checkout: `/Users/srividyajakkula/Documents/LatticePolicy`, on a
-  different branch, `codex/carrier-branding`. It does NOT contain the new code.
-- All private processing/governance/learning changes are currently uncommitted,
-  including untracked directories. Merely checking out the branch elsewhere
-  will NOT recover these files. Reuse the implementation checkout; do not
-  reset, clean, archive or delete it. Review `git status --short --branch` and
-  `git diff` there. `git diff` alone excludes the new untracked files.
-- No commit, push, PR, merge, release or deployment was performed for this work.
-  For another machine/fork, the full change set must first be reviewed and
-  transferred through an authorized commit/PR, including tests and Markdown.
-- This handoff request only added documentation/discovery links. It did not
-  authorize a new deployment, remote Git action, or issue closure.
+The private document processing, controlled learning and release governance work
+is **merged into `main`**:
 
-The primary checkout has pre-existing untracked `.claude/`, `output/`,
-`outputs/`, `reports/`, `research_notes/`, `tmp/`, and an invoice-extraction
-script. Preserve them and do not include them in the LLM change set.
+- [#378](https://github.com/kishorjakkula/LatticePolicy/pull/378) — private
+  processing, learning, release governance (migration 063), then governance
+  hardening and AI/person audit segregation (migrations 064, 065).
+- [#379](https://github.com/kishorjakkula/LatticePolicy/pull/379) — table-header
+  fix on the AI Audit and LLM Releases pages.
+
+Work from `main`. The old implementation checkout
+(`~/.codex/worktrees/private-document-engine/LatticePolicy`, branch
+`latticepolicy/private-document-engine`) is clean and superseded; nothing there
+is missing from `main`. The primary checkout's untracked `output/`, `outputs/`,
+`reports/`, `research_notes/`, `tmp/` and invoice-extraction script are personal
+material; preserve them and keep them out of commits.
 
 ## User Requirements And Decisions
 
@@ -78,9 +72,14 @@ script. Preserve them and do not include them in the LLM change set.
    a deadline. Optional actual LoRA code is in `training/train.py`; see that
    directory's README and standard-library tests. No ML runtime is bundled or
    certified, and no real weights were trained or converted for serving.
-4. [Release governance](LLM_RELEASE_GOVERNANCE.md): migration
-   `063_llm_release_governance.sql`, server routes/services and
-   `/admin/llm-releases` frontend. Current DB roles are rechecked; general admin
+4. [Release governance](LLM_RELEASE_GOVERNANCE.md): migrations
+   `063_llm_release_governance.sql`, `064_ai_governance_audit.sql` and
+   `065_audit_chain_serialized_sequence.sql`, server routes/services,
+   `/admin/llm-releases` and `/admin/ai-audit`. Hardening (four eyes, cooldown,
+   revocation, separate signer, service credentials, stored/re-checked reports,
+   append-only hash-chained audit with AI/automation/person/system actors) is in
+   [the hardening task note](tasks/ai-governance-audit-hardening.md) and
+   [merge blockers](tasks/pr-378-merge-blockers.md). Current DB roles are rechecked; general admin
    is not automatically technical admin. Candidate registration is immutable
    and idempotent. States: `READY_FOR_VALIDATION`, `IN_VALIDATION`, `VALIDATED`
    or `REJECTED`, then `PRODUCTION_AUTHORIZED`. This last state authorizes
@@ -109,7 +108,12 @@ marked; use the current guides above for actual behavior.
 
 ## Verified Checks
 
-Last implementation verification used Node 22 and synthetic inputs:
+Historical record from the first implementation slice (before #378's
+hardening). At merge, all nine GitHub checks passed on #378 and #379; the
+hardening added server (665+), frontend (253) and fresh-PostgreSQL integration
+(162+) coverage. Re-run checks rather than relying on these numbers.
+
+First-slice verification used Node 22 and synthetic inputs:
 
 | Check | Recorded Result |
 | --- | --- |
@@ -131,8 +135,9 @@ The full repository browser suite was NOT rerun in this task. The two browser
 tests use synthetic intercepted responses, not a live carrier API. No real SMTP
 delivery, model accuracy benchmark, GPU training, model conversion or cloud
 deployment was verified. Hash checks cannot prove which weights a separate
-model server loaded. Registration trusts the authorized evaluator's assertions;
-human validation evidence is an attestation, not cryptographic execution proof.
+model server loaded. Since #378's hardening, registration re-checks the stored evaluation report and
+recomputes its metrics, and validation requires an uploaded, hash-checked test
+report; it is still evidence from the carrier's test run, not execution proof.
 
 ## Continue And Validate
 
@@ -172,8 +177,13 @@ addition to the existing application checks. Root workspace lockfile is canonica
 
 ## Remaining Work And Operational State
 
-- Review all tracked AND untracked changes; then obtain/confirm the intended
-  commit/PR/publication action. No PR number or issue completion is asserted.
+Code is merged; what remains needs carrier environments and decisions:
+
+- Carrier go-live for private models: deploy `deploy/release-signer` and apply
+  `application.signer.yml` to the API; issue a release automation service
+  credential for `LEARNING_API_TOKEN`; assign at least two carrier technical
+  admins (production approval needs a different person from the validator).
+  See `docs/LLM_RELEASE_GOVERNANCE.md`.
 - Select an approved base model/license and hardware; provision a reviewed,
   hash-pinned Python/ML runtime for actual fine-tuning. Supply representative
   privacy-reviewed training/held-out carrier datasets.
@@ -181,23 +191,20 @@ addition to the existing application checks. Root workspace lockfile is canonica
   performance/concurrency, and security against carrier acceptance criteria.
 - Fine-tuned adapters need engine-specific conversion/serving and a new held-out
   evaluation before registration. No automatic cross-engine conversion exists.
-- Provision private lower/production environments, model stores, carrier-scoped
-  networks, IAM/secrets, TLS, encryption, backups, retention and monitoring on
-  AWS/Azure. Current kit is Compose/operator tooling, not complete cloud IaC.
-- Apply migration 063 only through a reviewed deployment; assign explicit
-  technical-admin/automation roles, configure signing/public keys, revocations,
-  expiry/renewal operations and verified model mounts. Keep email OFF for tests.
-- Test real SMTP only when explicitly enabled, then conduct carrier-admin UAT
-  before any production publication. Full autonomous learning is not claimed.
-- Temporary DB `lattice-learning-validation-db` was removed; temporary QA Vite
-  server on 5189 was stopped. No task-related tests/builds were left running.
-  Existing demo/pilot containers were not migrated, rebuilt, reset or stopped.
+- Provision private lower/production environments on AWS/Azure (networks,
+  IAM/secrets, TLS, encryption, backups, retention, monitoring). The current
+  kit is Compose/operator tooling, not complete cloud IaC.
+- Keep email OFF for tests; test real SMTP only when explicitly enabled.
+- Known limits: no proof of which weights a model server loaded; dataset and
+  profile consent flags are operator-declared; role security depends on the
+  carrier identity provider (use SSO and MFA).
 
 ## Minimal Continuation Prompt
 
 ```text
-Read AGENTS.md and docs/ACTIVE_WORK_HANDOFF.md. Verify the correct worktree and
-preserve its uncommitted changes. Continue the private document-learning work
-from the documented state, keep email disabled by default, and report which
-remaining steps need environment configuration rather than claiming them done.
+Read AGENTS.md and docs/ACTIVE_WORK_HANDOFF.md. Work from main. Continue the
+private document-learning work from the documented state, keep email disabled
+by default, never weaken the append-only AI audit or human-only approvals, and
+report which remaining steps need environment configuration rather than
+claiming them done.
 ```
