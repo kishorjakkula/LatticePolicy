@@ -6,9 +6,9 @@ area you are changing.
 
 ## Project Orientation
 
-- For the current private document/LLM work, read `docs/ACTIVE_WORK_HANDOFF.md`
-  first. It records the implementation location, uncommitted state, decisions,
-  verification, and remaining work; confirm these against the current checkout.
+- For the private document/LLM work (merged in #378), read
+  `docs/ACTIVE_WORK_HANDOFF.md` first. It records decisions, verification and
+  remaining carrier-environment work; confirm these against the current checkout.
 - Start with `docs/PROJECT_CONTEXT.md` for the domain, architecture, major
   modules, security model, and common commands.
 - Use `docs/TEST_PLAN.md` to choose the right automated test layer.
