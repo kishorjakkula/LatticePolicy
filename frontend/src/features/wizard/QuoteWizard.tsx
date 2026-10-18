@@ -15,6 +15,7 @@ import {
 } from '../../api/hooks'
 import { fetchCarrierBranding } from '../../tenant/carrierBranding'
 import { normalizePayloadCoverages } from './coverageUtils'
+import { configMatchesProduct, useHomeownersAutoDefaults, useProductConfiguration } from './useProductConfiguration'
 import {
   defaultAutoRisk,
   defaultCommercialAutoRisk,
@@ -512,6 +513,26 @@ const STEP_SCREENS: Record<number, ValidationScreen> = {
   1: 'product', 2: 'qualification', 3: 'insureds', 4: 'risk', 5: 'coverages', 6: 'rating', 7: 'premium', 8: 'forms',
 }
 
+export { configMatchesProduct, createLatestGuard, homeownersDefaultsReady } from './useProductConfiguration'
+
+/**
+ * Messages for coverages the product does not offer, from a rating, bind or
+ * issue error (`INVALID_QUOTE` / `PRODUCT_RULES_NOT_MET` with keyword "coverage").
+ */
+export function coverageErrorMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : ''
+  const at = message.indexOf(': {')
+  if (at < 0) return null
+  try {
+    const body = JSON.parse(message.slice(at + 2))
+    const errors = Array.isArray(body?.details?.errors) ? body.details.errors : []
+    const coverage = errors.filter((entry: any) => entry?.keyword === 'coverage').map((entry: any) => String(entry.message))
+    return coverage.length ? `${coverage.join(' ')} Go back to Coverages and apply the product's coverages.` : null
+  } catch {
+    return null
+  }
+}
+
 /** Acknowledged rule codes passed to bind/issue, ignoring a click event. */
 function acknowledgementList(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
@@ -804,14 +825,10 @@ function normalizeInsuredState(raw: any, applicant?: QuoteState['applicant']): I
 export function QuoteWizard() {
   const [, setProductRegistryRevision] = useState(0)
   const [step, setStep] = useState(1)
-  const [cfg, setCfg] = useState<any | null>(null)
-  const [riskFields, setRiskFields] = useState<Field[]>([])
-  // Screen a carrier pack defines for the product: the whole risk step for a
-  // pack product, or extra sections under a core product's built-in step.
-  const [riskScreen, setRiskScreen] = useState<ProductScreen | null>(null)
+  // The homeowners defaults the wizard applied itself (not the agent's choices).
+  const autoDefaultCoveragesRef = useRef('')
+  const [pendingProductChange, setPendingProductChange] = useState<QuoteProductCode | null>(null)
   const [riskScreenChecked, setRiskScreenChecked] = useState(false)
-  // Lookup tables the screen's rules read, sent with the screen.
-  const [riskTables, setRiskTables] = useState<Record<string, LookupTable>>({})
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [setupChecked, setSetupChecked] = useState(false)
   const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
@@ -929,24 +946,28 @@ export function QuoteWizard() {
     insureds: createDefaultInsuredState()
   })
 
-  useEffect(() => {
-    if (!q.productCode) {
-      setCfg(null)
-      setRiskFields([])
-      setRiskScreen(null)
-      return
-    }
-    void loadConfig(q.productCode)
-  }, [q.productCode])
-  useEffect(() => {
-    if (!cfg) return
-    if (q.productCode !== 'homeowners') return
-    const hasSelections = Array.isArray(q.coverages) && q.coverages.length > 0
-    if (hoDefaultsApplied.current && hasSelections) return
-    const defaults = buildHomeownerDefaults(cfg, q.coverages)
-    hoDefaultsApplied.current = true
-    setQ(prev => ({ ...prev, coverages: defaults }))
-  }, [cfg, q.productCode, q.coverages])
+  // Product configuration and risk form: cfg is null until the selected
+  // product's own configuration has loaded, so the wizard never shows or
+  // applies another product's coverages (WP-0002). Endorse, cancel, and
+  // reinstate stay on the product version the term was written on; a renewal
+  // or rewrite starts a new term on the current one.
+  const midTermForm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
+  // riskScreen: the screen a carrier pack defines for the product (the whole
+  // risk step for a pack product, or extra sections under a core product's
+  // built-in step); riskTables: the lookup tables its rules read.
+  const { cfg, riskFields, riskScreen, riskTables } = useProductConfiguration(q.productCode, {
+    formPolicyId: midTermForm && policyIdParam ? policyIdParam : undefined,
+    onLoaded: () => setRiskScreenChecked(false),
+  })
+  useHomeownersAutoDefaults({
+    productCode: q.productCode,
+    cfg,
+    coverages: q.coverages,
+    setCoverages: (coverages) => setQ(prev => ({ ...prev, coverages })),
+    buildDefaults: buildHomeownerDefaults,
+    appliedRef: hoDefaultsApplied,
+    autoDefaultsRef: autoDefaultCoveragesRef,
+  })
 
   useEffect(() => {
     if (isReadOnlyView) return
@@ -1856,24 +1877,6 @@ export function QuoteWizard() {
     overrideReason
   ])
 
-  async function loadConfig(code: ProductCode) {
-    try { setCfg(await api.getProductConfig(code)) } catch { setCfg(null) }
-    try {
-      // Endorse, cancel, and reinstate stay on the product version the term was
-      // written on; a renewal or rewrite starts a new term on the current one.
-      const midTerm = wizardMode === 'endorse' || wizardMode === 'cancel' || wizardMode === 'reinstate'
-      const form = await api.getProductForm(code, midTerm && policyIdParam ? policyIdParam : undefined)
-      setRiskFields(form?.fields || [])
-      setRiskScreen(form?.screen || null)
-      setRiskTables(form?.tables || {})
-    } catch {
-      setRiskFields([])
-      setRiskScreen(null)
-      setRiskTables({})
-    }
-    setRiskScreenChecked(false)
-  }
-
   async function loadQuoteFromServer(quoteId: string) {
     if (!quoteId) return
     setLoadingDraft(true)
@@ -2095,6 +2098,26 @@ export function QuoteWizard() {
     return false
   }
 
+  /** True when the current product already has data a product change would clear. */
+  function hasProductSpecificData(): boolean {
+    if (!q.productCode) return false
+    const answers = Object.values(q.qualificationAnswers || {}).some((value) => value !== '' && value !== null && value !== undefined)
+    // Defaults the wizard applied itself are not the agent's data.
+    const coverages = Array.isArray(q.coverages) && q.coverages.length > 0 && JSON.stringify(q.coverages) !== autoDefaultCoveragesRef.current
+    const risks = JSON.stringify(q.risks || []) !== JSON.stringify(defaultRisksForProduct(q.productCode))
+    return answers || coverages || risks
+  }
+
+  /** Product select: confirm before clearing another product's coverages, risks and answers. */
+  function requestProductChange(code: QuoteProductCode) {
+    if (isViewOnly || lockCoreProductFields) return
+    if (code !== q.productCode && hasProductSpecificData()) {
+      setPendingProductChange(code)
+      return
+    }
+    onProductChange(code)
+  }
+
   function onProductChange(code: QuoteProductCode) {
     if (isViewOnly) return
     if (lockCoreProductFields) return
@@ -2113,11 +2136,10 @@ export function QuoteWizard() {
     setQuoteDocumentModel(null)
     resetBindingState()
     setQualificationErrors({})
-    if (!code) {
-      setCfg(null)
-      setRiskFields([])
-      setRiskScreen(null)
-    }
+    // The previous product's configuration and risk form are dropped by
+    // useProductConfiguration when the product code actually changes. Resetting
+    // here would orphan an in-flight load when the same product is chosen again.
+    autoDefaultCoveragesRef.current = ''
   }
 
   async function searchPrimaryInsured(query: string) {
@@ -2785,7 +2807,10 @@ export function QuoteWizard() {
         resp = { ...preview, quoteId: draft?.quoteId || '', quoteNumber: draft?.quoteNumber || '', status: 'Rated', progressStep: 7 }
       } else {
         setEndorsementPreview(null)
-        resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode)
+        // A policy transaction rates against the policy's current coverages, so
+        // codes already on the policy are carried rather than refused.
+        const policyForRating = wizardMode === 'quote' ? undefined : policyContext?.policyId || boundPolicy?.policyId || policyIdParam || undefined
+        resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode, policyForRating)
       }
       const rateWarnings: ValidationFinding[] = Array.isArray(resp?.validation?.warnings) ? resp.validation.warnings : []
       setValidationResult(rateWarnings.length ? { title: 'Rating checks', errors: [], warnings: rateWarnings } : null)
@@ -2814,7 +2839,7 @@ export function QuoteWizard() {
         setSearchParams(params, { replace: true })
       }
     } catch (e: any) {
-      if (!showValidationStop(e, 'rate')) setError(e.message || String(e))
+      if (!showValidationStop(e, 'rate')) setError(coverageErrorMessage(e) || e.message || String(e))
     } finally { setAction(null) }
   }
 
@@ -2832,7 +2857,7 @@ export function QuoteWizard() {
       setDraft(prev => prev ? { ...prev, status: 'Converted', progressStep: steps.length } : prev)
       applyLocalQuoteAudit('Converted', steps.length)
     } catch (e: any) {
-      if (!showValidationStop(e, 'bind')) setError(e.message || String(e))
+      if (!showValidationStop(e, 'bind')) setError(coverageErrorMessage(e) || e.message || String(e))
     } finally { setAction(null) }
   }
 
@@ -2928,7 +2953,7 @@ export function QuoteWizard() {
       }
     } catch (e: any) {
       if (showValidationStop(e, 'issue')) return
-      const msg = e.message || String(e)
+      const msg = coverageErrorMessage(e) || e.message || String(e)
       setError(msg)
       toast.error('Action failed', msg)
     } finally { setAction(null) }
@@ -3489,6 +3514,18 @@ export function QuoteWizard() {
       {validationResult && (
         <ValidationFindings title={validationResult.title} errors={validationResult.errors} warnings={validationResult.warnings} />
       )}
+      {pendingProductChange !== null && q.productCode && (
+        <ProductChangeDialog
+          from={productLabel(q.productCode as ProductCode)}
+          to={pendingProductChange ? productLabel(pendingProductChange as ProductCode) : 'no product'}
+          onKeep={() => setPendingProductChange(null)}
+          onChange={() => {
+            const next = pendingProductChange
+            setPendingProductChange(null)
+            onProductChange(next)
+          }}
+        />
+      )}
       {ackRequest && (
         <ValidationAcknowledgeDialog
           action={ackRequest.action}
@@ -3816,7 +3853,7 @@ export function QuoteWizard() {
                 aria-invalid={Boolean(setupErrors.productCode)}
                 aria-describedby={setupErrors.productCode ? 'wizard-setup-product-error' : undefined}
                 value={q.productCode || ''}
-                onChange={e => onProductChange(e.target.value as QuoteProductCode)}
+                onChange={e => requestProductChange(e.target.value as QuoteProductCode)}
                 disabled={lockCoreProductFields || !q.country || !q.state || loadingUnderwritingCompanies || isViewOnly}
               >
                 <option value="">
@@ -5757,8 +5794,52 @@ function DwellingRiskEditor({ value, onChange }: { value: any; onChange: (v:any)
   )
 }
 
-function CoverageSelector({ product, cfg, value, onChange, disabled }: { product: ProductCode; cfg: any | null; value: any[]; onChange: (v:any[])=>void; disabled?: boolean }) {
-  if (!cfg) return <div className="muted">Loading product config...</div>
+/** Confirms a product change that would clear the current product's coverages, risks and answers. */
+export function ProductChangeDialog({ from, to, onKeep, onChange }: { from: string; to: string; onKeep: () => void; onChange: () => void }) {
+  const keepRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const onKeepRef = useRef(onKeep)
+  onKeepRef.current = onKeep
+  // Runs once per opening: re-renders must not move focus back to "Keep".
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    keepRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onKeepRef.current()
+      if (event.key !== 'Tab' || !panelRef.current) return
+      // Keep keyboard focus inside the dialog.
+      const buttons = Array.from(panelRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))
+      if (!buttons.length) return
+      const first = buttons[0]
+      const last = buttons[buttons.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      previous?.focus?.()
+    }
+  }, [])
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="product-change-title">
+      <div className="modal-panel" ref={panelRef}>
+        <div className="modal-header">
+          <h3 id="product-change-title">Change product to {to}?</h3>
+        </div>
+        <p>Coverages, risk details and qualification answers entered for {from} will be cleared. Insureds and policy details are kept.</p>
+        <div className="product-change-actions" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button type="button" className="btn-secondary" ref={keepRef} onClick={onKeep}>Keep {from}</button>
+          <button type="button" onClick={onChange}>Change product</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function CoverageSelector({ product, cfg, value, onChange, disabled }: { product: ProductCode; cfg: any | null; value: any[]; onChange: (v:any[])=>void; disabled?: boolean }) {
+  // Never show (or apply defaults from) another product's configuration.
+  if (!configMatchesProduct(cfg, product)) return <div className="muted">Loading product config...</div>
   const covs = Array.isArray(cfg.coverages) ? cfg.coverages : []
   if (product === 'homeowners') {
     return <HomeownersCoverageEditor cfg={cfg} selections={value} onChange={onChange} disabled={disabled} />

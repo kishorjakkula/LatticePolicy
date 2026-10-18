@@ -99,7 +99,8 @@ export async function createOrRateQuote(
   tenantId: string,
   body: any,
   requestedQuoteId: string | null,
-  updatedBy: string
+  updatedBy: string,
+  options: { previousPayload?: any } = {}
 ): Promise<{
   quoteId: string
   quoteNumber: string | null
@@ -130,7 +131,9 @@ export async function createOrRateQuote(
 
   // Rules from the carrier pack's screen for this product. The wizard applies
   // the same rules; enforcing them here means the API cannot be used to skip them.
-  const screenViolations = productRuleViolations(tenantId, body)
+  // A policy transaction rated here (cancel, renew, rewrite in the wizard)
+  // carries coverage codes already on the policy; only new ones are refused.
+  const screenViolations = productRuleViolations(tenantId, body, { previous: options.previousPayload })
   if (screenViolations.length > 0) {
     throw new ValidationError('INVALID_QUOTE', {
       message: 'Quote does not satisfy the rules for this product',

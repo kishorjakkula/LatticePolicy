@@ -897,7 +897,9 @@ describe('carrier technical-admin LLM release governance', () => {
       })
       expect(credential.token).toMatch(/^lpa_/)
       const stored = await q('SELECT * FROM llm_automation_credentials WHERE credential_id=$1', [credential.credentialId])
-      expect(JSON.stringify(stored.rows[0])).not.toContain(credential.token.split('_').pop())
+      // The secret itself may contain '_', so take everything after the id.
+      const secret = /^lpa_[0-9a-f-]{36}_(.+)$/.exec(credential.token)![1]
+      expect(JSON.stringify(stored.rows[0])).not.toContain(secret)
       const register = (token: string) =>
         request(createApp())
           .post('/api/v1/admin/llm/releases')

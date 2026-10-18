@@ -8,10 +8,16 @@ import {
   useOfacScreens,
   useUwReferrals,
   usePolicyIntegrityExceptions,
+  useCoverageIntegrity,
   useUpdatePolicyIntegrityExceptionMutation,
   useRetryPolicyIntegrityExceptionMutation,
 } from '../../api/hooks'
 import { adminApi } from '../../api/admin.api'
+import { listProducts } from '../../api/references.api'
+import { StatusBadge } from '../../components/StatusBadge'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '../../api/queryKeys'
+import { tenantId } from '../../api/request'
 
 type OutboxRow = {
   message_id: string
@@ -78,6 +84,7 @@ export function OperationsDashboardPage() {
       )}
 
       <PolicyIntegrityPanel />
+      <CoverageIntegrityPanel />
       <OutboxPanel />
       <NotificationsPanel />
       <OfacPanel />
@@ -124,6 +131,37 @@ function PolicyIntegrityPanel() {
                   <button className="button secondary" type="button" disabled={update.isPending} onClick={() => update.mutate({ id: row.exception_id, status: 'Resolved', note: 'Resolved by operator' })}>Resolve</button>
                 </div>
               </td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </PanelShell>
+  )
+}
+
+/** Records whose coverages are not offered by their product (WP-0002). Report only. */
+export function CoverageIntegrityPanel() {
+  const { data, isLoading, error } = useCoverageIntegrity()
+  const products = useQuery({ queryKey: queryKeys.products.list(tenantId()), queryFn: () => listProducts() })
+  const productLabel = (code: string) => products.data?.items?.find((product) => product.code === code)?.label || code
+  const rows = data?.items || []
+  return (
+    <PanelShell title="Coverage Integrity" isLoading={isLoading} error={error} empty={rows.length === 0} emptyMessage="All quotes and policies carry only coverages their product offers.">
+      <p className="muted">Records whose coverages are not offered by their product. Report only; nothing is changed.</p>
+      {data?.truncated && <p className="muted">Showing the 500 most recent of {data.total}.</p>}
+      <div className="ps-table-card" style={{ overflowX: 'auto' }}>
+        <table className="table table-no-sticky-head">
+          <thead><tr><th>Record</th><th>Number</th><th>Product</th><th>Status</th><th>Unexpected coverages</th><th>Date</th></tr></thead>
+          <tbody>{rows.map((row) => (
+            <tr key={`${row.kind}-${row.id}`}>
+              <td>{row.kind === 'policy' ? 'Policy' : 'Quote'}</td>
+              <td>
+                <Link to={row.kind === 'policy' ? `/policies/${row.id}` : `/wizard?quoteId=${row.id}`}>{row.number || row.id.slice(0, 8)}</Link>
+              </td>
+              <td>{productLabel(row.productCode)}</td>
+              <td>{row.status ? <StatusBadge status={row.status} /> : '—'}</td>
+              <td>{row.note ? <span className="muted">{row.note}</span> : row.unexpectedCodes.join(', ')}</td>
+              <td>{row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}</td>
             </tr>
           ))}</tbody>
         </table>

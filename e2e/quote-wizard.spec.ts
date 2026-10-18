@@ -47,6 +47,8 @@ test.describe('new business quote wizard', () => {
     await expect(page.getByRole('main')).toContainText(/Vehicle 1\s*\d{4} Toyota Camry/)
     await ratePremium(page)
     await expect(page.getByRole('row').filter({ hasText: 'BI - Bodily Injury Liability' })).toBeVisible()
+    // WP-0002: never another product's coverages (the homeowners set seen in the defect).
+    await expect(page.getByRole('row').filter({ hasText: /\bEND_(WB|PPRC|ORD|ERC)\b|Dwelling/ })).toHaveCount(0)
     await expect(page.getByRole('status').filter({ hasText: 'Pending' })).toBeVisible()
 
     await continueToStep(page, 8)

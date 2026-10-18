@@ -1,9 +1,15 @@
 import { config } from '../config'
 import { request, tenantId, authHeaders, handleUnauthorized, API_PREFIX } from './request'
 
-/** `transaction` names the transaction being rated (renewal, rewrite) for rate-level validation rules. */
-export const createQuote = (payload: any, transaction?: string) =>
-  request<any>('POST', `/v1/quotes${transaction ? `?transaction=${encodeURIComponent(transaction)}` : ''}`, payload)
+/** `transaction` names the transaction being rated (renewal, rewrite) for rate-level validation rules; `policyId` the policy it changes. */
+export const createQuote = (payload: any, transaction?: string, policyId?: string) => {
+  const params = new URLSearchParams()
+  if (transaction) params.set('transaction', transaction)
+  // For a policy transaction: coverages already on the policy are carried.
+  if (policyId) params.set('policyId', policyId)
+  const query = params.toString()
+  return request<any>('POST', `/v1/quotes${query ? `?${query}` : ''}`, payload)
+}
 
 export const bindQuote = (id: string, payload?: any) => request<any>('POST', `/v1/quotes/${id}/bind`, payload)
 

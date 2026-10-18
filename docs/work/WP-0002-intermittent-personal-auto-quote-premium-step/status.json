@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "id": "WP-0002",
+  "title": "Intermittent: personal auto quote Premium step shows homeowners coverages (END_WB, END_PPRC, END_ORD, END_ERC) instead o",
+  "track": "major",
+  "trackReason": "coverages and premium shown to users (rating area is always major)",
+  "state": "in-progress",
+  "createdAt": "2026-10-18T15:33:56.499Z",
+  "stages": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "writes": "status.json",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "business-analyst",
+      "name": "Business Analyst",
+      "writes": "01-requirements.md",
+      "gateAfter": "A",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "software-architect",
+      "name": "Software Architect",
+      "writes": "02-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "ui-designer",
+      "name": "UI/UX Designer",
+      "writes": "03-ui-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "test-designer",
+      "name": "Test Designer",
+      "writes": "04-test-design.md",
+      "gateAfter": "B",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "developer",
+      "name": "Developer",
+      "writes": "05-implementation.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 2
+    },
+    {
+      "id": "unit-test",
+      "name": "Unit Test",
+      "writes": "06-unit-tests.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "writes": "07-code-review.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "security-compliance",
+      "name": "Security and Compliance",
+      "writes": "08-security-compliance.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "automation-test",
+      "name": "Automation Test",
+      "writes": "09-automation-tests.md",
+      "gateAfter": "C",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "writes": "10-release.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "e2e-test",
+      "name": "End-to-End Test",
+      "writes": "11-e2e-results.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "business-validation",
+      "name": "Business Validation",
+      "writes": "12-business-validation.md",
+      "gateAfter": "D",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Knowledge Curator",
+      "writes": "13-lessons.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "A",
+      "approvedBy": "Kishor Kumar Jakkula (product owner)",
+      "approvedAt": "2026-10-18",
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": "Approved (all five recommended answers accepted)"
+    },
+    {
+      "gate": "B",
+      "approvedBy": "Kishor Kumar Jakkula (product owner)",
+      "approvedAt": "2026-10-18",
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": "Approve"
+    },
+    {
+      "gate": "C",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    },
+    {
+      "gate": "D",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-18T15:33:56.499Z",
+      "event": "started on the major track (coverages and premium shown to users (rating area is always major))"
+    },
+    {
+      "at": "2026-10-18T15:35:10.890Z",
+      "event": "Business Analyst completed"
+    },
+    {
+      "at": "2026-10-18T15:36:59.178Z",
+      "event": "Gate A approved by Kishor Kumar Jakkula (product owner): \"Approved (all five recommended answers accepted)\""
+    },
+    {
+      "at": "2026-10-18T15:40:06.876Z",
+      "event": "Software Architect completed"
+    },
+    {
+      "at": "2026-10-18T15:40:45.024Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-18T15:41:02.981Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-18T15:42:30.441Z",
+      "event": "Gate B approved by Kishor Kumar Jakkula (product owner): \"Approve\""
+    },
+    {
+      "at": "2026-10-18T15:51:11.948Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T15:51:12.076Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T15:59:16.267Z",
+      "event": "returned to Developer: Code review: 1 blocker (homeowners auto-defaults use previous product config), 3 majors, 7 minors (07-code-review.md)"
+    },
+    {
+      "at": "2026-10-18T16:04:48.306Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T16:04:48.432Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T16:33:01.509Z",
+      "event": "returned to Developer: Re-review: policyId on POST /quotes not tied to a policy transaction of the same product (major); frontend tests never render the config wiring; 5 minors (07-code-review.md rows 25-29)"
+    },
+    {
+      "at": "2026-10-18T16:33:01.638Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T16:33:01.763Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T16:40:41.055Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-18T16:45:45.331Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-18T16:45:45.481Z",
+      "event": "Automation Test completed"
+    }
+  ]
+}

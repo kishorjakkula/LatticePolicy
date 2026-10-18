@@ -4,9 +4,13 @@ import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { hasPermission } from '../auth.js'
 import { enqueueJob } from '../jobs/jobQueue.js'
 import { routeParam } from '../lib/utils.js'
+import { coverageIntegrityReport } from '../services/coverage-integrity.service.js'
 
 export const adminDashboardRoutes = Router()
 const integrityActionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
+// The coverage report scans many records; its own budget keeps dashboard loads
+// from using up the remediation actions' limit.
+const coverageReportLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
 
 adminDashboardRoutes.use((_req, res, next) => {
   if (!getDb()) {
@@ -22,6 +26,17 @@ function toStatusMap(rows: any[], key: 'status' | 'disposition'): Record<string,
   }
   return map
 }
+
+// GET /admin/dashboard/coverage-integrity
+// Quotes and policies whose coverages their product (version) does not offer.
+// Read-only: correcting records is the carrier's decision.
+adminDashboardRoutes.get('/coverage-integrity', coverageReportLimiter, async (req, res, next) => {
+  try {
+    res.json(await coverageIntegrityReport(req.tenant!.tenantId))
+  } catch (err) {
+    next(err)
+  }
+})
 
 // GET /admin/dashboard/summary
 // Aggregate counts across operational queues so operators can see failures

@@ -17,9 +17,53 @@ import { loadCarrierTables } from '../lib/carrier-tables.js'
  * meet the rules too, so neither can be used to get around them.
  */
 
-export type RuledTransaction = 'quote' | 'bind' | 'endorsement' | 'renewal' | 'rewrite' | 'reinstatement' | 'cancellation'
+export type RuledTransaction = 'quote' | 'bind' | 'issue' | 'endorsement' | 'renewal' | 'rewrite' | 'reinstatement' | 'cancellation'
 
-export function productRuleViolations(tenantId: string, payload: any): ScreenViolation[] {
+/** A coverage code the payload's product (version) does not define. */
+export type CoverageViolation = { path: string; keyword: 'coverage'; code: string; message: string }
+export type ProductRuleViolation = ScreenViolation | CoverageViolation
+export type ProductRuleOptions = {
+  /**
+   * The policy's current payload, for changes to an existing policy: undefined
+   * coverage codes already on it are carried (and reported elsewhere), only
+   * codes the change introduces are refused.
+   */
+  previous?: any
+}
+
+/** Coverage codes the payload's product defines: its pinned version, else the current definition. */
+function definedCoverages(tenantId: string, payload: any): { codes: Set<string>; label: string } | null {
+  const snapshot = requireLoadedSnapshot(tenantId, payload)
+  const code = String(payload?.productCode || '').trim().toLowerCase()
+  const config = snapshot ? snapshot.definition.config : code && getInstalledProductCapabilities(code) ? loadProductConfig(code) : null
+  if (!config || !Array.isArray(config.coverages)) return null
+  const codes = new Set<string>(config.coverages.map((coverage: any) => String(coverage?.code || '')).filter(Boolean))
+  return { codes, label: String(config?.capabilities?.label || code || 'this product') }
+}
+
+/**
+ * Coverage codes the product does not offer. Every product transaction refuses
+ * them, so a quote or policy can never carry, be rated with or bind coverage
+ * that was not defined (and filed) for its product.
+ */
+export function coverageViolations(tenantId: string, payload: any, options: ProductRuleOptions = {}): CoverageViolation[] {
+  const coverages = Array.isArray(payload?.coverages) ? payload.coverages : []
+  if (!coverages.length) return []
+  const defined = definedCoverages(tenantId, payload)
+  if (!defined) return []
+  const carried = new Set<string>(
+    (Array.isArray(options.previous?.coverages) ? options.previous.coverages : []).map((coverage: any) => String(coverage?.code || '')),
+  )
+  const violations: CoverageViolation[] = []
+  coverages.forEach((coverage: any, index: number) => {
+    const code = String(coverage?.code || '').trim()
+    if (!code || defined.codes.has(code) || carried.has(code)) return
+    violations.push({ path: `/coverages/${index}/code`, keyword: 'coverage', code, message: `Coverage ${code} is not offered by ${defined.label}.` })
+  })
+  return violations
+}
+
+function screenViolations(tenantId: string, payload: any): ScreenViolation[] {
   // A pinned payload is checked against the rules of the product version it
   // was written on, not rules added since.
   const snapshot = requireLoadedSnapshot(tenantId, payload)
@@ -32,14 +76,26 @@ export function productRuleViolations(tenantId: string, payload: any): ScreenVio
   return screen ? checkQuoteAgainstScreen(screen, payload, loadCarrierTables(tenantId)) : []
 }
 
-export function assertProductRules(tenantId: string, payload: any, transaction: RuledTransaction): void {
-  const violations = productRuleViolations(tenantId, payload)
+export function productRuleViolations(tenantId: string, payload: any, options: ProductRuleOptions = {}): ProductRuleViolation[] {
+  return [...screenViolations(tenantId, payload), ...coverageViolations(tenantId, payload, options)]
+}
+
+function refuse(transaction: RuledTransaction, violations: ProductRuleViolation[]): void {
   if (violations.length === 0) return
   throw new ValidationError('PRODUCT_RULES_NOT_MET', {
     message: `This ${transaction} does not satisfy the rules for this product`,
     transaction,
     errors: violations,
   })
+}
+
+export function assertProductRules(tenantId: string, payload: any, transaction: RuledTransaction, options: ProductRuleOptions = {}): void {
+  refuse(transaction, productRuleViolations(tenantId, payload, options))
+}
+
+/** Issue re-checks coverage codes only; bind already enforced the screen rules. */
+export function assertCoveragesDefined(tenantId: string, payload: any, transaction: RuledTransaction): void {
+  refuse(transaction, coverageViolations(tenantId, payload))
 }
 
 /** True when two payloads describe the same risks and coverages. */

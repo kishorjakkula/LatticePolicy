@@ -63,6 +63,13 @@ export const adminApi = {
   retryPolicyIntegrityException: (id: string) =>
     request<any>('POST', `/v1/admin/dashboard/policy-integrity/${id}/retry`, {}),
   exportPolicyIntegrityExceptions: () => requestBlob('/v1/admin/dashboard/policy-integrity?format=csv'),
+  /** Quotes and policies whose coverages their product does not offer (read-only). */
+  coverageIntegrity: () =>
+    request<{
+      items: Array<{ kind: 'quote' | 'policy'; id: string; number: string | null; productCode: string; status: string | null; unexpectedCodes: string[]; note: string | null; createdAt: string | null }>
+      total: number
+      truncated: boolean
+    }>('GET', '/v1/admin/dashboard/coverage-integrity'),
   // Job queue administration
   listJobDefinitions: () => request<{ items: any[] }>('GET', '/v1/admin/jobs/definitions'),
   listJobRuns: (opts?: { jobCode?: string; status?: string; limit?: number }) => {

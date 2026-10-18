@@ -296,6 +296,13 @@ export function useDashboardNotifications(status?: string) {
   })
 }
 
+export function useCoverageIntegrity() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.coverageIntegrity(),
+    queryFn: () => adminApi.coverageIntegrity(),
+  })
+}
+
 export function usePolicyIntegrityExceptions(status?: string) {
   return useQuery({
     queryKey: queryKeys.dashboard.policyIntegrity(status),

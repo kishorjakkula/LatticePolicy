@@ -544,7 +544,7 @@ async function computeEndorsementTimeline(
   // An endorsement stays on the product version the term was written on,
   // whatever the client sent, and must satisfy that version's rules.
   carryProductPin(nextPayload, previousPayload)
-  assertProductRules(tenantId, nextPayload, 'endorsement')
+  assertProductRules(tenantId, nextPayload, 'endorsement', { previous: previousPayload })
   const previousPremium = rate(tenantId, previousPayload)
   const nextPremium = rate(tenantId, nextPayload)
   const hypotheticalVersion: TimelineVersionInput = {
