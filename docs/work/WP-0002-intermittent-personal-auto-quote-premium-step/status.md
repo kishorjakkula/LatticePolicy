@@ -1,0 +1,37 @@
+<!-- Generated from status.json by scripts/delivery/flow.mjs. Do not edit by hand. -->
+# WP-0002: Intermittent: personal auto quote Premium step shows homeowners coverages (END_WB, END_PPRC, END_ORD, END_ERC) instead o
+
+- Track: **major** — coverages and premium shown to users (rating area is always major)
+- State: **in-progress**
+- Next: human approval at Gate A
+
+| Stage | Output | Status | Returns |
+| --- | --- | --- | --- |
+| Orchestrator | `status.json` | done | 0 |
+| Business Analyst | `01-requirements.md` | done | 0 |
+| Software Architect | `02-design.md` | pending | 0 |
+| UI/UX Designer | `03-ui-design.md` | pending | 0 |
+| Test Designer | `04-test-design.md` | pending | 0 |
+| Developer | `05-implementation.md` | pending | 0 |
+| Unit Test | `06-unit-tests.md` | pending | 0 |
+| Code Reviewer | `07-code-review.md` | pending | 0 |
+| Security and Compliance | `08-security-compliance.md` | pending | 0 |
+| Automation Test | `09-automation-tests.md` | pending | 0 |
+| Deployment | `10-release.md` | pending | 0 |
+| End-to-End Test | `11-e2e-results.md` | pending | 0 |
+| Business Validation | `12-business-validation.md` | pending | 0 |
+| Knowledge Curator | `13-lessons.md` | pending | 0 |
+
+## Gates
+
+| Gate | Status | Approved by | Note |
+| --- | --- | --- | --- |
+| A | pending |  |  |
+| B | pending |  |  |
+| C | pending |  |  |
+| D | pending |  |  |
+
+## History
+
+- 2026-10-18T15:33:56.499Z — started on the major track (coverages and premium shown to users (rating area is always major))
+- 2026-10-18T15:35:10.890Z — Business Analyst completed
