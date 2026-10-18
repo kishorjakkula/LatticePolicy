@@ -3,7 +3,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OperationsDashboardPage } from '../OperationsDashboardPage'
+
+vi.mock('../../../api/references.api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../api/references.api')>()),
+  listProducts: async () => ({ items: [] }),
+}))
 
 const useDashboardSummaryMock = vi.fn()
 const useDashboardOutboxMock = vi.fn()
@@ -28,9 +34,11 @@ vi.mock('../../../api/hooks', () => ({
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <OperationsDashboardPage />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>
+        <OperationsDashboardPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

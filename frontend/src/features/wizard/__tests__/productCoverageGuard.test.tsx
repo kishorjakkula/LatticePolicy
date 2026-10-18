@@ -1,15 +1,59 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { CoverageSelector, ProductChangeDialog, coverageErrorMessage } from '../QuoteWizard'
+import {
+  CoverageSelector,
+  ProductChangeDialog,
+  configMatchesProduct,
+  coverageErrorMessage,
+  createLatestGuard,
+  homeownersDefaultsReady,
+} from '../QuoteWizard'
 
 // WP-0002: the wizard must never show or apply another product's coverages.
 const autoConfig = { product: 'personal-auto', coverages: [{ code: 'BI', name: 'Bodily Injury Liability', limits: [100000] }, { code: 'PD', name: 'Property Damage', limits: [50000] }] }
 const homeConfig = { product: 'homeowners', coverages: [{ code: 'A', name: 'Dwelling' }, { code: 'END_WB', name: 'Water Back-Up' }] }
 
+describe('stale product configuration', () => {
+  it('ignores a response that arrives after a newer request (the race that caused the defect)', async () => {
+    const guard = createLatestGuard()
+    let resolveHome!: (value: unknown) => void
+    let resolveAuto!: (value: unknown) => void
+    const applied: unknown[] = []
+    const load = async (code: string, promise: Promise<unknown>) => {
+      const isCurrent = guard.begin(code)
+      const config = await promise
+      if (isCurrent()) applied.push(config)
+    }
+    const home = load('homeowners', new Promise((resolve) => (resolveHome = resolve)))
+    const auto = load('personal-auto', new Promise((resolve) => (resolveAuto = resolve)))
+    resolveAuto(autoConfig)
+    await auto
+    resolveHome(homeConfig) // the older request lands last
+    await home
+    expect(applied).toEqual([autoConfig])
+  })
+
+  it('a reset makes every in-flight response stale', async () => {
+    const guard = createLatestGuard()
+    const isCurrent = guard.begin('homeowners')
+    guard.reset()
+    expect(isCurrent()).toBe(false)
+  })
+
+  it('matches configurations to products, and builds homeowners defaults only from homeowners configuration', () => {
+    expect(configMatchesProduct(autoConfig, 'personal-auto')).toBe(true)
+    expect(configMatchesProduct(homeConfig, 'personal-auto')).toBe(false)
+    expect(configMatchesProduct(null, 'personal-auto')).toBe(false)
+    // Personal Auto → Homeowners: the previous product's configuration is still loaded.
+    expect(homeownersDefaultsReady('homeowners', autoConfig)).toBe(false)
+    expect(homeownersDefaultsReady('homeowners', homeConfig)).toBe(true)
+    expect(homeownersDefaultsReady('personal-auto', homeConfig)).toBe(false)
+  })
+})
+
 describe('coverage step guard', () => {
   it('shows loading instead of another product\'s coverages when a late configuration arrives', () => {
-    const onChange = vi.fn()
-    render(<CoverageSelector product="personal-auto" cfg={homeConfig} value={[]} onChange={onChange} />)
+    render(<CoverageSelector product="personal-auto" cfg={homeConfig} value={[]} onChange={vi.fn()} />)
     expect(screen.getByText('Loading product config...')).toBeInTheDocument()
     expect(screen.queryByText(/Water Back-Up|Dwelling/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Apply Default Coverages' })).not.toBeInTheDocument()
@@ -35,6 +79,20 @@ describe('product change confirmation', () => {
     expect(onKeep).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: 'Change product' }))
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps focus where the user put it across re-renders, and traps Tab inside the dialog', () => {
+    const { rerender } = render(<ProductChangeDialog from="Homeowners" to="Personal Auto" onKeep={() => undefined} onChange={() => undefined} />)
+    const keep = screen.getByRole('button', { name: 'Keep Homeowners' })
+    const change = screen.getByRole('button', { name: 'Change product' })
+    change.focus()
+    // A parent re-render passes new inline callbacks.
+    rerender(<ProductChangeDialog from="Homeowners" to="Personal Auto" onKeep={() => undefined} onChange={() => undefined} />)
+    expect(change).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(keep).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(change).toHaveFocus()
   })
 })
 

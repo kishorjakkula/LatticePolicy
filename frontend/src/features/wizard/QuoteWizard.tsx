@@ -512,6 +512,33 @@ const STEP_SCREENS: Record<number, ValidationScreen> = {
   1: 'product', 2: 'qualification', 3: 'insureds', 4: 'risk', 5: 'coverages', 6: 'rating', 7: 'premium', 8: 'forms',
 }
 
+/** Homeowners defaults may only be built from homeowners' own configuration. */
+export function homeownersDefaultsReady(productCode: string | null | undefined, cfg: any): boolean {
+  return productCode === 'homeowners' && cfg?.product === 'homeowners'
+}
+
+/** True when a loaded product configuration belongs to the given product. */
+export function configMatchesProduct(cfg: any, productCode: string | null | undefined): boolean {
+  return Boolean(cfg && productCode && (!cfg.product || cfg.product === productCode))
+}
+
+/**
+ * Remembers the last request started; a response for an earlier request is
+ * stale. Used so a late product configuration never replaces the current one.
+ */
+export function createLatestGuard() {
+  let latest: string | null = null
+  return {
+    begin(key: string) {
+      latest = key
+      return () => latest === key
+    },
+    reset() {
+      latest = null
+    },
+  }
+}
+
 /**
  * Messages for coverages the product does not offer, from a rating, bind or
  * issue error (`INVALID_QUOTE` / `PRODUCT_RULES_NOT_MET` with keyword "coverage").
@@ -826,7 +853,9 @@ export function QuoteWizard() {
   // The product whose configuration was requested last. A response for any
   // other product arrived late and is ignored, so the wizard never shows or
   // applies another product's coverages (WP-0002).
-  const configRequestRef = useRef('')
+  const configGuardRef = useRef(createLatestGuard())
+  // The homeowners defaults the wizard applied itself (not the agent's choices).
+  const autoDefaultCoveragesRef = useRef('')
   const [pendingProductChange, setPendingProductChange] = useState<QuoteProductCode | null>(null)
   const [riskFields, setRiskFields] = useState<Field[]>([])
   // Screen a carrier pack defines for the product: the whole risk step for a
@@ -954,7 +983,7 @@ export function QuoteWizard() {
 
   useEffect(() => {
     if (!q.productCode) {
-      configRequestRef.current = ''
+      configGuardRef.current.reset()
       setCfg(null)
       setRiskFields([])
       setRiskScreen(null)
@@ -963,12 +992,14 @@ export function QuoteWizard() {
     void loadConfig(q.productCode)
   }, [q.productCode])
   useEffect(() => {
-    if (!cfg) return
-    if (q.productCode !== 'homeowners') return
+    // Only homeowners' own configuration; on a product change the previous
+    // product's configuration is still in this render's closure (WP-0002).
+    if (!homeownersDefaultsReady(q.productCode, cfg)) return
     const hasSelections = Array.isArray(q.coverages) && q.coverages.length > 0
     if (hoDefaultsApplied.current && hasSelections) return
     const defaults = buildHomeownerDefaults(cfg, q.coverages)
     hoDefaultsApplied.current = true
+    autoDefaultCoveragesRef.current = JSON.stringify(defaults)
     setQ(prev => ({ ...prev, coverages: defaults }))
   }, [cfg, q.productCode, q.coverages])
 
@@ -1881,9 +1912,8 @@ export function QuoteWizard() {
   ])
 
   async function loadConfig(code: ProductCode) {
-    configRequestRef.current = code
+    const isCurrent = configGuardRef.current.begin(code)
     setCfg(null)
-    const isCurrent = () => configRequestRef.current === code
     try {
       const loaded = await api.getProductConfig(code)
       if (!isCurrent()) return
@@ -2135,7 +2165,8 @@ export function QuoteWizard() {
   function hasProductSpecificData(): boolean {
     if (!q.productCode) return false
     const answers = Object.values(q.qualificationAnswers || {}).some((value) => value !== '' && value !== null && value !== undefined)
-    const coverages = Array.isArray(q.coverages) && q.coverages.length > 0
+    // Defaults the wizard applied itself are not the agent's data.
+    const coverages = Array.isArray(q.coverages) && q.coverages.length > 0 && JSON.stringify(q.coverages) !== autoDefaultCoveragesRef.current
     const risks = JSON.stringify(q.risks || []) !== JSON.stringify(defaultRisksForProduct(q.productCode))
     return answers || coverages || risks
   }
@@ -2168,11 +2199,14 @@ export function QuoteWizard() {
     setQuoteDocumentModel(null)
     resetBindingState()
     setQualificationErrors({})
-    if (!code) {
-      setCfg(null)
-      setRiskFields([])
-      setRiskScreen(null)
-    }
+    // Drop the previous product's configuration and risk form now, so nothing
+    // (defaults, rules, fields) runs on it while the new product loads.
+    configGuardRef.current.reset()
+    autoDefaultCoveragesRef.current = ''
+    setCfg(null)
+    setRiskFields([])
+    setRiskScreen(null)
+    setRiskTables({})
   }
 
   async function searchPrimaryInsured(query: string) {
@@ -2840,7 +2874,10 @@ export function QuoteWizard() {
         resp = { ...preview, quoteId: draft?.quoteId || '', quoteNumber: draft?.quoteNumber || '', status: 'Rated', progressStep: 7 }
       } else {
         setEndorsementPreview(null)
-        resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode)
+        // A policy transaction rates against the policy's current coverages, so
+        // codes already on the policy are carried rather than refused.
+        const policyForRating = wizardMode === 'quote' ? undefined : policyContext?.policyId || boundPolicy?.policyId || policyIdParam || undefined
+        resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode, policyForRating)
       }
       const rateWarnings: ValidationFinding[] = Array.isArray(resp?.validation?.warnings) ? resp.validation.warnings : []
       setValidationResult(rateWarnings.length ? { title: 'Rating checks', errors: [], warnings: rateWarnings } : null)
@@ -5827,19 +5864,33 @@ function DwellingRiskEditor({ value, onChange }: { value: any; onChange: (v:any)
 /** Confirms a product change that would clear the current product's coverages, risks and answers. */
 export function ProductChangeDialog({ from, to, onKeep, onChange }: { from: string; to: string; onKeep: () => void; onChange: () => void }) {
   const keepRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const onKeepRef = useRef(onKeep)
+  onKeepRef.current = onKeep
+  // Runs once per opening: re-renders must not move focus back to "Keep".
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     keepRef.current?.focus()
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onKeep() }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onKeepRef.current()
+      if (event.key !== 'Tab' || !panelRef.current) return
+      // Keep keyboard focus inside the dialog.
+      const buttons = Array.from(panelRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))
+      if (!buttons.length) return
+      const first = buttons[0]
+      const last = buttons[buttons.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
       previous?.focus?.()
     }
-  }, [onKeep])
+  }, [])
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="product-change-title">
-      <div className="modal-panel">
+      <div className="modal-panel" ref={panelRef}>
         <div className="modal-header">
           <h3 id="product-change-title">Change product to {to}?</h3>
         </div>
@@ -5855,7 +5906,7 @@ export function ProductChangeDialog({ from, to, onKeep, onChange }: { from: stri
 
 export function CoverageSelector({ product, cfg, value, onChange, disabled }: { product: ProductCode; cfg: any | null; value: any[]; onChange: (v:any[])=>void; disabled?: boolean }) {
   // Never show (or apply defaults from) another product's configuration.
-  if (!cfg || (cfg.product && cfg.product !== product)) return <div className="muted">Loading product config...</div>
+  if (!configMatchesProduct(cfg, product)) return <div className="muted">Loading product config...</div>
   const covs = Array.isArray(cfg.coverages) ? cfg.coverages : []
   if (product === 'homeowners') {
     return <HomeownersCoverageEditor cfg={cfg} selections={value} onChange={onChange} disabled={disabled} />

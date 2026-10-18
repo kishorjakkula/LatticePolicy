@@ -8,7 +8,7 @@ import { createUser } from '../users.js'
 import { ensureTenantRbacDefaults } from '../rbac.js'
 import { createOrRateQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
-import { issuePolicy } from '../services/lifecycle.service.js'
+import { cancelPolicy, issuePolicy, renewPolicy, rewritePolicy } from '../services/lifecycle.service.js'
 import { executeEndorsement } from '../services/endorsement.service.js'
 import { coverageIntegrityReport } from '../services/coverage-integrity.service.js'
 
@@ -39,6 +39,15 @@ async function boundPolicy(tenant = tenantId) {
   const quote = await createOrRateQuote({} as any, tenant, payload(['BI', 'PD']), null, 'integration-test')
   const bound = await bindQuote({} as any, tenant, quote.quoteId, {}, 'integration-test', null)
   return { quote, policyId: bound.policyId }
+}
+
+/** An issued personal auto policy whose latest version also carries the given foreign codes. */
+async function issuedPolicyCarrying(codes: string[], tenant = tenantId) {
+  const { policyId } = await boundPolicy(tenant)
+  await withTenantTx(tenant, (db) => issuePolicy(db, tenant, policyId, {}, actor))
+  if (codes.length) await addVersionWithCoverages(tenant, policyId, codes)
+  const current = (await getDb()!.query('SELECT payload FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 ORDER BY processed_at DESC LIMIT 1', [tenant, policyId])).rows[0].payload
+  return { policyId, current }
 }
 
 /** Records a later policy version carrying extra coverage codes (models legacy data). */
@@ -137,19 +146,56 @@ describe('coverage codes belong to the product', () => {
     ).rejects.toMatchObject({ code: 'PRODUCT_RULES_NOT_MET', details: expect.objectContaining({ errors: [expect.objectContaining({ code: 'END_WB' })] }) })
   })
 
+  it('renewal and rewrite carry codes already on the policy but refuse new ones', async () => {
+    const renewal = await issuedPolicyCarrying(['A'])
+    await expect(
+      withTenantTx(tenantId, (db) => renewPolicy(db, tenantId, renewal.policyId, { payload: { ...renewal.current, coverages: [...renewal.current.coverages, { code: 'END_WB', selected: true }] } }, actor)),
+    ).rejects.toMatchObject({ code: 'PRODUCT_RULES_NOT_MET', details: expect.objectContaining({ transaction: 'renewal', errors: [expect.objectContaining({ code: 'END_WB' })] }) })
+    await withTenantTx(tenantId, (db) => renewPolicy(db, tenantId, renewal.policyId, { payload: renewal.current, overrideReason: 'integration' }, actor))
+
+    const rewrite = await issuedPolicyCarrying(['A'])
+    // A rewrite replaces a cancelled policy.
+    await withTenantTx(tenantId, (db) => cancelPolicy(db, tenantId, rewrite.policyId, { effectiveDate: '2026-07-15', reason: 'rewrite' }, actor))
+    await expect(
+      withTenantTx(tenantId, (db) => rewritePolicy(db, tenantId, rewrite.policyId, { effectiveDate: '2026-08-01', payload: { ...rewrite.current, coverages: [...rewrite.current.coverages, { code: 'END_WB', selected: true }] } }, actor)),
+    ).rejects.toMatchObject({ code: 'PRODUCT_RULES_NOT_MET', details: expect.objectContaining({ transaction: 'rewrite' }) })
+    await withTenantTx(tenantId, (db) => rewritePolicy(db, tenantId, rewrite.policyId, { effectiveDate: '2026-08-01', payload: rewrite.current, overrideReason: 'integration' }, actor))
+  })
+
+  it('a policy carrying foreign codes can still be rated for cancellation in the wizard and cancelled', async () => {
+    const { policyId, current } = await issuedPolicyCarrying(['A', 'END_WB'])
+    const rate = (query: string) =>
+      request(app).post(`/api/v1/quotes${query}`).set('Authorization', `Bearer ${adminToken}`).set('X-Tenant', tenantId).send(current)
+    // Without the policy context the carried codes are refused; with it they are carried.
+    await rate('?transaction=cancel').expect(422)
+    await rate(`?transaction=cancel&policyId=${policyId}`).expect(200)
+    // Adding a new foreign code during the transaction is still refused.
+    await request(app)
+      .post(`/api/v1/quotes?transaction=cancel&policyId=${policyId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Tenant', tenantId)
+      .send({ ...current, coverages: [...current.coverages, { code: 'DWELLING', selected: true }] })
+      .expect(422)
+    await withTenantTx(tenantId, (db) => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2026-09-01', reason: 'insured request', payload: current }, actor))
+  })
+
   it('reports records with foreign coverages to administrators only, per tenant, without changing them', async () => {
     const quote = await createOrRateQuote({} as any, tenantId, payload(['BI', 'PD']), null, 'integration-test')
     await getDb()!.query(
       `UPDATE quotes SET payload = jsonb_set(payload, '{coverages}', (payload->'coverages') || '[{"code":"DWELLING","selected":true}]'::jsonb) WHERE tenant_id=$1 AND quote_id=$2`,
       [tenantId, quote.quoteId],
     )
+    const own = await issuedPolicyCarrying(['END_ORD'])
+    // The other tenant has bad records too; they must never appear for this tenant.
+    const foreign = await issuedPolicyCarrying(['END_ERC'], otherTenant)
     const before = (await getDb()!.query('SELECT payload FROM quotes WHERE quote_id=$1', [quote.quoteId])).rows[0].payload
     const report = await coverageIntegrityReport(tenantId)
-    const entry = report.items.find((item) => item.id === quote.quoteId)
-    expect(entry).toMatchObject({ kind: 'quote', productCode: 'personal-auto', unexpectedCodes: ['DWELLING'] })
-    expect(report.items.some((item) => item.kind === 'policy' && item.unexpectedCodes.includes('A'))).toBe(true)
+    expect(report.items.find((item) => item.id === quote.quoteId)).toMatchObject({ kind: 'quote', productCode: 'personal-auto', unexpectedCodes: ['DWELLING'] })
+    expect(report.items.find((item) => item.id === own.policyId)).toMatchObject({ kind: 'policy', unexpectedCodes: ['END_ORD'] })
+    expect(report.items.some((item) => item.id === foreign.policyId)).toBe(false)
+    expect((await coverageIntegrityReport(otherTenant)).items.map((item) => item.id)).toEqual([foreign.policyId])
     expect((await getDb()!.query('SELECT payload FROM quotes WHERE quote_id=$1', [quote.quoteId])).rows[0].payload).toEqual(before)
-    expect((await coverageIntegrityReport(otherTenant)).items).toEqual([])
+    expect(report.total).toBe(report.items.length)
 
     const http = (token: string) =>
       request(app).get('/api/v1/admin/dashboard/coverage-integrity').set('Authorization', `Bearer ${token}`).set('X-Tenant', tenantId)

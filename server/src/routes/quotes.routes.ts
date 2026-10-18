@@ -19,6 +19,7 @@ import { loadTenantAiMlConfig } from '../tenantAi.js'
 import { inferQuoteAiInsights } from '../aiMl.js'
 import { validateQuoteDetailed } from '../contracts.js'
 import { runValidationGate } from '../lib/validation-gate.js'
+import { loadPolicyContext } from '../persistence.js'
 import { addMonths } from '../lib/date.utils.js'
 import { csvEscape, routeParam } from '../lib/utils.js'
 
@@ -120,11 +121,14 @@ quoteRoutes.post(
       // Rate-level validation rules. The wizard names the transaction it rates
       // for (renewal, rewrite); a plain quote is new business.
       const transaction = typeof req.query.transaction === 'string' ? req.query.transaction : 'new_business'
+      const policyId = typeof req.query.policyId === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.policyId) ? req.query.policyId : null
       const result = await req.tx(async (db) => {
         const validation = await runValidationGate(db, tenantId, {
           level: 'rate', transaction, payload: body, actor: updatedBy,
         })
-        const rated = await quoteService.createOrRateQuote(db, tenantId, body, requestedQuoteId, updatedBy)
+        // The policy's current payload (tenant-scoped), for codes it already carries.
+        const previousPayload = policyId ? (await loadPolicyContext(db, tenantId, policyId))?.latestPayload : undefined
+        const rated = await quoteService.createOrRateQuote(db, tenantId, body, requestedQuoteId, updatedBy, { previousPayload })
         return rated && typeof rated === 'object' ? { ...rated, validation } : rated
       })
       ok(res, result)

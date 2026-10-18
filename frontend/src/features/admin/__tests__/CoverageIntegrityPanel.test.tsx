@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const state = vi.hoisted(() => ({ result: { data: null as any, isLoading: false, error: null as unknown } }))
+vi.mock('../../../api/references.api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../api/references.api')>()),
+  listProducts: async () => ({ items: [{ code: 'personal-auto', label: 'Personal Auto' }, { code: 'homeowners', label: 'Homeowners' }] }),
+}))
 vi.mock('../../../api/hooks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../api/hooks')>()),
   useCoverageIntegrity: () => state.result,
@@ -12,9 +17,11 @@ import { CoverageIntegrityPanel } from '../OperationsDashboardPage'
 
 const show = () =>
   render(
-    <MemoryRouter>
-      <CoverageIntegrityPanel />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>
+        <CoverageIntegrityPanel />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 
 describe('Coverage Integrity panel', () => {
@@ -36,6 +43,17 @@ describe('Coverage Integrity panel', () => {
     expect(screen.getByText('A, END_WB')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'PC-1' })).toHaveAttribute('href', '/policies/p1')
     expect(screen.getByRole('link', { name: 'Q-1' })).toHaveAttribute('href', '/wizard?quoteId=q1')
+  })
+
+  it('shows product names and status badges', async () => {
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: { total: 1, truncated: false, items: [{ kind: 'policy', id: 'p1', number: 'PC-1', productCode: 'personal-auto', status: 'Bound', unexpectedCodes: ['A'], note: null, createdAt: null }] },
+    }
+    show()
+    expect(await screen.findByText('Personal Auto')).toBeInTheDocument()
+    expect(document.querySelector('.status-badge, [class*="status"]')).not.toBeNull()
   })
 
   it('shows the empty state when every record is clean', () => {

@@ -13,6 +13,9 @@ import {
   useRetryPolicyIntegrityExceptionMutation,
 } from '../../api/hooks'
 import { adminApi } from '../../api/admin.api'
+import { listProducts } from '../../api/references.api'
+import { StatusBadge } from '../../components/StatusBadge'
+import { useQuery } from '@tanstack/react-query'
 
 type OutboxRow = {
   message_id: string
@@ -137,6 +140,8 @@ function PolicyIntegrityPanel() {
 /** Records whose coverages are not offered by their product (WP-0002). Report only. */
 export function CoverageIntegrityPanel() {
   const { data, isLoading, error } = useCoverageIntegrity()
+  const products = useQuery({ queryKey: ['products'], queryFn: () => listProducts() })
+  const productLabel = (code: string) => products.data?.items?.find((product) => product.code === code)?.label || code
   const rows = data?.items || []
   return (
     <PanelShell title="Coverage Integrity" isLoading={isLoading} error={error} empty={rows.length === 0} emptyMessage="All quotes and policies carry only coverages their product offers.">
@@ -151,8 +156,8 @@ export function CoverageIntegrityPanel() {
               <td>
                 <Link to={row.kind === 'policy' ? `/policies/${row.id}` : `/wizard?quoteId=${row.id}`}>{row.number || row.id.slice(0, 8)}</Link>
               </td>
-              <td>{row.productCode}</td>
-              <td>{row.status || '—'}</td>
+              <td>{productLabel(row.productCode)}</td>
+              <td>{row.status ? <StatusBadge status={row.status} /> : '—'}</td>
               <td>{row.note ? <span className="muted">{row.note}</span> : row.unexpectedCodes.join(', ')}</td>
               <td>{row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}</td>
             </tr>

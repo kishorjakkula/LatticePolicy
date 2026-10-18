@@ -409,7 +409,7 @@ transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.v
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
     await pinToCurrentProduct(tenantId, payload)
-    assertProductRules(tenantId, payload, 'rewrite')
+    assertProductRules(tenantId, payload, 'rewrite', { previous: (policy as any).payload })
     const prem = rate(tenantId, payload)
     const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {
@@ -501,7 +501,7 @@ transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.vie
     payload.termMonths = termMonths
     payload.productCode = payload.productCode || (policy as any).productCode
     await pinToCurrentProduct(tenantId, payload)
-    assertProductRules(tenantId, payload, 'renewal')
+    assertProductRules(tenantId, payload, 'renewal', { previous: (policy as any).payload })
     const prem = rate(tenantId, payload)
     const uw = await evaluateUW(tenantId, payload)
     if (uw.decision === 'Decline') {
