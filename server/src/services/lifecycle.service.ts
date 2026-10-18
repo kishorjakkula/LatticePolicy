@@ -30,7 +30,7 @@ import {
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
-import { assertProductRules, sameRiskData } from './product-rules.service.js'
+import { assertCoveragesDefined, assertProductRules, sameRiskData } from './product-rules.service.js'
 import { carryProductPin, pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
@@ -181,6 +181,13 @@ export async function issuePolicy(
   const policyRow = policyRes.rows[0]
   requireProductCapability(String(policyRow.product_code || ''), 'issue')
   const transition = assertPolicyTransactionState('issue', policyRow.status)
+  if (!transition.idempotent) {
+    // A bound policy must not be issued with coverage its product does not offer.
+    const issueCtx = await loadPolicyContext(db, tenantId, policyId)
+    const issuePayload = issueCtx?.latestPayload
+    if (issuePayload && typeof issuePayload === 'object')
+      assertCoveragesDefined(tenantId, { ...issuePayload, productCode: issuePayload.productCode || policyRow.product_code }, 'issue')
+  }
   if (transition.idempotent) {
     return {
       policyId,
@@ -323,7 +330,7 @@ export async function cancelPolicy(
   // A plain cancellation is never blocked by product rules. One that also
   // changes the risk data has to meet them, or it would be a way around them.
   if (overridePayload && !sameRiskData(overridePayload, ctx.latestPayload)) {
-    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'cancellation')
+    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'cancellation', { previous: ctx.latestPayload })
   }
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
@@ -635,7 +642,7 @@ export async function reinstatePolicy(
   // Reinstating a policy as it was is always allowed; changing the risk while
   // doing so has to meet the product's rules like any other change.
   if (overridePayload && !sameRiskData(overridePayload, ctx.latestPayload)) {
-    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'reinstatement')
+    assertProductRules(tenantId, { ...txPayload, productCode: txPayload?.productCode || policyProductCode(policyRow) }, 'reinstatement', { previous: ctx.latestPayload })
   }
   const fullPremium = safeMoney(policyPremiumSummary(policyRow)?.total?.amount)
 
@@ -866,7 +873,7 @@ export async function renewPolicy(
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   // A renewal starts a new term on the product as it is defined now.
   await pinToCurrentProduct(tenantId, payload)
-  assertProductRules(tenantId, payload, 'renewal')
+  assertProductRules(tenantId, payload, 'renewal', { previous: prevPayload })
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)
   const authority = await resolveAuthorityDecision(q, {
@@ -1187,7 +1194,7 @@ export async function rewritePolicy(
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   // A rewrite starts a new term on the product as it is defined now.
   await pinToCurrentProduct(tenantId, payload)
-  assertProductRules(tenantId, payload, 'rewrite')
+  assertProductRules(tenantId, payload, 'rewrite', { previous: prevPayload })
 
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)

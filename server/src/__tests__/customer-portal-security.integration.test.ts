@@ -70,7 +70,6 @@ function quotePayload(customerName: string, vin: string) {
     coverages: [
       { code: 'BI', selected: true, limit: 100000 },
       { code: 'PD', selected: true, limit: 50000 },
-      { code: 'UM', selected: false, limit: 50000 },
     ],
   }
 }

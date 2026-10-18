@@ -31,6 +31,14 @@ A carrier pack product:
 Defines coverages, limits, deductibles, `ratingKeys`, and the product's
 capability descriptor. `product`, `version`, and `capabilities` are required.
 
+The `coverages` list is the complete set of coverage codes the product offers.
+Every transaction (rate, bind, issue, endorsement, renewal, rewrite, and a
+cancellation or reinstatement that changes risk data) refuses a payload with a
+coverage code the product version does not define (`coverageViolations` in
+`server/src/services/product-rules.service.ts`); a change to an existing policy
+may carry codes already on it. Records that already carry foreign codes appear
+in Administration → Operations Dashboard → Coverage Integrity.
+
 The `capabilities` object contains:
 
 - `label` and `riskLabel` for user-facing metadata;

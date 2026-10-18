@@ -18,7 +18,7 @@ export const productLines: ProductLine[] = [
     policyPrefix: 'HO-',
     state: 'TX',
     risk: { type: 'dwelling', address: '1 Main St', construction: 'masonry', yearBuilt: 2015, squareFeet: 2000, roofAgeYears: 5, protectionClass: 3 },
-    coverage: { code: 'DWELLING', selected: true, limit: 300_000 },
+    coverage: { code: 'A', selected: true, limit: 300_000 },
   },
   {
     productCode: 'cyber',

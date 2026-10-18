@@ -52,7 +52,7 @@
       "name": "Developer",
       "writes": "05-implementation.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -60,7 +60,7 @@
       "name": "Unit Test",
       "writes": "06-unit-tests.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -131,11 +131,11 @@
     },
     {
       "gate": "B",
-      "approvedBy": null,
-      "approvedAt": null,
+      "approvedBy": "Kishor Kumar Jakkula (product owner)",
+      "approvedAt": "2026-10-18",
       "waivedBy": null,
       "waivedAt": null,
-      "note": null
+      "note": "Approve"
     },
     {
       "gate": "C",
@@ -178,6 +178,18 @@
     {
       "at": "2026-10-18T15:41:02.981Z",
       "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-18T15:42:30.441Z",
+      "event": "Gate B approved by Kishor Kumar Jakkula (product owner): \"Approve\""
+    },
+    {
+      "at": "2026-10-18T15:51:11.948Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T15:51:12.076Z",
+      "event": "Unit Test completed"
     }
   ]
 }

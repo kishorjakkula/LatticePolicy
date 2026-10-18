@@ -23,6 +23,7 @@ vi.mock('../../../api/hooks', () => ({
   usePolicyIntegrityExceptions: (...args: any[]) => usePolicyIntegrityExceptionsMock(...args),
   useUpdatePolicyIntegrityExceptionMutation: () => ({ mutate: updateIntegrityMutateMock, isPending: false }),
   useRetryPolicyIntegrityExceptionMutation: () => ({ mutate: retryIntegrityMutateMock, isPending: false }),
+  useCoverageIntegrity: () => ({ data: { items: [], total: 0, truncated: false }, isLoading: false, error: null }),
 }))
 
 function renderPage() {

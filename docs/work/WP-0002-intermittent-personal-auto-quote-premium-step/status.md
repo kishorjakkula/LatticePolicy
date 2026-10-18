@@ -3,7 +3,7 @@
 
 - Track: **major** — coverages and premium shown to users (rating area is always major)
 - State: **in-progress**
-- Next: human approval at Gate B
+- Next: Code Reviewer (`07-code-review.md`)
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
@@ -12,8 +12,8 @@
 | Software Architect | `02-design.md` | done | 0 |
 | UI/UX Designer | `03-ui-design.md` | done | 0 |
 | Test Designer | `04-test-design.md` | done | 0 |
-| Developer | `05-implementation.md` | pending | 0 |
-| Unit Test | `06-unit-tests.md` | pending | 0 |
+| Developer | `05-implementation.md` | done | 0 |
+| Unit Test | `06-unit-tests.md` | done | 0 |
 | Code Reviewer | `07-code-review.md` | pending | 0 |
 | Security and Compliance | `08-security-compliance.md` | pending | 0 |
 | Automation Test | `09-automation-tests.md` | pending | 0 |
@@ -27,7 +27,7 @@
 | Gate | Status | Approved by | Note |
 | --- | --- | --- | --- |
 | A | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Approved (all five recommended answers accepted) |
-| B | pending |  |  |
+| B | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Approve |
 | C | pending |  |  |
 | D | pending |  |  |
 
@@ -39,3 +39,6 @@
 - 2026-10-18T15:40:06.876Z — Software Architect completed
 - 2026-10-18T15:40:45.024Z — UI/UX Designer completed
 - 2026-10-18T15:41:02.981Z — Test Designer completed
+- 2026-10-18T15:42:30.441Z — Gate B approved by Kishor Kumar Jakkula (product owner): "Approve"
+- 2026-10-18T15:51:11.948Z — Developer completed
+- 2026-10-18T15:51:12.076Z — Unit Test completed
