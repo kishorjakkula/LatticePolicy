@@ -41,3 +41,5 @@ __pycache__/
 
 # Vite
 *.local
+# Local agent worktrees (generated agent definitions in .claude/agents are tracked)
+.claude/worktrees/

@@ -1,0 +1,30 @@
+name: Delivery Checks
+
+# Every pull request names its work package (docs/delivery/WORKFLOW.md) or
+# declares a quick change. Gates A (and B on the major track) must be approved.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  work-package:
+    name: Work package and gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check the pull request's work package
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: node scripts/delivery/check.mjs --pr

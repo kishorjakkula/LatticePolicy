@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "id": "WP-0001",
+  "title": "Tool-neutral delivery agent flow for LatticePolicy coding requests",
+  "track": "standard",
+  "trackReason": "process, tooling and documentation change; no product data, tenancy, rating or AI runtime behavior",
+  "state": "in-progress",
+  "createdAt": "2026-10-18T04:02:40.216Z",
+  "stages": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "writes": "status.json",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "business-analyst",
+      "name": "Business Analyst",
+      "writes": "01-requirements.md",
+      "gateAfter": "A",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "software-architect",
+      "name": "Software Architect",
+      "writes": "02-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "test-designer",
+      "name": "Test Designer",
+      "writes": "03-test-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "developer",
+      "name": "Developer",
+      "writes": "04-implementation.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 1
+    },
+    {
+      "id": "unit-test",
+      "name": "Unit Test",
+      "writes": "05-unit-tests.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "writes": "06-code-review.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "security-compliance",
+      "name": "Security and Compliance",
+      "writes": "07-security-compliance.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "automation-test",
+      "name": "Automation Test",
+      "writes": "08-automation-tests.md",
+      "gateAfter": "C",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "writes": "09-release.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "e2e-test",
+      "name": "End-to-End Test",
+      "writes": "10-e2e-results.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "business-validation",
+      "name": "Business Validation",
+      "writes": "11-business-validation.md",
+      "gateAfter": "D",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Knowledge Curator",
+      "writes": "12-lessons.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "A",
+      "approvedBy": "Kishor Kumar Jakkula (product owner)",
+      "approvedAt": "2026-10-18",
+      "note": "I like that, good job … as per the standards you can decide which suits us and add value to the project and implement"
+    },
+    {
+      "gate": "C",
+      "approvedBy": null,
+      "approvedAt": null,
+      "note": null
+    },
+    {
+      "gate": "D",
+      "approvedBy": null,
+      "approvedAt": null,
+      "note": null
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-18T04:02:40.216Z",
+      "event": "started on the standard track (process, tooling and documentation change; no product data, tenancy, rating or AI runtime behavior)"
+    },
+    {
+      "at": "2026-10-18T04:03:21.791Z",
+      "event": "Business Analyst completed"
+    },
+    {
+      "at": "2026-10-18T04:03:21.928Z",
+      "event": "Gate A approved by Kishor Kumar Jakkula (product owner): \"I like that, good job … as per the standards you can decide which suits us and add value to the project and implement\""
+    },
+    {
+      "at": "2026-10-18T04:03:22.071Z",
+      "event": "Software Architect completed"
+    },
+    {
+      "at": "2026-10-18T04:03:22.310Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-18T04:03:22.465Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T04:03:22.608Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T04:15:32.452Z",
+      "event": "returned to Developer: Code review found 5 major and 11 minor issues (06-code-review.md)"
+    },
+    {
+      "at": "2026-10-18T04:20:31.688Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-18T04:20:31.822Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-18T04:25:28.973Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-18T04:26:11.611Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-18T04:26:11.833Z",
+      "event": "Automation Test completed"
+    }
+  ]
+}
