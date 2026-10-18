@@ -119,3 +119,14 @@
 .validation-rules__changes code {
   overflow-wrap: anywhere;
 }
+/* Admin labels are small caps; hints and choice labels read better as sentences. */
+.validation-rules .validation-rules__muted,
+.validation-rules .ps-checkbox,
+.validation-rules .ps-checkbox * {
+  text-transform: none;
+  letter-spacing: normal;
+}
+.validation-rules .ps-checkbox {
+  font-size: 0.9rem;
+  font-weight: normal;
+}

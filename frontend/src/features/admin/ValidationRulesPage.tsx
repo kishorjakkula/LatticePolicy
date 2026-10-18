@@ -422,8 +422,8 @@ function RuleEditor({
                 <option key={field.path} value={field.path}>{`${field.area}: ${field.label}`}</option>
               ))}
             </datalist>
-            <span className="validation-rules__muted">Use [*] to check every item, for example risks[*].vin.</span>
           </label>
+          <span className="validation-rules__muted">Use [*] to check every item, for example risks[*].vin.</span>
           {draft.kind === 'condition' && (
             <label>
               Condition that must be true
