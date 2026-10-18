@@ -75,7 +75,7 @@ The orchestrator chooses a track and says why; the requester can override it.
 
 | Track | Use for | Stages | Human gates |
 | --- | --- | --- | --- |
-| `quick` | Copy or typo fixes, a small bug with an obvious cause, test-only or docs-only changes | 0, 4, 5, 6, 9 | C |
+| `quick` | Copy or typo fixes, a small bug with an obvious cause, test-only or docs-only changes | 0, 5, 6, 7, 10 | C |
 | `standard` | A feature or behavior change inside one area | all (architect writes a short design; the UI/UX designer writes "No user-facing change" when nothing is visible) | A, C, D |
 | `major` | New product line, migrations, security, tenancy, authentication, rating, filed forms, customer data, AI, or cross-module change | all, with an ADR for lasting decisions | A, B, C, D |
 

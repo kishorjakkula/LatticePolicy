@@ -154,7 +154,7 @@ test('requirements approval is asked for unless the requester waives it in words
   assert.equal(runUntilGate(asked.dir).gate, 'C')
 })
 
-test('returns re-run later stages and stop for a person after two', (t) => {
+test('returns re-run later stages and the third return stops for a person', (t) => {
   const root = sandbox(t)
   const { dir } = startPackage(root, 'Fix typo on the dashboard')
   runUntilGate(dir)
@@ -350,4 +350,41 @@ test('agents:sync --check works from a path with spaces', (t) => {
   assert.match(check.stderr, /out of date/)
   assert.equal(run([]).status, 0)
   assert.equal(run(['--check']).status, 0)
+})
+
+// Regression tests for the WP-0001 re-review findings.
+
+test('only review and security stages are gated by findings, and formatting does not hide them', (t) => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'findings-')), 'review.md')
+  t.after(() => fs.rmSync(path.dirname(file), { recursive: true, force: true }))
+  fs.writeFileSync(file, '| Severity | Finding | Outcome |\n| --- | --- | --- |\n| **Major** | a | still open |\n| High | b | returned |\n| Major | c | fixed in abc |\n| Critical | d | accepted by owner |\n| Minor | e | open |\n')
+  assert.deepEqual(openSevereFindings(file).map((cells) => cells[1]), ['a', 'b'])
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Show the agent name on the quote list')
+  // A risk table in the requirements is not a findings table.
+  fs.writeFileSync(path.join(dir, '01-requirements.md'), '| Risk | Note | Status |\n| --- | --- | --- |\n| High | Data volume | open |\n')
+  completeStage(dir, 'business-analyst')
+})
+
+test('the security template has a findings table the check reads', () => {
+  const template = fs.readFileSync(path.join(realRoot, 'docs/delivery/templates/08-security-compliance.md'), 'utf8')
+  assert.match(template, /\| Severity \| Finding \| Resolution \| Outcome \|/)
+})
+
+test('a quick declaration needs a real reason on the same line', (t) => {
+  const root = sandbox(t)
+  assert.equal(pullRequestProblems(root, 'Delivery track: quick —\n## Summary').length, 1)
+  assert.equal(pullRequestProblems(root, 'Delivery track: quick — one-line reason').length, 1)
+  assert.deepEqual(pullRequestProblems(root, 'Delivery track: quick - docs typo'), [])
+})
+
+test('a UI design can be a single no-user-facing-change line', (t) => {
+  const root = sandbox(t)
+  const { dir } = startPackage(root, 'Add an audit column for request ids', { track: 'standard' })
+  runUntilGate(dir)
+  approveGate(dir, 'A', 'Owner')
+  fillOutput(dir, '02-design.md')
+  completeStage(dir, 'software-architect')
+  fs.writeFileSync(path.join(dir, '03-ui-design.md'), '# UI design\n\nNo user-facing change: server-side audit only.\n')
+  completeStage(dir, 'ui-designer')
 })

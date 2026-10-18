@@ -47,8 +47,8 @@ Design before anything is built, so tests and code follow a known design.
 - **Responsive behavior** at desktop and 390px phone width.
 - **Requirement mapping**: each `REQ-n` → screen and element.
 
-If the change has no user-facing part, write "No user-facing change" with the
-reason and complete the stage.
+If the change has no user-facing part, replace the template sections with the
+single line "No user-facing change: <reason>" and complete the stage.
 
 ## Rules
 

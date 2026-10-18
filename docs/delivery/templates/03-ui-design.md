@@ -1,6 +1,6 @@
 # UI design — {{id}}
 
-> UI/UX designer. Fill every placeholder below (the flow will not complete the stage while any remain). Write "No user-facing change" with the reason if nothing is visible to users.
+> UI/UX designer. Fill every placeholder below (the flow will not complete the stage while any remain). If nothing is visible to users, replace everything below this line with "No user-facing change: <reason>".
 
 ## User journeys
 

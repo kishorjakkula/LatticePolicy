@@ -251,13 +251,24 @@ export function placeholderCount(file) {
  */
 export function openSevereFindings(file) {
   if (!fs.existsSync(file)) return []
+  // Formatting (bold, code) does not hide a severity; only an outcome that says
+  // the finding is fixed, accepted or not applicable closes it.
+  const plain = (cell) => cell.replace(/[*_`]/g, '').trim().toLowerCase()
   return fs
     .readFileSync(file, 'utf8')
     .split(/\r?\n/)
     .filter((line) => line.trim().startsWith('|'))
-    .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim().toLowerCase()))
-    .filter((cells) => cells.length >= 2 && /^(blocker|major|high|critical)\b/.test(cells[0]) && /^open\b/.test(cells[cells.length - 1]))
+    .map((line) => line.split('|').slice(1, -1).map(plain))
+    .filter(
+      (cells) =>
+        cells.length >= 2 &&
+        /^(blocker|major|high|critical)\b/.test(cells[0]) &&
+        !/^(fixed|accepted|not applicable|n\/a|resolved|verified)\b/.test(cells[cells.length - 1]),
+    )
 }
+
+/** Stages whose findings table gates completion. */
+const FINDINGS_STAGES = ['code-reviewer', 'security-compliance']
 
 export function completeStage(dir, agentId, options = {}) {
   const status = readStatus(dir)
@@ -269,7 +280,7 @@ export function completeStage(dir, agentId, options = {}) {
   const left = placeholderCount(output)
   if (outputRequired && left === null) throw new Error(`${step.stage.writes} does not exist`)
   if (outputRequired && left > 0) throw new Error(`${step.stage.writes} still has ${left} ${PLACEHOLDER} placeholder(s)`)
-  const open = openSevereFindings(output)
+  const open = FINDINGS_STAGES.includes(step.stage.id) ? openSevereFindings(output) : []
   if (open.length) throw new Error(`${step.stage.writes} still has ${open.length} open blocker/major/high/critical finding(s); fix them or return the package`)
   step.stage.status = 'done'
   status.history.push({ at: now(options.clock), event: `${step.stage.name} completed` })
@@ -441,8 +452,9 @@ export function pullRequestProblems(root, body, author = '') {
   if (/\[bot\]$/.test(author) || author === 'dependabot') return []
   // Template guidance lives in HTML comments; only what the author wrote counts.
   const text = String(body || '').replace(/<!--[\s\S]*?-->/g, '')
-  const quickReason = /Delivery track:\s*quick\s*[—–-]\s*(.+)/i.exec(text)
-  const quick = Boolean(quickReason && !/^</.test(quickReason[1].trim()))
+  const quickReason = /Delivery track:[ \t]*quick[ \t]*[—–-][ \t]*([^\r\n]*)/i.exec(text)
+  const reason = quickReason ? quickReason[1].trim() : ''
+  const quick = reason.length > 0 && !/^</.test(reason) && !/^one-line reason$/i.test(reason)
   const reference = /Work package:\s*(WP-\d{4})\b/i.exec(text)
   if (!reference && quick) return []
   if (!reference)

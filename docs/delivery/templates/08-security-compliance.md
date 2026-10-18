@@ -13,3 +13,9 @@
 | AI data boundary | TODO(agent) | |
 | Regulatory (filings, notices, disclosures, privacy) | TODO(agent) | |
 | Code scanning and dependency results | TODO(agent) | |
+
+## Findings
+
+| Severity | Finding | Resolution | Outcome |
+| --- | --- | --- | --- |
+| TODO(agent): critical, high, medium or low — or "none" | | | |
