@@ -15,6 +15,7 @@ import {
 } from '@lattice-policy/rules'
 import { withTenantTx, toRawQuery } from '../db.js'
 import { buildRiskFields, loadProductConfig } from '../lib/products.js'
+import { listProductPackDirs } from '../lib/product-registry.js'
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../errors/domain.errors.js'
 
 /**
@@ -335,9 +336,13 @@ const COMMON_FIELDS: CatalogField[] = [
 
 export function validationFieldCatalog(tenantId: string, productCode?: string | null): CatalogField[] {
   const fields = [...COMMON_FIELDS]
-  if (productCode) {
+  // Only an installed product's own code reaches the file loaders, never the raw request value.
+  const installed = productCode
+    ? listProductPackDirs().find((entry) => entry.code === String(productCode).trim().toLowerCase())?.code
+    : undefined
+  if (installed) {
     try {
-      for (const field of buildRiskFields(productCode as any, loadProductConfig(productCode as any), tenantId))
+      for (const field of buildRiskFields(installed as any, loadProductConfig(installed as any), tenantId))
         if (field.path) fields.push({ path: field.path, label: field.label, area: 'Risk' })
     } catch {
       // Unknown or uninstalled product: common fields only.
