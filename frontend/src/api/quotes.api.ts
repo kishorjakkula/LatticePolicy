@@ -1,7 +1,9 @@
 import { config } from '../config'
 import { request, tenantId, authHeaders, handleUnauthorized, API_PREFIX } from './request'
 
-export const createQuote = (payload: any) => request<any>('POST', '/v1/quotes', payload)
+/** `transaction` names the transaction being rated (renewal, rewrite) for rate-level validation rules. */
+export const createQuote = (payload: any, transaction?: string) =>
+  request<any>('POST', `/v1/quotes${transaction ? `?transaction=${encodeURIComponent(transaction)}` : ''}`, payload)
 
 export const bindQuote = (id: string, payload?: any) => request<any>('POST', `/v1/quotes/${id}/bind`, payload)
 

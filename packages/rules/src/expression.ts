@@ -14,6 +14,10 @@
  * Operators  || && !   == != < <= > >=   in, not in   + - * /   ( )
  * Functions  isSet isEmpty len min max abs round lower upper contains
  *            startsWith number
+ *            today()                  the as-of date, YYYY-MM-DD (context `$today`,
+ *                                     else the current UTC date)
+ *            daysBetween(from, to)    whole days from one YYYY-MM-DD date to
+ *                                     another (negative when `to` is earlier)
  *            count(list)              number of items in a list
  *            sum(list, 'field')       total of a field across a list's items
  *            lookup('table', key, 'column')
@@ -298,6 +302,15 @@ function compare(left: unknown, right: unknown): number | null {
   return null
 }
 
+/** Context key holding the as-of date that today() returns. */
+export const TODAY_CONTEXT_KEY = '$today'
+
+function dayNumber(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(value)) return null
+  const time = Date.parse(`${value.slice(0, 10)}T00:00:00Z`)
+  return Number.isFinite(time) ? Math.round(time / 86400000) : null
+}
+
 function numbers(args: unknown[]): number[] | null {
   const out = args.map(toNumber)
   return out.some((value) => value === null) ? null : (out as number[])
@@ -370,6 +383,23 @@ const FUNCTIONS: Record<string, { min: number; max: number; run: (args: unknown[
   },
   startsWith: { min: 2, max: 2, run: ([value, prefix]) => typeof value === 'string' && typeof prefix === 'string' && value.startsWith(prefix) },
   number: { min: 1, max: 1, run: ([value]) => toNumber(value) },
+  today: {
+    min: 0,
+    max: 0,
+    run: (_args, context) => {
+      const pinned = context[TODAY_CONTEXT_KEY]
+      return typeof pinned === 'string' && dayNumber(pinned) !== null ? pinned.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    },
+  },
+  daysBetween: {
+    min: 2,
+    max: 2,
+    run: ([from, to]) => {
+      const start = dayNumber(from)
+      const end = dayNumber(to)
+      return start === null || end === null ? null : end - start
+    },
+  },
 }
 
 function lookup(context: Record<string, unknown>, path: string[]): unknown {

@@ -1,7 +1,7 @@
 import { config } from '../config'
 import { request, tenantId, authHeaders, handleUnauthorized, API_PREFIX } from './request'
 
-export const issuePolicy = (id: string) => request<any>('POST', `/v1/policies/${id}/issue`)
+export const issuePolicy = (id: string, body?: { validationAcknowledgements?: string[] }) => request<any>('POST', `/v1/policies/${id}/issue`, body)
 
 export const getPolicy = (id: string) => request<any>('GET', `/v1/policies/${id}`)
 

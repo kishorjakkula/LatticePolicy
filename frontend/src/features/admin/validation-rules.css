@@ -1,0 +1,121 @@
+.validation-rules {
+  min-width: 0;
+}
+.validation-rules__lede,
+.validation-rules__hint,
+.validation-rules__muted {
+  color: var(--ps-text-secondary, #4a5568);
+}
+.validation-rules__lede {
+  max-width: 860px;
+}
+.validation-rules__muted {
+  font-size: 0.85rem;
+  font-weight: normal;
+}
+.validation-rules__matrix td,
+.validation-rules__matrix th {
+  text-align: center;
+}
+.validation-rules__matrix th[scope='row'] {
+  text-align: left;
+}
+.validation-rules__cell {
+  min-width: 44px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ps-border, #e2e8f0);
+  background: var(--ps-surface, #fff);
+  color: var(--ps-text, #1a202c);
+  font-weight: 600;
+  cursor: pointer;
+}
+.validation-rules__filters,
+.validation-rules__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.validation-rules__filters label,
+.validation-rules__grid label,
+.validation-rules__fieldset > label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.validation-rules input:not([type='checkbox']):not([type='radio']),
+.validation-rules select,
+.validation-rules textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.validation-rules__editor {
+  display: grid;
+  gap: 16px;
+}
+.validation-rules__fieldset {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--ps-border, #e2e8f0);
+  border-radius: var(--ps-radius-sm, 8px);
+  padding: 12px 16px 16px;
+  min-width: 0;
+}
+.validation-rules__fieldset legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.validation-rules__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+}
+.validation-rules__group-label {
+  font-weight: 600;
+  min-width: 110px;
+}
+.validation-rules__help code {
+  white-space: normal;
+}
+.validation-rules__severity {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.validation-rules__severity--error {
+  background: #fed7d7;
+  color: #822727;
+}
+.validation-rules__severity--warning {
+  background: #feebc8;
+  color: #7b341e;
+}
+.validation-rules__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.validation-rules__buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.validation-rules__delete {
+  margin-left: auto;
+}
+.validation-rules__problems {
+  color: #822727;
+  margin: 0;
+}
+.validation-rules__history li {
+  margin-bottom: 8px;
+}
+.validation-rules__changes code {
+  overflow-wrap: anywhere;
+}

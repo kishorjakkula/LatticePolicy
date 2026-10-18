@@ -1,0 +1,53 @@
+.validation-findings {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.validation-findings__title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.validation-findings__group {
+  border: 1px solid var(--ps-border, #e2e8f0);
+  border-left-width: 4px;
+  border-radius: var(--ps-radius-sm, 8px);
+  padding: 10px 14px;
+}
+.validation-findings__group ul,
+.validation-ack__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.validation-findings__group li,
+.validation-ack__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 2px 0;
+}
+.validation-findings__group--error {
+  border-left-color: #c53030;
+  background: #fff5f5;
+  color: #742a2a;
+}
+.validation-findings__group--warning {
+  border-left-color: #b7791f;
+  background: #fffaf0;
+  color: #744210;
+}
+.validation-findings__field {
+  color: var(--ps-text-secondary, #4a5568);
+  font-size: 0.85rem;
+}
+.validation-ack__confirm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 14px 0;
+}
+.validation-ack__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}

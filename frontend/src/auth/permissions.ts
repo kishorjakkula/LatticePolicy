@@ -9,6 +9,7 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
   admin: [
     'menu.admin.llm.view','page.admin.llm.view','llm.releases.read','llm.releases.register','llm.releases.review',
     'menu.admin.ai_audit.view','page.admin.ai_audit.view','ai.audit.read',
+    'menu.admin.validation_rules.view','page.admin.validation_rules.view','admin.validation_rules.read','admin.validation_rules.manage',
     'menu.search.view',
     'menu.portal.view',
     'menu.rating.view',
