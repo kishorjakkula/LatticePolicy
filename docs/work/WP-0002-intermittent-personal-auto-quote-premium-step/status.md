@@ -3,15 +3,15 @@
 
 - Track: **major** — coverages and premium shown to users (rating area is always major)
 - State: **in-progress**
-- Next: human approval at Gate A
+- Next: human approval at Gate B
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
 | Orchestrator | `status.json` | done | 0 |
 | Business Analyst | `01-requirements.md` | done | 0 |
-| Software Architect | `02-design.md` | pending | 0 |
-| UI/UX Designer | `03-ui-design.md` | pending | 0 |
-| Test Designer | `04-test-design.md` | pending | 0 |
+| Software Architect | `02-design.md` | done | 0 |
+| UI/UX Designer | `03-ui-design.md` | done | 0 |
+| Test Designer | `04-test-design.md` | done | 0 |
 | Developer | `05-implementation.md` | pending | 0 |
 | Unit Test | `06-unit-tests.md` | pending | 0 |
 | Code Reviewer | `07-code-review.md` | pending | 0 |
@@ -26,7 +26,7 @@
 
 | Gate | Status | Approved by | Note |
 | --- | --- | --- | --- |
-| A | pending |  |  |
+| A | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Approved (all five recommended answers accepted) |
 | B | pending |  |  |
 | C | pending |  |  |
 | D | pending |  |  |
@@ -35,3 +35,7 @@
 
 - 2026-10-18T15:33:56.499Z — started on the major track (coverages and premium shown to users (rating area is always major))
 - 2026-10-18T15:35:10.890Z — Business Analyst completed
+- 2026-10-18T15:36:59.178Z — Gate A approved by Kishor Kumar Jakkula (product owner): "Approved (all five recommended answers accepted)"
+- 2026-10-18T15:40:06.876Z — Software Architect completed
+- 2026-10-18T15:40:45.024Z — UI/UX Designer completed
+- 2026-10-18T15:41:02.981Z — Test Designer completed

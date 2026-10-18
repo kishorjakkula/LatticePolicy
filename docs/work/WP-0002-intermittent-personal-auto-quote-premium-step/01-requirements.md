@@ -128,8 +128,8 @@ Scenario: The smoke test is reliable
 
 | # | Question | Recommended default | Answer |
 | --- | --- | --- | --- |
-| 1 | When the API receives a coverage code the product does not define, should it refuse the request or silently drop the code? | Refuse with a clear error naming the codes (never change what the user sent silently) | |
-| 2 | Should the check apply to policy changes (endorsement, renewal, rewrite) as well as new business? | Yes, all transactions that carry coverages | |
-| 3 | For existing records with foreign coverages: report only, or also offer a correction? | Report only in this package; corrections are a carrier decision | |
-| 4 | When an agent changes the product mid-quote after entering data, should the wizard ask before clearing coverages and risk details? | Yes: confirm, then clear | |
-| 5 | The bound local-staging policy from the test run: leave as test data or remove? | Leave it (test data); it will appear in the integrity report | |
+| 1 | When the API receives a coverage code the product does not define, should it refuse the request or silently drop the code? | Refuse with a clear error naming the codes (never change what the user sent silently) | Accepted (recommended default), Gate A 2026-10-18 |
+| 2 | Should the check apply to policy changes (endorsement, renewal, rewrite) as well as new business? | Yes, all transactions that carry coverages | Accepted (recommended default), Gate A 2026-10-18 |
+| 3 | For existing records with foreign coverages: report only, or also offer a correction? | Report only in this package; corrections are a carrier decision | Accepted (recommended default), Gate A 2026-10-18 |
+| 4 | When an agent changes the product mid-quote after entering data, should the wizard ask before clearing coverages and risk details? | Yes: confirm, then clear | Accepted (recommended default), Gate A 2026-10-18 |
+| 5 | The bound local-staging policy from the test run: leave as test data or remove? | Leave it (test data); it will appear in the integrity report | Accepted (recommended default), Gate A 2026-10-18 |
