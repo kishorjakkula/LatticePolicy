@@ -1,0 +1,156 @@
+{
+ "items": [
+  {
+   "kind": "quote",
+   "id": "a8ceb6eb-c429-4ad9-bdf3-ac21af3d58f0",
+   "number": "Q20261019-S7J9",
+   "productCode": "personal-auto",
+   "status": "Rated",
+   "unexpectedCodes": [
+    "END_WB"
+   ],
+   "note": null,
+   "createdAt": "2026-10-19T00:52:15.922Z"
+  },
+  {
+   "kind": "quote",
+   "id": "31105c6a-16f9-4e51-a519-23f12ef80872",
+   "number": "Q20261018-MWPP",
+   "productCode": "personal-auto",
+   "status": "Rated",
+   "unexpectedCodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "END_WB",
+    "END_PPRC",
+    "END_ORD",
+    "END_ERC"
+   ],
+   "note": null,
+   "createdAt": "2026-10-18T15:24:09.424Z"
+  },
+  {
+   "kind": "policy",
+   "id": "987896c3-85a9-40b4-bd1b-8e1dbcbc5933",
+   "number": "PC-987896C3",
+   "productCode": "personal-auto",
+   "status": "Bound",
+   "unexpectedCodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "END_WB",
+    "END_PPRC",
+    "END_ORD",
+    "END_ERC"
+   ],
+   "note": null,
+   "createdAt": "2026-10-18T03:16:53.521Z"
+  },
+  {
+   "kind": "quote",
+   "id": "5be36d0d-398e-4b20-94c0-7a75db878e05",
+   "number": "Q20261018-I4TL",
+   "productCode": "personal-auto",
+   "status": "Converted",
+   "unexpectedCodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "END_WB",
+    "END_PPRC",
+    "END_ORD",
+    "END_ERC"
+   ],
+   "note": null,
+   "createdAt": "2026-10-18T03:16:51.802Z"
+  },
+  {
+   "kind": "quote",
+   "id": "ede854f9-580f-463e-a371-cba169d3008e",
+   "number": "Q20261011-4XN9",
+   "productCode": "homeowners",
+   "status": "Draft",
+   "unexpectedCodes": [
+    "CYB_LIAB",
+    "BIZ_INT",
+    "CYB_EXT",
+    "IR_EXP",
+    "DATA_REC",
+    "MEDIA"
+   ],
+   "note": null,
+   "createdAt": "2026-10-11T03:37:35.194Z"
+  },
+  {
+   "kind": "policy",
+   "id": "448574aa-f113-4c6f-b2a1-d0ed9aa10918",
+   "number": "HO-448574AA",
+   "productCode": "homeowners",
+   "status": "Issued",
+   "unexpectedCodes": [
+    "DWELLING"
+   ],
+   "note": null,
+   "createdAt": "2026-10-11T03:26:14.580Z"
+  },
+  {
+   "kind": "quote",
+   "id": "4cf121a8-42d9-4bea-9509-bc2f51026075",
+   "number": "Q20261011-JC83",
+   "productCode": "homeowners",
+   "status": "Converted",
+   "unexpectedCodes": [
+    "DWELLING"
+   ],
+   "note": null,
+   "createdAt": "2026-10-11T03:26:14.553Z"
+  },
+  {
+   "kind": "quote",
+   "id": "8c08e764-2fd3-4320-ab8b-e883c4cadf9d",
+   "number": "Q20261011-QOUC",
+   "productCode": "personal-auto",
+   "status": "Rated",
+   "unexpectedCodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+   ],
+   "note": null,
+   "createdAt": "2026-10-11T03:25:50.026Z"
+  },
+  {
+   "kind": "quote",
+   "id": "cae1a7ba-ed0e-4100-838d-1188e64b226c",
+   "number": "Q20261010-FU82",
+   "productCode": "personal-auto",
+   "status": "Rated",
+   "unexpectedCodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+   ],
+   "note": null,
+   "createdAt": "2026-10-10T22:58:28.207Z"
+  }
+ ],
+ "total": 9,
+ "truncated": false
+}
