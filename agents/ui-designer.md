@@ -64,6 +64,10 @@ single line "No user-facing change: <reason>" and complete the stage.
 - Design for both new business and policy changes when a screen is shared
   (endorsement, cancellation, reinstatement, renewal, rewrite).
 - Customer portal screens show only customer-safe information.
+- When a confirmation or guard protects a state change, list every control
+  that can cause that change (for example product **and** underwriting
+  company, since a company change also clears the product) and design the
+  guard for each.
 - Do not change behavior the requirements did not ask for; raise it as a question.
 
 ## Done when
