@@ -15,7 +15,10 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('heading', { name: `Policy ${policy.policyNumber}` })).toBeVisible()
     await expect(page.getByRole('main')).toContainText('In Force')
-    await expect(page.getByRole('main')).toContainText('personal-auto')
+    const header = page.getByTestId('policy-header')
+    await expect(header).toContainText('Personal Auto')
+    await expect(header).not.toContainText('personal-auto')
+    await expect(header).toContainText(/Premium this term\s*\$[\d,]+\.\d{2}/)
 
     // Actions that are valid for an in-force policy are enabled; the rest are not.
     for (const name of ['Endorse', 'Cancel', 'Renew', 'Non-Renew']) {
@@ -26,8 +29,10 @@ test.describe('policy lifecycle transactions in the browser', () => {
 
     await expect(page.getByRole('row').filter({ hasText: /NB-\d{8}-/ }).first()).toContainText('admin')
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible()
-    await expect(page.getByRole('row').filter({ hasText: 'POLICY_PACKET' }).first()).toContainText('VERIFIED')
-    await expect(page.getByRole('row').filter({ hasText: 'RATING_WORKSHEET' }).first()).toBeVisible()
+    const documentsPanel = page.getByTestId('policy-documents-panel')
+    await expect(documentsPanel.getByRole('row').filter({ hasText: 'Policy packet' }).first()).toContainText('VERIFIED')
+    await expect(documentsPanel.getByRole('row').filter({ hasText: 'Rating worksheet' }).first()).toBeVisible()
+    await expect(documentsPanel).not.toContainText(/POLICY_PACKET|RATING_WORKSHEET/)
   })
 
   test('endorses a policy through the endorsement wizard', async ({ page, request, sessionFor, signInAs }) => {
@@ -120,7 +125,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
 
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('main')).toContainText('Cancelled')
-    await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toContainText('CANCEL')
+    await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toContainText('Cancellation')
   })
 
   test('transaction and policy dates show the stored calendar date', async ({ page, request, sessionFor, signInAs }) => {
@@ -130,7 +135,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await signInAs(page, 'admin')
 
     const [year, month, day] = effective.split('-')
-    const shown = `${month}-${day}-${year}`
+    const shown = `${month}/${day}/${year}`
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('main')).toContainText(new RegExp(`Policy Effective Date\\s*${shown}`))
     // The transaction grid must agree with the header (it used to be a day early).
@@ -149,14 +154,14 @@ test.describe('policy lifecycle transactions in the browser', () => {
 
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('main')).toContainText('Cancelled')
-    await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toContainText('CANCEL')
+    await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toContainText('Cancellation')
 
     // Reinstatement is a single action on the policy view (no wizard).
     await Promise.all([
       page.waitForResponse((response) => response.url().includes(`/policies/${policy.policyId}/reinstate`) && response.ok()),
       page.getByRole('button', { name: 'Reinstate', exact: true }).click(),
     ])
-    await expect(page.getByRole('row').filter({ hasText: /RI-\d{8}-/ }).first()).toContainText('REINSTATE')
+    await expect(page.getByRole('row').filter({ hasText: /RI-\d{8}-/ }).first()).toContainText('Reinstatement')
     await expect(page.getByRole('main')).toContainText('In Force')
     await expect(page.getByRole('button', { name: 'Reinstate', exact: true })).toBeDisabled()
   })
@@ -187,7 +192,9 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await page.getByRole('row').filter({ hasText: /NB-\d{8}-/ }).getByRole('button', { name: 'Audit' }).click()
     await expect(page.getByRole('main')).toContainText(/Audit|Change|Transaction/)
 
-    await page.getByText('View policy as of a date').click()
-    await expect(page.getByRole('main')).toContainText(/as of/i)
+    // The "As of" control sits in the policy header and drives the as-of snapshot.
+    await page.getByTestId('policy-header').getByLabel('As of date').fill(isoDate(0))
+    await page.getByRole('button', { name: 'View as of', exact: true }).click()
+    await expect(page.getByTestId('policy-asof-result')).toContainText(/State as of/)
   })
 })

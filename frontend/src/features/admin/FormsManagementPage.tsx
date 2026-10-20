@@ -5,11 +5,18 @@ import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { RadioGroup } from '../../components/RadioGroup'
+import { FormAttachmentEditor } from './forms/FormAttachmentEditor'
+import { FormScenarioTest } from './forms/FormScenarioTest'
+import { formMatchesScopeFilter, formScopeLabels, useFormsScopeCatalog, type FormScopeSummary } from './forms/useFormsScopeCatalog'
+import { useAuth } from '../../auth/AuthContext'
+import { hasPermission } from '../../auth/permissions'
+import './forms/forms-management.css'
 
 type SectionKey = 'catalog' | 'jurisdictions' | 'applicability' | 'output' | 'security' | 'audit' | 'preview'
 type EditorPopupMode = 'new' | 'view' | 'edit' | null
 
-type FormSummary = {
+type FormSummary = FormScopeSummary & {
   formId: string
   formNumber: string
   formTitle: string
@@ -17,6 +24,10 @@ type FormSummary = {
   workflowStatus: string
   active: boolean
   jurisdictionCount: number
+  productCodes: string[]
+  stateCodes: string[]
+  transactionTypes: string[]
+  templateSource: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -70,21 +81,24 @@ export function FormsManagementPage() {
   const [filterQ, setFilterQ] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterActive, setFilterActive] = useState('')
+  const [filterProduct, setFilterProduct] = useState('')
+  const [filterState, setFilterState] = useState('')
+  const [scopeFilter, setScopeFilter] = useState({ product: '', state: '' })
+  const scopeCatalog = useFormsScopeCatalog()
+  const [testRevision, setTestRevision] = useState(0)
   const [selectedFormId, setSelectedFormId] = useState<string>('')
   const [section, setSection] = useState<SectionKey>('catalog')
   const [auditItems, setAuditItems] = useState<any[]>([])
-  const [previewItems, setPreviewItems] = useState<any[]>([])
   const [templateAsset, setTemplateAsset] = useState<any | null>(null)
   const [templateFile, setTemplateFile] = useState<File | null>(null)
   const [templateUploadResult, setTemplateUploadResult] = useState<TemplateUploadResult | null>(null)
 
   const [formDraft, setFormDraft] = useState({ ...EMPTY_FORM_DRAFT })
   const [jurisdictionDraft, setJurisdictionDraft] = useState({ stateCode: '', regulatoryStatus: 'Pending', approvalTrackingId: '', effectiveDate: '', sunsetDate: '', hasStateExceptions: false, notes: '' })
-  const [applicabilityDraft, setApplicabilityDraft] = useState({ lineOfBusiness: 'personal-auto', productCode: 'personal-auto', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
+  const [applicabilityDraft, setApplicabilityDraft] = useState({ lineOfBusiness: 'personal-auto', productCode: '', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
   const [outputDraft, setOutputDraft] = useState({ templateSource: 'Static PDF', templateUri: '', outputFormat: 'PDF', mergeScope: 'policy', packetPlacement: 'End', sortOrder: 100, active: true })
   const [deliveryDraft, setDeliveryDraft] = useState({ deliveryMethodsText: 'Portal', visibilityText: 'Insured, Agent, Internal', acknowledgementRequired: false, esignRequired: false, active: true })
   const [securityDraft, setSecurityDraft] = useState({ allowedRolesText: 'forms_admin, compliance_admin, read_only', editRolesText: 'forms_admin, compliance_admin', viewRolesText: 'forms_admin, compliance_admin, read_only, admin' })
-  const [previewDraft, setPreviewDraft] = useState({ lineOfBusiness: 'personal-auto', productCode: 'personal-auto', transactionType: 'Quote', state: '', effectiveDate: '' })
 
   const [editingJurisdictionId, setEditingJurisdictionId] = useState('')
   const [editingApplicabilityId, setEditingApplicabilityId] = useState('')
@@ -108,7 +122,8 @@ export function FormsManagementPage() {
 
   const selectedSummary = useMemo(() => items.find((item) => item.formId === selectedFormId) || null, [items, selectedFormId])
   const sortedItems = useMemo(() => {
-    const next = [...items]
+    // Same scope fallbacks as generation: unscoped and 'ALL' forms stay in a filtered catalog.
+    const next = items.filter((item) => formMatchesScopeFilter(item, scopeFilter))
     next.sort((a, b) => {
       const av = toSortValue(a, formsSort.key)
       const bv = toSortValue(b, formsSort.key)
@@ -117,17 +132,30 @@ export function FormsManagementPage() {
       return 0
     })
     return next
-  }, [items, formsSort])
+  }, [items, formsSort, scopeFilter])
   const formsPagination = useClientPagination(sortedItems, 10)
   const jurisdictionsPagination = useClientPagination(detail?.jurisdictions || [], 10)
   const applicabilityPagination = useClientPagination(detail?.applicability || [], 10)
   const auditPagination = useClientPagination(auditItems, 10)
-  const previewPagination = useClientPagination(previewItems, 10)
 
   const loadForms = async () => {
     const active = filterActive === '' ? undefined : filterActive === 'true'
     setFilterOpts({ q: filterQ || undefined, status: filterStatus || undefined, active })
-    await refetchForms()
+    setScopeFilter({ product: filterProduct, state: filterState })
+  }
+
+  const refreshForms = async () => {
+    setError(null)
+    try {
+      await refetchForms()
+      if (selectedFormId) {
+        await refetchDetail()
+        await loadFormSideData(selectedFormId)
+      }
+      setTestRevision((value) => value + 1)
+    } catch (e: any) {
+      setError(e.message || String(e))
+    }
   }
 
   const hydrateDrafts = (data: FormDetail) => {
@@ -201,13 +229,12 @@ export function FormsManagementPage() {
   const resetNewForm = () => {
     setSelectedFormId('')
     setAuditItems([])
-    setPreviewItems([])
     setTemplateAsset(null)
     setTemplateFile(null)
     setTemplateUploadResult(null)
     setFormDraft({ ...EMPTY_FORM_DRAFT })
     setJurisdictionDraft({ stateCode: '', regulatoryStatus: 'Pending', approvalTrackingId: '', effectiveDate: '', sunsetDate: '', hasStateExceptions: false, notes: '' })
-    setApplicabilityDraft({ lineOfBusiness: 'personal-auto', productCode: 'personal-auto', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
+    setApplicabilityDraft({ lineOfBusiness: 'personal-auto', productCode: '', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
     setOutputDraft({ templateSource: 'Static PDF', templateUri: '', outputFormat: 'PDF', mergeScope: 'policy', packetPlacement: 'End', sortOrder: 100, active: true })
     setDeliveryDraft({ deliveryMethodsText: 'Portal', visibilityText: 'Insured, Agent, Internal', acknowledgementRequired: false, esignRequired: false, active: true })
     setSecurityDraft({ allowedRolesText: 'forms_admin, compliance_admin, read_only', editRolesText: 'forms_admin, compliance_admin', viewRolesText: 'forms_admin, compliance_admin, read_only, admin' })
@@ -232,9 +259,24 @@ export function FormsManagementPage() {
     setEditorPopupMode(null)
   }
 
-  const canModify = !detail?.form || detail.form.workflowStatus !== 'Approved' || !detail.form.editLock
+  const canModify = !selectedFormId || Boolean(detail?.form && (detail.form.workflowStatus !== 'Approved' || !detail.form.editLock))
   const isViewPopup = editorPopupMode === 'view'
   const canEdit = canModify && !isViewPopup
+  // Review and activation follow workflow state and compliance authority, not
+  // content editability: an approved, edit-locked edition must still be activatable.
+  const { user } = useAuth()
+  const isComplianceAdmin = hasPermission(user, 'admin.forms.approve') || (user?.roles || []).includes('compliance_admin')
+  const lifecycleForm = detail?.form
+  const lifecycleEnabled: Record<'approve' | 'activate' | 'deactivate' | 'delete', boolean> = {
+    approve: Boolean(lifecycleForm && lifecycleForm.workflowStatus === 'Reviewed'),
+    activate: Boolean(lifecycleForm && lifecycleForm.workflowStatus === 'Approved' && !lifecycleForm.active),
+    deactivate: Boolean(lifecycleForm?.active),
+    delete: Boolean(lifecycleForm && !lifecycleForm.active && lifecycleForm.workflowStatus !== 'Approved'),
+  }
+  const scopeProduct = detail?.applicability?.[0]?.productCode || applicabilityDraft.productCode
+  const products = mergeCatalogOptions(scopeCatalog.products, (detail?.applicability || []).map((row) => row.productCode))
+  const states = mergeCatalogOptions(scopeCatalog.states, (detail?.jurisdictions || []).map((row) => row.stateCode))
+  const primarySection = section === 'jurisdictions' ? 'catalog' : section === 'applicability' ? 'attachment' : section
 
   const handleSaveCatalog = async (e: FormEvent) => {
     e.preventDefault()
@@ -261,8 +303,11 @@ export function FormsManagementPage() {
         void loadFormSideData(nextId)
       }
       setFormDraft((prev) => ({ ...prev, changeReason: '' }))
+      setTestRevision((value) => value + 1)
+      return true
     } catch (e: any) {
       setError(e.message || String(e))
+      return false
     }
   }
 
@@ -317,6 +362,7 @@ export function FormsManagementPage() {
       }
       setJurisdictionDraft({ stateCode: '', regulatoryStatus: 'Pending', approvalTrackingId: '', effectiveDate: '', sunsetDate: '', hasStateExceptions: false, notes: '' })
       setEditingJurisdictionId('')
+      setTestRevision((value) => value + 1)
       void refetchDetail()
     } catch (e: any) {
       setError(e.message || String(e))
@@ -339,8 +385,9 @@ export function FormsManagementPage() {
       } else {
         await api.addFormApplicability(selectedFormId, payload)
       }
-      setApplicabilityDraft({ lineOfBusiness: 'personal-auto', productCode: 'personal-auto', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
+      setApplicabilityDraft({ lineOfBusiness: 'personal-auto', productCode: '', riskUnitAssociation: 'Policy', transactionTypesText: 'Quote, Issue', active: true })
       setEditingApplicabilityId('')
+      setTestRevision((value) => value + 1)
       void refetchDetail()
     } catch (e: any) {
       setError(e.message || String(e))
@@ -358,9 +405,12 @@ export function FormsManagementPage() {
         esignRequired: deliveryDraft.esignRequired,
         active: deliveryDraft.active
       })
+      setTestRevision((value) => value + 1)
       void refetchDetail()
+      return true
     } catch (e: any) {
       setError(e.message || String(e))
+      return false
     }
   }
 
@@ -395,6 +445,7 @@ export function FormsManagementPage() {
         if (!reason) return
       }
       const response = await api.uploadFormTemplateAsset(selectedFormId, templateFile, reason || undefined)
+      setTestRevision((value) => value + 1)
       setTemplateFile(null)
       if (isDocx) {
         const recognizedTokens = Array.isArray((response as any)?.recognizedTokens)
@@ -426,6 +477,7 @@ export function FormsManagementPage() {
       setTemplateAsset(null)
       setTemplateFile(null)
       setTemplateUploadResult(null)
+      setTestRevision((value) => value + 1)
       void refetchDetail()
     } catch (e: any) {
       setError(e.message || String(e))
@@ -446,21 +498,6 @@ export function FormsManagementPage() {
     }
   }
 
-  const runPreview = async () => {
-    try {
-      const result = await api.previewAdminForms({
-        lineOfBusiness: previewDraft.lineOfBusiness,
-        productCode: previewDraft.productCode,
-        transactionType: previewDraft.transactionType,
-        state: previewDraft.state,
-        effectiveDate: previewDraft.effectiveDate || undefined
-      })
-      setPreviewItems(result || [])
-    } catch (e: any) {
-      setError(e.message || String(e))
-    }
-  }
-
   const canSaveCatalog = canEdit && (Boolean(selectedFormId) || editorPopupMode === 'new')
   const isEditorPopupOpen = editorPopupMode !== null
   const toggleFormsSort = (key: FormSortKey) => {
@@ -475,15 +512,16 @@ export function FormsManagementPage() {
   }
 
   return (
-    <div className="ps-admin-page">
+    <div className="ps-admin-page forms-management">
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Forms Administration</h2></div>
         <div className="ps-page-header-actions">
           <button className="btn-secondary" type="button" onClick={openNewFormPopup}>New Form</button>
-          <button className="btn-secondary" type="button" onClick={() => void loadForms()} disabled={loading}>Refresh</button>
+          <button className="btn-secondary" type="button" onClick={() => void refreshForms()} disabled={loading}>Refresh</button>
         </div>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      {scopeCatalog.error && <p className="error" role="alert">Scope catalog unavailable: {scopeCatalog.error}</p>}
 
       <CollapsibleSection title="Filters" className="ps-filter-panel">
         <form className="ps-filter-grid" onSubmit={(e) => { e.preventDefault(); void loadForms() }} role="search">
@@ -497,6 +535,14 @@ export function FormsManagementPage() {
               <option value="">All Statuses</option>
               {WORKFLOW_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
+          </div>
+          <div className="ps-filter-col">
+            <label className="ps-filter-label" htmlFor="fm-filter-product">Product</label>
+            <select id="fm-filter-product" value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)}><option value="">All products</option>{scopeCatalog.products.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select>
+          </div>
+          <div className="ps-filter-col">
+            <label className="ps-filter-label" htmlFor="fm-filter-state">State</label>
+            <select id="fm-filter-state" value={filterState} onChange={(e) => setFilterState(e.target.value)}><option value="">All states</option>{scopeCatalog.states.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select>
           </div>
           <div className="ps-filter-col">
             <label className="ps-filter-label" htmlFor="fm-filter-active">Active</label>
@@ -513,7 +559,7 @@ export function FormsManagementPage() {
       </CollapsibleSection>
 
       <CollapsibleSection title="Form List" className="ps-table-card">
-        <table className="table">
+        <div className="forms-table-scroll"><table className="table table-no-sticky-head">
         <thead>
           <tr>
             <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('formNumber')}>{sortLabel('formNumber', 'Form #')}</button></th>
@@ -522,28 +568,28 @@ export function FormsManagementPage() {
             <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('workflowStatus')}>{sortLabel('workflowStatus', 'Status')}</button></th>
             <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('active')}>{sortLabel('active', 'Active')}</button></th>
             <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('jurisdictionCount')}>{sortLabel('jurisdictionCount', 'Jurisdictions')}</button></th>
-            <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('createdAt')}>{sortLabel('createdAt', 'Created Date')}</button></th>
-            <th><button type="button" className="table-sort-button" onClick={() => toggleFormsSort('updatedAt')}>{sortLabel('updatedAt', 'Updated Date')}</button></th>
+            <th>Product / states</th>
+            <th>Printing / attachment</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {!loading && items.length === 0 && <tr><td colSpan={9} className="muted">No forms configured.</td></tr>}
+          {!loading && sortedItems.length === 0 && <tr><td colSpan={9} className="muted">No matching forms.</td></tr>}
           {formsPagination.rows.map((item) => (
-            <tr key={item.formId} onClick={() => setSelectedFormId(item.formId)} style={{ cursor: 'pointer', background: selectedFormId === item.formId ? 'var(--panel-soft)' : undefined }}>
-              <td>{item.formNumber}</td>
+            <tr key={item.formId} style={{ background: selectedFormId === item.formId ? 'var(--panel-soft)' : undefined }}>
+              <td className="forms-list-nowrap">{item.formNumber}</td>
               <td>{item.formTitle}</td>
               <td>{formatEditionDate(item.editionDate)}</td>
               <td>{item.workflowStatus}</td>
               <td>{item.active ? 'Yes' : 'No'}</td>
               <td>{item.jurisdictionCount}</td>
-              <td>{formatDisplayDate(item.createdAt, { fallback: '-' })}</td>
-              <td>{formatDisplayDate(item.updatedAt, { fallback: '-' })}</td>
+              <td>{formScopeLabels(item).products}<br />{formScopeLabels(item).states}</td>
+              <td>{item.templateSource || '-'}<br />{toCsv(item.transactionTypes) || '-'}</td>
               <td>
                 <div className="table-actions table-actions--icons">
                   <button
                     type="button"
-                    className="icon-action-btn"
+                    className="icon-action-btn forms-list-action"
                     aria-label={`View ${item.formNumber || item.formId}`}
                     title="View"
                     onClick={(e) => {
@@ -551,11 +597,11 @@ export function FormsManagementPage() {
                       openFormPopup(item.formId, 'view')
                     }}
                   >
-                    {'\u{1F441}'}
+                    <span aria-hidden="true">{'\u{1F441}'}</span> View
                   </button>
                   <button
                     type="button"
-                    className="icon-action-btn"
+                    className="icon-action-btn forms-list-action"
                     aria-label={`Edit ${item.formNumber || item.formId}`}
                     title="Edit"
                     onClick={(e) => {
@@ -563,14 +609,14 @@ export function FormsManagementPage() {
                       openFormPopup(item.formId, 'edit')
                     }}
                   >
-                    {'\u270E'}
+                    <span aria-hidden="true">{'\u270E'}</span> Edit
                   </button>
                 </div>
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       </CollapsibleSection>
       {!loading && items.length > 0 && (
         <TablePagination
@@ -582,8 +628,7 @@ export function FormsManagementPage() {
         />
       )}
 
-      {isEditorPopupOpen && <div className="modal-overlay" role="presentation" onClick={closeEditorPopup} />}
-      {(selectedFormId || isEditorPopupOpen) && <div className={`card stack-card${isEditorPopupOpen ? ' forms-editor-popover' : ''}`}>
+      {isEditorPopupOpen && <section aria-label="Form editor">
         <div className="panel-header">
           <h3>
             {editorPopupMode === 'new'
@@ -602,31 +647,35 @@ export function FormsManagementPage() {
           </div>
         </div>
         <div className="admin-section-layout">
-          <nav className="admin-section-menu" aria-label="Forms sections">
-            {(['catalog', 'jurisdictions', 'applicability', 'output', 'security', 'audit', 'preview'] as SectionKey[]).map((key) => (
-              <button key={key} type="button" className={`admin-section-link${section === key ? ' active' : ''}`} onClick={() => setSection(key)}>{labelForSection(key)}</button>
+          <nav className="forms-primary-tabs" role="tablist" aria-label="Forms sections">
+            {(['catalog', 'output', 'applicability', 'preview'] as SectionKey[]).map((key, index, keys) => (
+              <button key={key} id={`forms-tab-${key}`} role="tab" aria-selected={(key === 'applicability' ? 'attachment' : key) === primarySection} aria-controls="forms-editor-panel" tabIndex={(key === 'applicability' ? 'attachment' : key) === primarySection ? 0 : -1} type="button" onClick={() => setSection(key)} onKeyDown={(event) => {
+                const nextIndex = event.key === 'ArrowRight' ? (index + 1) % keys.length : event.key === 'ArrowLeft' ? (index + keys.length - 1) % keys.length : event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1 : -1
+                if (nextIndex < 0) return
+                event.preventDefault(); setSection(keys[nextIndex]); document.getElementById(`forms-tab-${keys[nextIndex]}`)?.focus()
+              }}>{labelForSection(key)}</button>
             ))}
           </nav>
-          <div className="admin-section-content">
-        {section === 'catalog' && <form onSubmit={handleSaveCatalog}>
-          <div className="row"><div className="col"><label>Carrier Code</label><input value={formDraft.carrierCode} onChange={(e) => setFormDraft((prev) => ({ ...prev, carrierCode: e.target.value }))} /></div><div className="col"><label>Authority</label><input value={formDraft.authority} onChange={(e) => setFormDraft((prev) => ({ ...prev, authority: e.target.value }))} /></div><div className="col"><label>Form Number</label><input value={formDraft.formNumber} onChange={(e) => setFormDraft((prev) => ({ ...prev, formNumber: e.target.value }))} /></div><div className="col"><label>Edition Date (MM/YYYY)</label><input value={formDraft.editionDate} onChange={(e) => setFormDraft((prev) => ({ ...prev, editionDate: e.target.value }))} /></div></div>
-          <div className="row"><div className="col"><label>Form Title</label><input value={formDraft.formTitle} onChange={(e) => setFormDraft((prev) => ({ ...prev, formTitle: e.target.value }))} /></div><div className="col"><label>Form Type</label><input value={formDraft.formType} onChange={(e) => setFormDraft((prev) => ({ ...prev, formType: e.target.value }))} /></div><div className="col"><label>Line Of Business</label><input value={formDraft.lineOfBusiness} onChange={(e) => setFormDraft((prev) => ({ ...prev, lineOfBusiness: e.target.value }))} /></div></div>
-          <div className="row"><div className="col"><label>Change Reason</label><input value={formDraft.changeReason} onChange={(e) => setFormDraft((prev) => ({ ...prev, changeReason: e.target.value }))} /></div><div className="col"><label>Edit Lock</label><select value={formDraft.editLock ? 'true' : 'false'} onChange={(e) => setFormDraft((prev) => ({ ...prev, editLock: e.target.value === 'true' }))}><option value="true">On</option><option value="false">Off</option></select></div><div className="col"><label>Require Approved Jurisdiction</label><select value={formDraft.requireApprovedJurisdiction ? 'true' : 'false'} onChange={(e) => setFormDraft((prev) => ({ ...prev, requireApprovedJurisdiction: e.target.value === 'true' }))}><option value="true">Yes</option><option value="false">No</option></select></div></div>
+          <details><summary>History, security & legacy settings</summary><div className="toolbar-actions">{(['output', 'security', 'audit'] as SectionKey[]).map((key) => <button type="button" className="btn-secondary" key={key} onClick={() => setSection(key)}>{key === 'output' ? 'Output + Delivery' : labelForSection(key)}</button>)}</div></details>
+          <div className="admin-section-content" id="forms-editor-panel" role="tabpanel" aria-labelledby={`forms-tab-${section === 'jurisdictions' ? 'catalog' : section === 'security' || section === 'audit' ? 'preview' : section}`}>
+        {primarySection === 'catalog' && <form onSubmit={handleSaveCatalog}>
+          <fieldset disabled={!canEdit}><legend>Details & scope</legend>
+          <div className="row"><div className="col"><label htmlFor="fm-carrier">Carrier Code</label><input id="fm-carrier" value={formDraft.carrierCode} onChange={(e) => setFormDraft((prev) => ({ ...prev, carrierCode: e.target.value }))} /></div><div className="col"><label htmlFor="fm-authority">Authority</label><input id="fm-authority" value={formDraft.authority} onChange={(e) => setFormDraft((prev) => ({ ...prev, authority: e.target.value }))} /></div><div className="col"><label htmlFor="fm-number">Form Number</label><input id="fm-number" value={formDraft.formNumber} onChange={(e) => setFormDraft((prev) => ({ ...prev, formNumber: e.target.value }))} /></div><div className="col"><label htmlFor="fm-edition">Edition Date (MM/YYYY)</label><input id="fm-edition" value={formDraft.editionDate} onChange={(e) => setFormDraft((prev) => ({ ...prev, editionDate: e.target.value }))} /></div></div>
+          <div className="row"><div className="col"><label htmlFor="fm-title">Form Title</label><input id="fm-title" value={formDraft.formTitle} onChange={(e) => setFormDraft((prev) => ({ ...prev, formTitle: e.target.value }))} /></div><div className="col"><label htmlFor="fm-type">Form Type</label><input id="fm-type" value={formDraft.formType} onChange={(e) => setFormDraft((prev) => ({ ...prev, formType: e.target.value }))} /></div><div className="col"><label htmlFor="fm-lob">Line Of Business</label><input id="fm-lob" value={formDraft.lineOfBusiness} onChange={(e) => setFormDraft((prev) => ({ ...prev, lineOfBusiness: e.target.value }))} /></div></div>
+          <div className="row"><div className="col"><label htmlFor="fm-reason">Change Reason</label><input id="fm-reason" value={formDraft.changeReason} onChange={(e) => setFormDraft((prev) => ({ ...prev, changeReason: e.target.value }))} /></div><div className="col"><label className="forms-check"><input type="checkbox" checked={formDraft.editLock} onChange={(e) => setFormDraft({ ...formDraft, editLock: e.target.checked })} />Edit Lock</label></div><div className="col"><label className="forms-check"><input type="checkbox" checked={formDraft.requireApprovedJurisdiction} onChange={(e) => setFormDraft({ ...formDraft, requireApprovedJurisdiction: e.target.checked })} />Require Approved Jurisdiction</label></div></div>
           <div className="toolbar-actions" style={{ marginTop: 12 }}>
             <button type="submit" disabled={!canSaveCatalog}>{selectedFormId ? 'Save Form' : 'Create Form'}</button>
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('submit')} disabled={!canEdit}>Submit</button>}
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('approve')} disabled={!canEdit}>Approve</button>}
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('activate')} disabled={!canEdit}>Activate</button>}
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('deactivate')} disabled={!canEdit}>Deactivate</button>}
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('clone')} disabled={!canEdit}>Clone</button>}
-            {selectedFormId && <button type="button" className="btn-secondary" onClick={() => void runWorkflowAction('delete')} disabled={!canEdit}>Delete</button>}
+            <button type="button" disabled={!canSaveCatalog} onClick={async () => { if (await handleSaveCatalog({ preventDefault() {} } as FormEvent)) setSection('output') }}>Save & continue</button>
             {!selectedFormId && editorPopupMode !== 'new' && <span className="muted">Use New Form to create a form record.</span>}
           </div>
+          </fieldset>
         </form>}
 
-        {section === 'jurisdictions' && <>
+        {primarySection === 'catalog' && <>
+          <h4>Applicable states & effective window</h4>
+          {!detail?.jurisdictions?.length && <p className="muted">No state scope saved. This is not worldwide approval.</p>}
           <form onSubmit={saveJurisdiction} className="row">
-            <div className="col"><label>State/Province</label><input value={jurisdictionDraft.stateCode} onChange={(e) => setJurisdictionDraft((prev) => ({ ...prev, stateCode: e.target.value }))} /></div>
+            <div className="col"><label htmlFor="fm-scope-state">State/Province</label><select id="fm-scope-state" disabled={!canEdit} value={jurisdictionDraft.stateCode} onChange={(e) => setJurisdictionDraft((prev) => ({ ...prev, stateCode: e.target.value }))}><option value="">Select state</option>{states.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></div>
             <div className="col"><label>Regulatory Status</label><select value={jurisdictionDraft.regulatoryStatus} onChange={(e) => setJurisdictionDraft((prev) => ({ ...prev, regulatoryStatus: e.target.value }))}>{REGULATORY_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
             <div className="col"><label>Approval ID</label><input value={jurisdictionDraft.approvalTrackingId} onChange={(e) => setJurisdictionDraft((prev) => ({ ...prev, approvalTrackingId: e.target.value }))} /></div>
             <div className="col"><label>Effective Date</label><input type="date" value={jurisdictionDraft.effectiveDate} onChange={(e) => setJurisdictionDraft((prev) => ({ ...prev, effectiveDate: e.target.value }))} /></div>
@@ -662,12 +711,14 @@ export function FormsManagementPage() {
           )}
         </>}
 
-        {section === 'applicability' && <>
+        {(primarySection === 'catalog' || primarySection === 'attachment') && <>
+          <details open={primarySection === 'catalog'}><summary>Product & transaction scope</summary>
+          {!detail?.applicability?.length && <p className="muted">No product scope saved.</p>}
           <form onSubmit={saveApplicability} className="row">
             <div className="col"><label>LOB</label><input value={applicabilityDraft.lineOfBusiness} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, lineOfBusiness: e.target.value }))} /></div>
-            <div className="col"><label>Product</label><input value={applicabilityDraft.productCode} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, productCode: e.target.value }))} /></div>
+            <div className="col"><label htmlFor="fm-scope-product">Product scope</label><select id="fm-scope-product" disabled={!canEdit} value={applicabilityDraft.productCode} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, productCode: e.target.value }))}><option value="">Select product</option>{products.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></div>
             <div className="col"><label>Risk Unit</label><select value={applicabilityDraft.riskUnitAssociation} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, riskUnitAssociation: e.target.value }))}>{RISK_ASSOCIATIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-            <div className="col"><label>Transactions (CSV)</label><input value={applicabilityDraft.transactionTypesText} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, transactionTypesText: e.target.value }))} /></div>
+            <fieldset className="forms-transactions" disabled={!canEdit}><legend>Transactions</legend>{TX_OPTIONS.map((transaction) => <label className="forms-check" key={transaction}><input type="checkbox" checked={fromCsv(applicabilityDraft.transactionTypesText).includes(transaction)} onChange={(e) => setApplicabilityDraft((prev) => ({ ...prev, transactionTypesText: toCsv(e.target.checked ? [...fromCsv(prev.transactionTypesText), transaction] : fromCsv(prev.transactionTypesText).filter((value) => value !== transaction)) }))} />{transaction}</label>)}</fieldset>
             <div className="col" style={{ alignSelf: 'end' }}><button type="submit" disabled={!selectedFormId || !canEdit}>{editingApplicabilityId ? 'Update' : 'Add'}</button></div>
           </form>
           <table className="table" style={{ marginTop: 10 }}>
@@ -696,11 +747,27 @@ export function FormsManagementPage() {
               onPageSizeChange={applicabilityPagination.setPageSize}
             />
           )}
+          </details>
+        </>}
+
+        {primarySection === 'attachment' && <>
+          <FormAttachmentEditor key={selectedFormId} formId={selectedFormId} productCode={scopeProduct} canEdit={canEdit && detail?.form?.workflowStatus === 'Draft'} onChange={() => { setTestRevision((value) => value + 1); void refetchDetail() }} />
+          {detail?.form && detail.form.workflowStatus !== 'Draft' && <p className="muted">Attachment rules can only be changed on a Draft edition.</p>}
+          <fieldset disabled={!canEdit}><legend>Packet placement</legend>
+            <label>Placement<select value={outputDraft.packetPlacement} onChange={(e) => setOutputDraft({ ...outputDraft, packetPlacement: e.target.value })}>{['Beginning', 'End', outputDraft.packetPlacement].filter((value, index, all) => all.indexOf(value) === index).map((value) => <option key={value}>{value}</option>)}</select></label>
+            <label>Packet order<input type="number" value={outputDraft.sortOrder} onChange={(e) => setOutputDraft({ ...outputDraft, sortOrder: Number(e.target.value) })} /></label>
+            <label>Copy scope<select value={outputDraft.mergeScope} onChange={(e) => setOutputDraft({ ...outputDraft, mergeScope: e.target.value })}>{['policy', 'risk', outputDraft.mergeScope].filter((value, index, all) => all.indexOf(value) === index).map((value) => <option key={value}>{value}</option>)}</select></label>
+            <button type="button" disabled={!selectedFormId || !canEdit} onClick={() => void saveOutputAndDelivery()}>Save attachment output</button>
+            <button type="button" disabled={!selectedFormId || !canEdit} onClick={async () => { if (await saveOutputAndDelivery()) setSection('preview') }}>Save & continue</button>
+          </fieldset>
+          <p className="muted">Saved scope: {toCsv((detail?.applicability || []).map((row) => `${row.productCode}: ${toCsv(row.transactionTypes)}`)) || 'Incomplete'}; states: {toCsv((detail?.jurisdictions || []).map((row) => row.stateCode)) || 'Incomplete'}. New-business stage conditions use transaction.stage (Bind or Issue); servicing transactions use transaction.type. No separate required-output setting is exposed by this API.</p>
         </>}
 
         {section === 'output' && <>
-          <div className="row"><div className="col"><label>Template Source</label><input value={outputDraft.templateSource} onChange={(e) => setOutputDraft((prev) => ({ ...prev, templateSource: e.target.value }))} /></div><div className="col"><label>Template URI</label><input value={outputDraft.templateUri} onChange={(e) => setOutputDraft((prev) => ({ ...prev, templateUri: e.target.value }))} /></div><div className="col"><label>Output Format</label><input value={outputDraft.outputFormat} onChange={(e) => setOutputDraft((prev) => ({ ...prev, outputFormat: e.target.value }))} /></div><div className="col"><label>Packet Placement</label><input value={outputDraft.packetPlacement} onChange={(e) => setOutputDraft((prev) => ({ ...prev, packetPlacement: e.target.value }))} /></div></div>
-          <div className="row"><div className="col"><label>Upload Template (PDF or Word .docx)</label><input type="file" accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => { setTemplateFile(e.target.files?.[0] || null); setTemplateUploadResult(null) }} /></div><div className="col"><label>Current Template File</label><div className="muted" style={{ marginTop: 10 }}>{templateAsset ? `${templateAsset.fileName} (${formatBytes(templateAsset.sizeBytes)})` : 'No uploaded file'}</div></div></div>
+          <RadioGroup name="form-printing" ariaLabel="Printing" disabled={!canEdit} options={[{ value: 'Static PDF', label: 'Static file (PDF)' }, { value: 'Uploaded DOCX', label: 'Policy data (DOCX)' }]} value={outputDraft.templateSource === 'Uploaded DOCX' ? 'Uploaded DOCX' : 'Static PDF'} onChange={(templateSource) => setOutputDraft({ ...outputDraft, templateSource, outputFormat: 'PDF' })} />
+          <p className="muted">Supported uploads: PDF and Word (.docx). XLSX and policy-filled PDF are not supported. DOCX variables are checked by the upload service.</p>
+          <details><summary>Existing output metadata</summary><div className="row"><div className="col"><label>Template Source</label><input value={outputDraft.templateSource} onChange={(e) => setOutputDraft((prev) => ({ ...prev, templateSource: e.target.value }))} /></div><div className="col"><label>Template URI</label><input readOnly value={outputDraft.templateUri} /></div><div className="col"><label>Output Format</label><input value={outputDraft.outputFormat} onChange={(e) => setOutputDraft((prev) => ({ ...prev, outputFormat: e.target.value }))} /></div></div></details>
+          <div className="row"><div className="col"><label htmlFor="fm-template-upload">Upload Template (PDF or Word .docx)</label><input id="fm-template-upload" type="file" disabled={!canEdit} accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => { const file = e.target.files?.[0] || null; setTemplateFile(file); setTemplateUploadResult(null); if (file) setOutputDraft((prev) => ({ ...prev, templateSource: file.name.toLowerCase().endsWith('.docx') ? 'Uploaded DOCX' : 'Static PDF' })) }} /></div><div className="col"><label>Current Template File</label><div className="muted" style={{ marginTop: 10 }}>{templateAsset ? `${templateAsset.fileName} (${formatBytes(templateAsset.sizeBytes)})` : 'No uploaded file'}</div></div></div>
           {templateUploadResult?.kind === 'success' && (
             <p className="success" role="status">
               Template "{templateUploadResult.fileName}" uploaded.{' '}
@@ -746,6 +813,7 @@ export function FormsManagementPage() {
           </details>
           <div className="row"><div className="col"><label>Delivery Methods (CSV)</label><input value={deliveryDraft.deliveryMethodsText} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, deliveryMethodsText: e.target.value }))} /></div><div className="col"><label>Visibility (CSV)</label><input value={deliveryDraft.visibilityText} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, visibilityText: e.target.value }))} /></div><div className="col"><label>Ack Required</label><select value={deliveryDraft.acknowledgementRequired ? 'true' : 'false'} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, acknowledgementRequired: e.target.value === 'true' }))}><option value="false">No</option><option value="true">Yes</option></select></div><div className="col"><label>E-sign Required</label><select value={deliveryDraft.esignRequired ? 'true' : 'false'} onChange={(e) => setDeliveryDraft((prev) => ({ ...prev, esignRequired: e.target.value === 'true' }))}><option value="false">No</option><option value="true">Yes</option></select></div></div>
           <div className="toolbar-actions" style={{ marginTop: 12 }}><button type="button" onClick={saveOutputAndDelivery} disabled={!selectedFormId || !canEdit}>Save Output + Delivery</button><button type="button" className="btn-secondary" onClick={uploadTemplateFile} disabled={!selectedFormId || !templateFile || !canEdit}>Upload Template</button><button type="button" className="btn-secondary" onClick={removeTemplatePdf} disabled={!selectedFormId || !templateAsset || !canEdit}>Remove Template</button><button type="button" className="btn-secondary" onClick={viewDocument} disabled={!selectedFormId}>View Document</button></div>
+          <div className="toolbar-actions"><button type="button" disabled={!selectedFormId || !canEdit || Boolean(templateFile)} onClick={async () => { if (await saveOutputAndDelivery()) setSection('applicability') }}>Save & continue</button></div>
         </>}
 
         {section === 'security' && <>
@@ -775,41 +843,38 @@ export function FormsManagementPage() {
         )}
 
         {section === 'preview' && <>
-          <div className="row"><div className="col"><label>LOB</label><input value={previewDraft.lineOfBusiness} onChange={(e) => setPreviewDraft((prev) => ({ ...prev, lineOfBusiness: e.target.value }))} /></div><div className="col"><label>Product</label><input value={previewDraft.productCode} onChange={(e) => setPreviewDraft((prev) => ({ ...prev, productCode: e.target.value }))} /></div><div className="col"><label>Transaction Type</label><select value={previewDraft.transactionType} onChange={(e) => setPreviewDraft((prev) => ({ ...prev, transactionType: e.target.value }))}>{TX_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></div><div className="col"><label>State</label><input value={previewDraft.state} onChange={(e) => setPreviewDraft((prev) => ({ ...prev, state: e.target.value.toUpperCase() }))} /></div><div className="col"><label>Effective Date</label><input type="date" value={previewDraft.effectiveDate} onChange={(e) => setPreviewDraft((prev) => ({ ...prev, effectiveDate: e.target.value }))} /></div></div>
-          <div className="muted" style={{ marginTop: 8 }}>Attachment preview uses explicit jurisdiction + applicability criteria (no inference rules).</div>
-          <div className="toolbar-actions" style={{ marginTop: 12 }}><button type="button" onClick={runPreview}>Run Packet Preview</button></div>
-          <table className="table" style={{ marginTop: 10 }}>
-            <thead><tr><th>Form #</th><th>Title</th><th>Edition</th><th>Placement</th><th>Reasons</th></tr></thead>
-            <tbody>
-              {previewItems.length === 0 && <tr><td colSpan={5} className="muted">No attached forms for this scenario.</td></tr>}
-              {previewPagination.rows.map((row) => <tr key={row.formId}><td>{row.formNumber}</td><td>{row.formTitle}</td><td>{formatEditionDate(row.editionDate)}</td><td>{row.packetPlacement}</td><td>{Array.isArray(row.reasons) ? row.reasons.join(' | ') : '-'}</td></tr>)}
-            </tbody>
-          </table>
-          {previewItems.length > 0 && (
-            <TablePagination
-              page={previewPagination.page}
-              pageSize={previewPagination.pageSize}
-              totalItems={previewPagination.totalItems}
-              onPageChange={previewPagination.setPage}
-              onPageSizeChange={previewPagination.setPageSize}
-            />
-          )}
+          <FormScenarioTest key={selectedFormId} formId={selectedFormId} lineOfBusiness={formDraft.lineOfBusiness} products={products} states={states} initialProduct={scopeProduct} initialState={detail?.jurisdictions?.[0]?.stateCode || ''} revision={JSON.stringify([detail, formDraft, outputDraft, deliveryDraft, testRevision])} />
+          <div className="toolbar-actions">
+            <button type="button" disabled={!selectedFormId} onClick={() => void viewDocument()}>View Document</button>
+            <button type="button" disabled={!canSaveCatalog} onClick={async () => { if (await handleSaveCatalog({ preventDefault() {} } as FormEvent)) await saveOutputAndDelivery() }}>Save draft</button>
+            <button type="button" disabled={!selectedFormId || !canEdit} onClick={() => void runWorkflowAction('submit')}>Submit for review</button>
+            <button type="button" className="btn-secondary" disabled={!selectedFormId || isViewPopup} onClick={() => void runWorkflowAction('clone')}>Create new edition</button>
+          </div>
+          <details><summary>Review, activation & lifecycle</summary><div className="toolbar-actions">
+            {(['approve', 'activate', 'deactivate', 'delete'] as const).map((action) => <button type="button" className="btn-secondary" key={action} onClick={() => void runWorkflowAction(action)} disabled={!selectedFormId || isViewPopup || !isComplianceAdmin || !lifecycleEnabled[action]}>{action[0].toUpperCase() + action.slice(1)}</button>)}
+          </div></details>
         </>}
           </div>
         </div>
-      </div>}
+      </section>}
     </div>
   )
 }
 
 function labelForSection(key: SectionKey): string {
-  if (key === 'catalog') return 'Catalog'
+  if (key === 'catalog') return 'Details & scope'
   if (key === 'jurisdictions') return 'Jurisdictions'
-  if (key === 'applicability') return 'Applicability'
-  if (key === 'output') return 'Output + Delivery'
+  if (key === 'applicability') return 'Attachment'
+  if (key === 'output') return 'Template'
   if (key === 'security') return 'Security'
   if (key === 'audit') return 'Audit'
-  return 'Packet Preview'
+  return 'Test & publish'
+}
+
+function mergeCatalogOptions(options: Array<{ code: string; label: string }>, saved: string[]) {
+  const merged = new Map(options.map((option) => [option.code, option]))
+  for (const code of saved) if (code && !merged.has(code)) merged.set(code, { code, label: `${code} (saved scope)` })
+  return [...merged.values()]
 }
 
 function groupTemplateVariables(variables: TemplateVariable[]): Array<{ group: string; items: TemplateVariable[] }> {

@@ -79,3 +79,18 @@
 - Browser evidence was invalid until disk space was freed: the Mac had 321 MB
   free (ENOSPC), and the bind writes failed. `docker builder prune` freed
   5.5 GB; no volumes were touched.
+
+## PR #386 documentation review correction
+
+- Delivery track: quick; documentation only, no new behavior or Gate A/B change.
+- `12-business-validation.md`: partial/conditional validation, PR #387 pending
+  merge/deployment/staging verification, and accurate retained-draft identity.
+- `10-release.md`, `11-e2e-results.md`, `13-lessons.md`: qualified confirmation
+  and test claims to match the recorded staging revision and unresolved gap.
+- `docs/tasks/wp-0002-coverage-integrity.md`: updated summary and follow-up handoff.
+- No runtime source changes or new application tests; Gate D remains pending.
+  No review, merge approval, business exception or business sign-off is supplied.
+- Checks for this correction: `npm run agents:sync -- --check` passed;
+  `npm run delivery:check` passed (2 packages); `npm run test:delivery` passed
+  (27/27); `git diff --check` passed. Application suites were not rerun for this
+  documentation-only correction; historical results above remain unchanged.

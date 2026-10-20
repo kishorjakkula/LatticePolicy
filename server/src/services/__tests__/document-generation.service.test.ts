@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildEndorsementChangeSet,
   buildPolicyDocumentPacket,
-  matchesEndorsementChanges,
   selectPolicyForms,
 } from '../document-generation.service.js'
+import { matchesEndorsementChanges } from '../form-selection.js'
 import { isPreviewApplicabilityMatch } from '../forms.service.js'
 import { retrieveStoredDocument } from '../document-storage.service.js'
 import { DOCX_TEMPLATE_MIME_TYPE } from '../document-template-variables.js'
@@ -440,6 +440,38 @@ describe('document generation service', () => {
       }), { ...context, transactionType: 'Endorse' })
 
       expect(forms).toHaveLength(0)
+      // The preview applies the same endorsement rule to a zero-row form.
+      expect(isPreviewApplicabilityMatch([], {
+        lineOfBusiness: 'personal-auto', productCode: context.productCode, transactionType: 'Endorsement',
+      })).toBe(false)
+    })
+  })
+
+  describe('endorsement-change parity with the Wizard preview', () => {
+    const emailOnly = { changedPaths: ['/applicant/email'], addedCoverageCodes: [], removedCoverageCodes: [], modifiedCoverageCodes: [] }
+    const collAdded = { changedPaths: ['/coverages/2'], addedCoverageCodes: ['COLL'], removedCoverageCodes: [], modifiedCoverageCodes: [] }
+    const adminRow = {
+      form_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', form_number: 'PA-COLL-END',
+      form_title: 'Collision Added', transaction_types: ['Endorsement'],
+      endorsement_change_criteria: { coverageCodes: ['COLL'], changeTypes: ['added'], match: 'all' }, visibility: ['internal'],
+      state_code: 'CA', regulatory_status: 'Approved', sort_order: 10,
+    }
+    const previewRow = {
+      line_of_business: 'personal-auto', product_code: 'personal-auto', transaction_types: ['Endorsement'],
+      endorsement_change_criteria: adminRow.endorsement_change_criteria, active: true,
+    }
+
+    it.each([
+      ['an email-only change', emailOnly, false],
+      ['an added COLL coverage', collAdded, true],
+    ])('generation and preview agree for %s', async (_label, endorsementChanges, attaches) => {
+      const forms = await selectPolicyForms(createQuery({ forms_admin_forms: [adminRow] }), {
+        ...context, transactionType: 'Endorse', endorsementChanges,
+      })
+      expect(forms.map((form) => form.code)).toEqual(attaches ? ['PA-COLL-END'] : [])
+      expect(isPreviewApplicabilityMatch([previewRow], {
+        lineOfBusiness: 'personal-auto', productCode: 'personal-auto', transactionType: 'Endorsement', endorsementChanges,
+      })).toBe(attaches)
     })
   })
 

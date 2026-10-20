@@ -1,0 +1,31 @@
+.forms-management .forms-primary-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.forms-management .forms-primary-tabs button[aria-selected="true"] { border-bottom: 3px solid currentColor; font-weight: 700; }
+.forms-management .forms-primary-tabs button { background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 0; }
+.forms-management .forms-primary-tabs button:hover { background: var(--panel-soft); }
+.forms-management .forms-scenario-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.forms-management label:has(> textarea), .forms-management .forms-scenario-grid label, .forms-management .forms-field-catalog > label { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.forms-management textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; }
+.forms-management .forms-check { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.forms-management .forms-check input { width: auto; }
+.forms-management .forms-table-scroll { overflow-x: auto; max-width: 100%; }
+.forms-management .forms-field-catalog { margin: 16px 0; }
+.forms-management .forms-field-catalog table { font-size: 0.875rem; }
+.forms-management .forms-field-catalog code { overflow-wrap: anywhere; }
+.forms-management fieldset { border: 1px solid var(--border); min-width: 0; margin: 12px 0; padding: 12px; }
+.forms-management .admin-section-layout { display: block; }
+.forms-management .admin-section-content { min-width: 0; overflow-wrap: anywhere; }
+.forms-management .admin-section-content > table { display: block; overflow-x: auto; }
+.forms-management .forms-transactions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.forms-management .forms-transactions .forms-check { margin: 0; }
+.forms-management .row { flex-wrap: wrap; }
+.forms-management .col { min-width: min(180px, 100%); }
+.forms-management .forms-editor-popover { max-width: calc(100vw - 24px); }
+@media (max-width: 600px) {
+  .forms-management .forms-scenario-grid { grid-template-columns: minmax(0, 1fr); }
+  .forms-management .forms-primary-tabs button { flex: 1 1 42%; }
+  .forms-management .col { flex-basis: 100%; }
+  .forms-management .row { grid-template-columns: minmax(0, 1fr); }
+}
+/* WP-0004 REQ-18: form numbers stay on one line; row actions show their text. */
+.forms-management .forms-list-nowrap { white-space: nowrap; overflow-wrap: normal; }
+.forms-management .forms-list-action { gap: 4px; padding: 0 10px; white-space: nowrap; }

@@ -51,14 +51,14 @@ export async function getTenantPreferences(
       tenantId,
       defaultCountry: defaults.defaultCountry,
       dateFormatsByCountry: defaults.dateFormatsByCountry,
-      dateFormat: defaults.dateFormatsByCountry[defaults.defaultCountry] || 'MM-DD-YYYY',
+      dateFormat: defaults.dateFormatsByCountry[defaults.defaultCountry] || 'MM/DD/YYYY',
       aiMlConfig: defaultTenantAiMlConfig()
     }
   }
 
   const row = (result as any).rows[0]
   const prefs = tenantDatePreferencesFromRow(row)
-  const dateFormat = prefs.dateFormatsByCountry[prefs.defaultCountry] || 'MM-DD-YYYY'
+  const dateFormat = prefs.dateFormatsByCountry[prefs.defaultCountry] || 'MM/DD/YYYY'
 
   return {
     tenantId: row.tenant_id,

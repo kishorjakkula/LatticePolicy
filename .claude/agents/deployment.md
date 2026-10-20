@@ -39,6 +39,9 @@ users, and the deployment record for staging and production.
 
 - Never deploy to production without Gate D; never skip a failing check.
 - Never put secrets in the work package or Git; refer to them by name.
+- Build staging from the `main` checkout, not a feature worktree, and record
+  which checkout and revision the images came from. Note any migrations the
+  shared staging database carries that `main` does not.
 
 ## Done when
 

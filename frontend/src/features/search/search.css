@@ -1,0 +1,50 @@
+/* Policy search (WP-0004 REQ-13). Scoped to the search page's own classes;
+   shared table styles stay in styles/search-design-system.css. */
+
+/* Headers never paint over the next column: the fixed table layout keeps each
+   header to its column, and a label too long for it is cut with an ellipsis
+   (the full text stays in the button's accessible name). */
+.policy-search-shell .ps-policy-table thead th {
+  overflow: hidden;
+}
+
+.policy-search-shell .ps-policy-table .ps-sort-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status legend: explains Issued vs In Force and the other statuses. */
+.ps-status-legend {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--ps-text-secondary);
+}
+
+.ps-status-legend summary {
+  cursor: pointer;
+  color: var(--ps-primary);
+  width: fit-content;
+}
+
+.ps-status-legend dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 16px;
+  margin: 8px 0 0;
+}
+
+.ps-status-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ps-status-legend-item dt {
+  flex-shrink: 0;
+}
+
+.ps-status-legend-item dd {
+  margin: 0;
+}

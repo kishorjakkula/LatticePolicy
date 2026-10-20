@@ -31,17 +31,9 @@ function compareDate(left: any, right: any): number {
   return a > b ? 1 : -1
 }
 
+// Shared, tenant-aware date-time display (US: MM/DD/YYYY h:mm AM/PM).
 function formatDateTimeMmDdYyyyHm(value: any, fallback = ''): string {
-  const raw = String(value || '').trim()
-  if (!raw) return fallback
-  const dt = new Date(raw)
-  if (Number.isNaN(dt.getTime())) return fallback
-  const month = String(dt.getMonth() + 1).padStart(2, '0')
-  const day = String(dt.getDate()).padStart(2, '0')
-  const year = String(dt.getFullYear())
-  const hours = String(dt.getHours()).padStart(2, '0')
-  const minutes = String(dt.getMinutes()).padStart(2, '0')
-  return `${month}-${day}-${year} ${hours}:${minutes}`
+  return formatDisplayDateTime(value, { fallback, includeTime: true })
 }
 
 function customerStatusColor(status: string): string {

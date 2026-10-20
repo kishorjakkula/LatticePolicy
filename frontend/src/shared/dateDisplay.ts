@@ -21,14 +21,22 @@ export const DATE_FORMAT_OPTIONS: DateFormatValue[] = [
 ]
 
 const STORAGE_KEY = 'tenantDatePreferences'
-const DEFAULT_DATE_FORMAT: DateFormatValue = 'MM-DD-YYYY'
+// US convention (WP-0004 REQ-7): dates read MM/DD/YYYY and date-times
+// MM/DD/YYYY h:mm AM/PM. Other countries keep their tenant-configured order.
+const DEFAULT_DATE_FORMAT: DateFormatValue = 'MM/DD/YYYY'
 const DEFAULT_PREFERENCES: TenantDatePreferences = {
   defaultCountry: 'US',
   dateFormatsByCountry: {
-    US: 'MM-DD-YYYY',
+    US: 'MM/DD/YYYY',
     CA: 'MM-DD-YYYY'
   }
 }
+// The dash form was the platform default stored for every tenant before
+// REQ-7 (migration 012). For the US it is read as the slash form so existing
+// tenants show the US convention without a data migration.
+const LEGACY_US_DATE_FORMAT: DateFormatValue = 'MM-DD-YYYY'
+// Countries whose everyday convention is a 12-hour clock with AM/PM.
+const TWELVE_HOUR_COUNTRIES = new Set(['US', 'CA', 'AU', 'NZ', 'IN', 'PH'])
 
 let preferencesCache: TenantDatePreferences = loadPreferencesFromStorage()
 
@@ -91,8 +99,12 @@ export function formatDisplayDateTime(
   }
   const dateText = renderDate(parsed.date, parsed.dateOnly, resolveDateFormat(options.country))
   if (!options.includeTime || parsed.dateOnly) return dateText
-  const timeText = parsed.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return `${dateText} ${timeText}`
+  return `${dateText} ${renderTime(parsed.date, usesTwelveHourClock(options.country))}`
+}
+
+/** True when the country (or the tenant default country) uses a 12-hour clock. */
+export function usesTwelveHourClock(country?: string | null): boolean {
+  return TWELVE_HOUR_COUNTRIES.has(normalizeCountryCode(country, preferencesCache.defaultCountry))
 }
 
 export function normalizeTenantDatePreferences(
@@ -106,6 +118,9 @@ export function normalizeTenantDatePreferences(
   )
   if (!dateFormatsByCountry[defaultCountry]) {
     dateFormatsByCountry[defaultCountry] = fallback.dateFormatsByCountry?.[defaultCountry] || DEFAULT_DATE_FORMAT
+  }
+  if (dateFormatsByCountry.US === LEGACY_US_DATE_FORMAT) {
+    dateFormatsByCountry.US = 'MM/DD/YYYY'
   }
   return { defaultCountry, dateFormatsByCountry }
 }
@@ -189,5 +204,12 @@ function renderDate(date: Date, dateOnly: boolean, format: DateFormatValue): str
   if (format === 'MM/DD/YYYY') return `${month}/${day}/${year}`
   if (format === 'DD/MM/YYYY') return `${day}/${month}/${year}`
   return `${year}/${month}/${day}`
+}
+
+function renderTime(date: Date, twelveHour: boolean): string {
+  const hours = date.getHours()
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  if (!twelveHour) return `${String(hours).padStart(2, '0')}:${minutes}`
+  return `${hours % 12 || 12}:${minutes} ${hours < 12 ? 'AM' : 'PM'}`
 }
 

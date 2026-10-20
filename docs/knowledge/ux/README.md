@@ -20,8 +20,13 @@ For the UI/UX designer, developer, automation test and business validation agent
   at bind and issue open an acknowledgement dialog (`docs/VALIDATION_RULES.md`).
 - Status: `StatusBadge` with text; feedback through `Toast`; empty lists use
   `EmptyState`; long lists use `TablePagination`.
-- Tokens and styles: `frontend/src/styles/` (`search-design-system.css` defines
-  the `--ps-*` tokens). Colours come from tokens; no one-off literals.
+- Tokens and styles: `frontend/src/styles.css` (imported by `main.tsx`) defines
+  the `--ps-*` tokens, including primary and danger sets; `styles/radio.css` and
+  feature CSS files are the only other stylesheets loaded (the other files under
+  `frontend/src/styles/` are unused). Colours come from tokens; no one-off literals.
+- Buttons: one primary style (`--ps-primary`) per action group; destructive
+  actions use the outlined danger style and sit last. Pagers use `Pagination`
+  (through `TablePagination` where a table wraps it).
 - Tables inside horizontal scroll wrappers use `table-no-sticky-head`.
 - Carrier branding: logo and primary colour per carrier on screens and documents.
 

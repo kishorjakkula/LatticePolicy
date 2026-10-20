@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SubmissionsInboxPage } from '../SubmissionsInboxPage'
@@ -45,6 +47,34 @@ describe('SubmissionsInboxPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Ready for review/ }))
     expect(mockUseSubmissions).toHaveBeenLastCalledWith('READY_FOR_REVIEW')
     expect(screen.getByRole('button', { name: /Upload and read/ })).toBeDisabled()
+  })
+
+  // REQ-14: at 390px the queue table scrolls inside its own wrapper, so the page
+  // itself never scrolls sideways. jsdom has no layout, so this checks the
+  // structure and the CSS rules; the 390px e2e pass measures scrollWidth.
+  it('puts the queue table in its own keyboard-reachable horizontal scroll region', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u', roles: ['underwriter'], permissions: [] } } as any)
+    const { container } = render(<MemoryRouter><SubmissionsInboxPage /></MemoryRouter>)
+
+    const region = screen.getByRole('region', { name: 'Submission queue table' })
+    expect(region).toHaveClass('si-table-wrap')
+    expect(region).toHaveAttribute('tabindex', '0')
+    expect(region.firstElementChild).toBe(screen.getByRole('table'))
+    expect(container.firstElementChild).toHaveClass('si-page', 'si-inbox')
+
+    const css = readFileSync(resolve(__dirname, '../submissions.css'), 'utf8')
+    expect(css).toMatch(/\.si-table-wrap\s*\{[^}]*overflow-x:\s*auto[^}]*max-width:\s*100%/)
+    expect(css).toMatch(/\.si-inbox\s*\{[^}]*min-width:\s*0/)
+    expect(css).toMatch(/\.si-inbox \.si-table-wrap\s*\{[^}]*contain:\s*inline-size/)
+  })
+
+  it('shows received dates in the US format', () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u', roles: ['underwriter'], permissions: [] } } as any)
+    render(<MemoryRouter><SubmissionsInboxPage /></MemoryRouter>)
+    const queue = screen.getByRole('table')
+    // 09:42Z and 09:58Z on Oct 17 fall on Oct 16 or 17 depending on the timezone.
+    expect(within(queue).getAllByText(/^10\/1[67]\/2026$/)).toHaveLength(2)
+    expect(within(queue).queryByText(/^\d{2}-\d{2}-\d{4}$/)).not.toBeInTheDocument()
   })
 
   it('hides the upload form from users who cannot manage submissions', () => {

@@ -4,6 +4,7 @@ import { validateQuoteSetup } from './setupValidation'
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, apiDetails } from '../../api/client'
+import { archivedOutputFormat, canOpenArchivedDocument } from '../../api/policies.api'
 import { quoteIntakeApi } from '../../api/quotes.api'
 import {
   useUnderwritingCompanies,
@@ -162,8 +163,78 @@ type AttachedForm = {
 type GeneratedDocumentRow = {
   id: string
   name: string
-  stage: FormAttachmentStage
+  stage: string
   status: string
+  archive?: any
+}
+
+export function pinnedTransactionWorkspace(details: any, policyId: string, versionId: string) {
+  if (!details || details.policyId !== policyId || details.versionId !== versionId) {
+    return { forms: [], documents: [] }
+  }
+  return {
+    forms: Array.isArray(details.forms) ? details.forms : [],
+    documents: (Array.isArray(details.documents) ? details.documents : []).filter((doc: any) =>
+      doc.versionId === versionId && doc.transactionId === details.transactionId),
+  }
+}
+
+export function liveFormPreviewContext(payload: any, stage: FormAttachmentStage, facts: {
+  type: string; number?: string; effectiveDate: string; policy: any; premium: any; uw: any
+}) {
+  const type = facts.type.toLowerCase()
+  const resultingStatus = type === 'nb' ? (stage === 'Issue' ? 'Issued' : 'Bound')
+    : type === 'issue' || type === 'reinstate' || type === 'reinstatement' || type === 'rewrite' ? 'Issued'
+    : type === 'cancel' || type === 'cancellation' ? 'Cancelled'
+    : facts.policy?.internalStatus || facts.policy?.status
+  const startsNewTerm = ['nb', 'renew', 'renewal', 'rewrite'].includes(type)
+  const termEffectiveDate = startsNewTerm
+    ? facts.effectiveDate || payload?.effectiveDate
+    : facts.policy?.termEffectiveDate || facts.policy?.term?.effectiveDate
+  const termExpirationDate = startsNewTerm && termEffectiveDate
+    ? addMonthsToIsoDate(termEffectiveDate, Number(payload?.termMonths) || 12)
+    : facts.policy?.termExpirationDate || facts.policy?.term?.expirationDate
+  const isCancellation = type === 'cancel' || type === 'cancellation'
+  const policy = {
+    ...facts.policy,
+    ...(resultingStatus ? { status: resultingStatus } : {}),
+    // Rules read issued-ness from the status before a cancellation, not its result.
+    ...(isCancellation && (facts.policy?.internalStatus || facts.policy?.status) ? { priorStatus: facts.policy?.internalStatus || facts.policy?.status } : {}),
+    ...(termEffectiveDate ? { termEffectiveDate } : {}),
+    ...(termExpirationDate ? { termExpirationDate } : {}),
+    ...(termEffectiveDate || termExpirationDate ? { term: {
+      ...facts.policy?.term,
+      ...(termEffectiveDate ? { effectiveDate: termEffectiveDate } : {}),
+      ...(termExpirationDate ? { expirationDate: termExpirationDate } : {}),
+    } } : {}),
+  }
+  // Nothing is generated at Quote, so the Quote list is a projection of what
+  // binding will attach: rules see the Bind stage and the Bound status they
+  // will see at generation, and the list is labelled "attaches at bind".
+  const ruleStage = stage === 'Quote' ? 'Bind' : stage
+  return {
+    payload,
+    coverages: payload?.coverages || [],
+    // The Quote list projects bind, so its scope filter is Bind too: Quote-only
+    // forms are never generated and Bind-scoped forms do attach.
+    transactionType: facts.type === 'NB' ? ruleStage : facts.type,
+    policy,
+    transaction: { ...payload?.transaction, type: facts.type, stage: ruleStage, number: facts.number, effectiveDate: facts.effectiveDate },
+    premium: facts.premium,
+    uw: facts.uw,
+  }
+}
+
+export function buildWizardQuotePayload(state: QuoteState, insuredState: InsuredState): any {
+  const commissionPct = parseCommissionPercent(state.agencyCommissionPct)
+  const payload = normalizePayloadCoverages({
+    ...state,
+    agencyCommissionPct: commissionPct ?? undefined,
+    insureds: normalizeInsuredState(insuredState, state.applicant),
+    uwAnswers: deriveUwAnswers(state),
+  })
+  if (commissionPct == null) delete payload.agencyCommissionPct
+  return payload
 }
 
 type EndorsementImpactedSegment = {
@@ -192,6 +263,8 @@ type EndorsementPreviewResponse = {
   effectiveDate: string
   underwriting?: any
   premium?: any
+  /** Change set the server uses to select endorsement forms. */
+  endorsementChanges?: Record<string, unknown>
   fullTerm?: {
     old: number
     new: number
@@ -853,7 +926,7 @@ export function QuoteWizard() {
   const [savingDraft, setSavingDraft] = useState(false)
   const [loadingDraft, setLoadingDraft] = useState(false)
   const [copying, setCopying] = useState(false)
-  const [policyContext, setPolicyContext] = useState<{ policyId: string; policyNumber?: string } | null>(null)
+  const [policyContext, setPolicyContext] = useState<{ policyId: string; policyNumber?: string; [key: string]: any } | null>(null)
   const [transactionEffectiveDate, setTransactionEffectiveDate] = useState<string>(defaultState.effectiveDate)
   const [transactionDateDirty, setTransactionDateDirty] = useState(false)
   const [cancelReasonCode, setCancelReasonCode] = useState<string>('')
@@ -1066,19 +1139,22 @@ export function QuoteWizard() {
 
   useEffect(() => {
     if (!policyIdParam) return
+    let cancelled = false
     setPolicyContext({ policyId: policyIdParam, policyNumber: policyNumberParam || undefined })
-    if (!policyNumberParam) {
+    if (!isReadOnlyView || !policyNumberParam) {
       api.getPolicy(policyIdParam)
-        .then(p => setPolicyContext({ policyId: policyIdParam, policyNumber: p.policyNumber }))
+        .then(p => { if (!cancelled) setPolicyContext({ ...p, policyId: policyIdParam, policyNumber: p.policyNumber || policyNumberParam }) })
         .catch(() => {})
     }
-  }, [policyIdParam, policyNumberParam])
+    return () => { cancelled = true }
+  }, [policyIdParam, policyNumberParam, isReadOnlyView])
 
   useEffect(() => {
     if (!isReadOnlyView) return
     if (!policyIdParam || !versionIdParam) return
     let cancelled = false
     setLoadingDraft(true)
+    setReadOnlyVersion(null)
     setError(null)
     Promise.all([
       apiDetails.getVersionDetails(policyIdParam, versionIdParam),
@@ -1096,7 +1172,7 @@ export function QuoteWizard() {
         setDraft(null)
         setQuoteResp(null)
         setEndorsementPreview(null)
-        setReadOnlyVersion(matchingVersion || null)
+        setReadOnlyVersion({ ...matchingVersion, ...details })
         if (matchingVersion?.premium) {
           const syntheticResponse = {
             quoteNumber: matchingVersion.transactionNumber || matchingVersion.versionId || '',
@@ -1351,61 +1427,8 @@ export function QuoteWizard() {
       `${String(normalizedInsureds?.primary?.firstName || '').trim()} ${String(normalizedInsureds?.primary?.lastName || '').trim()}`.trim()
   ).trim()
   function buildQuotePayload(state: QuoteState, insuredState: InsuredState = normalizedInsureds): any {
-    const commissionPct = parseCommissionPercent(state.agencyCommissionPct)
-    const payload = normalizePayloadCoverages({
-      ...state,
-      agencyCommissionPct: commissionPct ?? undefined,
-      insureds: normalizeInsuredState(insuredState, state.applicant),
-      uwAnswers: deriveUwAnswers(state)
-    })
-    if (commissionPct == null && payload && typeof payload === 'object' && 'agencyCommissionPct' in payload) {
-      delete payload.agencyCommissionPct
-    }
-    return payload
+    return buildWizardQuotePayload(state, insuredState)
   }
-  const selectedCoverageCodes = useMemo(() => {
-    return (Array.isArray(q.coverages) ? q.coverages : [])
-      .filter((item: any) => item && item.selected !== false)
-      .map((item: any) => String(item.code || '').trim())
-      .filter(Boolean)
-  }, [q.coverages])
-  const formAttachmentAttributes = useMemo(() => {
-    const firstRisk = Array.isArray(q.risks) && q.risks.length && q.risks[0] && typeof q.risks[0] === 'object'
-      ? q.risks[0]
-      : {}
-    return {
-      ...firstRisk,
-      country: q.country || undefined,
-      state: q.state || undefined,
-      termMonths: q.termMonths,
-      underwritingCompany: q.underwritingCompanyName || undefined,
-      agencyId: q.agencyId || undefined,
-      agencyName: q.agencyName || undefined,
-      agencyContactName: q.agencyContactName || undefined,
-      agencyCommissionPct: parseCommissionPercent(q.agencyCommissionPct) ?? undefined,
-      policyOffering: q.policyOffering || undefined,
-      underwriter: q.underwriterName || undefined,
-      priorPolicyNumber: q.priorPolicyNumber || undefined,
-      priorCarrier: q.priorCarrier || undefined,
-      applicant: q.applicant || {}
-    }
-  }, [
-    q.risks,
-    q.country,
-    q.state,
-    q.termMonths,
-    q.underwritingCompanyName,
-    q.agencyId,
-    q.agencyName,
-    q.agencyContactName,
-    q.agencyCommissionPct,
-    q.policyOffering,
-    q.underwriterName,
-    q.priorPolicyNumber,
-    q.priorCarrier,
-    q.applicant
-  ])
-
   const selectedUnderwriterName = companyNameKey(q.underwritingCompanyName)
   const companyScopedConfigs = useMemo(() => {
     if (!selectedUnderwriterName) return underwritingConfigurations
@@ -1776,6 +1799,10 @@ export function QuoteWizard() {
 
   useEffect(() => {
     if (step !== 8) return
+    if (isReadOnlyView) {
+      setFormsLoading(false)
+      return
+    }
     if (!q.productCode || !q.state) {
       setAttachedFormsByStage({ Quote: [], Bind: [], Issue: [] })
       setFormsError(null)
@@ -1783,14 +1810,8 @@ export function QuoteWizard() {
     }
 
     const stages: FormAttachmentStage[] = []
-    if (isReadOnlyView) {
-      if (wizardMode === 'quote') {
-        stages.push('Quote', 'Bind', 'Issue')
-      } else if (wizardMode === 'reinstate') {
-        stages.push('Issue')
-      } else {
-        stages.push('Quote', 'Issue')
-      }
+    if (isPolicyTransactionMode) {
+      if (quoteResp || boundPolicy || issued) stages.push('Issue')
     } else {
       if (quoteResp) stages.push('Quote')
       if (boundPolicy) stages.push('Bind')
@@ -1811,24 +1832,31 @@ export function QuoteWizard() {
       ? (transactionEffectiveDate || q.effectiveDate)
       : q.effectiveDate
     const uwContext = {
-      ...deriveUwAnswers(q),
       decision: quoteResp?.underwriting?.decision || undefined,
       overrideReason: overrideReason.trim() || undefined,
-      isBound: Boolean(boundPolicy),
-      isIssued: issued
     }
+    const previewPayload = buildQuotePayload(q)
 
     Promise.all(
       stages.map(async (stage) => {
         const rows = await api.previewForms({
           lineOfBusiness: q.productCode,
           productCode: q.productCode,
-          transactionType: stage,
           state: q.state,
           effectiveDate: effectiveDateForPreview || undefined,
-          coverages: selectedCoverageCodes,
-          attributes: formAttachmentAttributes,
-          uw: uwContext
+          ...liveFormPreviewContext(previewPayload, stage, {
+            type: wizardMode === 'quote' ? 'NB' : txLabel,
+            number: transactionNumber || draft?.quoteNumber,
+            effectiveDate: effectiveDateForPreview,
+            policy: policyContext,
+            premium: visiblePremium,
+            uw: uwContext,
+          }),
+          // Endorsement forms attach on change criteria; until the endorsement is
+          // rated there is no change set and only always-attach forms preview.
+          ...(wizardMode === 'endorse' && endorsementPreview?.endorsementChanges
+            ? { endorsementChanges: endorsementPreview.endorsementChanges }
+            : {}),
         })
         const mapped: AttachedForm[] = (Array.isArray(rows) ? rows : []).map((item: any) => ({
           formId: String(item.formId || ''),
@@ -1863,11 +1891,15 @@ export function QuoteWizard() {
     }
   }, [
     step,
+    q,
+    normalizedInsureds,
+    transactionNumber,
+    draft?.quoteNumber,
+    policyContext,
+    visiblePremium,
     q.productCode,
     q.state,
     q.effectiveDate,
-    selectedCoverageCodes,
-    formAttachmentAttributes,
     quoteResp,
     boundPolicy,
     issued,
@@ -1875,6 +1907,7 @@ export function QuoteWizard() {
     wizardMode,
     transactionEffectiveDate,
     isPolicyTransactionMode,
+    endorsementPreview,
     overrideReason
   ])
 
@@ -3040,6 +3073,7 @@ export function QuoteWizard() {
   }
 
   async function openFormDocument(formId: string) {
+    if (isReadOnlyView) return
     if (!formId) return
     setDocumentOpeningFormId(formId)
     setFormsError(null)
@@ -3277,6 +3311,37 @@ export function QuoteWizard() {
   }
 
   async function openGeneratedDocument(documentId: string) {
+    if (isReadOnlyView) {
+      const { documents } = pinnedTransactionWorkspace(readOnlyVersion, policyIdParam, versionIdParam)
+      const doc = documents.find((item: any) => item.documentId === documentId)
+      if (!canOpenArchivedDocument(doc)) return
+      const format = archivedOutputFormat(doc.contentType)
+      const native = format === 'DOCX' || format === 'XLSX'
+      const tab = native ? null : window.open('about:blank', '_blank')
+      if (tab) tab.opener = null
+      setDocumentOpeningId(documentId)
+      setFormsError(null)
+      try {
+        if (!native && !tab) throw new Error('Allow pop-ups to open archived documents.')
+        const blob = await api.downloadPolicyDocument(policyIdParam, documentId, {
+          versionId: versionIdParam, transactionId: readOnlyVersion.transactionId || undefined,
+        })
+        const url = URL.createObjectURL(blob)
+        if (native) {
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `${documentId}.${format.toLowerCase()}`
+          link.click()
+        } else if (tab) tab.location.href = url
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      } catch (err: any) {
+        tab?.close()
+        setFormsError(err?.message || String(err))
+      } finally {
+        setDocumentOpeningId(null)
+      }
+      return
+    }
     if (documentId === 'quote-summary') {
       await openQuoteSummaryDocument()
       return
@@ -3295,47 +3360,19 @@ export function QuoteWizard() {
   }
 
   async function openRatingWorksheetDocument() {
+    if (isReadOnlyView) return
     const premium = quoteResp?.premium || visiblePremium
     if (!premium) return
     setDocumentOpeningId('rating-worksheet')
     setFormsError(null)
     try {
-      let model: RatingWorksheetDocumentModel | null = null
-
-      if (isReadOnlyView && policyIdParam && versionIdParam) {
-        try {
-          const persisted = await apiDetails.getVersionRatingWorksheet(policyIdParam, versionIdParam)
-          const snapshot = persisted?.metadata?.snapshot
-          if (snapshot?.payload && snapshot?.premium) {
-            const persistedPayload = normalizePayloadCoverages(snapshot.payload || {})
-            const persistedState = mergeQuoteState(persistedPayload, { ...defaultState })
-            const context = snapshot?.context && typeof snapshot.context === 'object'
-              ? {
-                transactionType: String(snapshot.context.transactionType || txLabel || 'Issue'),
-                quoteOrTransactionNumber: String(snapshot.context.quoteOrTransactionNumber || snapshot.context.transactionNumber || '-'),
-                policyNumber: String(snapshot.context.policyNumber || boundPolicy?.policyNumber || policyNumber || '-')
-              }
-              : undefined
-            model = buildRatingWorksheetModel(persistedState, snapshot.premium, context)
-            if (persisted?.createdAt) model.generatedAt = String(persisted.createdAt)
-            if (snapshot?.context?.transactionEffectiveDate) {
-              model.transactionEffectiveDate = String(snapshot.context.transactionEffectiveDate)
-            }
-          }
-        } catch {
-          // Fall back to on-demand rendering from the loaded readonly version payload.
-        }
-      }
-
-      if (!model) {
-        model = buildRatingWorksheetModel(q, premium, {
+      const model = buildRatingWorksheetModel(q, premium, {
           transactionType: wizardMode === 'quote' ? 'Quote' : txLabel,
           quoteOrTransactionNumber: wizardMode === 'quote'
             ? (draft?.quoteNumber || quoteResp?.quoteNumber || quoteResp?.quoteId || '-')
             : (transactionNumber || '-'),
           policyNumber: boundPolicy?.policyNumber || policyNumber || '-'
         })
-      }
       const blob = await buildRatingWorksheetPdf(model)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -3366,14 +3403,20 @@ export function QuoteWizard() {
     if (requiresRatingBeforeIssue && !quoteResp) return 'Rate premium before issuing'
     return null
   })()
-  const formsRows = useMemo(
-    () =>
+  const formsRows = useMemo<{ stage: string; item: AttachedForm }[]>(
+    () => isReadOnlyView
+      ? pinnedTransactionWorkspace(readOnlyVersion, policyIdParam, versionIdParam).forms.map((item: any) => ({ stage: item.stage, item }))
+      :
       (['Quote', 'Bind', 'Issue'] as FormAttachmentStage[]).flatMap((stage) =>
         (attachedFormsByStage[stage] || []).map((item) => ({ stage, item }))
       ),
-    [attachedFormsByStage]
+    [attachedFormsByStage, isReadOnlyView, readOnlyVersion, policyIdParam, versionIdParam]
   )
   const documentRows = useMemo<GeneratedDocumentRow[]>(() => {
+    if (isReadOnlyView) return pinnedTransactionWorkspace(readOnlyVersion, policyIdParam, versionIdParam).documents.map((doc: any) => ({
+      id: doc.documentId, name: `${doc.displayName || doc.type}${doc.edition ? ` (${doc.edition})` : ''} - ${archivedOutputFormat(doc.contentType)}`,
+      stage: doc.stage, status: `${doc.status} / ${doc.integrityStatus}`, archive: doc,
+    }))
     const rows: GeneratedDocumentRow[] = []
     if (visiblePremium) {
       const versionSuffix = visiblePremium?.calcTrace?.versionLabel ? ` (${visiblePremium.calcTrace.versionLabel})` : ''
@@ -3381,7 +3424,7 @@ export function QuoteWizard() {
         id: 'rating-worksheet',
         name: `Rating Worksheet${versionSuffix}`,
         stage: wizardMode === 'quote' ? 'Quote' : 'Issue',
-        status: 'Attached'
+        status: 'Draft preview'
       })
     }
     if (wizardMode === 'quote' && quoteDocumentModel) {
@@ -3389,7 +3432,7 @@ export function QuoteWizard() {
         id: 'quote-summary',
         name: quoteDocumentModel.quoteNumber ? `Quote Summary #${quoteDocumentModel.quoteNumber}` : 'Quote Summary',
         stage: 'Quote',
-        status: 'Attached'
+        status: 'Draft preview'
       })
     }
     if (boundPolicy && q.productCode === 'personal-auto') {
@@ -3397,17 +3440,17 @@ export function QuoteWizard() {
         id: 'policy-pocket',
         name: `Policy Packet #${boundPolicy.policyNumber || ''}`.trim(),
         stage: 'Bind',
-        status: 'Attached'
+        status: 'Draft preview'
       })
       rows.push({
         id: 'id-cards',
         name: 'Policy ID Cards',
         stage: 'Bind',
-        status: 'Attached'
+        status: 'Draft preview'
       })
     }
     return rows
-  }, [wizardMode, quoteDocumentModel, boundPolicy, q.productCode, visiblePremium])
+  }, [wizardMode, quoteDocumentModel, boundPolicy, q.productCode, visiblePremium, isReadOnlyView, readOnlyVersion, policyIdParam, versionIdParam])
   const aiInsightsPanel = visibleAiInsights ? (
     <div className="block-spaced-sm">
       <h3>AI / ML Insights</h3>
@@ -5001,7 +5044,7 @@ export function QuoteWizard() {
             <CollapsibleSection className="card">
               <h3>Forms</h3>
               <div className="muted wizard-forms-status" style={{ marginBottom: 8 }}>
-                Quote: {quoteResp ? 'evaluated' : 'pending'} · Bind: {boundPolicy ? 'evaluated' : 'pending'} · Issue: {issued ? 'evaluated' : 'pending'}
+                {isReadOnlyView ? `Pinned transaction ${readOnlyVersion?.transactionNumber || transactionNumber || '-'} | Version ${versionIdParam} | Effective ${formatDisplayDate(readOnlyVersion?.effectiveDate, { fallback: '-' })}` : <>Quote: {quoteResp ? 'evaluated' : 'pending'} · Bind: {boundPolicy ? 'evaluated' : 'pending'} · Issue: {issued ? 'evaluated' : 'pending'}</>}
               </div>
               <table className="table">
                 <thead>
@@ -5018,18 +5061,20 @@ export function QuoteWizard() {
                 <tbody>
                   {formsRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="muted">No forms matched configured attachment rules.</td>
+                      <td colSpan={7} className="muted">{isReadOnlyView ? 'No pinned forms recorded for this transaction.' : 'No forms matched configured attachment rules.'}</td>
                     </tr>
                   )}
                   {formsRows.map(({ stage, item }, index) => (
                     <tr key={`${stage}-${item.formId}-${index}`}>
-                      <td>{stage}</td>
+                      {/* Nothing is generated at Quote: these rows project what binding will attach. */}
+                      <td>{stage === 'Quote' && !isReadOnlyView ? 'Quote (attaches at bind)' : stage}</td>
                       <td>{item.formNumber || item.formId}</td>
                       <td>{item.formTitle || '-'}</td>
                       <td>{item.editionDate || '-'}</td>
                       <td>{item.packetPlacement || 'End'}</td>
                       <td>{Array.isArray(item.reasons) && item.reasons.length > 0 ? item.reasons.join(' | ') : '-'}</td>
                       <td>
+                        {isReadOnlyView ? 'Archived outputs in Documents' :
                         <button
                           type="button"
                           className="btn-secondary"
@@ -5037,7 +5082,7 @@ export function QuoteWizard() {
                           disabled={!item.formId || documentOpeningFormId === item.formId}
                         >
                           {documentOpeningFormId === item.formId ? 'Opening...' : 'View'}
-                        </button>
+                        </button>}
                       </td>
                     </tr>
                   ))}
@@ -5047,6 +5092,7 @@ export function QuoteWizard() {
           ) : (
             <CollapsibleSection className="card">
               <h3>Documents</h3>
+              {isReadOnlyView && <p className="muted">Transaction {readOnlyVersion?.transactionNumber || transactionNumber || '-'} | Version {versionIdParam} | Effective {formatDisplayDate(readOnlyVersion?.effectiveDate, { fallback: '-' })}</p>}
               <table className="table">
                 <thead>
                   <tr>
@@ -5072,16 +5118,17 @@ export function QuoteWizard() {
                           type="button"
                           className="btn-secondary"
                           onClick={() => void openGeneratedDocument(row.id)}
-                          disabled={!canOpenGeneratedDocument(row.id, { hasQuoteDocument: Boolean(quoteDocumentModel), hasPremiumDocument: Boolean(visiblePremium), boundPolicy, productCode: q.productCode }) || documentOpeningId === row.id}
+                          title={isReadOnlyView && !canOpenArchivedDocument(row.archive) ? 'Archived output unavailable or not verified' : row.name}
+                          disabled={(isReadOnlyView ? !canOpenArchivedDocument(row.archive) : !canOpenGeneratedDocument(row.id, { hasQuoteDocument: Boolean(quoteDocumentModel), hasPremiumDocument: Boolean(visiblePremium), boundPolicy, productCode: q.productCode })) || documentOpeningId === row.id}
                         >
-                          {documentOpeningId === row.id ? 'Opening...' : 'View'}
+                          {documentOpeningId === row.id ? 'Opening...' : row.archive && ['DOCX', 'XLSX'].includes(archivedOutputFormat(row.archive.contentType)) ? 'Download' : 'View'}
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="muted">Quote summary is generated when premium rating completes.</div>
+              {!isReadOnlyView && <div className="muted">Draft previews</div>}
             </CollapsibleSection>
           )}
         </section>
@@ -5414,7 +5461,7 @@ function ReviewFooter({
                   Policy <strong>{boundPolicy.policyNumber}</strong>
                 </div>
                 <div className="muted review-policy-subtext">
-                  {issued ? 'Policy is issued and locked.' : 'Policy is bound. Issue to lock it.'}
+                  {readOnly ? 'Historical transaction' : issued ? 'Policy is issued and locked.' : 'Policy is bound. Issue to lock it.'}
                 </div>
               </div>
               <div className="review-policy-actions">

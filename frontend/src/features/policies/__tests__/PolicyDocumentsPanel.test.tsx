@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PolicyDocumentsPanel } from '../PolicyDocumentsPanel'
+import { PolicyDocumentsPanel, policyDocumentName } from '../PolicyDocumentsPanel'
 import { usePolicyDocuments } from '../../../api/hooks'
 import { api } from '../../../api/client'
 
@@ -17,6 +17,7 @@ vi.mock('../../../api/client', () => ({
 
 const mockUseDocuments = vi.mocked(usePolicyDocuments)
 const mockDownload = vi.mocked(api.downloadPolicyDocument)
+const ready = { status: 'READY', available: true, byteSize: 100, contentType: 'application/pdf', integrityStatus: 'VERIFIED' }
 
 describe('PolicyDocumentsPanel', () => {
   beforeEach(() => {
@@ -33,7 +34,7 @@ describe('PolicyDocumentsPanel', () => {
   })
 
   it('does not request content when the browser blocks the reserved tab', async () => {
-    mockUseDocuments.mockReturnValue({ data: { documents: [{ documentId: 'doc-1', type: 'POLICY_PACKET' }] }, isLoading: false, error: null } as any)
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, documentId: 'doc-1', type: 'POLICY_PACKET' }] }, isLoading: false, error: null } as any)
     vi.mocked(window.open).mockReturnValue(null)
     render(<PolicyDocumentsPanel policyId="policy-1" />)
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
@@ -94,11 +95,78 @@ describe('PolicyDocumentsPanel', () => {
 
     render(<PolicyDocumentsPanel policyId="policy-1" />)
 
-    expect(screen.getByText('POLICY_PACKET TX-1')).toBeInTheDocument()
-    expect(screen.getByText('RATING_WORKSHEET TX-1')).toBeInTheDocument()
+    // Name cell and type cell both read the display name; no transaction type is known here.
+    expect(screen.getAllByText('Policy packet')).toHaveLength(2)
+    expect(screen.getAllByText('Rating worksheet')).toHaveLength(2)
+    expect(screen.queryByText(/POLICY_PACKET|RATING_WORKSHEET/)).not.toBeInTheDocument()
     expect(screen.getByText('VERIFIED')).toBeInTheDocument()
     expect(screen.getByText('FAILED')).toBeInTheDocument()
     expect(screen.getAllByText('TX-1')).toHaveLength(2)
+  })
+
+  it('names documents by type and transaction, with the format as the type', () => {
+    mockUseDocuments.mockReturnValue({
+      data: {
+        documents: [
+          { ...ready, documentId: 'doc-rn', displayName: 'POLICY_PACKET (Renew) RN-20261020-1', type: 'POLICY_PACKET', transactionType: 'Renew', transactionNumber: 'RN-20261020-1', versionId: 'ver-rn', transactionId: 'tx-rn' },
+          { ...ready, documentId: 'doc-nb', displayName: 'RATING_WORKSHEET (NB) NB-20261020-1', type: 'RATING_WORKSHEET', transactionType: 'NB', transactionNumber: 'NB-20261020-1', contentType: 'text/html' },
+          { ...ready, documentId: 'doc-form', displayName: 'Auto Declarations (Endorse) [PA-DEC] (Endorse) EN-1', type: 'POLICY_FORM_DOCUMENT', transactionType: 'Endorse', transactionNumber: 'EN-1', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+          { ...ready, documentId: 'doc-legacy', displayName: 'Legacy upload', type: '' },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any)
+
+    render(<PolicyDocumentsPanel policyId="policy-1" />)
+
+    const names = screen.getAllByTestId('policy-document-name').map((node) => node.textContent)
+    expect(names).toEqual([
+      'Policy packet — Renewal',
+      'Rating worksheet — New business',
+      'Auto Declarations (Endorse) [PA-DEC] — Endorsement',
+      'Legacy upload',
+    ])
+    const renewalRow = screen.getByText('Policy packet — Renewal').closest('tr')!
+    expect(within(renewalRow).getByText('RN-20261020-1')).toBeInTheDocument()
+    expect(within(renewalRow).getByText('PDF')).toBeInTheDocument()
+    expect(within(renewalRow).getByText('Policy packet')).toBeInTheDocument()
+    expect(renewalRow).not.toHaveTextContent(/POLICY_PACKET|\bRenew\b/)
+    const worksheetRow = screen.getByText('Rating worksheet — New business').closest('tr')!
+    expect(within(worksheetRow).getByText('HTML')).toBeInTheDocument()
+  })
+
+  it('shows version and transaction IDs only after Details is expanded', async () => {
+    mockUseDocuments.mockReturnValue({
+      data: { documents: [{ ...ready, documentId: 'doc-1', type: 'POLICY_PACKET', transactionType: 'NB', versionId: 'ver-123', transactionId: 'tx-456' }] },
+      isLoading: false,
+      error: null,
+    } as any)
+
+    render(<PolicyDocumentsPanel policyId="policy-1" />)
+
+    expect(screen.queryByText(/ver-123/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/tx-456/)).not.toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Details for Policy packet — New business' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Version ver-123')).toBeInTheDocument()
+    expect(screen.getByText('Transaction ID tx-456')).toBeInTheDocument()
+
+    await userEvent.click(toggle)
+    expect(screen.queryByText('Version ver-123')).not.toBeInTheDocument()
+  })
+
+  it('offers no Details toggle when a document has no version or transaction ID', () => {
+    mockUseDocuments.mockReturnValue({
+      data: { documents: [{ ...ready, documentId: 'doc-1', type: 'POLICY_PACKET' }] },
+      isLoading: false,
+      error: null,
+    } as any)
+    render(<PolicyDocumentsPanel policyId="policy-1" />)
+    expect(screen.queryByRole('button', { name: /^Details/ })).not.toBeInTheDocument()
   })
 
   it('downloads/opens a document via the content endpoint when Open is clicked', async () => {
@@ -106,6 +174,7 @@ describe('PolicyDocumentsPanel', () => {
       data: {
         documents: [
           {
+            ...ready,
             documentId: 'doc-1',
             displayName: 'Policy Document Packet',
             type: 'POLICY_PACKET',
@@ -123,7 +192,7 @@ describe('PolicyDocumentsPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
 
-    expect(mockDownload).toHaveBeenCalledWith('policy-1', 'doc-1')
+    expect(mockDownload).toHaveBeenCalledWith('policy-1', 'doc-1', undefined)
     expect(window.open).toHaveBeenCalled()
   })
 
@@ -132,10 +201,11 @@ describe('PolicyDocumentsPanel', () => {
       data: {
         documents: [
           {
+            ...ready,
             documentId: 'doc-1',
             displayName: 'Policy Document Packet',
             type: 'POLICY_PACKET',
-            integrityStatus: 'UNVERIFIED',
+            integrityStatus: 'VERIFIED',
             generatedAt: '2026-07-01T00:00:00.000Z',
           },
         ],
@@ -150,5 +220,41 @@ describe('PolicyDocumentsPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
 
     expect(window.alert).toHaveBeenCalledWith('Document download failed 409')
+  })
+
+  it.each([
+    { integrityStatus: 'FAILED' }, { integrityStatus: 'UNVERIFIED' },
+    { status: 'PENDING' }, { status: 'UNKNOWN' }, { available: false },
+    { byteSize: 0 }, { contentType: null },
+  ])('never opens an unavailable archive: %j', async (overrides) => {
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, ...overrides, documentId: 'doc' }] }, isLoading: false } as any)
+    render(<PolicyDocumentsPanel policyId="policy" />)
+    const open = screen.getByRole('button', { name: 'Open' })
+    expect(open).toBeDisabled()
+    await userEvent.click(open)
+    expect(mockDownload).not.toHaveBeenCalled()
+  })
+
+  it('retains exact version and transaction references on archive retrieval', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, documentId: 'doc', versionId: 'v1', transactionId: 'tx1', transactionNumber: 'END-1', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }] }, isLoading: false } as any)
+    mockDownload.mockResolvedValue(new Blob(['native bytes']))
+    render(<PolicyDocumentsPanel policyId="policy" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }))
+    expect(mockDownload).toHaveBeenCalledWith('policy', 'doc', { versionId: 'v1', transactionId: 'tx1' })
+    expect(screen.queryByText('Version v1')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^Details for/ }))
+    expect(screen.getByText('Version v1')).toBeInTheDocument()
+    expect(click).toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+    click.mockRestore()
+  })
+})
+
+describe('policyDocumentName for form documents', () => {
+  it('names a form document by its form when the stored name has no form code', () => {
+    const base = { type: 'POLICY_FORM_DOCUMENT', transactionType: 'Endorse', displayName: 'POLICY_FORM_DOCUMENT (Endorse) EN-1' }
+    expect(policyDocumentName({ ...base, forms: [{ code: 'HO-EOI', title: 'Evidence of Insurance' }] })).toBe('Evidence of Insurance [HO-EOI] — Endorsement')
+    expect(policyDocumentName({ ...base, forms: [{ code: 'HO-DEC', title: 'Homeowners Declarations' }] })).toBe('Homeowners Declarations [HO-DEC] — Endorsement')
   })
 })

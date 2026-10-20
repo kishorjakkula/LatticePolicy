@@ -121,6 +121,12 @@ Core domain entities:
 
 Important lifecycle flows:
 
+- Forms master data is managed at `/admin/forms`; attachment conditions use the
+  shared safe expression engine against transaction business snapshots. Historical
+  transaction Forms & Documents reads pinned forms and archived outputs, not the
+  current master edition. See `docs/tasks/forms-attachment-rules.md` for field
+  paths, legacy opt-in behavior and the remaining WP-0003 document-module scope.
+
 - Quote -> rate -> underwriting decision -> bind -> policy projection and initial version.
 - Issue, endorse, cancel, reinstate, rewrite, renew, and non-renew transactions.
 - Effective-dated timelines support out-of-sequence endorsements, cancellations,

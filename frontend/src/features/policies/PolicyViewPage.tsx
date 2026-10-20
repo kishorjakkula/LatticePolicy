@@ -24,9 +24,12 @@ import {
 import { derivePolicyWorkflowStatus, policyStatusBadgeColor } from './statusModel'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { TransactionAuditPanel } from './TransactionAuditPanel'
-import { PolicyAsOfPanel } from './PolicyAsOfPanel'
+import { PolicyAsOfControl, PolicyAsOfResult } from './PolicyAsOfPanel'
 import { PolicyDocumentsPanel } from './PolicyDocumentsPanel'
+import { computeCurrentTermPremium, isCancelTransactionType, isReinstateTransactionType } from './policyPremium'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { PageHeader, PageHeaderFact } from '../../components/PageHeader'
+import { POLICY_STATUS_LEGEND, productLabel, transactionTypeLabel } from '../../shared/displayLabels'
 
 type JsonRecord = Record<string, any>
 type TransactionMode = 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
@@ -35,8 +38,6 @@ type VersionSortKey =
   | 'transactionNumber'
   | 'policyEffectiveDate'
   | 'effectiveDate'
-  | 'expirationDate'
-  | 'createdDate'
   | 'updatedDate'
   | 'updatedUser'
   | 'transactionType'
@@ -65,32 +66,6 @@ function toIsoDateOnly(value: unknown): string {
   const raw = String(value)
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(raw)
   return match ? match[1] : ''
-}
-
-// Same idea as toIsoDateOnly, but reads the *local* date components instead
-// of normalizing through toISOString (which is always UTC). Used only for
-// matching a version's dates against the policy term, where we want the
-// calendar date as entered rather than a UTC-shifted one.
-function toLocalDateOnlyKey(value: unknown): string {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
-  const parsed = new Date(trimmed)
-  if (Number.isNaN(parsed.getTime())) return ''
-  const year = String(parsed.getFullYear())
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function isCancelTransactionType(value: unknown): boolean {
-  const normalized = String(value || '').trim().toLowerCase()
-  return normalized === 'cancel' || normalized === 'cancelled' || normalized === 'cancellation'
-}
-
-function isReinstateTransactionType(value: unknown): boolean {
-  const normalized = String(value || '').trim().toLowerCase()
-  return normalized === 'reinstate' || normalized === 'reinstated' || normalized === 'reinstatement'
 }
 
 // Maps a raw transactionType string (as stored on a version) to the mode
@@ -132,23 +107,7 @@ function formatDate(value: unknown): string {
 }
 
 function formatDateTime(value: unknown): string {
-  return formatDisplayDateTime(value, { fallback: '' })
-}
-
-// Formats a raw ledger timestamp as "MM-DD-YYYY HH:MM" in the viewer's local
-// time. This is intentionally its own (simpler) formatter rather than
-// formatDateTime, matching the original ledger table's display.
-function formatLedgerTimestamp(value: unknown, fallback = '-'): string {
-  const raw = String(value || '').trim()
-  if (!raw) return fallback
-  const parsed = new Date(raw)
-  if (Number.isNaN(parsed.getTime())) return fallback
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  const year = String(parsed.getFullYear())
-  const hours = String(parsed.getHours()).padStart(2, '0')
-  const minutes = String(parsed.getMinutes()).padStart(2, '0')
-  return `${month}-${day}-${year} ${hours}:${minutes}`
+  return formatDisplayDateTime(value, { fallback: '', includeTime: true })
 }
 
 function formatCurrencyAmount(value: unknown, currency = 'USD'): string {
@@ -265,19 +224,6 @@ function summarizeLedgerEvent(event: JsonRecord): string {
   return parts.length ? parts.join(' | ') : 'Recorded by system'
 }
 
-// Policy "Term" number shown in the summary card: term 1 plus one for every
-// renewal transaction recorded against the policy.
-function countPolicyTermNumber(versions: JsonRecord[]): number {
-  if (!Array.isArray(versions) || versions.length === 0) return 1
-  return (
-    1 +
-    versions.reduce((count, version) => {
-      const type = String(version?.transactionType || '').trim().toUpperCase()
-      return type === 'RENEW' || type === 'RENEWAL' ? count + 1 : count
-    }, 0)
-  )
-}
-
 function sortVersionsForDisplayOrder(versions: JsonRecord[]): Array<{ version: JsonRecord; index: number }> {
   return [...versions.map((version, index) => ({ version, index }))].sort((left, right) => {
     const leftProcessed = Date.parse(
@@ -361,73 +307,6 @@ function reconcileReinstatementPremiums(versions: JsonRecord[]): JsonRecord[] {
   })
 }
 
-// Computes the policy's current total premium by summing the (reinstatement
-// -adjusted-in-spirit) premium deltas of the versions belonging to the
-// policy's current term. See reconcileReinstatementPremiums for the
-// cancel/reinstate pairing idea; this function re-implements a variant of
-// that logic independently (as found in the original), with one notable
-// difference: here, the "pending cancellation" memory is cleared ONLY by a
-// reinstatement, not by any other intervening transaction type. That
-// asymmetry versus reconcileReinstatementPremiums is preserved intentionally
-// rather than unified, since unifying it would change displayed totals.
-function computeCurrentPolicyPremium(versions: JsonRecord[], term: JsonRecord | null | undefined): JsonRecord | null {
-  if (!Array.isArray(versions) || versions.length === 0) return null
-
-  const termEffective = toLocalDateOnlyKey(term?.effectiveDate)
-  const termExpiration = toLocalDateOnlyKey(term?.expirationDate)
-
-  const inCurrentTerm = versions.filter((version) => {
-    if (!termEffective && !termExpiration) return true
-    const versionEffective = toLocalDateOnlyKey(version?.policyEffectiveDate)
-    const versionExpiration = toLocalDateOnlyKey(version?.expirationDate)
-    return !(
-      (termEffective && versionEffective && versionEffective !== termEffective) ||
-      (termExpiration && versionExpiration && versionExpiration !== termExpiration)
-    )
-  })
-
-  const ordered = [...(inCurrentTerm.length > 0 ? inCurrentTerm : versions)].sort((left, right) => {
-    const leftProcessed = Date.parse(String(left?.processedDate || left?.updatedDate || left?.createdDate || ''))
-    const rightProcessed = Date.parse(String(right?.processedDate || right?.updatedDate || right?.createdDate || ''))
-    const leftProcessedSafe = Number.isFinite(leftProcessed) ? leftProcessed : 0
-    const rightProcessedSafe = Number.isFinite(rightProcessed) ? rightProcessed : 0
-    if (leftProcessedSafe !== rightProcessedSafe) return leftProcessedSafe - rightProcessedSafe
-
-    const leftEffective = Date.parse(String(left?.effectiveDate || ''))
-    const rightEffective = Date.parse(String(right?.effectiveDate || ''))
-    const leftEffectiveSafe = Number.isFinite(leftEffective) ? leftEffective : 0
-    const rightEffectiveSafe = Number.isFinite(rightEffective) ? rightEffective : 0
-    if (leftEffectiveSafe !== rightEffectiveSafe) return leftEffectiveSafe - rightEffectiveSafe
-
-    return String(left?.transactionNumber || '').localeCompare(String(right?.transactionNumber || ''))
-  })
-
-  let cumulative = 0
-  let sawAnyAmount = false
-  let currency = 'USD'
-  let pendingCancelMagnitude = 0
-
-  for (const version of ordered) {
-    const total = version?.premium?.total
-    const amount = typeof total?.amount === 'number' ? total.amount : Number(total?.amount)
-    if (!Number.isFinite(amount)) continue
-
-    let delta = amount
-    if (isCancelTransactionType(version?.transactionType) && amount < 0) {
-      pendingCancelMagnitude = Math.abs(amount)
-    } else if (isReinstateTransactionType(version?.transactionType)) {
-      if (Math.abs(amount) < 0.01 && pendingCancelMagnitude > 0) delta = pendingCancelMagnitude
-      pendingCancelMagnitude = 0
-    }
-
-    sawAnyAmount = true
-    cumulative += delta
-    if (typeof total?.currency === 'string' && total.currency.trim()) currency = total.currency.trim()
-  }
-
-  return sawAnyAmount ? { amount: cumulative, currency } : null
-}
-
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
@@ -445,6 +324,7 @@ export function PolicyViewPage() {
   const [pendingByMode, setPendingByMode] = useState<PendingTransactionByMode>(EMPTY_PENDING_BY_MODE)
   const [nonRenewModalOpen, setNonRenewModalOpen] = useState(false)
   const [nonRenewBusy, setNonRenewBusy] = useState(false)
+  const [asOf, setAsOf] = useState<string | null>(null)
 
   const { data: policy, refetch: refetchPolicy } = usePolicy(id ?? '')
   const { data: versionsData, refetch: refetchVersions } = usePolicyVersions(id ?? '')
@@ -505,13 +385,11 @@ export function PolicyViewPage() {
       if (sortKey === 'transactionNumber') result = compareStrings(left?.transactionNumber, right?.transactionNumber)
       else if (sortKey === 'policyEffectiveDate') result = compareDates(left?.policyEffectiveDate, right?.policyEffectiveDate)
       else if (sortKey === 'effectiveDate') result = compareDates(left?.effectiveDate, right?.effectiveDate)
-      else if (sortKey === 'expirationDate') result = compareDates(left?.expirationDate, right?.expirationDate)
-      else if (sortKey === 'createdDate')
-        result = compareDates(left?.createdDate || left?.processedDate, right?.createdDate || right?.processedDate)
       else if (sortKey === 'updatedDate')
         result = compareDates(left?.updatedDate || left?.processedDate, right?.updatedDate || right?.processedDate)
       else if (sortKey === 'updatedUser') result = compareStrings(left?.updatedUser, right?.updatedUser)
-      else if (sortKey === 'transactionType') result = compareStrings(left?.transactionType, right?.transactionType)
+      else if (sortKey === 'transactionType')
+        result = compareStrings(transactionTypeLabel(left?.transactionType), transactionTypeLabel(right?.transactionType))
       else if (sortKey === 'amount') result = compareNumbers(left?.premium?.total?.amount, right?.premium?.total?.amount)
       return result * dirMultiplier
     })
@@ -706,8 +584,6 @@ export function PolicyViewPage() {
     if (
       key === 'policyEffectiveDate' ||
       key === 'effectiveDate' ||
-      key === 'expirationDate' ||
-      key === 'createdDate' ||
       key === 'updatedDate' ||
       key === 'amount'
     ) {
@@ -730,11 +606,6 @@ export function PolicyViewPage() {
     return `${label} ${sortDir === 'asc' ? '^' : 'v'}`
   }
 
-  function sortArrow(key: VersionSortKey): string {
-    if (sortKey !== key) return ''
-    return sortDir === 'asc' ? '^' : 'v'
-  }
-
   if (error) {
     return (
       <div className="card">
@@ -751,12 +622,11 @@ export function PolicyViewPage() {
   const lastVersion = adjustedVersions.length ? adjustedVersions[adjustedVersions.length - 1] : null
   const canReinstate = isCancelTransactionType(lastVersion?.transactionType) || (!lastVersion && statusLower === 'cancelled')
   const workflowStatus = derivePolicyWorkflowStatus(rawStatus, policy.term)
-  const termNumber = countPolicyTermNumber(adjustedVersions)
-  const policyPremiumTotal =
-    computeCurrentPolicyPremium(adjustedVersions, policy?.term) ||
-    lastVersion?.premium?.total ||
-    policy?.premium?.total ||
-    null
+  // Premium of the current term only (earlier terms excluded); see computeCurrentTermPremium.
+  const termPremium = computeCurrentTermPremium(adjustedVersions, policy?.term) || policy?.premium?.total || null
+  const statusLegend = POLICY_STATUS_LEGEND[workflowStatus] || ''
+  const termStart = formatDate(policy.term?.effectiveDate)
+  const termEnd = formatDate(policy.term?.expirationDate)
 
   const customer = policy.customer && typeof policy.customer === 'object' ? policy.customer : null
   const customerId = String(customer?.customerId || customer?.customerKey || '').trim()
@@ -765,63 +635,81 @@ export function PolicyViewPage() {
   const customerName = String(
     customer?.name || [customerFirstName, customerLastName].filter(Boolean).join(' ').trim(),
   ).trim()
-  const customerLinkLabel = [
-    String(customer?.customerKey || '').trim() || String(customer?.customerId || '').trim(),
-    customerName,
-  ]
-    .filter(Boolean)
-    .join(' - ')
+  const insuredLabel = customerName || String(customer?.customerKey || '').trim() || customerId
 
   return (
     <>
       <div className="ps-page-shell policy-shell">
-        <nav className="ps-breadcrumbs" aria-label="Breadcrumb">
-          <Link to="/dashboard" className="ps-breadcrumb-link">
-            Home
-          </Link>
-          <span className="ps-breadcrumb-sep" aria-hidden="true">
-            /
-          </span>
-          <Link to="/search" className="ps-breadcrumb-link">
-            Policies
-          </Link>
-          <span className="ps-breadcrumb-sep" aria-hidden="true">
-            /
-          </span>
-          <span className="ps-breadcrumb-current">{policy.policyNumber}</span>
-        </nav>
-
-        <div className="card page-shell policy-hero">
-          <div className="policy-hero-kicker">Policy workflow</div>
-          <div className="ps-page-header policy-page-header">
-            <div className="policy-hero-main">
-              <h1 className="ps-page-title">
-                Policy <span className="id-mono">{policy.policyNumber}</span>
-              </h1>
-            </div>
-            <div className="ps-page-header-actions">
-              <span className={`badge ${policyStatusBadgeColor(workflowStatus)}`}>{workflowStatus}</span>
-            </div>
-          </div>
-          <div className="policy-hero-meta">
-            <div className="policy-hero-meta-card">
-              <div className="policy-hero-meta-label">Customer</div>
-              <div className="policy-hero-meta-value">
-                {customerId ? (
-                  <Link to={`/customers/${encodeURIComponent(customerId)}`}>{customerLinkLabel || customerId}</Link>
+        <PageHeader
+          className="card page-shell policy-hero"
+          data-testid="policy-header"
+          breadcrumbs={
+            <nav className="ps-breadcrumbs" aria-label="Breadcrumb">
+              <Link to="/dashboard" className="ps-breadcrumb-link">
+                Home
+              </Link>
+              <span className="ps-breadcrumb-sep" aria-hidden="true">
+                /
+              </span>
+              <Link to="/search" className="ps-breadcrumb-link">
+                Policies
+              </Link>
+              <span className="ps-breadcrumb-sep" aria-hidden="true">
+                /
+              </span>
+              <span className="ps-breadcrumb-current">{policy.policyNumber}</span>
+            </nav>
+          }
+          title={
+            <>
+              Policy <span className="id-mono">{policy.policyNumber}</span>
+            </>
+          }
+          status={
+            <>
+              {/* The legend sits beside the badge so the badge text is the status alone. */}
+              <span
+                className={`badge ${policyStatusBadgeColor(workflowStatus)}`}
+                title={statusLegend || undefined}
+                aria-describedby={statusLegend ? 'policy-status-legend' : undefined}
+              >
+                {workflowStatus}
+              </span>
+              {statusLegend && (
+                <span id="policy-status-legend" className="sr-only">
+                  {statusLegend}
+                </span>
+              )}
+            </>
+          }
+          facts={
+            <>
+              <PageHeaderFact label="Named insured">
+                {!customer || !insuredLabel ? (
+                  <span className="muted">No insured linked</span>
+                ) : customerId ? (
+                  <Link to={`/customers/${encodeURIComponent(customerId)}`} title={insuredLabel}>
+                    {insuredLabel}
+                  </Link>
                 ) : (
-                  <span>{customerName || '-'}</span>
+                  <span title={insuredLabel}>{insuredLabel}</span>
                 )}
-              </div>
-            </div>
-            <div className="policy-hero-meta-card">
-              <div className="policy-hero-meta-label">Policy Premium</div>
-              <div className={`policy-hero-meta-value ${isNegativeAmount(policyPremiumTotal) ? 'amount-negative' : ''}`}>
-                {formatMoney(policyPremiumTotal) || '-'}
-              </div>
-            </div>
-          </div>
-        </div>
+              </PageHeaderFact>
+              <PageHeaderFact label="Product">{productLabel(policy.productCode)}</PageHeaderFact>
+              <PageHeaderFact label="Term">
+                {termStart || termEnd ? `${termStart || '-'} – ${termEnd || '-'}` : '-'}
+              </PageHeaderFact>
+              <PageHeaderFact label="Premium this term">
+                <span className={isNegativeAmount(termPremium) ? 'amount-negative' : undefined}>
+                  {formatMoney(termPremium) || 'Not rated'}
+                </span>
+              </PageHeaderFact>
+              <PageHeaderFact label="As of">
+                <PolicyAsOfControl asOf={asOf} onChange={setAsOf} />
+              </PageHeaderFact>
+            </>
+          }
+        />
 
         <CollapsibleSection id="policy-edit" className="card policy-actions-card policy-section-card">
           <div className="policy-actions-header">
@@ -924,7 +812,7 @@ export function PolicyViewPage() {
           <div className="policy-summary-grid">
             <div className="policy-summary-item">
               <div className="policy-summary-label">Product</div>
-              <div className="policy-summary-value">{policy.productCode}</div>
+              <div className="policy-summary-value">{productLabel(policy.productCode)}</div>
             </div>
             {policy.productVersion && (
               <div className="policy-summary-item">
@@ -932,10 +820,6 @@ export function PolicyViewPage() {
                 <div className="policy-summary-value">{policy.productVersion}</div>
               </div>
             )}
-            <div className="policy-summary-item">
-              <div className="policy-summary-label">Term</div>
-              <div className="policy-summary-value">{termNumber}</div>
-            </div>
             <div className="policy-summary-item">
               <div className="policy-summary-label">Policy Effective Date</div>
               <div className="policy-summary-value">{formatDate(policy.term.effectiveDate)}</div>
@@ -961,7 +845,7 @@ export function PolicyViewPage() {
           </div>
         )}
 
-        <PolicyAsOfPanel policyId={policy.policyId} />
+        <PolicyAsOfResult policyId={policy.policyId} asOf={asOf} />
 
         <CollapsibleSection title="Transactions" className="card policy-section-card policy-versions-card">
           <table className="table table-sticky-header">
@@ -972,43 +856,29 @@ export function PolicyViewPage() {
                     {sortLabel('transactionNumber', 'Transaction #')}
                   </button>
                 </th>
-                <th data-mobile-label="Effective Date">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('policyEffectiveDate')}>
-                    {sortLabel('policyEffectiveDate', 'Effective Date')}
-                  </button>
-                </th>
-                <th data-mobile-label="Transaction Effective Date">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('effectiveDate')}>
-                    Transaction
-                    <br />
-                    {`Effective Date${sortArrow('effectiveDate') ? ` ${sortArrow('effectiveDate')}` : ''}`}
-                  </button>
-                </th>
-                <th data-mobile-label="Expiration">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('expirationDate')}>
-                    {sortLabel('expirationDate', 'Expiration')}
-                  </button>
-                </th>
-                <th data-mobile-label="Created Date">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('createdDate')}>
-                    {sortLabel('createdDate', 'Created Date')}
-                  </button>
-                </th>
-                <th data-mobile-label="Updated Date">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('updatedDate')}>
-                    {sortLabel('updatedDate', 'Updated Date')}
-                  </button>
-                </th>
-                <th data-mobile-label="Updated User">
-                  <button type="button" className="table-sort-button" onClick={() => handleSort('updatedUser')}>
-                    Updated
-                    <br />
-                    {`User${sortArrow('updatedUser') ? ` ${sortArrow('updatedUser')}` : ''}`}
-                  </button>
-                </th>
                 <th data-mobile-label="Type">
                   <button type="button" className="table-sort-button" onClick={() => handleSort('transactionType')}>
                     {sortLabel('transactionType', 'Type')}
+                  </button>
+                </th>
+                <th data-mobile-label="Transaction effective">
+                  <button type="button" className="table-sort-button" onClick={() => handleSort('effectiveDate')}>
+                    {sortLabel('effectiveDate', 'Transaction effective')}
+                  </button>
+                </th>
+                <th data-mobile-label="Policy term">
+                  <button type="button" className="table-sort-button" onClick={() => handleSort('policyEffectiveDate')}>
+                    {sortLabel('policyEffectiveDate', 'Policy term')}
+                  </button>
+                </th>
+                <th data-mobile-label="Updated">
+                  <button type="button" className="table-sort-button" onClick={() => handleSort('updatedDate')}>
+                    {sortLabel('updatedDate', 'Updated')}
+                  </button>
+                </th>
+                <th data-mobile-label="Updated by">
+                  <button type="button" className="table-sort-button" onClick={() => handleSort('updatedUser')}>
+                    {sortLabel('updatedUser', 'Updated by')}
                   </button>
                 </th>
                 <th data-mobile-label="Amount">
@@ -1022,7 +892,7 @@ export function PolicyViewPage() {
             <tbody>
               {sortedVersions.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="muted">
+                  <td colSpan={8} className="muted">
                     No versions
                   </td>
                 </tr>
@@ -1040,13 +910,14 @@ export function PolicyViewPage() {
                         {version.transactionNumber || 'Open'}
                       </button>
                     </td>
-                    <td>{formatDate(version.policyEffectiveDate || policy.term?.effectiveDate)}</td>
+                    <td>{transactionTypeLabel(version.transactionType)}</td>
                     <td>{formatDate(version.effectiveDate)}</td>
-                    <td>{formatDate(version.expirationDate || policy.term?.expirationDate)}</td>
-                    <td>{formatLedgerTimestamp(version.createdDate || version.processedDate)}</td>
-                    <td>{formatLedgerTimestamp(version.updatedDate || version.processedDate)}</td>
+                    <td>
+                      {formatDate(version.policyEffectiveDate || policy.term?.effectiveDate) || '-'} –{' '}
+                      {formatDate(version.expirationDate || policy.term?.expirationDate) || '-'}
+                    </td>
+                    <td>{formatDateTime(version.updatedDate || version.processedDate) || '-'}</td>
                     <td>{version.updatedUser || 'system'}</td>
-                    <td>{version.transactionType}</td>
                     <td className={isNegativeAmount(version.premium?.total) ? 'amount-negative' : undefined}>
                       {formatMoney(version.premium?.total)}
                     </td>
@@ -1065,7 +936,7 @@ export function PolicyViewPage() {
                 return [
                   row,
                   <tr key={`${version.versionId}-audit`}>
-                    <td colSpan={10}>
+                    <td colSpan={8}>
                       <TransactionAuditPanel
                         policyId={policy.policyId}
                         version={version as JsonRecord & { versionId: string }}
@@ -1314,7 +1185,7 @@ function NonRenewModal({ policy, busy, onClose, onSubmit }: NonRenewModalProps) 
     onSubmit(noticeDate, reasonCode, reason)
   }
 
-  const termEndLabel = policy.term?.expirationDate ? new Date(policy.term.expirationDate).toLocaleDateString() : 'term end'
+  const termEndLabel = policy.term?.expirationDate ? formatDate(policy.term.expirationDate) : 'term end'
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
