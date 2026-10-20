@@ -11,7 +11,7 @@ Install these tools before starting:
 | Tool | Required version | Purpose |
 | --- | --- | --- |
 | Git | Current stable | Clone, branch, commit, and push changes |
-| Node.js | 20 or later | Run the TypeScript workspaces |
+| Node.js | `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0` | Run the TypeScript workspaces (including jsdom tests) |
 | npm | Bundled with Node.js | Install workspace dependencies |
 | Docker Desktop | Current stable | Run PostgreSQL, Redis, API, and UI containers |
 | GitHub CLI | Optional | Create and manage pull requests from the terminal |

@@ -201,9 +201,11 @@ npm run test:e2e:docker
 npm run typecheck
 ```
 
-The root `npm run test` command runs local Vitest on Node 22. If the active
-local Node version is not 22 and Docker is available, it falls back to the
-Docker runner automatically.
+The root `npm run test` command runs locally when Node satisfies the root
+`package.json` engine contract (`^22.22.2 || ^24.15.0 || >=26.0.0`). Otherwise,
+it falls back to the Docker Node 22 runner when Docker is available, or exits
+with the required range. `npm run test:node-runtime` checks the runtime guard
+boundaries and manifest/lockfile/jsdom engine consistency without a database.
 
 You can also run the full suite in Docker directly:
 
