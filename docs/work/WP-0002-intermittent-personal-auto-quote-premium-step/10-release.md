@@ -20,7 +20,10 @@
   product does not offer, with `422` naming the coverage to remove
   (for example "Coverage END_WB is not offered by Personal Auto"). Policy
   changes keep coverages already on the policy but cannot add undefined ones.
-- Changing the product on a quote with entered data asks for confirmation first.
+- Changing the Product select on a quote with entered data asks for confirmation
+  first. Changing Underwriting Company can also switch product, but does not ask
+  at this revision. PR #387 addresses that gap; merge, deployment and staging
+  verification remain pending (see `12-business-validation.md`).
 - New read-only **Coverage Integrity** panel on the Operations Dashboard lists
   quotes and policies that already carry coverages outside their product, so
   they can be corrected (`GET /api/v1/admin/dashboard/coverage-integrity`).

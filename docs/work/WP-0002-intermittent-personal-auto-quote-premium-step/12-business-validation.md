@@ -24,24 +24,34 @@ Environment: local staging (Docker stack built from `main` at 25606a0), tenant
    immediately without the new "Change product to …?" dialog. The dialog
    appears only when the Product select is changed within a company that
    writes several products. Data integrity is correct; the agent loses entered
-   answers without warning. Proposed: a quick-track follow-up that routes the
-   company change through the same confirmation, or accept as an exception.
-2. **Abandoned draft on switch (minor, pre-existing behaviour).** Switching
-   company after the homeowners quote was saved starts a new personal auto
-   quote; the homeowners draft remains as a Draft record. No action proposed
-   unless the business wants switches to reuse the quote.
+   answers without warning. Follow-up PR #387 proposes the company-change
+   confirmation; it is still open, pending merge, deployment and staging
+   verification. This criterion is only partially satisfied until that evidence
+   is recorded, unless the business owner explicitly accepts an exception.
+2. **Draft identity clarification (not a separate observed defect).** The
+   company-change handler retains `draft.quoteId`; subsequent saves use
+   `updateQuoteDraft` to update the same quote. It does not automatically create
+   a new personal auto quote or preserve a separate homeowners draft. The
+   earlier abandoned-draft explanation was unsupported and is withdrawn.
 3. **Records to correct (carrier decision, out of scope by Gate A answer 3).**
    The integrity report shows bound policy PC-987896C3 and 8 quotes with
    coverages outside their product on staging. All are test data.
 
 ## Recommendation
 
-Accept. Every acceptance criterion passes on staging. The defect is fixed at
-both layers: the wizard no longer shows or sends another product's coverages,
-and the API refuses them at rating and binding. Administrators can see the
-records the defect already created. Open issue 1 does not lose or corrupt
-policy data, but it falls short of the confirmation agreed at Gate A. I
-recommend signing off on WP-0002 and either taking issue 1 as a quick-track
-follow-up or recording it as an accepted exception in the Gate D note.
+Partial validation, conditional on resolving open issue 1. The recorded staging
+checks support the coverage-integrity fix at both layers: the wizard shows and
+sends the selected product's coverages, and the API refuses foreign codes at
+rating and binding. Administrators can see affected records. However, REQ-2's
+Gate A confirmation requirement is not fully satisfied: switching company clears
+entered answers without warning. The completed validation stage records these
+results; it does not mean every acceptance criterion passed.
+
+Before unconditional sign-off, merge and deploy PR #387 through human Gate C,
+then verify on staging that cancelling a company change preserves the quote and
+confirming clears the old product's data. Record that revision and evidence here.
+Alternatively, only the business owner may explicitly accept the unresolved
+confirmation requirement as an exception. Neither verification nor an accepted
+exception is recorded by this documentation correction.
 
 Gate D: pending, for the business owner (Kishor Kumar Jakkula, product owner).

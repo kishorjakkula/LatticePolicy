@@ -44,7 +44,11 @@ Applied in this closeout pull request (#386):
 
 Follow-ups:
 
-- PR #387 (quick track): the company change now asks before clearing data.
+- PR #387 (quick track) proposes asking before a company change clears data.
+  It remains open, pending merge, deployment and staging verification. Business
+  validation is partial until the confirmation requirement is verified or the
+  business owner explicitly accepts an exception; Gate D remains pending.
 - Not started: correcting records with foreign coverages is a carrier decision
-  (Gate A answer 3). Abandoned homeowners drafts after a company switch are
-  existing behaviour, with no change proposed.
+  (Gate A answer 3). The earlier abandoned-draft explanation was unsupported:
+  the company handler retains the draft ID and subsequent saves update the same
+  quote, rather than preserving a separate homeowners draft.

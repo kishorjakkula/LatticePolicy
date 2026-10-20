@@ -21,7 +21,10 @@
   (`test-failed-1.png`, `error-context.md`) for the rate-limited run; its
   Playwright trace and video (6.5 MB) were kept outside Git. CI on PR #385:
   all 10 checks green, including Playwright E2E.
-- Defects: **none attributable to WP-0002.**
+- Defects: **none found in these automated runs.** Subsequent business validation
+  found the company-change confirmation gap (REQ-2 / Gate A answer 4); see
+  `12-business-validation.md`. PR #387 remains pending merge, deployment and
+  staging verification; these passing runs do not validate that follow-up.
   - Environment, not product: on local staging, repeat 8 of the 10× run
     failed at the last step. The quote had already passed Premium (BI shown),
     rated, bound and issued (policy PC-7998479C, In Force), but the policy page's
