@@ -4,6 +4,7 @@ import { sanitizeInlineFileName } from '../lib/utils.js'
 import { parseValidationTransaction } from '@lattice-policy/rules'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
+import { formJurisdictionDecision, formTransactionMatches } from './form-selection.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,18 +38,6 @@ export type FormDocumentData = {
 } | null
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const FORMS_PREVIEW_DEFAULT_FUTURE_DATE = '9999-12-31'
-const FORMS_PREVIEW_TRANSACTION_TYPES = new Set([
-  'Quote',
-  'Bind',
-  'Issue',
-  'Endorsement',
-  'Renewal',
-  'Cancellation',
-  'Reinstatement',
-  'Rewrite'
-])
 
 function normalizeFormsPreviewLabel(value: unknown): string {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
@@ -92,32 +81,6 @@ function mapRowsByFormId(rows: any[]): Record<string, any[]> {
   return out
 }
 
-function pickMatchingPreviewJurisdiction(
-  rows: any[],
-  stateCode: string,
-  effectiveDate: string
-): any | null {
-  if (!rows?.length) return null
-  const sorted = [...rows].sort((a, b) => {
-    const aState = String(a.state_code || '').toUpperCase()
-    const bState = String(b.state_code || '').toUpperCase()
-    const aExact = stateCode && aState === stateCode ? 1 : 0
-    const bExact = stateCode && bState === stateCode ? 1 : 0
-    if (aExact !== bExact) return bExact - aExact
-    return String(a.effective_date || '').localeCompare(String(b.effective_date || ''))
-  })
-  for (const row of sorted) {
-    if (String(row.regulatory_status || '') !== 'Approved') continue
-    const rowState = String(row.state_code || '').toUpperCase()
-    if (stateCode && rowState !== stateCode && rowState !== 'ALL') continue
-    const start = asDateOnly(row.effective_date)
-    const end = asDateOnly(row.sunset_date) || FORMS_PREVIEW_DEFAULT_FUTURE_DATE
-    if (!start) continue
-    if (start <= effectiveDate && effectiveDate <= end) return row
-  }
-  return null
-}
-
 export function isPreviewApplicabilityMatch(
   rows: any[],
   input: { lineOfBusiness: string; productCode: string; transactionType: string }
@@ -138,18 +101,10 @@ export function isPreviewApplicabilityMatch(
   return rows.some((row) => {
     const lob = String(row.line_of_business || '').trim().toLowerCase()
     const product = String(row.product_code || '').trim().toLowerCase()
-    const txValues = Array.isArray(row.transaction_types)
-      ? row.transaction_types.filter(Boolean)
-      : []
-    const normalizedTxValues = txValues
-      .map((item: any) => String(item || '').trim())
-      .filter((item: string) => FORMS_PREVIEW_TRANSACTION_TYPES.has(item))
     const lobOk = !input.lineOfBusiness || !lob || lob === input.lineOfBusiness
     const productOk = !input.productCode || !product || product === input.productCode
-    const txOk =
-      !input.transactionType ||
-      normalizedTxValues.length === 0 ||
-      normalizedTxValues.includes(input.transactionType)
+    // Same transaction scope rule as generation (form-selection.ts).
+    const txOk = !input.transactionType || formTransactionMatches(row.transaction_types, input.transactionType)
     return row.active !== false && lobOk && productOk && txOk
   })
 }
@@ -330,14 +285,16 @@ export async function previewForm(
       if (lineOfBusiness && String(form.line_of_business || '') !== lineOfBusiness) continue
 
       const jurisdictionRows = jurisdictionsByForm[String(form.form_id)] || []
-      const matchedJurisdiction = pickMatchingPreviewJurisdiction(
+      // Same jurisdiction gate as generation (form-selection.ts).
+      const { attach: jurisdictionAllows, jurisdiction: matchedJurisdiction } = formJurisdictionDecision(
         jurisdictionRows,
         stateCode,
-        effectiveDate
+        effectiveDate,
+        form.require_approved_jurisdiction === true
       )
-      if (form.require_approved_jurisdiction && !matchedJurisdiction) continue
+      if (!jurisdictionAllows) continue
       if (matchedJurisdiction) {
-        reasons.push(`Jurisdiction ${matchedJurisdiction.state_code} approved`)
+        reasons.push(`Jurisdiction ${matchedJurisdiction.state_code} ${String(matchedJurisdiction.regulatory_status || 'approved').toLowerCase()}`)
       }
 
       const applicabilityRows = applicabilityByForm[String(form.form_id)] || []

@@ -93,6 +93,8 @@
  const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const icon=n=>`<i data-lucide="${n}" aria-hidden="true"></i>`;
  const badge=s=>`<span class="lp-badge ${['Ready','Verified','Approved','Active','Passed','Reconciled'].includes(s)?'lp-ready':['Failed','Unavailable'].includes(s)?'lp-failed':['Processing','Pending','Review required'].includes(s)?'lp-pending':''}">${esc(s)}</span>`;
+ // Views come from data-action attributes; only known views reach render().
+ const VIEWS=['policy','templates','operations','exports','customer'];
  // Free text from inputs is escaped before it is stored, because render() builds markup with innerHTML.
  const clean=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const button=(label,action,cls='',disabled=false)=>`<button type="button" data-action="${action}" class="${cls}" ${disabled?'disabled':''}>${label}</button>`;
@@ -169,7 +171,7 @@
  function openDialog(title,body,action,label){lastFocus=document.activeElement;dialog.innerHTML=`<div class="lp-heading"><h2 id="lp-doc-dialog-title">${title}</h2>${button(icon('x'),'close','lp-icon')}</div>${body}<div class="lp-actions">${button('Cancel','close')}${action?button(label,action,'lp-primary'):''}</div>`;dialog.querySelector('[data-action=close]').setAttribute('aria-label','Close dialog');dialog.showModal();icons();}
  function closeDialog(){dialog.close();lastFocus?.isConnected&&lastFocus.focus();}
  root.addEventListener('click',e=>{const b=e.target.closest('button[data-action]');if(!b||b.disabled)return;const a=b.dataset.action;
- if(a.startsWith('view:')){state.view=a.split(':')[1];announcement.hidden=true;render();nav.querySelector('[aria-selected=true]').focus();save();}
+ if(a.startsWith('view:')){const view=a.split(':')[1];if(!VIEWS.includes(view))return;state.view=view;announcement.hidden=true;render();nav.querySelector('[aria-selected=true]').focus();save();}
  else if(a.startsWith('area:')){const area=a.slice(5);state.view=({'Policies':'policy','Administration':'templates','Reporting':'exports','Customer portal':'customer'})[area];if(area==='Policies')state.policyScreen='transactions';if(area==='Administration')state.formOpened=false;announcement.hidden=true;render();save();}
  else if(a==='back-policy'){state.policyScreen='transactions';render();}
  else if(a.startsWith('transaction:')){const tx=transactions.find(t=>t.id===a.slice(12));if(!tx)return;state.transactionId=tx.id;state.policyScreen='transaction';state.wizardStep=8;state.formsTab='Documents';state.selected=visibleDocuments()[0]?.id;announcement.hidden=true;render();}

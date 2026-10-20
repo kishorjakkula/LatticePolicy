@@ -55,6 +55,24 @@ policy. The admin scenario test defaults to the Bind stage (Issue for Issue). Pi
 form snapshots record only each rule's ID, type, expressions, priority and
 active flag, not catalog audit columns.
 
+## Selection Scope (Shared By Preview And Generation)
+
+`server/src/services/form-selection.ts` decides transaction scope and the
+jurisdiction gate for both the preview and generation:
+
+- Transaction scope: generation passes NB at bind and Issue at issue. A form
+  scoped to `Bind` attaches only at bind and `Issue` only at issue; a generic
+  new-business scope (`NB`, `new_business`) attaches at Quote, Bind and Issue.
+  Empty scope applies to every transaction; an unrecognized configured name
+  matches nothing.
+- Jurisdiction: rows in force on the effective date decide, state-specific rows
+  ahead of `ALL`. Approved or Filed allows the form (Filed covers file-and-use
+  states); Pending or Withdrawn blocks it. With no row in force, the form
+  attaches only if it does not require an approved jurisdiction. A form approved
+  only in NY, or whose approval expired, no longer attaches to a CA transaction.
+- Admin lifecycle actions (Approve, Activate, Deactivate, Delete) follow
+  workflow state and compliance authority, not content edit-lock.
+
 ## API And Compatibility
 
 - `GET /admin/forms/attachment-fields?productCode=...`: field metadata.

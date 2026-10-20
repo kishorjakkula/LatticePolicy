@@ -9,6 +9,8 @@ import { RadioGroup } from '../../components/RadioGroup'
 import { FormAttachmentEditor } from './forms/FormAttachmentEditor'
 import { FormScenarioTest } from './forms/FormScenarioTest'
 import { useFormsScopeCatalog } from './forms/useFormsScopeCatalog'
+import { useAuth } from '../../auth/AuthContext'
+import { hasPermission } from '../../auth/permissions'
 import './forms/forms-management.css'
 
 type SectionKey = 'catalog' | 'jurisdictions' | 'applicability' | 'output' | 'security' | 'audit' | 'preview'
@@ -262,6 +264,17 @@ export function FormsManagementPage() {
   const canModify = !selectedFormId || Boolean(detail?.form && (detail.form.workflowStatus !== 'Approved' || !detail.form.editLock))
   const isViewPopup = editorPopupMode === 'view'
   const canEdit = canModify && !isViewPopup
+  // Review and activation follow workflow state and compliance authority, not
+  // content editability: an approved, edit-locked edition must still be activatable.
+  const { user } = useAuth()
+  const isComplianceAdmin = hasPermission(user, 'admin.forms.approve') || (user?.roles || []).includes('compliance_admin')
+  const lifecycleForm = detail?.form
+  const lifecycleEnabled: Record<'approve' | 'activate' | 'deactivate' | 'delete', boolean> = {
+    approve: Boolean(lifecycleForm && lifecycleForm.workflowStatus === 'Reviewed'),
+    activate: Boolean(lifecycleForm && lifecycleForm.workflowStatus === 'Approved' && !lifecycleForm.active),
+    deactivate: Boolean(lifecycleForm?.active),
+    delete: Boolean(lifecycleForm && !lifecycleForm.active && lifecycleForm.workflowStatus !== 'Approved'),
+  }
   const scopeProduct = detail?.applicability?.[0]?.productCode || applicabilityDraft.productCode
   const products = mergeCatalogOptions(scopeCatalog.products, (detail?.applicability || []).map((row) => row.productCode))
   const states = mergeCatalogOptions(scopeCatalog.states, (detail?.jurisdictions || []).map((row) => row.stateCode))
@@ -840,7 +853,7 @@ export function FormsManagementPage() {
             <button type="button" className="btn-secondary" disabled={!selectedFormId || isViewPopup} onClick={() => void runWorkflowAction('clone')}>Create new edition</button>
           </div>
           <details><summary>Review, activation & lifecycle</summary><div className="toolbar-actions">
-            {(['approve', 'activate', 'deactivate', 'delete'] as const).map((action) => <button type="button" className="btn-secondary" key={action} onClick={() => void runWorkflowAction(action)} disabled={!selectedFormId || !canEdit}>{action[0].toUpperCase() + action.slice(1)}</button>)}
+            {(['approve', 'activate', 'deactivate', 'delete'] as const).map((action) => <button type="button" className="btn-secondary" key={action} onClick={() => void runWorkflowAction(action)} disabled={!selectedFormId || isViewPopup || !isComplianceAdmin || !lifecycleEnabled[action]}>{action[0].toUpperCase() + action.slice(1)}</button>)}
           </div></details>
         </>}
           </div>

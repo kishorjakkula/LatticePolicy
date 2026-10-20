@@ -6,6 +6,7 @@ import { BadRequestError } from '../errors/domain.errors.js'
 import { logger } from '../logger.js'
 import { pinnedFormTriggerRules } from '@lattice-policy/rules'
 import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
+import { formJurisdictionDecision, formTransactionMatches } from './form-selection.js'
 import {
   getDocumentStorageAdapter,
   renderAndStoreDocument,
@@ -129,13 +130,6 @@ function normalizeTransactionType(type: string): string {
   if (normalized === 'renewal') return 'renew'
   if (normalized === 'nonrenewal' || normalized === 'non-renewal' || normalized === 'non_renewal') return 'nonrenewal'
   return normalized
-}
-
-function matchesTransactionType(transactionTypes: unknown, transactionType: string): boolean {
-  const normalized = normalizeTransactionType(transactionType)
-  const values = Array.isArray(transactionTypes) ? transactionTypes : []
-  if (!values.length) return true
-  return values.some((value) => normalizeTransactionType(String(value)) === normalized)
 }
 
 function isCustomerSafe(visibility: string[]): boolean {
@@ -364,7 +358,11 @@ export async function selectPolicyForms(
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
             a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
-            d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata,
+            d.visibility, d.delivery_methods, f.metadata, f.require_approved_jurisdiction,
+            (SELECT jsonb_agg(jsonb_build_object('state_code', j.state_code, 'regulatory_status', j.regulatory_status,
+                                                 'effective_date', j.effective_date, 'sunset_date', j.sunset_date))
+               FROM forms_admin_jurisdictions j
+              WHERE j.tenant_id = f.tenant_id AND j.form_id = f.form_id) AS jurisdictions,
             (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.priority, t.trigger_id)
                FROM forms_admin_triggers t
               WHERE t.tenant_id=f.tenant_id AND t.form_id=f.form_id AND t.active=true) AS attachment_triggers
@@ -381,12 +379,6 @@ export async function selectPolicyForms(
          ON o.tenant_id = f.tenant_id AND o.form_id = f.form_id AND o.active = true
        LEFT JOIN forms_admin_delivery d
          ON d.tenant_id = f.tenant_id AND d.form_id = f.form_id AND d.active = true
-       LEFT JOIN forms_admin_jurisdictions j
-         ON j.tenant_id = f.tenant_id
-        AND j.form_id = f.form_id
-        AND ($3::text = '' OR upper(j.state_code) = $3)
-        AND j.effective_date <= $4::date
-        AND (j.sunset_date IS NULL OR j.sunset_date >= $4::date)
       WHERE f.tenant_id = $1
         AND f.active = true
         AND lower(f.workflow_status) IN ('approved', 'active', 'filed')
@@ -395,7 +387,7 @@ export async function selectPolicyForms(
           OR (has_app.form_id IS NULL AND lower(f.line_of_business) = lower($2))
         )
       ORDER BY COALESCE(o.sort_order, 100), f.form_number`,
-    [context.tenantId, productCode, state, effectiveDate]
+    [context.tenantId, productCode]
   )
 
   const forms: SelectedPolicyForm[] = []
@@ -411,13 +403,13 @@ export async function selectPolicyForms(
     premium: context.premium,
     uw: context.uw,
   })
-  // The joins return a row per matching jurisdiction; a form's rules are evaluated once.
+  // The joins can return a row per applicability/output/delivery row; a form's rules are evaluated once.
   const adminDecisions = new Map<string, ReturnType<typeof evaluateConfiguredFormAttachment>>()
   for (const row of adminRows.rows as any[]) {
-    if (!matchesTransactionType(row.transaction_types, context.transactionType)) continue
+    if (!formTransactionMatches(row.transaction_types, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
         !matchesEndorsementChanges(row.endorsement_change_criteria, context.endorsementChanges)) continue
-    if (state && row.state_code && !['approved', 'active', 'filed'].includes(String(row.regulatory_status || '').toLowerCase())) continue
+    if (!formJurisdictionDecision(row.jurisdictions, state, String(effectiveDate || ''), row.require_approved_jurisdiction === true).attach) continue
     const code = normalizeText(row.form_number)
     if (!code || seen.has(`admin:${row.form_id}`)) continue
     let attachment = adminDecisions.get(String(row.form_id))
@@ -467,7 +459,7 @@ export async function selectPolicyForms(
 
   for (const row of catalogRows.rows as any[]) {
     const applicability = row.applicability || {}
-    if (!matchesTransactionType(applicability.transactionTypes || applicability.transactions, context.transactionType)) continue
+    if (!formTransactionMatches(applicability.transactionTypes || applicability.transactions, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
         !matchesEndorsementChanges(applicability.endorsementChanges, context.endorsementChanges)) continue
     const formState = normalizeText(row.jurisdiction?.state || row.jurisdiction?.region || applicability.state).toUpperCase()

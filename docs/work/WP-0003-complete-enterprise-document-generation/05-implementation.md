@@ -122,3 +122,20 @@ Fixes for the second review in `07-code-review.md`:
   for cancellation (B); create rejects non-object metadata (C).
 - Final results: rules 221, server 728, frontend 354 passed; typecheck pass;
   attachment PostgreSQL suite 75 passed; E2E 6 passed (before A-C, UI unchanged).
+
+## P1 Fixes From `docs/tasks/wp-0003-latest-implementation-review.md` - 2026-10-19
+
+- P1-1 jurisdiction bypass: generation now applies the form's
+  `require_approved_jurisdiction` and evaluates all of its jurisdiction rows
+  in JS through `formJurisdictionDecision` (shared with preview). Preview now
+  also accepts Filed, as generation already did.
+- P1-2 stage applicability: `formTransactionMatches` (shared) maps NB to Bind
+  and Issue to Issue; generic new-business scopes match every NB stage;
+  unknown configured names match nothing (preview previously ignored them).
+- P1-3 UI: lifecycle buttons depend on workflow state and compliance
+  permission (`admin.forms.approve` or compliance_admin), not edit-lock.
+- Also: pilot document E2E updated for scoped download URLs and direct
+  DOCX/XLSX downloads; mockup CodeQL js/xss-through-dom fixed.
+- Results: typecheck pass; rules 221, server 765, frontend 358 passed;
+  attachment PostgreSQL suite 75; full host integration 38 files / 256 passed;
+  E2E document specs 6 passed. P2 findings remain open.

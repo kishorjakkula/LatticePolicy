@@ -132,6 +132,24 @@ describe('actual policy form selection uses the same condition engine', () => {
     expect(reads).toBe(1)
   })
 
+  it('does not attach a form requiring approval when only another state approved it', async () => {
+    const nyOnly = { ...form, metadata: {}, require_approved_jurisdiction: true, jurisdictions: [{ state_code: 'NY', regulatory_status: 'Approved', effective_date: '2026-01-01', sunset_date: null }] }
+    expect(await selectPolicyForms(query(nyOnly) as any, context)).toEqual([])
+    const caApproved = { ...nyOnly, jurisdictions: [{ state_code: 'CA', regulatory_status: 'Approved', effective_date: '2026-01-01', sunset_date: null }] }
+    expect(await selectPolicyForms(query(caApproved) as any, context)).toHaveLength(1)
+    const expired = { ...nyOnly, jurisdictions: [{ state_code: 'CA', regulatory_status: 'Approved', effective_date: '2025-01-01', sunset_date: '2026-06-30' }] }
+    expect(await selectPolicyForms(query(expired) as any, context)).toEqual([])
+  })
+
+  it.each([
+    [['Bind'], 'NB', 1], [['Bind'], 'Issue', 0],
+    [['Issue'], 'NB', 0], [['Issue'], 'Issue', 1],
+    [['NB'], 'NB', 1], [['NB'], 'Issue', 1],
+  ] as const)('scopes %j forms to the right stage at %s', async (types, transactionType, count) => {
+    const scoped = { ...form, metadata: {}, transaction_types: types }
+    expect(await selectPolicyForms(query(scoped) as any, { ...context, transactionType })).toHaveLength(count)
+  })
+
   it('blames oversized policy data, not the form configuration', async () => {
     const huge = { ...input.payload, list: Array(100001).fill(1) }
     await expect(selectPolicyForms(query(form) as any, { ...context, inputSnapshot: huge })).rejects.toMatchObject({ code: 'FORM_ATTACHMENT_CONTEXT_TOO_LARGE', statusCode: 422 })
