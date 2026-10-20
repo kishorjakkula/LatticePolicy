@@ -184,8 +184,9 @@ test('pilot branding is editable in administration and appears on login and docu
 async function assertCarrierPdf(bytes: Buffer, name: string) {
   // Parse downloaded bytes, rather than trusting branding metadata.
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const pdf = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: true }).promise
+  const loadingTask = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true })
   try {
+    const pdf = await loadingTask.promise
     let text = ''
     for (let i = 1; i <= pdf.numPages; i++) {
       const content = await (await pdf.getPage(i)).getTextContent()
@@ -201,5 +202,5 @@ async function assertCarrierPdf(bytes: Buffer, name: string) {
     expect(text).not.toMatch(/Lattice\s*Policy/i)
     const operators = await (await pdf.getPage(1)).getOperatorList()
     expect(operators.fnArray).toContain(OPS.paintImageXObject)
-  } finally { await pdf.destroy() }
+  } finally { await loadingTask.destroy() }
 }
