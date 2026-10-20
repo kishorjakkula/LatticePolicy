@@ -72,6 +72,35 @@ test.describe('new business quote wizard', () => {
     await expect(page.getByRole('row').filter({ hasText: /NB-\d{8}-/ }).first()).toBeVisible()
   })
 
+  test('changing the underwriting company asks before clearing another product\'s answers', async ({ page, signInAs }) => {
+    await signInAs(page, 'agent1')
+    await page.goto('/wizard')
+    await expectWizardStep(page, 1)
+    await selectProduct(page, { company: 'Sample Carrier Property', state: 'TX', productCode: 'homeowners' })
+    const homeownersCompany = (await fieldByLabel(page, 'Underwriting Company').locator('option:checked').textContent())?.trim() || ''
+    await continueToStep(page, 2)
+    await answerAllQualificationQuestions(page)
+    await page.getByRole('button', { name: /Back$/ }).click()
+    await expectWizardStep(page, 1)
+
+    const company = fieldByLabel(page, 'Underwriting Company')
+    const otherCompany = (await company.locator('option').allTextContents()).map((label) => label.trim()).find((label, index) => index > 0 && label !== homeownersCompany)
+    expect(otherCompany, 'a second underwriting company').toBeTruthy()
+
+    await company.selectOption({ label: otherCompany! })
+    const dialog = page.getByRole('dialog', { name: `Change underwriting company to ${otherCompany}?` })
+    await expect(dialog).toContainText('entered for Homeowners will be cleared')
+    await dialog.getByRole('button', { name: 'Keep Homeowners' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(fieldByLabel(page, 'Product')).toHaveValue('homeowners')
+    await expect(company.locator('option:checked')).toHaveText(homeownersCompany)
+
+    await company.selectOption({ label: otherCompany! })
+    await page.getByRole('dialog').getByRole('button', { name: 'Change company' }).click()
+    await expect(company.locator('option:checked')).toHaveText(otherCompany!)
+    await expect(fieldByLabel(page, 'Product')).not.toHaveValue('homeowners')
+  })
+
   test('blocks each step until its required data is supplied', async ({ page, signInAs }) => {
     await signInAs(page, 'admin')
     const insured = insuredName()

@@ -81,6 +81,26 @@ describe('product change confirmation', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
+  it('words an underwriting company change, which also clears the product and state', () => {
+    const onChange = vi.fn()
+    render(
+      <ProductChangeDialog
+        from="Homeowners"
+        to="PA UW Company"
+        title="Change underwriting company to PA UW Company?"
+        description="The product, state, coverages, risk details and qualification answers entered for Homeowners will be cleared. Insureds are kept."
+        confirmLabel="Change company"
+        onKeep={() => undefined}
+        onChange={onChange}
+      />,
+    )
+    expect(screen.getByRole('dialog', { name: 'Change underwriting company to PA UW Company?' })).toBeInTheDocument()
+    expect(screen.getByText(/The product, state, coverages/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Keep Homeowners' })).toHaveFocus()
+    fireEvent.click(screen.getByRole('button', { name: 'Change company' }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps focus where the user put it across re-renders, and traps Tab inside the dialog', () => {
     const { rerender } = render(<ProductChangeDialog from="Homeowners" to="Personal Auto" onKeep={() => undefined} onChange={() => undefined} />)
     const keep = screen.getByRole('button', { name: 'Keep Homeowners' })
