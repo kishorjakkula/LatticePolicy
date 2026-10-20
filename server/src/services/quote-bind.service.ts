@@ -729,6 +729,8 @@ export async function bindQuote(
       generatedAt: nowIso,
       inputSnapshot: quote.payload,
       premium: premiumSummary,
+      policy: { status: 'Bound', termEffectiveDate: effectiveDate, termExpirationDate: expirationDate },
+      uw: { decision: quote.uw?.decision, overrideReason: overrideReason || undefined },
       generatedBy: normalizedActorId,
       correlationId: transactionNumber,
     })
@@ -831,6 +833,7 @@ export async function bindQuote(
       transactionId,
       transactionType: 'NB',
       transactionNumber,
+      versionId,
       productCode,
       state: quote.payload?.state || jurisdiction?.code || null,
       effectiveDate,

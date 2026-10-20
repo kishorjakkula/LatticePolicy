@@ -583,6 +583,7 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
     await q
       .update(documents)
       .set({
+        versionId: versionRow.versionId,
         uri: `generated://rating-worksheet/${transactionId}`,
         hash: artifact.contentHash,
         integrityStatus: 'VERIFIED',
@@ -601,6 +602,7 @@ async function upsertRatingWorksheetDocument(q: DrizzleDB, args: UpsertRatingWor
     tenantId,
     policyId: policyId as any,
     transactionId: transactionId as any,
+    versionId: versionRow.versionId,
     type: 'RATING_WORKSHEET',
     uri: `generated://rating-worksheet/${transactionId}`,
     hash: artifact.contentHash,

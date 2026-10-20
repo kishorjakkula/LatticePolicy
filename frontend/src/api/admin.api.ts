@@ -408,6 +408,10 @@ export const adminApi = {
   deleteFormApplicability: (id: string, applicabilityId: string) =>
     request<any>('DELETE', `/v1/admin/forms/${id}/applicability/${applicabilityId}`),
   listFormTriggers: (id: string) => request<any[]>('GET', `/v1/admin/forms/${id}/triggers`),
+  getFormAttachmentFields: (productCode: string) =>
+    request<{ fields: Array<{ path: string; label: string; type: string; group: string; expressionPath?: string }>; contextRoots: string[] }>(
+      'GET', `/v1/admin/forms/attachment-fields?productCode=${encodeURIComponent(productCode)}`
+    ),
   addFormTrigger: (id: string, payload: any) => request<any>('POST', `/v1/admin/forms/${id}/triggers`, payload),
   updateFormTrigger: (id: string, triggerId: string, payload: any) =>
     request<any>('PATCH', `/v1/admin/forms/${id}/triggers/${triggerId}`, payload),

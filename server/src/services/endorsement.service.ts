@@ -688,6 +688,13 @@ export async function previewEndorsement(
       wouldRebase: computation.rebasedTransactions.length > 0,
       rebasedTransactions: computation.rebasedTransactions,
     },
+    // The same change set executeEndorsement uses to select forms, so the
+    // wizard's form preview applies endorsement change criteria identically.
+    endorsementChanges: buildEndorsementChangeSet(
+      computation.previousPayload,
+      computation.nextPayload,
+      computation.changes.map((entry: any) => typeof entry === 'string' ? entry : entry.path).filter(Boolean),
+    ),
   }
 }
 
@@ -894,6 +901,9 @@ export async function executeEndorsement(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: newPayload,
+    premium: endorsementPremium.premium,
+    policy: { status: policyRow.status, termEffectiveDate: termEffective, termExpirationDate: termExpiration },
+    uw: { decision: uw.decision, overrideReason: overrideReason || undefined },
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
     endorsementChanges,

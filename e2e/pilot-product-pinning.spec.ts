@@ -54,17 +54,20 @@ test('the accepted pilot policy opens every listed document', async ({ page, con
   await signInAs(page, username)
   await page.goto(`/policies/${acceptance.policyId}`)
   for (const [i, doc] of documents.entries()) {
-    const popup = context.waitForEvent('page')
-    const response = page.waitForResponse(r => r.request().method() === 'GET' && r.url().endsWith(`/documents/${doc.documentId}/content`))
-    await page.getByRole('row').filter({ hasText: doc.displayName }).getByRole('button', { name: 'Open', exact: true }).click()
-    const tab = await popup
+    // Word and Excel outputs download directly; PDF and HTML open in a new tab.
+    const native = /wordprocessingml|spreadsheetml/.test(String(doc.contentType || ''))
+    const popup = native ? null : context.waitForEvent('page')
+    // Downloads carry the version/transaction scope as a query string.
+    const response = page.waitForResponse(r => r.request().method() === 'GET' && new URL(r.url()).pathname.endsWith(`/documents/${doc.documentId}/content`))
+    await page.getByRole('row').filter({ hasText: doc.displayName }).getByRole('button', { name: native ? 'Download' : 'Open', exact: true }).click()
+    const tab = popup ? await popup : null
     expect((await response).status()).toBe(200)
     await expect.poll(() => page.evaluate(index => (window as any).__pilotOpened[index]?.size || 0, i)).toBeGreaterThan(100)
     const text = await page.evaluate(async index => ((window as any).__pilotOpened[index] as Blob).text(), i)
     if (doc.type === 'RATING_WORKSHEET') expect(text).toContain('Rating worksheet')
     else if (doc.type === 'POLICY_FORM_DOCUMENT') expect(text.slice(0, 2)).toBe('PK') // filled Word form
     else expect(text.slice(0, 5)).toBe('%PDF-')
-    await tab.close()
+    await tab?.close()
   }
 })
 

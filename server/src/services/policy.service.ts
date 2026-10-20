@@ -753,6 +753,32 @@ export async function getPolicyVersions(
 
 // ── 2d. getVersionDetails ─────────────────────────────────────────────────────
 
+/** Reference projection only; never exposes storage locations or evaluates templates. */
+export function archivedDocumentReference(row: any) {
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  const artifact = metadata.artifact || {}
+  const ready = row.integrity_status === 'VERIFIED' && Boolean(row.hash && artifact.storageUri && artifact.contentType)
+    && Number(artifact.byteSize) > 0
+    && (!metadata.status || String(metadata.status).toUpperCase() === 'READY')
+  return {
+    documentId: String(row.document_id),
+    transactionId: row.transaction_id || null,
+    versionId: row.version_id || null,
+    type: row.type,
+    displayName: metadata.title || ({ POLICY_PACKET: 'Policy Packet', RATING_WORKSHEET: 'Rating Worksheet' } as Record<string, string>)[row.type] || row.type,
+    formId: metadata.formId || null,
+    transactionNumber: metadata.transactionNumber || metadata.snapshot?.context?.transactionNumber || null,
+    stage: metadata.stage || metadata.snapshot?.context?.stage || (metadata.transactionType === 'NB' ? 'Bind' : metadata.transactionType ? 'Issue' : '-'),
+    edition: metadata.edition || null,
+    status: ready ? 'READY' : 'UNAVAILABLE',
+    available: ready,
+    integrityStatus: row.integrity_status || 'UNVERIFIED',
+    contentType: artifact.contentType || null,
+    byteSize: artifact.byteSize ?? null,
+    generatedAt: metadata.generatedAt || row.created_at,
+  }
+}
+
 /**
  * Fetch detail data for a single policy version: payload, risk entities,
  * coverage selections, and computed diffs against the prior version.
@@ -766,8 +792,24 @@ export async function getVersionDetails(
   return withTenantTx(tenantId, async (db) => {
     const q = toRawQuery(db)
     const pv = await q(
-      'SELECT payload, processed_at FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 AND version_id=$3',
+      'SELECT payload, processed_at, transaction_id, transaction_number, transaction_type, effective_date FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2 AND version_id=$3',
       [tenantId, policyId, versionId]
+    )
+    if (!pv.rowCount) throw new NotFoundError('VERSION_NOT_FOUND')
+    const version = pv.rows[0]
+    // policy_forms has no version_id: its immutable owner is the version's transaction.
+    // A legacy version without an owner must not inherit policy-wide/current forms.
+    const forms = version.transaction_id ? await q(
+      `SELECT policy_form_id, form_id, code, edition, snapshot_hash, data, metadata
+         FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND transaction_id=$3
+         ORDER BY created_at, policy_form_id`,
+      [tenantId, policyId, version.transaction_id]
+    ) : { rows: [] }
+    const documents = await q(
+      `SELECT document_id, transaction_id, version_id, type, hash, integrity_status, metadata, created_at
+         FROM documents WHERE tenant_id=$1 AND policy_id=$2 AND version_id=$3
+          AND transaction_id IS NOT DISTINCT FROM $4::uuid ORDER BY created_at, document_id`,
+      [tenantId, policyId, versionId, version.transaction_id]
     )
     const auto = await q(
       'SELECT * FROM auto_vehicles WHERE tenant_id=$1 AND policy_id=$2 AND version_id=$3',
@@ -805,6 +847,24 @@ export async function getVersionDetails(
       }))
     }
     return {
+      policyId,
+      versionId,
+      transactionId: version.transaction_id || null,
+      transactionNumber: version.transaction_number || null,
+      effectiveDate: version.effective_date,
+      forms: forms.rows.map((row: any) => {
+        const snapshot = row.data || {}
+        const metadata = row.metadata || {}
+        return {
+          policyFormId: row.policy_form_id, formId: row.form_id,
+          formNumber: row.code, editionDate: row.edition,
+          formTitle: snapshot.title || '', snapshotHash: row.snapshot_hash,
+          stage: metadata.stage || snapshot.metadata?.stage || (version.transaction_type === 'NB' ? 'Bind' : 'Issue'),
+          packetPlacement: metadata.packetPlacement || snapshot.metadata?.packetPlacement || '',
+          reasons: metadata.reasons || snapshot.metadata?.reasons || metadata.attachmentRuleIds || [],
+        }
+      }),
+      documents: documents.rows.map(archivedDocumentReference),
       payload: pv.rowCount ? pv.rows[0].payload : null,
       autoVehicle: auto.rowCount ? auto.rows[0] : null,
       dwelling: dw.rowCount ? dw.rows[0] : null,
