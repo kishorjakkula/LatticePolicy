@@ -59,7 +59,7 @@ test('the accepted pilot policy opens every listed document', async ({ page, con
     const popup = native ? null : context.waitForEvent('page')
     // Downloads carry the version/transaction scope as a query string.
     const response = page.waitForResponse(r => r.request().method() === 'GET' && new URL(r.url()).pathname.endsWith(`/documents/${doc.documentId}/content`))
-    await page.getByRole('row').filter({ hasText: doc.displayName }).getByRole('button', { name: native ? 'Download' : 'Open', exact: true }).click()
+    await page.getByTestId('policy-documents-panel').locator(`tr[data-document-id="${doc.documentId}"]`).getByRole('button', { name: native ? 'Download' : 'Open', exact: true }).click()
     const tab = popup ? await popup : null
     expect((await response).status()).toBe(200)
     await expect.poll(() => page.evaluate(index => (window as any).__pilotOpened[index]?.size || 0, i)).toBeGreaterThan(100)

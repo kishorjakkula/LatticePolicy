@@ -23,7 +23,8 @@ test.describe('every product line quotes, binds, and issues', () => {
       await signInAs(page, 'admin')
       await page.goto(`/policies/${bound.policyId}`)
       await expect(page.getByRole('heading', { name: `Policy ${bound.policyNumber}` })).toBeVisible()
-      await expect(page.getByRole('main')).toContainText(line.productCode)
+      await expect(page.getByTestId('policy-header')).toContainText(line.label)
+      await expect(page.getByTestId('policy-header')).not.toContainText(line.productCode)
       await expect(page.getByRole('main')).toContainText(/In Force|Issued/)
       await expect(page.getByRole('row').filter({ hasText: /NB-\d{8}-/ }).first()).toBeVisible()
 

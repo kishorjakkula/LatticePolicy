@@ -46,8 +46,8 @@
 .si-btn:hover:not(:disabled) { border-color: var(--accent); }
 .si-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .si-btn:disabled { cursor: not-allowed; opacity: 0.6; }
-.si-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
-.si-btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+.si-btn-primary { background: var(--ps-primary); border-color: var(--ps-primary); color: var(--ps-on-primary); font-weight: 700; }
+.si-btn-primary:hover:not(:disabled) { background: var(--ps-primary-hover); border-color: var(--ps-primary-hover); }
 .si-btn-danger { color: var(--si-low-fg); border-color: var(--si-low-bg); }
 .si-btn-lg { min-height: 48px; padding: 0 20px; font-weight: 800; }
 .si-btn-sm { min-height: 32px; padding: 0 10px; font-size: 13px; }
@@ -85,7 +85,14 @@ textarea.si-input { padding: 8px 10px; min-height: 64px; resize: vertical; }
 .si-stages { display: flex; flex-wrap: wrap; gap: 8px; }
 .si-stage { font: inherit; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--panel); color: var(--text); cursor: pointer; }
 .si-stage[aria-pressed="true"] { background: var(--text); color: var(--panel); border-color: var(--text); }
-.si-table-wrap { overflow-x: auto; }
+.si-table-wrap { overflow-x: auto; max-width: 100%; }
+/* Submissions list (WP-0004 REQ-14): at phone width the queue table scrolls
+   inside its own wrapper and the page never scrolls sideways. min-width: 0
+   lets the page shrink inside the app's flex layout, and inline-size
+   containment stops the table's 980px minimum from widening its ancestors. */
+.si-inbox { min-width: 0; }
+.si-inbox .si-table-wrap { contain: inline-size; }
+.si-table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .si-table { width: 100%; min-width: 980px; border-collapse: collapse; }
 .si-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); padding: 12px; background: var(--bg-elevated); }
 .si-table td { padding: 12px; border-top: 1px solid var(--border); vertical-align: top; }

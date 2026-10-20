@@ -128,7 +128,7 @@ test.describe('new business quote wizard', () => {
     await page.getByRole('button', { name: 'Search', exact: true }).click()
     const draftRow = page.getByRole('row').filter({ hasText: quoteNumber })
     await expect(draftRow).toContainText('Draft')
-    await expect(draftRow).toContainText('personal-auto')
+    await expect(draftRow).toContainText('Personal Auto')
 
     // Re-opening the draft resumes on the step where it was saved.
     await draftRow.getByRole('link', { name: quoteNumber }).click()

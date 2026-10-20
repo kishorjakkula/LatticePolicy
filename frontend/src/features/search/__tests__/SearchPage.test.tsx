@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { SearchPage } from '../SearchPage'
+import { SearchPage, parseSearchPageSize, searchPageSizeOptions } from '../SearchPage'
 import { api, adminApi } from '../../../api/client'
 import { useAuth } from '../../../auth/AuthContext'
 
@@ -99,7 +99,10 @@ describe('SearchPage', () => {
     })
     expect(screen.getByRole('button', { name: 'PA-100' })).toBeInTheDocument()
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
-    expect(screen.getByText('personal-auto')).toBeInTheDocument()
+    const row = screen.getByRole('button', { name: 'PA-100' }).closest('tr') as HTMLElement
+    expect(within(row).getByText('Personal Auto')).toBeInTheDocument()
+    expect(within(row).getByText('07/01/2026')).toBeInTheDocument()
+    expect(within(row).getByText('07/01/2027')).toBeInTheDocument()
     expect(screen.getByText('$1,234.56')).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Customers/i })).not.toBeInTheDocument()
   })
@@ -157,6 +160,135 @@ describe('SearchPage', () => {
 
     await waitFor(() => expect(mockSearchPolicies).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('search failed')).toBeInTheDocument()
+  })
+
+  describe('REQ-13 page size, headers, product names and status legend', () => {
+    beforeEach(() => {
+      localStorage.clear()
+      // jsdom has no layout; the pager scrolls the table into view after a change.
+      Element.prototype.scrollIntoView = vi.fn()
+    })
+
+    function policies(count: number, productCode = 'personal-auto') {
+      return Array.from({ length: count }, (_, i) => ({
+        policyId: `policy-${i + 1}`,
+        policyNumber: `PA-${String(i + 1).padStart(3, '0')}`,
+        insuredName: `Insured ${i + 1}`,
+        productCode,
+        status: 'Issued',
+        internalStatus: 'Issued',
+        term: { effectiveDate: '2026-07-01', expirationDate: '2027-07-01' },
+      }))
+    }
+
+    it('shows the page size actually used in the picker, the count and the pager', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: policies(20), total: 183 })
+      renderSearch('/search?page=1&pageSize=20&mode=policies')
+
+      await screen.findByRole('button', { name: 'PA-001' })
+      expect(mockSearchPolicies).toHaveBeenLastCalledWith('', expect.objectContaining({ page: 1, pageSize: 20 }))
+      const picker = screen.getByRole('combobox', { name: 'Results per page' }) as HTMLSelectElement
+      expect(picker.value).toBe('20')
+      expect(within(picker).getByRole('option', { name: '20 per page' })).toHaveProperty('selected', true)
+      expect(screen.getByText('Page 1 of 10')).toBeInTheDocument()
+      expect(screen.getByText((_, el) => el?.className === 'ps-table-count' && el.textContent === 'Showing 1-20 of 183 policies')).toBeInTheDocument()
+    })
+
+    it('defaults to 20 per page when the URL has no page size', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: policies(20), total: 183 })
+      renderSearch('/search?mode=policies')
+
+      await screen.findByRole('button', { name: 'PA-001' })
+      expect(mockSearchPolicies).toHaveBeenLastCalledWith('', expect.objectContaining({ pageSize: 20 }))
+      expect((screen.getByRole('combobox', { name: 'Results per page' }) as HTMLSelectElement).value).toBe('20')
+      expect(screen.getByText('Page 1 of 10')).toBeInTheDocument()
+    })
+
+    it('changing the picker refetches with that size and the pager follows', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: policies(20), total: 183 })
+      renderSearch('/search?page=1&pageSize=20&mode=policies')
+      await screen.findByRole('button', { name: 'PA-001' })
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Results per page' }), { target: { value: '50' } })
+
+      await waitFor(() => expect(mockSearchPolicies).toHaveBeenLastCalledWith('', expect.objectContaining({ page: 1, pageSize: 50 })))
+      expect((screen.getByRole('combobox', { name: 'Results per page' }) as HTMLSelectElement).value).toBe('50')
+      expect(await screen.findByText('Page 1 of 4')).toBeInTheDocument()
+    })
+
+    it('reads hostile or out-of-range URL page sizes safely', () => {
+      expect(parseSearchPageSize(null)).toBe(20)
+      expect(parseSearchPageSize('')).toBe(20)
+      expect(parseSearchPageSize('0')).toBe(20)
+      expect(parseSearchPageSize('-5')).toBe(20)
+      expect(parseSearchPageSize('12.5')).toBe(20)
+      expect(parseSearchPageSize('abc')).toBe(20)
+      expect(parseSearchPageSize('1e9')).toBe(100)
+      expect(parseSearchPageSize('500')).toBe(100)
+      expect(parseSearchPageSize('37')).toBe(37)
+      expect(searchPageSizeOptions(20)).toEqual([10, 20, 25, 50, 100])
+      expect(searchPageSizeOptions(37)).toEqual([10, 20, 25, 37, 50, 100])
+    })
+
+    it('clamps an oversized URL page size and shows it in the picker', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: policies(5), total: 183 })
+      renderSearch('/search?page=1&pageSize=500&mode=policies')
+      await screen.findByRole('button', { name: 'PA-001' })
+      expect(mockSearchPolicies).toHaveBeenLastCalledWith('', expect.objectContaining({ pageSize: 100 }))
+      expect((screen.getByRole('combobox', { name: 'Results per page' }) as HTMLSelectElement).value).toBe('100')
+      expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+    })
+
+    it('shows product display names, not codes, in policy rows', async () => {
+      mockSearchPolicies.mockResolvedValue({
+        items: [...policies(1, 'commercial-auto'), { ...policies(2, 'farm-owners')[1] }],
+        total: 2,
+      })
+      renderSearch()
+      await screen.findByRole('button', { name: 'PA-001' })
+      const table = screen.getByRole('grid')
+      expect(within(table).getByText('Commercial Auto')).toBeInTheDocument()
+      // Unknown codes are humanized rather than shown raw.
+      expect(within(table).getByText('Farm Owners')).toBeInTheDocument()
+      expect(within(table).queryByText('commercial-auto')).not.toBeInTheDocument()
+      expect(within(table).queryByText('farm-owners')).not.toBeInTheDocument()
+    })
+
+    it('uses a short dates header with the full label as a tooltip', async () => {
+      mockSearchPolicies.mockResolvedValue({ items: policies(1), total: 1 })
+      renderSearch()
+      await screen.findByRole('button', { name: 'PA-001' })
+      const header = screen.getByRole('button', { name: /Effective - Expiration/ })
+      expect(header).toHaveAttribute('title', 'Effective - Expiration')
+      expect(screen.queryByText('Effective Date - Expiration Date')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Created/ })).toHaveAttribute('title', 'Created')
+    })
+
+    it('explains Issued vs In Force in a status legend and a status tooltip', async () => {
+      const [inForce, issued] = policies(2)
+      mockSearchPolicies.mockResolvedValue({
+        items: [
+          { ...inForce, term: { effectiveDate: '2000-01-01', expirationDate: '2999-01-01' } },
+          { ...issued, term: { effectiveDate: '2998-01-01', expirationDate: '2999-01-01' } },
+        ],
+        total: 2,
+      })
+      renderSearch()
+      await screen.findByRole('button', { name: 'PA-001' })
+
+      const legend = screen.getByTestId('policy-status-legend')
+      expect(within(legend).getByText('What the statuses mean')).toBeInTheDocument()
+      expect(within(legend).getByText('Documents issued; the term has not started yet.')).toBeInTheDocument()
+      expect(within(legend).getByText('Issued and the current term has started.')).toBeInTheDocument()
+
+      const statusCell = (policyNumber: string) =>
+        (screen.getByRole('button', { name: policyNumber }).closest('tr') as HTMLElement)
+          .querySelector('td[data-col="status"]') as HTMLElement
+      expect(within(statusCell('PA-001')).getByText('In Force')).toBeInTheDocument()
+      expect(statusCell('PA-001')).toHaveAttribute('title', 'Issued and the current term has started.')
+      expect(within(statusCell('PA-002')).getByText('Issued')).toBeInTheDocument()
+      expect(statusCell('PA-002')).toHaveAttribute('title', 'Documents issued; the term has not started yet.')
+    })
   })
 
   describe('results toolbar', () => {

@@ -577,7 +577,7 @@ export function FormsManagementPage() {
           {!loading && sortedItems.length === 0 && <tr><td colSpan={9} className="muted">No matching forms.</td></tr>}
           {formsPagination.rows.map((item) => (
             <tr key={item.formId} style={{ background: selectedFormId === item.formId ? 'var(--panel-soft)' : undefined }}>
-              <td>{item.formNumber}</td>
+              <td className="forms-list-nowrap">{item.formNumber}</td>
               <td>{item.formTitle}</td>
               <td>{formatEditionDate(item.editionDate)}</td>
               <td>{item.workflowStatus}</td>
@@ -589,7 +589,7 @@ export function FormsManagementPage() {
                 <div className="table-actions table-actions--icons">
                   <button
                     type="button"
-                    className="icon-action-btn"
+                    className="icon-action-btn forms-list-action"
                     aria-label={`View ${item.formNumber || item.formId}`}
                     title="View"
                     onClick={(e) => {
@@ -597,11 +597,11 @@ export function FormsManagementPage() {
                       openFormPopup(item.formId, 'view')
                     }}
                   >
-                    {'\u{1F441}'}
+                    <span aria-hidden="true">{'\u{1F441}'}</span> View
                   </button>
                   <button
                     type="button"
-                    className="icon-action-btn"
+                    className="icon-action-btn forms-list-action"
                     aria-label={`Edit ${item.formNumber || item.formId}`}
                     title="Edit"
                     onClick={(e) => {
@@ -609,7 +609,7 @@ export function FormsManagementPage() {
                       openFormPopup(item.formId, 'edit')
                     }}
                   >
-                    {'\u270E'}
+                    <span aria-hidden="true">{'\u270E'}</span> Edit
                   </button>
                 </div>
               </td>

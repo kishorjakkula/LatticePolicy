@@ -11,6 +11,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, adminApi } from "../../api/client";
 import { formatDisplayDateTime } from "../../shared/dateDisplay";
+import { POLICY_STATUS_LEGEND, productLabel } from "../../shared/displayLabels";
 import { hasPermission } from "../../auth/permissions";
 import { useAuth } from "../../auth/AuthContext";
 import {
@@ -24,6 +25,7 @@ import { LoadingBar } from "../../components/LoadingBar";
 import { ActionButton } from "../../components/ActionButton";
 import { PolicyRow } from "./PolicyRow";
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import "./search.css";
 
 // Lazy-loaded: only fetched when the context menu is first opened
 const PolicyContextMenuLazy = lazy(() =>
@@ -66,6 +68,27 @@ const TOGGLEABLE_POLICY_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "status", label: "Status" },
 ];
 const HIDDEN_COLUMNS_STORAGE_KEY = "policySearchHiddenColumns";
+
+// REQ-13: the default size (20) is one of the picker's options, so the picker,
+// the "Showing x-y" count and the pager always agree on the size in use.
+// 25 stays for saved links and bookmarks that already use it.
+export const DEFAULT_SEARCH_PAGE_SIZE = 20;
+export const SEARCH_PAGE_SIZE_OPTIONS = [10, 20, 25, 50, 100];
+const MAX_SEARCH_PAGE_SIZE = 100;
+
+/** Reads a page size from the URL: a whole number from 1 to 100, else 20. */
+export function parseSearchPageSize(raw: string | null): number {
+  const value = Number(raw);
+  if (!raw || !Number.isInteger(value) || value < 1) return DEFAULT_SEARCH_PAGE_SIZE;
+  return Math.min(value, MAX_SEARCH_PAGE_SIZE);
+}
+
+/** The picker options, always including the size actually in use. */
+export function searchPageSizeOptions(pageSize: number): number[] {
+  return SEARCH_PAGE_SIZE_OPTIONS.includes(pageSize)
+    ? SEARCH_PAGE_SIZE_OPTIONS
+    : [...SEARCH_PAGE_SIZE_OPTIONS, pageSize].sort((a, b) => a - b);
+}
 
 function normalizePolicyStatusFilterValue(value: string): string {
   const normalized = String(value || "")
@@ -114,7 +137,7 @@ export function SearchPage() {
   const initialProduct = sp.get("product") || "";
   const initialStatus = normalizePolicyStatusFilterValue(sp.get("status") || "");
   const initialPage = Math.max(1, Number(sp.get("page") || 1) || 1);
-  const initialPageSize = Math.max(1, Number(sp.get("pageSize") || 20) || 20);
+  const initialPageSize = parseSearchPageSize(sp.get("pageSize"));
   const initialStateFilter = sp.get("state") || "";
   const initialDateFrom = sp.get("dateFrom") || "";
   const initialDateTo = sp.get("dateTo") || "";
@@ -199,7 +222,7 @@ export function SearchPage() {
     const nextProduct = sp.get("product") || "";
     const nextStatus = normalizePolicyStatusFilterValue(sp.get("status") || "");
     const nextPage = Number(sp.get("page") || 1);
-    const nextPageSize = Number(sp.get("pageSize") || 20);
+    const nextPageSize = parseSearchPageSize(sp.get("pageSize"));
     const nextState = sp.get("state") || "";
     const nextDateFrom = sp.get("dateFrom") || "";
     const nextDateTo = sp.get("dateTo") || "";
@@ -666,7 +689,7 @@ export function SearchPage() {
     setDateFrom("");
     setDateTo("");
     setPage(1);
-    setPageSize(20);
+    setPageSize(DEFAULT_SEARCH_PAGE_SIZE);
     setPolicySortBy("effectiveDate");
     setPolicySortDir("desc");
   };
@@ -796,6 +819,7 @@ export function SearchPage() {
     <button
       type="button"
       className="ps-sort-header"
+      title={label}
       onClick={() => togglePolicySort(field)}
       aria-sort={
         policySortBy === field
@@ -1220,6 +1244,20 @@ export function SearchPage() {
               </div>
             </div>
 
+            <details className="ps-status-legend" data-testid="policy-status-legend">
+              <summary>What the statuses mean</summary>
+              <dl>
+                {Object.entries(POLICY_STATUS_LEGEND).map(([statusName, meaning]) => (
+                  <div key={statusName} className="ps-status-legend-item">
+                    <dt>
+                      <StatusBadge status={statusName} />
+                    </dt>
+                    <dd>{meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+
             {/* Bulk actions bar â€” slide in when rows selected */}
             {selectedRows.size > 0 && (
               <div className="ps-bulk-bar" role="status" aria-live="polite">
@@ -1257,7 +1295,7 @@ export function SearchPage() {
                   <col style={{ width: 120 }} />
                   {isColumnVisible("insured") && <col />}
                   {isColumnVisible("product") && <col />}
-                  {isColumnVisible("dates") && <col />}
+                  {isColumnVisible("dates") && <col style={{ width: 220 }} />}
                   {isColumnVisible("created") && <col style={{ width: 116 }} />}
                   {isColumnVisible("updated") && <col style={{ width: 116 }} />}
                   {isColumnVisible("premium") && <col />}
@@ -1290,7 +1328,7 @@ export function SearchPage() {
                       <th data-col="dates">
                         <SortHeader
                           field="effectiveDate"
-                          label="Effective Date - Expiration Date"
+                          label="Effective - Expiration"
                         />
                       </th>
                     )}
@@ -1387,7 +1425,7 @@ export function SearchPage() {
                           {item.quoteNumber || item.quoteId}
                         </Link>
                       </td>
-                      <td>{item.productCode}</td>
+                      <td>{item.productCode ? productLabel(item.productCode) : ""}</td>
                       <td>{item.status}</td>
                       <td>{item.progressStep ?? ""}</td>
                       <td>
@@ -1486,7 +1524,7 @@ export function SearchPage() {
                 });
               }, 0);
             }}
-            pageSizeOptions={[10, 25, 50, 100]}
+            pageSizeOptions={searchPageSizeOptions(pageSize)}
             className="ps-pagination-footer"
           />
         </div>
