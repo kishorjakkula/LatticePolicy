@@ -117,7 +117,11 @@ The new integration test normally owns a disposable PostgreSQL container and
 ignores inherited DATABASE_URL. The root container runner explicitly sets
 `LATTICE_DISPOSABLE_TEST_DATABASE=true`; this allows only the exact
 `lattice_policy_integration` database on a local host and needs no nested Docker
-socket. Cleanup removes only the fixture's random tenants. Never point tests at
+socket. Because the suite renders PDFs with Puppeteer, the root runner builds
+the test-only `scripts/integration-test-runner.Dockerfile` image (node:22-alpine
+plus Alpine Chromium, as in `server/Dockerfile`); `NODE_TEST_IMAGE` overrides it
+with an image that must already provide a browser
+(`NODE_TEST_PUPPETEER_EXECUTABLE_PATH` sets its path). Cleanup removes only the fixture's random tenants. Never point tests at
 demo/pilot databases.
 Final run evidence and review findings belong in the WP implementation handoff.
 
@@ -129,3 +133,40 @@ exports, archive restore, operational tooling and carrier workload qualification
 These are not implemented by this slice. Existing legacy template-governance
 exceptions are not equivalent to independent package approval. Human merge and
 business-release gates remain required; no production deployment is authorized.
+
+## Release Impact On Existing Forms
+
+The shared selection rules change which forms attach on existing data:
+
+- A form with `require_approved_jurisdiction` (the column default is true) no
+  longer attaches where no Approved or Filed row is in force for the state and
+  date. Before, generation attached it whenever no state row joined; for
+  example, ISO state amendatories attached to every policy, and seeded forms
+  attached to policies dated before their approval start.
+- A form scoped `Issue` (the editor's default draft is "Quote, Issue") no
+  longer prints at bind, and a `Bind`-scoped form now does. A Quote-only scope
+  never attaches, because nothing is generated at quote.
+- Pending or Withdrawn rows for the state block the form.
+- Activation now accepts Filed as well as Approved jurisdictions.
+
+Before deploying to a carrier, list the forms whose behavior changes:
+
+```sql
+-- Active forms requiring approval with no usable jurisdiction in force today.
+SELECT f.tenant_id, f.form_number, f.edition_date
+  FROM forms_admin_forms f
+ WHERE f.active AND f.require_approved_jurisdiction
+   AND NOT EXISTS (
+     SELECT 1 FROM forms_admin_jurisdictions j
+      WHERE j.tenant_id = f.tenant_id AND j.form_id = f.form_id
+        AND j.regulatory_status IN ('Approved', 'Filed')
+        AND j.effective_date <= CURRENT_DATE
+        AND (j.sunset_date IS NULL OR j.sunset_date >= CURRENT_DATE));
+
+-- Active forms whose scope names Issue but not Bind or new business (no longer printed at bind).
+SELECT f.tenant_id, f.form_number, a.product_code, a.transaction_types
+  FROM forms_admin_forms f
+  JOIN forms_admin_applicability a ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id AND a.active
+ WHERE f.active AND 'Issue' = ANY (a.transaction_types)
+   AND NOT (a.transaction_types && ARRAY['Bind', 'NB', 'new_business', 'NewBusiness']);
+```

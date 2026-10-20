@@ -208,13 +208,16 @@ export function liveFormPreviewContext(payload: any, stage: FormAttachmentStage,
       ...(termExpirationDate ? { expirationDate: termExpirationDate } : {}),
     } } : {}),
   }
-  // Nothing is generated at Quote, so the Quote list shows what binding will
-  // attach: rules see the Bind stage, as they will at generation.
+  // Nothing is generated at Quote, so the Quote list is a projection of what
+  // binding will attach: rules see the Bind stage and the Bound status they
+  // will see at generation, and the list is labelled "attaches at bind".
   const ruleStage = stage === 'Quote' ? 'Bind' : stage
   return {
     payload,
     coverages: payload?.coverages || [],
-    transactionType: facts.type === 'NB' ? stage : facts.type,
+    // The Quote list projects bind, so its scope filter is Bind too: Quote-only
+    // forms are never generated and Bind-scoped forms do attach.
+    transactionType: facts.type === 'NB' ? ruleStage : facts.type,
     policy,
     transaction: { ...payload?.transaction, type: facts.type, stage: ruleStage, number: facts.number, effectiveDate: facts.effectiveDate },
     premium: facts.premium,
@@ -260,6 +263,8 @@ type EndorsementPreviewResponse = {
   effectiveDate: string
   underwriting?: any
   premium?: any
+  /** Change set the server uses to select endorsement forms. */
+  endorsementChanges?: Record<string, unknown>
   fullTerm?: {
     old: number
     new: number
@@ -1845,7 +1850,12 @@ export function QuoteWizard() {
             policy: policyContext,
             premium: visiblePremium,
             uw: uwContext,
-          })
+          }),
+          // Endorsement forms attach on change criteria; until the endorsement is
+          // rated there is no change set and only always-attach forms preview.
+          ...(wizardMode === 'endorse' && endorsementPreview?.endorsementChanges
+            ? { endorsementChanges: endorsementPreview.endorsementChanges }
+            : {}),
         })
         const mapped: AttachedForm[] = (Array.isArray(rows) ? rows : []).map((item: any) => ({
           formId: String(item.formId || ''),
@@ -1896,6 +1906,7 @@ export function QuoteWizard() {
     wizardMode,
     transactionEffectiveDate,
     isPolicyTransactionMode,
+    endorsementPreview,
     overrideReason
   ])
 
@@ -5028,7 +5039,8 @@ export function QuoteWizard() {
                   )}
                   {formsRows.map(({ stage, item }, index) => (
                     <tr key={`${stage}-${item.formId}-${index}`}>
-                      <td>{stage}</td>
+                      {/* Nothing is generated at Quote: these rows project what binding will attach. */}
+                      <td>{stage === 'Quote' && !isReadOnlyView ? 'Quote (attaches at bind)' : stage}</td>
                       <td>{item.formNumber || item.formId}</td>
                       <td>{item.formTitle || '-'}</td>
                       <td>{item.editionDate || '-'}</td>

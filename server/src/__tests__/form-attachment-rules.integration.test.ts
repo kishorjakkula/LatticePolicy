@@ -457,6 +457,41 @@ describe('form attachment configuration on disposable PostgreSQL', () => {
     expect(selected.metadata.attachmentRules).toEqual([])
   })
 
+  it('applies the jurisdiction gate and Bind/Issue scope in real generation SQL', async () => {
+    const isSelected = async (id: string, extra: Partial<PolicyDocumentContext> = {}) =>
+      (await selection(input(), tenantA, extra)).some(item => item.metadata.sourceFormId === id)
+
+    // Requires approval, approved only in NY: never attaches to a CA transaction.
+    const nyOnly = await form({ metadata: {} })
+    await getDb()!.query("UPDATE forms_admin_jurisdictions SET state_code='NY' WHERE form_id=$1", [nyOnly])
+    await publish(nyOnly)
+    expect(await isSelected(nyOnly)).toBe(false)
+
+    // CA approval that expired before the effective date.
+    const expired = await form({ metadata: {} })
+    await getDb()!.query("UPDATE forms_admin_jurisdictions SET effective_date='2020-01-01', sunset_date='2021-01-01' WHERE form_id=$1", [expired])
+    await publish(expired)
+    expect(await isSelected(expired)).toBe(false)
+
+    // Filed counts as usable (file-and-use).
+    const filed = await form({ metadata: {} })
+    await getDb()!.query("UPDATE forms_admin_jurisdictions SET regulatory_status='Filed' WHERE form_id=$1", [filed])
+    await publish(filed)
+    expect(await isSelected(filed)).toBe(true)
+
+    // Bind-only and Issue-only scopes attach only at their own stage.
+    const bindOnly = await form({ metadata: {} })
+    await getDb()!.query("UPDATE forms_admin_applicability SET transaction_types=ARRAY['Bind'] WHERE form_id=$1", [bindOnly])
+    await publish(bindOnly)
+    const issueOnly = await form({ metadata: {} })
+    await getDb()!.query("UPDATE forms_admin_applicability SET transaction_types=ARRAY['Issue'] WHERE form_id=$1", [issueOnly])
+    await publish(issueOnly)
+    expect(await isSelected(bindOnly, { transactionType: 'NB' })).toBe(true)
+    expect(await isSelected(bindOnly, { transactionType: 'Issue' })).toBe(false)
+    expect(await isSelected(issueOnly, { transactionType: 'NB' })).toBe(false)
+    expect(await isSelected(issueOnly, { transactionType: 'Issue' })).toBe(true)
+  })
+
   it('keeps the rules flag server-owned on general form edits', async () => {
     const legacy = await form()
     await getDb()!.query(
@@ -721,6 +756,49 @@ describe('form attachment configuration on disposable PostgreSQL', () => {
     expect(foreign.body.find((item: any) => item.formId === foreignId)).toMatchObject({
       productCodes: ['personal-auto'], stateCodes: ['CA'], transactionTypes: ['Bind', 'Issue'], templateSource: 'Static PDF',
     })
+    // Explicitly scoped rows expose no generator fallbacks.
+    expect(summary).toMatchObject({ hasApplicability: true, requireApprovedJurisdiction: true })
+  })
+
+  it('lists the scope fallbacks the generator applies to forms without explicit product or state scope', async () => {
+    // No applicability rows and no jurisdictions: matches by line of business, every state when approval is optional.
+    const noRows = await form()
+    await getDb()!.query('DELETE FROM forms_admin_applicability WHERE form_id=$1', [noRows])
+    await getDb()!.query('DELETE FROM forms_admin_jurisdictions WHERE form_id=$1', [noRows])
+    await getDb()!.query('UPDATE forms_admin_forms SET require_approved_jurisdiction=false WHERE form_id=$1', [noRows])
+    // Only inactive rows count as no applicability, as in selectPolicyForms' has_app join.
+    const inactiveOnly = await form()
+    await getDb()!.query('UPDATE forms_admin_applicability SET active=false WHERE form_id=$1', [inactiveOnly])
+    // Blank-product rows (seeds/imports can carry blanks) never attach in generation, so they add no product code; plus an ALL jurisdiction.
+    const blankProduct = await form()
+    await getDb()!.query(
+      `INSERT INTO forms_admin_applicability (tenant_id,form_id,line_of_business,product_code,transaction_types,active)
+       VALUES ($1,$2,'homeowners','',ARRAY['Issue'],true), ($1,$2,' ','',ARRAY['Issue'],true)`, [tenantA, blankProduct],
+    )
+    await getDb()!.query(
+      `INSERT INTO forms_admin_jurisdictions (tenant_id,form_id,state_code,regulatory_status,effective_date)
+       VALUES ($1,$2,'ALL','Approved','2026-01-01')`, [tenantA, blankProduct],
+    )
+    // Another tenant's form must not leak into tenant A's projection.
+    const foreignId = await form({ tenantId: tenantB })
+    await getDb()!.query(
+      `INSERT INTO forms_admin_applicability (tenant_id,form_id,line_of_business,product_code,transaction_types,active)
+       VALUES ($1,$2,'','',ARRAY['Issue'],true)`, [tenantB, foreignId],
+    )
+
+    const listed = await api('get', '/admin/forms').expect(200)
+    const byId = (id: string) => listed.body.find((item: any) => item.formId === id)
+    expect(byId(noRows)).toMatchObject({
+      lineOfBusiness: product, hasApplicability: false,
+      productCodes: [], stateCodes: [], jurisdictionCount: 0, requireApprovedJurisdiction: false,
+    })
+    expect(byId(inactiveOnly)).toMatchObject({ hasApplicability: false, productCodes: [], requireApprovedJurisdiction: true })
+    expect(byId(blankProduct)).toMatchObject({
+      hasApplicability: true, productCodes: [product], stateCodes: ['ALL', 'CA'],
+    })
+    const foreign = await api('get', '/admin/forms', otherEditor, tenantB).expect(200)
+    expect(foreign.body.find((item: any) => item.formId === foreignId)).toMatchObject({ hasApplicability: true })
+    expect(listed.body.some((item: any) => item.formId === foreignId)).toBe(false)
   })
 })
 

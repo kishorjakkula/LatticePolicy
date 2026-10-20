@@ -8,7 +8,7 @@ import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { RadioGroup } from '../../components/RadioGroup'
 import { FormAttachmentEditor } from './forms/FormAttachmentEditor'
 import { FormScenarioTest } from './forms/FormScenarioTest'
-import { useFormsScopeCatalog } from './forms/useFormsScopeCatalog'
+import { formMatchesScopeFilter, formScopeLabels, useFormsScopeCatalog, type FormScopeSummary } from './forms/useFormsScopeCatalog'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import './forms/forms-management.css'
@@ -16,7 +16,7 @@ import './forms/forms-management.css'
 type SectionKey = 'catalog' | 'jurisdictions' | 'applicability' | 'output' | 'security' | 'audit' | 'preview'
 type EditorPopupMode = 'new' | 'view' | 'edit' | null
 
-type FormSummary = {
+type FormSummary = FormScopeSummary & {
   formId: string
   formNumber: string
   formTitle: string
@@ -122,10 +122,8 @@ export function FormsManagementPage() {
 
   const selectedSummary = useMemo(() => items.find((item) => item.formId === selectedFormId) || null, [items, selectedFormId])
   const sortedItems = useMemo(() => {
-    const next = items.filter((item) => {
-      return (!scopeFilter.product || item.productCodes?.includes(scopeFilter.product)) &&
-        (!scopeFilter.state || item.stateCodes?.some((state) => state === scopeFilter.state || state === 'ALL'))
-    })
+    // Same scope fallbacks as generation: unscoped and 'ALL' forms stay in a filtered catalog.
+    const next = items.filter((item) => formMatchesScopeFilter(item, scopeFilter))
     next.sort((a, b) => {
       const av = toSortValue(a, formsSort.key)
       const bv = toSortValue(b, formsSort.key)
@@ -585,7 +583,7 @@ export function FormsManagementPage() {
               <td>{item.workflowStatus}</td>
               <td>{item.active ? 'Yes' : 'No'}</td>
               <td>{item.jurisdictionCount}</td>
-              <td>{toCsv(item.productCodes) || 'No product scope'}<br />{toCsv(item.stateCodes) || 'No state scope'}</td>
+              <td>{formScopeLabels(item).products}<br />{formScopeLabels(item).states}</td>
               <td>{item.templateSource || '-'}<br />{toCsv(item.transactionTypes) || '-'}</td>
               <td>
                 <div className="table-actions table-actions--icons">

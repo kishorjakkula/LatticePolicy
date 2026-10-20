@@ -688,6 +688,13 @@ export async function previewEndorsement(
       wouldRebase: computation.rebasedTransactions.length > 0,
       rebasedTransactions: computation.rebasedTransactions,
     },
+    // The same change set executeEndorsement uses to select forms, so the
+    // wizard's form preview applies endorsement change criteria identically.
+    endorsementChanges: buildEndorsementChangeSet(
+      computation.previousPayload,
+      computation.nextPayload,
+      computation.changes.map((entry: any) => typeof entry === 'string' ? entry : entry.path).filter(Boolean),
+    ),
   }
 }
 

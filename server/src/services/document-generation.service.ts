@@ -4,9 +4,15 @@ import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { logger } from '../logger.js'
+import { asDateOnly } from '../lib/date.utils.js'
 import { pinnedFormTriggerRules } from '@lattice-policy/rules'
 import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
-import { formJurisdictionDecision, formTransactionMatches } from './form-selection.js'
+import {
+  formJurisdictionDecision,
+  formTransactionMatches,
+  matchesEndorsementChanges,
+  type EndorsementChangeSet,
+} from './form-selection.js'
 import {
   getDocumentStorageAdapter,
   renderAndStoreDocument,
@@ -20,6 +26,9 @@ import {
   sha256Bytes,
   validateDocxPlaceholderTokens,
 } from './document-template-variables.js'
+
+// The endorsement-change types live with the shared selection rules.
+export type { EndorsementChangeCriteria, EndorsementChangeSet, EndorsementChangeType } from './form-selection.js'
 
 export type PolicyDocumentTransactionType =
   | 'NB'
@@ -54,23 +63,6 @@ export type PolicyDocumentContext = {
   premium?: { total?: { amount?: number; currency?: string } | null; fees?: { amount?: number } | null; taxes?: { amount?: number } | null } | null
   requiredFormCodes?: string[]
   requiredDeliveryMethods?: string[]
-}
-
-export type EndorsementChangeType = 'added' | 'removed' | 'modified'
-
-export type EndorsementChangeSet = {
-  changedPaths: string[]
-  addedCoverageCodes: string[]
-  removedCoverageCodes: string[]
-  modifiedCoverageCodes: string[]
-}
-
-export type EndorsementChangeCriteria = {
-  alwaysAttachOnEndorsement?: boolean
-  match?: 'any' | 'all'
-  coverageCodes?: string[]
-  changeTypes?: EndorsementChangeType[]
-  changedPathPatterns?: string[]
 }
 
 export type SelectedPolicyForm = {
@@ -177,42 +169,6 @@ export function buildEndorsementChangeSet(
     removedCoverageCodes: removedCoverageCodes.sort(),
     modifiedCoverageCodes: modifiedCoverageCodes.sort(),
   }
-}
-
-function pathMatches(pattern: string, path: string): boolean {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
-  return new RegExp(`^${escaped}$`).test(path)
-}
-
-export function matchesEndorsementChanges(
-  criteria: EndorsementChangeCriteria | null | undefined,
-  changes: EndorsementChangeSet | null | undefined
-): boolean {
-  if (!criteria || typeof criteria !== 'object') return false
-  if (criteria.alwaysAttachOnEndorsement === true) return true
-  if (!changes) return false
-
-  const coverageCodes = (criteria.coverageCodes || []).map((code) => normalizeText(code).toUpperCase()).filter(Boolean)
-  const changeTypes = (criteria.changeTypes || []).filter((type) => ['added', 'removed', 'modified'].includes(type))
-  const pathPatterns = (criteria.changedPathPatterns || []).map(normalizeText).filter(Boolean)
-  if (!coverageCodes.length && !changeTypes.length && !pathPatterns.length) return false
-
-  const changedByType: Record<EndorsementChangeType, string[]> = {
-    added: changes.addedCoverageCodes,
-    removed: changes.removedCoverageCodes,
-    modified: changes.modifiedCoverageCodes,
-  }
-  const changedCoverageCodes = new Set(Object.values(changedByType).flat())
-  const checks: boolean[] = []
-  if (coverageCodes.length && changeTypes.length) {
-    checks.push(changeTypes.some((type) => coverageCodes.some((code) => changedByType[type].includes(code))))
-  } else if (coverageCodes.length) {
-    checks.push(coverageCodes.some((code) => changedCoverageCodes.has(code)))
-  } else if (changeTypes.length) {
-    checks.push(changeTypes.some((type) => changedByType[type].length > 0))
-  }
-  if (pathPatterns.length) checks.push(pathPatterns.some((pattern) => changes.changedPaths.some((path) => pathMatches(pattern, path))))
-  return criteria.match === 'all' ? checks.every(Boolean) : checks.some(Boolean)
 }
 
 function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPolicyForm[]): GeneratedPolicyDocument[] {
@@ -409,7 +365,7 @@ export async function selectPolicyForms(
     if (!formTransactionMatches(row.transaction_types, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
         !matchesEndorsementChanges(row.endorsement_change_criteria, context.endorsementChanges)) continue
-    if (!formJurisdictionDecision(row.jurisdictions, state, String(effectiveDate || ''), row.require_approved_jurisdiction === true).attach) continue
+    if (!formJurisdictionDecision(row.jurisdictions, state, asDateOnly(effectiveDate) || '', row.require_approved_jurisdiction === true).attach) continue
     const code = normalizeText(row.form_number)
     if (!code || seen.has(`admin:${row.form_id}`)) continue
     let attachment = adminDecisions.get(String(row.form_id))

@@ -199,3 +199,102 @@ repo. Integration (PostgreSQL), Docker and E2E suites were not run.
 
 Result: no open blockers or majors. Three new minors (A-C), returned at low
 priority, plus the recommended per-route body limit.
+
+## Review Of P1 Fixes - 2026-10-19
+
+Reviewer: independent Claude Code session, separate from the developer. I reviewed the
+committed content of `ee9224a`, `19d0639` and `0d8bf15` (`git show`, `git show HEAD:<path>`),
+not the working tree, which other agents are editing.
+
+### Verdict
+
+The three P1 findings in `docs/tasks/wp-0003-latest-implementation-review.md` are fixed.
+I found no blockers and no majors. There are four minors and some nits, listed below.
+Merge is not blocked from the code-review side.
+
+### What I verified
+
+- P1-1 (jurisdiction): `selectPolicyForms` now selects `f.require_approved_jurisdiction` and
+  gets every jurisdiction row for the form through `jsonb_agg`. `formJurisdictionDecision`
+  applies that flag. The old filtered LEFT JOIN, which let a form through whenever no row
+  joined (NY-only, expired, or not yet effective), has been removed. `$3`/`$4` are gone and
+  the parameter list matches (`$1`, `$2`). `jsonb_build_object` turns `date` into a
+  `YYYY-MM-DD` string, which `asDateOnly` reads without converting time zones. The subquery
+  is correlated per output row and is indexed on `(tenant_id, form_id, ...)`. Jurisdictions
+  no longer add rows, and the `has_app` logic is unchanged.
+- P1-2 (stage): I listed every `transactionType` that reaches generation:
+  `NB` (quote-bind.service.ts:723,834), `Issue`, `Cancel`, `Reinstate`, `Renew`, `Rewrite`,
+  `NonRenewal` (lifecycle.service.ts) and `Endorse` (endorsement.service.ts). All of them
+  resolve in `TRANSACTION_ALIASES`. Preview passes the normalized `Quote`, `Bind`, `Issue`,
+  `Endorsement`, `Renewal`, `Cancellation`, `Reinstatement`, `Rewrite` or `NonRenewal`, or
+  `''` (no filter) for NB/QuoteBind. All of these resolve.
+- Removed helpers: no references remain to `matchesTransactionType`,
+  `pickMatchingPreviewJurisdiction`, `FORMS_PREVIEW_TRANSACTION_TYPES` or
+  `FORMS_PREVIEW_DEFAULT_FUTURE_DATE`. `normalizeTransactionType` in
+  document-generation.service.ts is still used for the endorsement check.
+- Stored scopes that could stop or start attaching:
+  - The admin routes only save `Quote`, `Bind`, `Issue`, `Endorsement`, `Renewal`,
+    `Cancellation`, `Reinstatement` and `Rewrite` (forms-admin.routes.ts:25, 2851).
+  - The ISO seed uses that same list plus Approved rows for all states.
+  - The product template seed uses `[]`, `['NB']` and `['NB','Renew']`.
+  - Integration fixtures use `NB`, `Endorse`, `Cancel`, `Reinstate`, `Renew`, `NonRenewal`
+    and `Rewrite`, all in CA with Approved rows from 2026-01-01 and effective dates in
+    2026-07 to 2026-11.
+  - `forms_catalog` sample seeds have no transaction scope.
+  - No stored value uses spaces, and none is unknown, so the "unknown matches nothing"
+    rule changes no seeded form.
+  - No seed or fixture stores a Pending or Withdrawn row.
+- UI: `isComplianceAdmin` in the UI matches the server
+  (forms-admin.routes.ts:3072). The frontend `hasPermission` returns true for role `admin`,
+  and `compliance_admin` is checked explicitly.
+  - Delete is enabled only for an edition that is inactive and not Approved, which matches
+    DELETE `/:id` (forms-admin.routes.ts:761-766).
+  - Approve requires Reviewed (`transitionWorkflow`), and Activate requires Approved and
+    inactive.
+  - `useAuth()` is called at the top level of the component before the only `return`, so
+    hook order is stable.
+- Tests against the committed snapshot: I exported the tree with `git archive HEAD` to a
+  scratch directory and symlinked `node_modules`.
+  - `form-selection.test.ts`, `forms.service.test.ts` and
+    `document-generation.service.test.ts` pass.
+  - `form-attachment.service.test.ts` passes except for the field-catalog case, which fails
+    only because the export does not include product config. The same case passes in the
+    repository.
+  - `FormsManagementPage.lifecycle.test.tsx` passes (4 tests).
+- Mutation check: I put back the pre-fix `document-generation.service.ts` (`ee9224a^`).
+  The new NY-only/expired test and the `['Bind']@NB` and `['Issue']@NB` stage tests then
+  fail. The first lifecycle UI test would fail on the old `!canEdit` gate, because Activate
+  was disabled for an Approved, edit-locked edition.
+- E2E pilot spec (`19d0639`): matching on the URL path and choosing Download or Open by
+  content type fits `PolicyDocumentsPanel.tsx:119`. Blob capture through
+  `createObjectURL` covers both flows.
+- Mockup escaping (`0d8bf15`): this only affects the mockup. The view allow-list and
+  `clean()` close the CodeQL paths.
+
+Not verified: the PostgreSQL integration suites, Docker and E2E runs. I relied on the
+developer's reported results for these and did not reproduce them.
+
+### Findings
+
+| # | Severity | Location | Defect and failure scenario | Fix | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| A | Minor | server/src/routes/forms-admin.routes.ts:829-831 vs server/src/services/form-selection.ts:52 | Activation counts only `Approved` jurisdictions, but the shared gate now treats `Filed` as usable. Scenario: a form that requires approval and has only Filed rows (file-and-use states) would attach, but the compliance admin gets "Activation requires at least one approved jurisdiction". | Use the same usable-status set (Approved/Filed) in activation, or remove Filed from the gate. Decide one rule and record it in the forms knowledge doc. | Returned (P2) |
+| B | Minor | frontend/src/features/wizard/QuoteWizard.tsx:214 and forms.service.ts `isPreviewApplicabilityMatch` | The Quote preview sends `transactionType: 'Quote'`. The code comment says the Quote list should show "what binding will attach", but Bind-scoped forms are hidden and Quote-only forms (which generation never attaches) are shown. This existed before the fix (exact `'Quote'` match), but it contradicts the "never previews one way and attaches another" claim in form-selection.ts. | At Quote, filter on the Bind scope, as the rule stage already does, or label the list as quote-stage forms. | Returned (P2) |
+| C | Minor | server/src/services/__tests__/form-attachment.service.test.ts:135-151 | The unit tests mock `q` and pass ready-shaped `jurisdictions` and `require_approved_jurisdiction` values, so they do not test the rewritten SQL. A wrong key in `jsonb_build_object` or a dropped `f.require_approved_jurisdiction` would still pass. Integration fixtures only cover the positive CA-Approved case. | Add one PostgreSQL case to form-attachment-rules.integration.test.ts: a form approved only in NY is not attached at a CA bind, and a Bind-only form is not attached at Issue. | Returned |
+| D | Minor | Release / data | This is an intended behavior change on existing data. Forms that require approval now stop attaching where no Approved or Filed row is in force for the state and date. Before, they attached whenever no row joined, including all 51 ISO state amendatories on every policy and policies dated before 2026-01-01. Admin forms scoped `Issue` (the UI's default draft is "Quote, Issue") no longer print at bind. | Deployment should run a pre-deploy query listing active forms with `require_approved_jurisdiction` and no in-force usable row per written state, and note the Bind/Issue change in the release notes. | Accepted, with a hand-off to stage 10 |
+| N1 | Nit | document-generation.service.ts:411 | `String(effectiveDate \|\| '')` compares raw strings. Every current caller passes `YYYY-MM-DD` (bind's payload is checked by `DateOnlySchema`), but a timestamp would leave out the sunset day. The old SQL cast to `date`. | Pass `asDateOnly(effectiveDate)`. | Open |
+| N2 | Nit | document-generation.service.ts:362-365 | The subquery returns every state's rows for each form, about 52 per ISO form. | Add `AND ($3 = '' OR upper(j.state_code) IN ($3,'ALL'))` if packet SQL becomes slow. | Open |
+| N3 | Nit | forms.service.ts (preview) | Preview reads DATE columns as JS `Date` values, which `asDateOnly` converts through UTC. Generation reads strings. If the server time zone is east of UTC, preview and generation can disagree on boundary days. This existed before the fix. | Confirm the server runs in UTC, or format dates in SQL for preview as well. | Open |
+| N4 | Nit | FormsManagementPage.lifecycle.test.tsx | There is no case where Delete is enabled (Draft, inactive) and no case for the `admin` role. | Add both. | Open |
+| N5 | Nit | e2e/pilot-product-pinning.spec.ts:58 | The spec uses a regex on `contentType`, but the UI uses an exact match (`archivedOutputFormat`). A content type with parameters would make the spec look for the wrong button. Only the test is affected. | Use the same helper or the same exact values. | Open |
+| N6 | Nit | mockups/document-generation.html | Escaped values are stored in state, so mockup search and filters compare escaped text (`A&amp;B`). This affects only the mockup. | Escape when rendering, not when storing. | Open |
+
+Notes on semantics I checked:
+- State rows take precedence over ALL rows. When no state is given, any usable row in force
+  allows the form; the old generation code did not check at all in that case.
+- A Pending row and an Approved row for the same state cannot both be in force, because
+  `ensureNoJurisdictionOverlap` prevents overlapping rows per state. So the
+  `find(usable)` choice cannot hide a withdrawal.
+
+Result: no open blockers or majors. Findings A-C are returned as P2 follow-ups. D is handed
+to Deployment (stage 10).

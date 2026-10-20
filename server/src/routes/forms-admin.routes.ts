@@ -8,6 +8,7 @@ import { asDateOnly as _asDateOnly } from '../lib/date.utils.js'
 import { routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 import { buildFormAttachmentContext, evaluateFormTriggers, validateFormTriggerDefinition } from '@lattice-policy/rules'
 import { formAttachmentFields } from '../services/form-attachment.service.js'
+import { isUsableRegulatoryStatus } from '../services/form-selection.js'
 import { previewForm } from '../services/forms.service.js'
 import { AppError } from '../errors/domain.errors.js'
 import {
@@ -147,7 +148,10 @@ formsAdminRoutes.get('/', async (req, res) => {
                 (SELECT COUNT(*)::int FROM forms_admin_jurisdictions j WHERE j.tenant_id = f.tenant_id AND j.form_id = f.form_id) AS jurisdiction_count,
                 (SELECT COUNT(*)::int FROM forms_admin_applicability a WHERE a.tenant_id = f.tenant_id AND a.form_id = f.form_id) AS applicability_count,
                 (SELECT COUNT(*)::int FROM forms_admin_triggers t WHERE t.tenant_id = f.tenant_id AND t.form_id = f.form_id) AS trigger_count,
-                ARRAY(SELECT DISTINCT a.product_code FROM forms_admin_applicability a WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true AND a.product_code IS NOT NULL ORDER BY a.product_code) AS product_codes,
+                ARRAY(SELECT DISTINCT a.product_code FROM forms_admin_applicability a WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true AND NULLIF(btrim(a.product_code), '') IS NOT NULL ORDER BY a.product_code) AS product_codes,
+                -- Generator scope fallback, so catalog filters keep forms with no explicit product:
+                -- a form with no active applicability rows matches by f.line_of_business (selectPolicyForms has_app).
+                EXISTS (SELECT 1 FROM forms_admin_applicability a WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true) AS has_applicability,
                 ARRAY(SELECT DISTINCT j.state_code FROM forms_admin_jurisdictions j WHERE j.tenant_id=f.tenant_id AND j.form_id=f.form_id ORDER BY j.state_code) AS state_codes,
                 ARRAY(SELECT DISTINCT tx FROM forms_admin_applicability a CROSS JOIN LATERAL unnest(a.transaction_types) tx WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true ORDER BY tx) AS transaction_types,
                 (SELECT o.template_source FROM forms_admin_output o WHERE o.tenant_id=f.tenant_id AND o.form_id=f.form_id LIMIT 1) AS template_source
@@ -827,9 +831,10 @@ formsAdminRoutes.post('/:id/activate', async (req, res) => {
         return { code: 'INVALID_STATE', message: 'Only approved forms can be activated' }
       }
       if (before.form.requireApprovedJurisdiction) {
-        const approvedCount = before.jurisdictions.filter((j: any) => j.regulatoryStatus === 'Approved').length
+        // Same usable statuses as the attachment gate, so a form that would attach can be activated.
+        const approvedCount = before.jurisdictions.filter((j: any) => isUsableRegulatoryStatus(j.regulatoryStatus)).length
         if (approvedCount < 1) {
-          return { code: 'INVALID_STATE', message: 'Activation requires at least one approved jurisdiction' }
+          return { code: 'INVALID_STATE', message: 'Activation requires at least one approved or filed jurisdiction' }
         }
       }
 
@@ -2288,6 +2293,8 @@ function mapFormSummaryRow(row: any) {
     jurisdictionCount: Number(row.jurisdiction_count || 0),
     applicabilityCount: Number(row.applicability_count || 0),
     triggerCount: Number(row.trigger_count || 0),
+    requireApprovedJurisdiction: row.require_approved_jurisdiction === true,
+    hasApplicability: Boolean(row.has_applicability),
     productCodes: row.product_codes || [],
     stateCodes: row.state_codes || [],
     transactionTypes: row.transaction_types || [],

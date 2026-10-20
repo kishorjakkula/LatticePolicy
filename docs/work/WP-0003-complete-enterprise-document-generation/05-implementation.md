@@ -139,3 +139,24 @@ Fixes for the second review in `07-code-review.md`:
 - Results: typecheck pass; rules 221, server 765, frontend 358 passed;
   attachment PostgreSQL suite 75; full host integration 38 files / 256 passed;
   E2E document specs 6 passed. P2 findings remain open.
+
+## P2 Fixes And P1 Review Minors - 2026-10-19
+
+- P2-4: preview applies endorsement change criteria through the shared
+  `matchesEndorsementChanges` (moved to form-selection.ts). The endorsement
+  preview API returns `endorsementChanges`, and the wizard sends it with its
+  form preview; before rating, only always-attach endorsement forms preview.
+- P2-5: catalog product/state filters follow generation scope (line-of-business
+  fallback for forms without applicability rows, ALL states, jurisdiction-less
+  forms that don't require approval). Blank-product rows match nothing in
+  generation, catalog and preview alike.
+- P2-6: the Quote list projects bind (Bind scope, Bind stage, Bound status) and
+  is labelled "Quote (attaches at bind)".
+- P2-7: `npm run test:integration` builds a test-only runner image with
+  Alpine Chromium (scripts/integration-test-runner.Dockerfile).
+- P1 review minors: activation accepts Filed like the gate; generation uses
+  asDateOnly; a PostgreSQL test covers NY-only, expired, Filed and Bind/Issue
+  scope; release impact and pre-deploy queries are in the task note.
+- Results: typecheck pass; rules 221, server 777, frontend 369 passed;
+  Docker integration 38 files / 258 passed; E2E (forms, documents,
+  transaction documents, quote wizard) 12 passed.

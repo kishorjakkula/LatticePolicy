@@ -41,7 +41,7 @@ describe('transaction Forms & Documents boundaries', () => {
   it.each(['Quote', 'Bind', 'Issue'] as const)('preserves new-business legacy %s prefilter separately from NB business type', stage => {
     expect(liveFormPreviewContext({}, stage, { type: 'NB', effectiveDate: '2026-10-18', policy: {}, premium: {}, uw: {} })).toMatchObject({
       // Quote previews what binding will attach; no documents are generated at Quote.
-      transactionType: stage, transaction: { type: 'NB', stage: stage === 'Quote' ? 'Bind' : stage },
+      transactionType: stage === 'Quote' ? 'Bind' : stage, transaction: { type: 'NB', stage: stage === 'Quote' ? 'Bind' : stage },
     })
   })
   it('matches generation evaluation for full-domain endorsement conditions and Money premium', () => {

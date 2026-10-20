@@ -661,7 +661,18 @@ const componentSchemas: Record<string, any> = {
       premium: { $ref: '#/components/schemas/PremiumResponse' },
       fullTerm: { type: 'object', additionalProperties: true },
       retroAdjustment: { type: 'object', additionalProperties: true },
-      timeline: { type: 'object', additionalProperties: true }
+      timeline: { type: 'object', additionalProperties: true },
+      endorsementChanges: {
+        type: 'object',
+        description: 'Changed paths and coverage codes, as used for endorsement form selection.',
+        properties: {
+          changedPaths: { type: 'array', items: { type: 'string' } },
+          addedCoverageCodes: { type: 'array', items: { type: 'string' } },
+          removedCoverageCodes: { type: 'array', items: { type: 'string' } },
+          modifiedCoverageCodes: { type: 'array', items: { type: 'string' } }
+        },
+        additionalProperties: true
+      }
     },
     additionalProperties: true
   },

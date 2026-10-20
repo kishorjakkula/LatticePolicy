@@ -1,6 +1,6 @@
 import { asDateOnly } from '../lib/date.utils.js'
 
-// Form transaction scope and jurisdiction decisions shared by the admin/wizard
+// Form transaction scope, jurisdiction and endorsement-change decisions shared by the admin/wizard
 // preview (forms.service.ts) and actual document generation
 // (document-generation.service.ts), so a form never previews one way and
 // attaches another.
@@ -50,6 +50,11 @@ export function formTransactionMatches(configured: unknown, transactionType: str
 }
 
 const USABLE_REGULATORY_STATUSES = new Set(['approved', 'filed'])
+
+/** Approved or Filed (file-and-use): the statuses under which a form may be used in a state. */
+export function isUsableRegulatoryStatus(status: unknown): boolean {
+  return USABLE_REGULATORY_STATUSES.has(String(status ?? '').trim().toLowerCase())
+}
 const OPEN_ENDED = '9999-12-31'
 
 export type FormJurisdictionRow = {
@@ -86,4 +91,102 @@ export function formJurisdictionDecision<T extends FormJurisdictionRow>(
   if (usable) return { attach: true, jurisdiction: usable }
   if (deciding.length) return { attach: false, jurisdiction: null }
   return { attach: !requireApproved, jurisdiction: null }
+}
+
+export type EndorsementChangeType = 'added' | 'removed' | 'modified'
+
+export type EndorsementChangeSet = {
+  changedPaths: string[]
+  addedCoverageCodes: string[]
+  removedCoverageCodes: string[]
+  modifiedCoverageCodes: string[]
+}
+
+export type EndorsementChangeCriteria = {
+  alwaysAttachOnEndorsement?: boolean
+  match?: 'any' | 'all'
+  coverageCodes?: string[]
+  changeTypes?: EndorsementChangeType[]
+  changedPathPatterns?: string[]
+}
+
+function normalizeText(value: unknown): string {
+  return String(value || '').trim()
+}
+
+/** Whether a transaction name is an endorsement, in either the preview or the generation vocabulary. */
+export function isEndorsementTransaction(transactionType: unknown): boolean {
+  return formTransaction(transactionType) === 'endorsement'
+}
+
+const MAX_CHANGE_ENTRIES = 500
+
+function stringList(value: unknown, upperCase: boolean): string[] {
+  if (!Array.isArray(value)) return []
+  const items = value
+    .filter((item) => typeof item === 'string')
+    .slice(0, MAX_CHANGE_ENTRIES)
+    .map((item) => (upperCase ? normalizeText(item).toUpperCase() : normalizeText(item)))
+    .filter(Boolean)
+  return [...new Set(items)].sort()
+}
+
+/**
+ * Reads an endorsement change set supplied by a caller (the form preview
+ * body) into the shape generation builds with buildEndorsementChangeSet.
+ * Anything that is not an object is no change set; non-string entries are
+ * dropped, so a malformed body cannot widen what matches.
+ */
+export function normalizeEndorsementChangeSet(value: unknown): EndorsementChangeSet | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const input = value as Record<string, unknown>
+  return {
+    changedPaths: stringList(input.changedPaths, false),
+    addedCoverageCodes: stringList(input.addedCoverageCodes, true),
+    removedCoverageCodes: stringList(input.removedCoverageCodes, true),
+    modifiedCoverageCodes: stringList(input.modifiedCoverageCodes, true),
+  }
+}
+
+function pathMatches(pattern: string, path: string): boolean {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
+  return new RegExp(`^${escaped}$`).test(path)
+}
+
+/**
+ * Endorsement-change gate for one form on an endorsement. A form attaches
+ * only when its criteria say so: alwaysAttachOnEndorsement, or a coverage
+ * code / change type / changed path in the change set. A form with no
+ * criteria, empty criteria, or no change set to compare against does not
+ * attach (unless it always attaches on endorsement).
+ */
+export function matchesEndorsementChanges(
+  criteria: EndorsementChangeCriteria | null | undefined,
+  changes: EndorsementChangeSet | null | undefined
+): boolean {
+  if (!criteria || typeof criteria !== 'object') return false
+  if (criteria.alwaysAttachOnEndorsement === true) return true
+  if (!changes) return false
+
+  const coverageCodes = (criteria.coverageCodes || []).map((code) => normalizeText(code).toUpperCase()).filter(Boolean)
+  const changeTypes = (criteria.changeTypes || []).filter((type) => ['added', 'removed', 'modified'].includes(type))
+  const pathPatterns = (criteria.changedPathPatterns || []).map(normalizeText).filter(Boolean)
+  if (!coverageCodes.length && !changeTypes.length && !pathPatterns.length) return false
+
+  const changedByType: Record<EndorsementChangeType, string[]> = {
+    added: changes.addedCoverageCodes,
+    removed: changes.removedCoverageCodes,
+    modified: changes.modifiedCoverageCodes,
+  }
+  const changedCoverageCodes = new Set(Object.values(changedByType).flat())
+  const checks: boolean[] = []
+  if (coverageCodes.length && changeTypes.length) {
+    checks.push(changeTypes.some((type) => coverageCodes.some((code) => changedByType[type].includes(code))))
+  } else if (coverageCodes.length) {
+    checks.push(coverageCodes.some((code) => changedCoverageCodes.has(code)))
+  } else if (changeTypes.length) {
+    checks.push(changeTypes.some((type) => changedByType[type].length > 0))
+  }
+  if (pathPatterns.length) checks.push(pathPatterns.some((pattern) => changes.changedPaths.some((path) => pathMatches(pattern, path))))
+  return criteria.match === 'all' ? checks.every(Boolean) : checks.some(Boolean)
 }

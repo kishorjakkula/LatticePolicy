@@ -22,3 +22,57 @@ export function useFormsScopeCatalog() {
   const states: CatalogOption[] = [...stateMap].sort(([a], [b]) => a.localeCompare(b)).map(([code, label]) => ({ code, label: `${code} - ${label}` }))
   return { products, states, error }
 }
+
+/** Scope fields of a `/admin/forms` list summary that the catalog filters read. */
+export type FormScopeSummary = {
+  lineOfBusiness?: string | null
+  hasApplicability?: boolean
+  productCodes?: string[]
+  stateCodes?: string[]
+  requireApprovedJurisdiction?: boolean
+}
+
+const sameCode = (a: unknown, b: string) => String(a || '').trim().toLowerCase() === b
+
+/**
+ * Product filter, mirroring the generator's applicability rules (selectPolicyForms and
+ * isPreviewApplicabilityMatch): explicit product codes match; a form with no active
+ * applicability rows matches by its own line of business; an active row with a blank
+ * product matches by its line of business, or any product when that is blank too.
+ */
+export function formMatchesProductFilter(item: FormScopeSummary, product: string): boolean {
+  const wanted = String(product || '').trim().toLowerCase()
+  if (!wanted) return true
+  if (item.hasApplicability === false) return sameCode(item.lineOfBusiness, wanted)
+  // Like selectPolicyForms, a row attaches only for its own product code.
+  return (item.productCodes || []).some((code) => sameCode(code, wanted))
+}
+
+/**
+ * State filter, mirroring formJurisdictionDecision: a matching or 'ALL' jurisdiction row
+ * keeps the form; a form with no jurisdiction rows applies everywhere unless it requires
+ * an approved jurisdiction.
+ */
+export function formMatchesStateFilter(item: FormScopeSummary, state: string): boolean {
+  const wanted = String(state || '').trim().toLowerCase()
+  if (!wanted) return true
+  const states = item.stateCodes || []
+  if (!states.length) return item.requireApprovedJurisdiction === false
+  return states.some((code) => sameCode(code, wanted) || sameCode(code, 'all'))
+}
+
+export function formMatchesScopeFilter(item: FormScopeSummary, filter: { product: string; state: string }): boolean {
+  return formMatchesProductFilter(item, filter.product) && formMatchesStateFilter(item, filter.state)
+}
+
+/** Catalog list labels that say why an unscoped form appears under a filter. */
+export function formScopeLabels(item: FormScopeSummary): { products: string; states: string } {
+  const products = item.hasApplicability === false
+    ? (item.lineOfBusiness ? `All ${item.lineOfBusiness} products` : 'No product scope')
+    : (item.productCodes || []).join(', ') || 'No product scope'
+  const stateCodes = (item.stateCodes || []).map((code) => (code.toUpperCase() === 'ALL' ? 'All states' : code))
+  const states = stateCodes.length
+    ? stateCodes.join(', ')
+    : item.requireApprovedJurisdiction === false ? 'All states' : 'No state scope'
+  return { products, states }
+}

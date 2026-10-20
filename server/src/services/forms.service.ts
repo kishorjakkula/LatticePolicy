@@ -4,7 +4,14 @@ import { sanitizeInlineFileName } from '../lib/utils.js'
 import { parseValidationTransaction } from '@lattice-policy/rules'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
-import { formJurisdictionDecision, formTransactionMatches } from './form-selection.js'
+import {
+  formJurisdictionDecision,
+  formTransactionMatches,
+  isEndorsementTransaction,
+  matchesEndorsementChanges,
+  normalizeEndorsementChangeSet,
+  type EndorsementChangeSet,
+} from './form-selection.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,6 +21,11 @@ export type FormsPreviewBody = {
   transactionType?: string
   state?: string
   effectiveDate?: string
+  /**
+   * What the endorsement changes, in the shape generation builds with
+   * buildEndorsementChangeSet. Read only for an endorsement preview.
+   */
+  endorsementChanges?: unknown
   [key: string]: unknown
 }
 
@@ -83,7 +95,12 @@ function mapRowsByFormId(rows: any[]): Record<string, any[]> {
 
 export function isPreviewApplicabilityMatch(
   rows: any[],
-  input: { lineOfBusiness: string; productCode: string; transactionType: string }
+  input: {
+    lineOfBusiness: string
+    productCode: string
+    transactionType: string
+    endorsementChanges?: EndorsementChangeSet | null
+  }
 ): boolean {
   // No applicability rows means the form has no declared scoping, so it's treated as
   // matching every submission. This is only safe because previewForm's caller (the
@@ -97,15 +114,23 @@ export function isPreviewApplicabilityMatch(
   // (scoped by productCode, since it has no separate lineOfBusiness input) so a form
   // that shows as "will attach" in this preview never silently fails to attach when
   // the policy actually binds, and vice versa.
-  if (!rows?.length) return true
+  //
+  // On an endorsement a form attaches only when its applicability row's
+  // endorsement_change_criteria match the change set (form-selection.ts), as
+  // in generation. A form with no applicability rows has no criteria, so it
+  // does not attach on an endorsement.
+  const endorsement = isEndorsementTransaction(input.transactionType)
+  if (!rows?.length) return !endorsement
   return rows.some((row) => {
     const lob = String(row.line_of_business || '').trim().toLowerCase()
     const product = String(row.product_code || '').trim().toLowerCase()
     const lobOk = !input.lineOfBusiness || !lob || lob === input.lineOfBusiness
-    const productOk = !input.productCode || !product || product === input.productCode
+    // Like selectPolicyForms, a row applies only to its own product: a blank product never matches.
+    const productOk = !input.productCode || product === input.productCode
     // Same transaction scope rule as generation (form-selection.ts).
     const txOk = !input.transactionType || formTransactionMatches(row.transaction_types, input.transactionType)
-    return row.active !== false && lobOk && productOk && txOk
+    const endorsementOk = !endorsement || matchesEndorsementChanges(row.endorsement_change_criteria, input.endorsementChanges)
+    return row.active !== false && lobOk && productOk && txOk && endorsementOk
   })
 }
 
@@ -225,6 +250,9 @@ export async function previewForm(
   const transactionType = normalizeFormsPreviewTransactionType(body.transactionType)
   const stateCode = normalizeStateCode(body.state)
   const effectiveDate = coerceDateOnly(body.effectiveDate, today())
+  // Without a change set an endorsement preview lists only the forms that
+  // always attach on endorsement, as generation would with no changes.
+  const endorsementChanges = normalizeEndorsementChangeSet(body.endorsementChanges)
 
   const result = await withTenantTx(tenantId, async (innerDb) => {
     const q = toRawQuery(innerDb)
@@ -250,7 +278,7 @@ export async function previewForm(
         [tenantId, formIds]
       ),
       q(
-        `SELECT form_id, line_of_business, product_code, transaction_types, active
+        `SELECT form_id, line_of_business, product_code, transaction_types, endorsement_change_criteria, active
            FROM forms_admin_applicability
           WHERE tenant_id = $1 AND form_id = ANY($2::uuid[]) AND active = true`,
         [tenantId, formIds]
@@ -302,11 +330,13 @@ export async function previewForm(
         !isPreviewApplicabilityMatch(applicabilityRows, {
           lineOfBusiness,
           productCode,
-          transactionType
+          transactionType,
+          endorsementChanges,
         })
       )
         continue
       if (applicabilityRows.length > 0) reasons.push('Applicability matched')
+      if (isEndorsementTransaction(transactionType)) reasons.push('Endorsement change criteria matched')
 
       const decision = evaluateConfiguredFormAttachment(form.metadata, triggersByForm[String(form.form_id)] || [], attachmentContext)
       if (!decision.attach) continue

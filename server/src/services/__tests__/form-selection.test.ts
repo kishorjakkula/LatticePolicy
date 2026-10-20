@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formJurisdictionDecision, formTransactionMatches } from '../form-selection.js'
+import {
+  formJurisdictionDecision,
+  formTransactionMatches,
+  isEndorsementTransaction,
+  matchesEndorsementChanges,
+  normalizeEndorsementChangeSet,
+} from '../form-selection.js'
 
 describe('form transaction scope', () => {
   it.each([
@@ -72,5 +78,53 @@ describe('form jurisdiction gate', () => {
     const dated = { state_code: 'CA', regulatory_status: 'Approved', effective_date: new Date('2026-01-01T00:00:00Z'), sunset_date: new Date('2026-12-31T00:00:00Z') }
     expect(formJurisdictionDecision([dated], 'CA', '2026-11-01', true).attach).toBe(true)
     expect(formJurisdictionDecision([dated], 'CA', '2027-01-15', true).attach).toBe(false)
+  })
+})
+
+describe('endorsement-change rule', () => {
+  const emailOnly = { changedPaths: ['/applicant/email'], addedCoverageCodes: [], removedCoverageCodes: [], modifiedCoverageCodes: [] }
+  const collAdded = { changedPaths: ['/coverages/2'], addedCoverageCodes: ['COLL'], removedCoverageCodes: [], modifiedCoverageCodes: [] }
+  const collRemoved = { changedPaths: ['/coverages/2'], addedCoverageCodes: [], removedCoverageCodes: ['COLL'], modifiedCoverageCodes: [] }
+  const addedColl = { coverageCodes: ['coll'], changeTypes: ['added' as const], match: 'all' as const }
+
+  it('attaches a coverage-scoped form only when that coverage changed the configured way', () => {
+    expect(matchesEndorsementChanges(addedColl, emailOnly)).toBe(false)
+    expect(matchesEndorsementChanges(addedColl, collAdded)).toBe(true)
+    expect(matchesEndorsementChanges(addedColl, collRemoved)).toBe(false)
+  })
+
+  it('does not attach without criteria, with empty criteria, or with no change set', () => {
+    expect(matchesEndorsementChanges(null, collAdded)).toBe(false)
+    expect(matchesEndorsementChanges({}, collAdded)).toBe(false)
+    expect(matchesEndorsementChanges({ coverageCodes: ['  '] }, collAdded)).toBe(false)
+    expect(matchesEndorsementChanges(addedColl, null)).toBe(false)
+    expect(matchesEndorsementChanges({ alwaysAttachOnEndorsement: true }, null)).toBe(true)
+    // only a literal true always attaches
+    expect(matchesEndorsementChanges({ alwaysAttachOnEndorsement: 'true' as any }, emailOnly)).toBe(false)
+  })
+
+  it('matches changed-path patterns segment by segment, treating other regex characters literally', () => {
+    expect(matchesEndorsementChanges({ changedPathPatterns: ['/applicant/*'] }, emailOnly)).toBe(true)
+    expect(matchesEndorsementChanges({ changedPathPatterns: ['/*'] }, emailOnly)).toBe(false)
+    expect(matchesEndorsementChanges({ changedPathPatterns: ['/applicant/.*'] }, emailOnly)).toBe(false)
+    expect(matchesEndorsementChanges({ changedPathPatterns: ['/applicant/email|/x'] }, emailOnly)).toBe(false)
+  })
+
+  it('recognizes endorsements in both the preview and the generation vocabulary', () => {
+    for (const name of ['Endorse', 'Endorsement', 'endorsement', 'ENDORSE']) expect(isEndorsementTransaction(name)).toBe(true)
+    for (const name of ['NB', 'Bind', 'Renewal', '', null, 'endorsement-ish']) expect(isEndorsementTransaction(name)).toBe(false)
+  })
+
+  it('reads a caller-supplied change set defensively', () => {
+    expect(normalizeEndorsementChangeSet(undefined)).toBeNull()
+    expect(normalizeEndorsementChangeSet('COLL')).toBeNull()
+    expect(normalizeEndorsementChangeSet(['COLL'])).toBeNull()
+    expect(normalizeEndorsementChangeSet({})).toEqual({ changedPaths: [], addedCoverageCodes: [], removedCoverageCodes: [], modifiedCoverageCodes: [] })
+    expect(normalizeEndorsementChangeSet({
+      changedPaths: [' /applicant/email ', 7, null, '/applicant/email'],
+      addedCoverageCodes: [' coll ', { code: 'BI' }, ''],
+      removedCoverageCodes: 'PD',
+      modifiedCoverageCodes: ['bi'],
+    })).toEqual({ changedPaths: ['/applicant/email'], addedCoverageCodes: ['COLL'], removedCoverageCodes: [], modifiedCoverageCodes: ['BI'] })
   })
 })
