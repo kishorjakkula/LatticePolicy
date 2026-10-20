@@ -203,6 +203,36 @@ describe('policy document artifact storage and retrieval', () => {
     await closePdfRenderer()
   })
 
+  it.each([
+    'isSet(uw.decision)',
+    'premium.total > 0',
+    "policy.status == 'Issued'",
+    "policy.term.effectiveDate == '2026-07-01'",
+    "isSet(uw.decision) && premium.total > 0 && policy.status == 'Issued' && policy.term.effectiveDate == '2026-07-01'",
+  ])('attaches an Issue-only rule using persisted facts: %s', async condition => {
+    await initDb()
+    const tenantId = 'sample-carrier'
+    await ensureTenant(tenantId, 'Sample Carrier')
+    const run = suffix()
+    const formId = await seedForm(tenantId, `PA-ISSUE-RULE-${run}`, ['internal'])
+    await getDb()!.query("UPDATE forms_admin_forms SET metadata='{\"attachmentRulesVersion\":1}'::jsonb WHERE tenant_id=$1 AND form_id=$2", [tenantId, formId])
+    await getDb()!.query(
+      `INSERT INTO forms_admin_triggers (tenant_id,form_id,trigger_type,condition_expression,active)
+       VALUES ($1,$2,'Expression',$3,true)`,
+      [tenantId, formId, `transaction.stage == 'Issue' && (${condition})`],
+    )
+    const customer = await createCustomer(tenantId, `ISSUE-RULE-${run}`, 'Synthetic Insured')
+    const policy = await createIssuedPolicy(tenantId, customer, `VINRULE${run}`)
+    const attached = await getDb()!.query(
+      "SELECT data, metadata FROM policy_forms WHERE tenant_id=$1 AND policy_id=$2 AND metadata->>'sourceFormId'=$3",
+      [tenantId, policy.policyId, formId],
+    )
+    expect(attached.rows).toHaveLength(1)
+    expect(attached.rows[0].metadata).toMatchObject({ stage: 'Issue', attachmentRulesVersion: 1 })
+    expect(attached.rows[0].metadata.attachmentRuleIds).toHaveLength(1)
+    expect(attached.rows[0].data.metadata.stage).toBe('Issue')
+  })
+
   it('renders and stores a real artifact whose hash matches the retrieved content', async () => {
     await initDb()
     const tenantId = 'sample-carrier'
@@ -240,24 +270,28 @@ describe('policy document artifact storage and retrieval', () => {
     const actualHash = crypto.createHash('sha256').update(contentBuffer).digest('hex')
     expect(actualHash).toBe(hash)
 
-    // A container rebuild can lose a legacy packet file. Recover only exact bytes.
+    // Missing archives fail closed; downloads never reconstruct issued originals.
     const packetFile = path.join(process.env.DOCUMENT_STORAGE_DIR || path.join(os.tmpdir(), 'lattice-policy-documents'), tenantId, `${documentId}.pdf`)
     await fs.unlink(packetFile)
-    const recovered = await authGet(`/api/v1/policies/${policy.policyId}/documents/${documentId}/content`, agentToken, tenantId).expect(200)
-    expect(crypto.createHash('sha256').update(recovered.body).digest('hex')).toBe(hash)
+    await authGet(`/api/v1/policies/${policy.policyId}/documents/${documentId}/content`, agentToken, tenantId).expect(409)
+    await fs.writeFile(packetFile, contentBuffer)
+    await getDb()!.query("UPDATE documents SET integrity_status='VERIFIED' WHERE tenant_id=$1 AND document_id=$2", [tenantId, documentId])
     await fs.writeFile(packetFile, 'corrupted content')
     await authGet(`/api/v1/policies/${policy.policyId}/documents/${documentId}/content`, agentToken, tenantId).expect(409)
     await fs.writeFile(packetFile, contentBuffer)
+    await getDb()!.query("UPDATE documents SET integrity_status='VERIFIED' WHERE tenant_id=$1 AND document_id=$2", [tenantId, documentId])
 
     const worksheet = listRes.body.data.documents.find((doc: any) => doc.type === 'RATING_WORKSHEET')
+    expect(worksheet.versionId).toBeTruthy()
+    const worksheetDetails = await authGet(`/api/v1/policies/${policy.policyId}/versions/${worksheet.versionId}/details`, agentToken, tenantId).expect(200)
+    expect(worksheetDetails.body.data.documents.some((doc: any) => doc.documentId === worksheet.documentId)).toBe(true)
     expect(worksheet.integrityStatus).toBe('VERIFIED')
     const worksheetUrl = `/api/v1/policies/${policy.policyId}/documents/${worksheet.documentId}/content`
     const worksheetContent = await authGet(worksheetUrl, agentToken, tenantId).expect(200)
     expect(worksheetContent.text).toContain('Rating worksheet')
     // Model the old snapshot-only worksheet record without deleting rating data.
     await getDb()!.query("UPDATE documents SET metadata=metadata - 'artifact', hash='rating:legacy', integrity_status='UNVERIFIED' WHERE tenant_id=$1 AND document_id=$2", [tenantId, worksheet.documentId])
-    const repairedWorksheet = await authGet(worksheetUrl, agentToken, tenantId).expect(200)
-    expect(repairedWorksheet.text).toContain('Rating worksheet')
+    await authGet(worksheetUrl, agentToken, tenantId).expect(409)
 
     await authPost(
       `/api/v1/policies/${policy.policyId}/documents/${documentId}/regenerate`,

@@ -215,11 +215,13 @@ export async function issuePolicy(
     ['Issued', tenantId, policyId, 'NB']
   )
   const txnRes = await q(
-    `SELECT pt.transaction_id, pt.metadata,
-            (SELECT pv.version_id FROM policy_versions pv
-              WHERE pv.tenant_id=pt.tenant_id AND pv.transaction_id=pt.transaction_id
-              ORDER BY pv.processed_at DESC LIMIT 1) AS version_id
+    `SELECT pt.transaction_id, pt.metadata, pt.uw, pv.version_id, pv.override_reason
        FROM policy_transactions pt
+       LEFT JOIN LATERAL (
+         SELECT version_id, override_reason FROM policy_versions
+          WHERE tenant_id=pt.tenant_id AND transaction_id=pt.transaction_id
+          ORDER BY processed_at DESC LIMIT 1
+       ) pv ON true
       WHERE pt.tenant_id = $1 AND pt.policy_id = $2 AND pt.type = 'NB'
       ORDER BY pt.created_at DESC
       LIMIT 1`,
@@ -242,6 +244,9 @@ export async function issuePolicy(
       versionId: txnRes.rows[0].version_id || null,
       generatedAt: issuedAt,
       inputSnapshot: payload,
+      premium: policyRow.premium_summary,
+      policy: { status: 'Issued', termEffectiveDate: coerceDateOnly(policyRow.term_effective_date), termExpirationDate: coerceDateOnly(policyRow.term_expiration_date) },
+      uw: { decision: txnRes.rows[0].uw?.decision, overrideReason: txnRes.rows[0].override_reason || undefined },
       generatedBy: actor?.id || null,
       correlationId: transactionNumber || issueTransactionId,
     }
@@ -434,6 +439,8 @@ export async function cancelPolicy(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: txPayload,
+    premium: version.premium,
+    policy: { status: 'Cancelled', priorStatus: policyRow.status, termEffectiveDate: termEffective, termExpirationDate: termExpiration },
     requiredFormCodes: complianceRule?.requiredFormCodes || [],
     requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     generatedBy: actor?.id || null,
@@ -698,6 +705,8 @@ export async function reinstatePolicy(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: txPayload,
+    premium: version.premium,
+    policy: { status: 'Issued', termEffectiveDate: termEffective, termExpirationDate: termExpiration },
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -982,6 +991,9 @@ export async function renewPolicy(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: payload,
+    premium: prem,
+    policy: { status: policyRow.status, termEffectiveDate: nextEff, termExpirationDate: nextExp },
+    uw: { decision: uw.decision, overrideReason: overrideReason || undefined },
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -1318,6 +1330,9 @@ export async function rewritePolicy(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: payload,
+    premium: prem,
+    policy: { status: 'Issued', termEffectiveDate: nextEff, termExpirationDate: nextExp },
+    uw: { decision: uw.decision, overrideReason: overrideReason || undefined },
     generatedBy: actor?.id || null,
     correlationId: transactionNumber,
   })
@@ -1576,6 +1591,8 @@ export async function nonRenewPolicy(
     versionId,
     generatedAt: processedAt,
     inputSnapshot: ctx.latestPayload,
+    premium: simplePremium(0),
+    policy: { status: policyRow.status, termEffectiveDate: policyTermEffective(policyRow), termExpirationDate: termExpiration },
     requiredFormCodes: complianceRule?.requiredFormCodes || [],
     requiredDeliveryMethods: complianceRule?.requiredDeliveryMethods || [],
     generatedBy: actor?.id || null,

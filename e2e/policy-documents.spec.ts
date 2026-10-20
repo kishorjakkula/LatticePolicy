@@ -28,10 +28,15 @@ test('each listed policy document has a distinct stage label and opens real cont
     await expect(row).toHaveCount(1)
     const downloadCount = downloads.length
     const popupPromise = context.waitForEvent('page')
-    const responsePromise = page.waitForResponse((response) => response.request().method() === 'GET' && response.url().endsWith(`/documents/${doc.documentId}/content`))
+    const responsePromise = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/documents/${doc.documentId}/content`))
     await row.getByRole('button', { name: 'Open', exact: true }).click()
     const [popup, response] = await Promise.all([popupPromise, responsePromise])
     expect(response.status()).toBe(200)
+    const contentUrl = new URL(response.url())
+    expect(doc.versionId, 'the policy index retains each document version').toBeTruthy()
+    expect(doc.transactionId, 'the policy index retains each document transaction').toBeTruthy()
+    expect(contentUrl.searchParams.get('versionId')).toBe(doc.versionId)
+    expect(contentUrl.searchParams.get('transactionId')).toBe(doc.transactionId)
     await expect.poll(() => page.evaluate((i) => (window as any).__openedDocuments[i]?.size || 0, index)).toBeGreaterThan(100)
     const opened = await page.evaluate(async (i) => {
       const blob = (window as any).__openedDocuments[i] as Blob

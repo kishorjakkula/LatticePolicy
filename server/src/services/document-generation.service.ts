@@ -4,6 +4,15 @@ import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { logger } from '../logger.js'
+import { asDateOnly } from '../lib/date.utils.js'
+import { pinnedFormTriggerRules } from '@lattice-policy/rules'
+import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
+import {
+  formJurisdictionDecision,
+  formTransactionMatches,
+  matchesEndorsementChanges,
+  type EndorsementChangeSet,
+} from './form-selection.js'
 import {
   getDocumentStorageAdapter,
   renderAndStoreDocument,
@@ -17,6 +26,9 @@ import {
   sha256Bytes,
   validateDocxPlaceholderTokens,
 } from './document-template-variables.js'
+
+// The endorsement-change types live with the shared selection rules.
+export type { EndorsementChangeCriteria, EndorsementChangeSet, EndorsementChangeType } from './form-selection.js'
 
 export type PolicyDocumentTransactionType =
   | 'NB'
@@ -44,27 +56,13 @@ export type PolicyDocumentContext = {
   versionId?: string | null
   generatedAt?: string | null
   inputSnapshot?: unknown
+  transaction?: Record<string, unknown>
+  policy?: Record<string, unknown>
+  uw?: Record<string, unknown>
   /** Premium of the transaction, for documents generated before its policy version is saved. */
   premium?: { total?: { amount?: number; currency?: string } | null; fees?: { amount?: number } | null; taxes?: { amount?: number } | null } | null
   requiredFormCodes?: string[]
   requiredDeliveryMethods?: string[]
-}
-
-export type EndorsementChangeType = 'added' | 'removed' | 'modified'
-
-export type EndorsementChangeSet = {
-  changedPaths: string[]
-  addedCoverageCodes: string[]
-  removedCoverageCodes: string[]
-  modifiedCoverageCodes: string[]
-}
-
-export type EndorsementChangeCriteria = {
-  alwaysAttachOnEndorsement?: boolean
-  match?: 'any' | 'all'
-  coverageCodes?: string[]
-  changeTypes?: EndorsementChangeType[]
-  changedPathPatterns?: string[]
 }
 
 export type SelectedPolicyForm = {
@@ -126,13 +124,6 @@ function normalizeTransactionType(type: string): string {
   return normalized
 }
 
-function matchesTransactionType(transactionTypes: unknown, transactionType: string): boolean {
-  const normalized = normalizeTransactionType(transactionType)
-  const values = Array.isArray(transactionTypes) ? transactionTypes : []
-  if (!values.length) return true
-  return values.some((value) => normalizeTransactionType(String(value)) === normalized)
-}
-
 function isCustomerSafe(visibility: string[]): boolean {
   return visibility.map((item) => item.toLowerCase()).some((item) => CUSTOMER_VISIBILITY.has(item))
 }
@@ -178,42 +169,6 @@ export function buildEndorsementChangeSet(
     removedCoverageCodes: removedCoverageCodes.sort(),
     modifiedCoverageCodes: modifiedCoverageCodes.sort(),
   }
-}
-
-function pathMatches(pattern: string, path: string): boolean {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]+')
-  return new RegExp(`^${escaped}$`).test(path)
-}
-
-export function matchesEndorsementChanges(
-  criteria: EndorsementChangeCriteria | null | undefined,
-  changes: EndorsementChangeSet | null | undefined
-): boolean {
-  if (!criteria || typeof criteria !== 'object') return false
-  if (criteria.alwaysAttachOnEndorsement === true) return true
-  if (!changes) return false
-
-  const coverageCodes = (criteria.coverageCodes || []).map((code) => normalizeText(code).toUpperCase()).filter(Boolean)
-  const changeTypes = (criteria.changeTypes || []).filter((type) => ['added', 'removed', 'modified'].includes(type))
-  const pathPatterns = (criteria.changedPathPatterns || []).map(normalizeText).filter(Boolean)
-  if (!coverageCodes.length && !changeTypes.length && !pathPatterns.length) return false
-
-  const changedByType: Record<EndorsementChangeType, string[]> = {
-    added: changes.addedCoverageCodes,
-    removed: changes.removedCoverageCodes,
-    modified: changes.modifiedCoverageCodes,
-  }
-  const changedCoverageCodes = new Set(Object.values(changedByType).flat())
-  const checks: boolean[] = []
-  if (coverageCodes.length && changeTypes.length) {
-    checks.push(changeTypes.some((type) => coverageCodes.some((code) => changedByType[type].includes(code))))
-  } else if (coverageCodes.length) {
-    checks.push(coverageCodes.some((code) => changedCoverageCodes.has(code)))
-  } else if (changeTypes.length) {
-    checks.push(changeTypes.some((type) => changedByType[type].length > 0))
-  }
-  if (pathPatterns.length) checks.push(pathPatterns.some((pattern) => changes.changedPaths.some((path) => pathMatches(pattern, path))))
-  return criteria.match === 'all' ? checks.every(Boolean) : checks.some(Boolean)
 }
 
 function buildPacketDocument(context: PolicyDocumentContext, forms: SelectedPolicyForm[]): GeneratedPolicyDocument[] {
@@ -359,7 +314,14 @@ export async function selectPolicyForms(
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
             a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
-            d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata
+            d.visibility, d.delivery_methods, f.metadata, f.require_approved_jurisdiction,
+            (SELECT jsonb_agg(jsonb_build_object('state_code', j.state_code, 'regulatory_status', j.regulatory_status,
+                                                 'effective_date', j.effective_date, 'sunset_date', j.sunset_date))
+               FROM forms_admin_jurisdictions j
+              WHERE j.tenant_id = f.tenant_id AND j.form_id = f.form_id) AS jurisdictions,
+            (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.priority, t.trigger_id)
+               FROM forms_admin_triggers t
+              WHERE t.tenant_id=f.tenant_id AND t.form_id=f.form_id AND t.active=true) AS attachment_triggers
        FROM forms_admin_forms f
        LEFT JOIN forms_admin_applicability a
          ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id AND a.active = true
@@ -373,12 +335,6 @@ export async function selectPolicyForms(
          ON o.tenant_id = f.tenant_id AND o.form_id = f.form_id AND o.active = true
        LEFT JOIN forms_admin_delivery d
          ON d.tenant_id = f.tenant_id AND d.form_id = f.form_id AND d.active = true
-       LEFT JOIN forms_admin_jurisdictions j
-         ON j.tenant_id = f.tenant_id
-        AND j.form_id = f.form_id
-        AND ($3::text = '' OR upper(j.state_code) = $3)
-        AND j.effective_date <= $4::date
-        AND (j.sunset_date IS NULL OR j.sunset_date >= $4::date)
       WHERE f.tenant_id = $1
         AND f.active = true
         AND lower(f.workflow_status) IN ('approved', 'active', 'filed')
@@ -387,18 +343,37 @@ export async function selectPolicyForms(
           OR (has_app.form_id IS NULL AND lower(f.line_of_business) = lower($2))
         )
       ORDER BY COALESCE(o.sort_order, 100), f.form_number`,
-    [context.tenantId, productCode, state, effectiveDate]
+    [context.tenantId, productCode]
   )
 
   const forms: SelectedPolicyForm[] = []
   const seen = new Set<string>()
+  // Packet grouping label. The rule context only keeps it for new business.
+  const documentStage = context.transactionType === 'NB' ? 'Bind' : 'Issue'
+  // One rule context per transaction, built only if an opted-in form needs it.
+  const attachmentContext = lazyFormAttachmentContext({
+    payload: context.inputSnapshot,
+    productCode, state, effectiveDate, transactionType: context.transactionType,
+    transaction: { ...(context.transaction || {}), id: context.transactionId, number: context.transactionNumber, effectiveDate, stage: documentStage },
+    policy: { ...(context.policy || {}), policyNumber: context.policyNumber, policyId: context.policyId, versionId: context.versionId },
+    premium: context.premium,
+    uw: context.uw,
+  })
+  // The joins can return a row per applicability/output/delivery row; a form's rules are evaluated once.
+  const adminDecisions = new Map<string, ReturnType<typeof evaluateConfiguredFormAttachment>>()
   for (const row of adminRows.rows as any[]) {
-    if (!matchesTransactionType(row.transaction_types, context.transactionType)) continue
+    if (!formTransactionMatches(row.transaction_types, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
         !matchesEndorsementChanges(row.endorsement_change_criteria, context.endorsementChanges)) continue
-    if (state && row.state_code && !['approved', 'active', 'filed'].includes(String(row.regulatory_status || '').toLowerCase())) continue
+    if (!formJurisdictionDecision(row.jurisdictions, state, asDateOnly(effectiveDate) || '', row.require_approved_jurisdiction === true).attach) continue
     const code = normalizeText(row.form_number)
     if (!code || seen.has(`admin:${row.form_id}`)) continue
+    let attachment = adminDecisions.get(String(row.form_id))
+    if (!attachment) {
+      attachment = evaluateConfiguredFormAttachment(row.metadata, row.attachment_triggers || [], attachmentContext)
+      adminDecisions.set(String(row.form_id), attachment)
+    }
+    if (!attachment.attach) continue
     const visibility = Array.isArray(row.visibility) && row.visibility.length ? row.visibility.map(String) : ['internal']
     seen.add(`admin:${row.form_id}`)
     forms.push({
@@ -413,6 +388,7 @@ export async function selectPolicyForms(
       customerSafe: isCustomerSafe(visibility),
       sortOrder: Number(row.sort_order || 100),
       metadata: {
+        stage: documentStage,
         source: 'forms_admin',
         sourceFormId: row.form_id || null,
         packetPlacement: row.packet_placement || 'End',
@@ -420,6 +396,9 @@ export async function selectPolicyForms(
         deliveryMethods: Array.isArray(row.delivery_methods) ? row.delivery_methods.map(String) : [],
         formMetadata: row.metadata || {},
         endorsementChangeCriteria: row.endorsement_change_criteria || null,
+        attachmentRuleIds: attachment.matchedRuleIds,
+        attachmentRulesVersion: row.metadata?.attachmentRulesVersion || null,
+        attachmentRules: row.metadata?.attachmentRulesVersion === 1 ? pinnedFormTriggerRules(row.attachment_triggers) : [],
       },
     })
   }
@@ -436,13 +415,15 @@ export async function selectPolicyForms(
 
   for (const row of catalogRows.rows as any[]) {
     const applicability = row.applicability || {}
-    if (!matchesTransactionType(applicability.transactionTypes || applicability.transactions, context.transactionType)) continue
+    if (!formTransactionMatches(applicability.transactionTypes || applicability.transactions, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
         !matchesEndorsementChanges(applicability.endorsementChanges, context.endorsementChanges)) continue
     const formState = normalizeText(row.jurisdiction?.state || row.jurisdiction?.region || applicability.state).toUpperCase()
     if (state && formState && formState !== state) continue
     const code = normalizeText(row.code)
     if (!code || seen.has(`catalog:${row.form_id}`)) continue
+    const catalogAttachment = evaluateConfiguredFormAttachment(applicability, applicability.attachmentRules || [], attachmentContext)
+    if (!catalogAttachment.attach) continue
     const visibility = Array.isArray(applicability.visibility) && applicability.visibility.length
       ? applicability.visibility.map(String)
       : ['internal']
@@ -459,9 +440,12 @@ export async function selectPolicyForms(
       customerSafe: isCustomerSafe(visibility),
       sortOrder: Number(applicability.sortOrder || 100),
       metadata: {
+        stage: documentStage,
         source: 'forms_catalog',
         render: row.render || {},
         endorsementChangeCriteria: applicability.endorsementChanges || null,
+        attachmentRuleIds: catalogAttachment.matchedRuleIds,
+        attachmentRules: applicability.attachmentRulesVersion === 1 ? pinnedFormTriggerRules(applicability.attachmentRules) : [],
       },
     })
   }

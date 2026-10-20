@@ -1,6 +1,17 @@
 import { toRawQuery, withTenantTx, type DrizzleDB } from '../db.js'
 import { today, coerceDateOnly, asDateOnly } from '../lib/date.utils.js'
 import { sanitizeInlineFileName } from '../lib/utils.js'
+import { parseValidationTransaction } from '@lattice-policy/rules'
+import { BadRequestError } from '../errors/domain.errors.js'
+import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
+import {
+  formJurisdictionDecision,
+  formTransactionMatches,
+  isEndorsementTransaction,
+  matchesEndorsementChanges,
+  normalizeEndorsementChangeSet,
+  type EndorsementChangeSet,
+} from './form-selection.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -10,6 +21,11 @@ export type FormsPreviewBody = {
   transactionType?: string
   state?: string
   effectiveDate?: string
+  /**
+   * What the endorsement changes, in the shape generation builds with
+   * buildEndorsementChangeSet. Read only for an endorsement preview.
+   */
+  endorsementChanges?: unknown
   [key: string]: unknown
 }
 
@@ -35,18 +51,6 @@ export type FormDocumentData = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const FORMS_PREVIEW_DEFAULT_FUTURE_DATE = '9999-12-31'
-const FORMS_PREVIEW_TRANSACTION_TYPES = new Set([
-  'Quote',
-  'Bind',
-  'Issue',
-  'Endorsement',
-  'Renewal',
-  'Cancellation',
-  'Reinstatement',
-  'Rewrite'
-])
-
 function normalizeFormsPreviewLabel(value: unknown): string {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
@@ -66,7 +70,12 @@ function normalizeFormsPreviewTransactionType(value: unknown): string {
   if (raw === 'cancellation' || raw === 'cancel') return 'Cancellation'
   if (raw === 'reinstatement' || raw === 'reinstate') return 'Reinstatement'
   if (raw === 'rewrite') return 'Rewrite'
-  return ''
+  if (['nonrenewal', 'non-renewal', 'non_renewal', 'non renewal', 'nonrenew', 'non-renew'].includes(raw)) return 'NonRenewal'
+  // Other new-business names the rules engine accepts (NB, new_business,
+  // QuoteBind) keep the unfiltered preview; anything unknown is rejected
+  // rather than previewed as new business.
+  if (parseValidationTransaction(raw)) return ''
+  throw new BadRequestError('INVALID_INPUT', 'Unknown transaction type for form preview.')
 }
 
 function normalizeStateCode(value: unknown): string {
@@ -84,35 +93,14 @@ function mapRowsByFormId(rows: any[]): Record<string, any[]> {
   return out
 }
 
-function pickMatchingPreviewJurisdiction(
-  rows: any[],
-  stateCode: string,
-  effectiveDate: string
-): any | null {
-  if (!rows?.length) return null
-  const sorted = [...rows].sort((a, b) => {
-    const aState = String(a.state_code || '').toUpperCase()
-    const bState = String(b.state_code || '').toUpperCase()
-    const aExact = stateCode && aState === stateCode ? 1 : 0
-    const bExact = stateCode && bState === stateCode ? 1 : 0
-    if (aExact !== bExact) return bExact - aExact
-    return String(a.effective_date || '').localeCompare(String(b.effective_date || ''))
-  })
-  for (const row of sorted) {
-    if (String(row.regulatory_status || '') !== 'Approved') continue
-    const rowState = String(row.state_code || '').toUpperCase()
-    if (stateCode && rowState !== stateCode && rowState !== 'ALL') continue
-    const start = asDateOnly(row.effective_date)
-    const end = asDateOnly(row.sunset_date) || FORMS_PREVIEW_DEFAULT_FUTURE_DATE
-    if (!start) continue
-    if (start <= effectiveDate && effectiveDate <= end) return row
-  }
-  return null
-}
-
 export function isPreviewApplicabilityMatch(
   rows: any[],
-  input: { lineOfBusiness: string; productCode: string; transactionType: string }
+  input: {
+    lineOfBusiness: string
+    productCode: string
+    transactionType: string
+    endorsementChanges?: EndorsementChangeSet | null
+  }
 ): boolean {
   // No applicability rows means the form has no declared scoping, so it's treated as
   // matching every submission. This is only safe because previewForm's caller (the
@@ -126,23 +114,23 @@ export function isPreviewApplicabilityMatch(
   // (scoped by productCode, since it has no separate lineOfBusiness input) so a form
   // that shows as "will attach" in this preview never silently fails to attach when
   // the policy actually binds, and vice versa.
-  if (!rows?.length) return true
+  //
+  // On an endorsement a form attaches only when its applicability row's
+  // endorsement_change_criteria match the change set (form-selection.ts), as
+  // in generation. A form with no applicability rows has no criteria, so it
+  // does not attach on an endorsement.
+  const endorsement = isEndorsementTransaction(input.transactionType)
+  if (!rows?.length) return !endorsement
   return rows.some((row) => {
     const lob = String(row.line_of_business || '').trim().toLowerCase()
     const product = String(row.product_code || '').trim().toLowerCase()
-    const txValues = Array.isArray(row.transaction_types)
-      ? row.transaction_types.filter(Boolean)
-      : []
-    const normalizedTxValues = txValues
-      .map((item: any) => String(item || '').trim())
-      .filter((item: string) => FORMS_PREVIEW_TRANSACTION_TYPES.has(item))
     const lobOk = !input.lineOfBusiness || !lob || lob === input.lineOfBusiness
-    const productOk = !input.productCode || !product || product === input.productCode
-    const txOk =
-      !input.transactionType ||
-      normalizedTxValues.length === 0 ||
-      normalizedTxValues.includes(input.transactionType)
-    return row.active !== false && lobOk && productOk && txOk
+    // Like selectPolicyForms, a row applies only to its own product: a blank product never matches.
+    const productOk = !input.productCode || product === input.productCode
+    // Same transaction scope rule as generation (form-selection.ts).
+    const txOk = !input.transactionType || formTransactionMatches(row.transaction_types, input.transactionType)
+    const endorsementOk = !endorsement || matchesEndorsementChanges(row.endorsement_change_criteria, input.endorsementChanges)
+    return row.active !== false && lobOk && productOk && txOk && endorsementOk
   })
 }
 
@@ -254,31 +242,35 @@ export { sanitizeInlineFileName }
 export async function previewForm(
   db: DrizzleDB,
   tenantId: string,
-  body: FormsPreviewBody
+  body: FormsPreviewBody,
+  options: { formId?: string; includeDraft?: boolean } = {},
 ): Promise<FormPreviewItem[]> {
   const lineOfBusiness = normalizeFormsPreviewLabel(body.lineOfBusiness)
   const productCode = normalizeFormsPreviewProductCode(body.productCode)
   const transactionType = normalizeFormsPreviewTransactionType(body.transactionType)
   const stateCode = normalizeStateCode(body.state)
   const effectiveDate = coerceDateOnly(body.effectiveDate, today())
+  // Without a change set an endorsement preview lists only the forms that
+  // always attach on endorsement, as generation would with no changes.
+  const endorsementChanges = normalizeEndorsementChangeSet(body.endorsementChanges)
 
   const result = await withTenantTx(tenantId, async (innerDb) => {
     const q = toRawQuery(innerDb)
     const formsRes = await q(
       `SELECT form_id, carrier_code, authority, form_number, form_title, edition_date,
-              line_of_business, require_approved_jurisdiction
+              line_of_business, require_approved_jurisdiction, metadata
          FROM forms_admin_forms
         WHERE tenant_id = $1
-          AND active = true
-          AND workflow_status = 'Approved'
+          AND ($2::uuid IS NULL OR form_id=$2::uuid)
+          AND (($3::boolean AND workflow_status IN ('Draft','Reviewed','Approved')) OR (active = true AND workflow_status = 'Approved'))
         ORDER BY updated_at DESC`,
-      [tenantId]
+      [tenantId, options.formId || null, Boolean(options.includeDraft && options.formId)]
     )
     const forms = formsRes.rows || []
     if (!forms.length) return []
 
     const formIds = forms.map((row: any) => row.form_id)
-    const [jurisdictionsRes, applicabilityRes, outputRes] = await Promise.all([
+    const [jurisdictionsRes, applicabilityRes, outputRes, triggersRes] = await Promise.all([
       q(
         `SELECT form_id, state_code, regulatory_status, effective_date, sunset_date
            FROM forms_admin_jurisdictions
@@ -286,7 +278,7 @@ export async function previewForm(
         [tenantId, formIds]
       ),
       q(
-        `SELECT form_id, line_of_business, product_code, transaction_types, active
+        `SELECT form_id, line_of_business, product_code, transaction_types, endorsement_change_criteria, active
            FROM forms_admin_applicability
           WHERE tenant_id = $1 AND form_id = ANY($2::uuid[]) AND active = true`,
         [tenantId, formIds]
@@ -296,12 +288,24 @@ export async function previewForm(
            FROM forms_admin_output
           WHERE tenant_id = $1 AND form_id = ANY($2::uuid[])`,
         [tenantId, formIds]
+      ),
+      q(
+        `SELECT * FROM forms_admin_triggers
+          WHERE tenant_id=$1 AND form_id=ANY($2::uuid[]) AND active=true
+          ORDER BY priority, trigger_id`,
+        [tenantId, formIds]
       )
     ])
 
     const jurisdictionsByForm = mapRowsByFormId(jurisdictionsRes.rows || [])
     const applicabilityByForm = mapRowsByFormId(applicabilityRes.rows || [])
     const outputByForm = mapRowsByFormId(outputRes.rows || [])
+    const triggersByForm = mapRowsByFormId(triggersRes.rows || [])
+    const attachmentContext = lazyFormAttachmentContext({
+      ...body,
+      payload: body.payload || body,
+      productCode, state: stateCode, effectiveDate, transactionType,
+    })
 
     const attached: FormPreviewItem[] = []
     for (const form of forms) {
@@ -309,14 +313,16 @@ export async function previewForm(
       if (lineOfBusiness && String(form.line_of_business || '') !== lineOfBusiness) continue
 
       const jurisdictionRows = jurisdictionsByForm[String(form.form_id)] || []
-      const matchedJurisdiction = pickMatchingPreviewJurisdiction(
+      // Same jurisdiction gate as generation (form-selection.ts).
+      const { attach: jurisdictionAllows, jurisdiction: matchedJurisdiction } = formJurisdictionDecision(
         jurisdictionRows,
         stateCode,
-        effectiveDate
+        effectiveDate,
+        form.require_approved_jurisdiction === true
       )
-      if (form.require_approved_jurisdiction && !matchedJurisdiction) continue
+      if (!jurisdictionAllows) continue
       if (matchedJurisdiction) {
-        reasons.push(`Jurisdiction ${matchedJurisdiction.state_code} approved`)
+        reasons.push(`Jurisdiction ${matchedJurisdiction.state_code} ${String(matchedJurisdiction.regulatory_status || 'approved').toLowerCase()}`)
       }
 
       const applicabilityRows = applicabilityByForm[String(form.form_id)] || []
@@ -324,11 +330,17 @@ export async function previewForm(
         !isPreviewApplicabilityMatch(applicabilityRows, {
           lineOfBusiness,
           productCode,
-          transactionType
+          transactionType,
+          endorsementChanges,
         })
       )
         continue
       if (applicabilityRows.length > 0) reasons.push('Applicability matched')
+      if (isEndorsementTransaction(transactionType)) reasons.push('Endorsement change criteria matched')
+
+      const decision = evaluateConfiguredFormAttachment(form.metadata, triggersByForm[String(form.form_id)] || [], attachmentContext)
+      if (!decision.attach) continue
+      reasons.push(decision.reason)
 
       const outputRow = (outputByForm[String(form.form_id)] || [])[0]
       attached.push({

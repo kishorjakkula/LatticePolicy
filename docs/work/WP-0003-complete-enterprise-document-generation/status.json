@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "id": "WP-0003",
+  "title": "Complete enterprise document generation readiness for PDF Word and Excel, resuming the existing asynchronous foundation ",
+  "track": "major",
+  "trackReason": "Filed documents, customer data, tenant boundaries, migrations and cross-module deployment require the major track",
+  "state": "in-progress",
+  "createdAt": "2026-10-19T00:10:30.789Z",
+  "stages": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "writes": "status.json",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "business-analyst",
+      "name": "Business Analyst",
+      "writes": "01-requirements.md",
+      "gateAfter": "A",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "software-architect",
+      "name": "Software Architect",
+      "writes": "02-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "ui-designer",
+      "name": "UI/UX Designer",
+      "writes": "03-ui-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 2
+    },
+    {
+      "id": "test-designer",
+      "name": "Test Designer",
+      "writes": "04-test-design.md",
+      "gateAfter": "B",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "developer",
+      "name": "Developer",
+      "writes": "05-implementation.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "unit-test",
+      "name": "Unit Test",
+      "writes": "06-unit-tests.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "writes": "07-code-review.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "security-compliance",
+      "name": "Security and Compliance",
+      "writes": "08-security-compliance.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "automation-test",
+      "name": "Automation Test",
+      "writes": "09-automation-tests.md",
+      "gateAfter": "C",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "writes": "10-release.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "e2e-test",
+      "name": "End-to-End Test",
+      "writes": "11-e2e-results.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "business-validation",
+      "name": "Business Validation",
+      "writes": "12-business-validation.md",
+      "gateAfter": "D",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Knowledge Curator",
+      "writes": "13-lessons.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "A",
+      "approvedBy": "Kishor Jakkula",
+      "approvedAt": "2026-10-19",
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": "Yes Approve."
+    },
+    {
+      "gate": "B",
+      "approvedBy": "Kishor Jakkula",
+      "approvedAt": "2026-10-19",
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": "it looks good, implement it and do the good amount of testing, attachment rule it should able access all the fields and values of the application so based on the those paramenters also form will attach."
+    },
+    {
+      "gate": "C",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    },
+    {
+      "gate": "D",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-19T00:10:30.789Z",
+      "event": "started on the major track (Filed documents, customer data, tenant boundaries, migrations and cross-module deployment require the major track)"
+    },
+    {
+      "at": "2026-10-19T00:12:09.477Z",
+      "event": "Business Analyst completed"
+    },
+    {
+      "at": "2026-10-19T00:12:53.658Z",
+      "event": "Gate A approved by Kishor Jakkula: \"Yes Approve.\""
+    },
+    {
+      "at": "2026-10-19T00:15:15.010Z",
+      "event": "Software Architect completed"
+    },
+    {
+      "at": "2026-10-19T00:16:21.687Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-19T00:17:37.343Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-19T00:19:47.810Z",
+      "event": "Gate B approved by Kishor Jakkula: \"Aproove, As part of the UI design provide the mockup.\""
+    },
+    {
+      "at": "2026-10-19T00:40:58.177Z",
+      "event": "returned to UI/UX Designer: Product owner requested explicit existing-policy Documents navigation and Administration form-edition management in the mockup; revise UI and regression checks before renewed design approval. (Gate B reopened)"
+    },
+    {
+      "at": "2026-10-19T00:44:07.102Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-19T00:44:07.244Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-19T00:47:46.297Z",
+      "event": "returned to UI/UX Designer: Product owner clarified that documents belong inside each existing transaction Forms & Documents wizard step, not a new policy-level Documents tab. Review actual PolicyViewPage and QuoteWizard and embed design in that flow."
+    },
+    {
+      "at": "2026-10-19T00:51:20.274Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-19T00:51:20.504Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-19T01:11:17.145Z",
+      "event": "Gate B approved by Kishor Jakkula: \"it looks good, implement it and do the good amount of testing, attachment rule it should able access all the fields and values of the application so based on the those paramenters also form will attach.\""
+    }
+  ]
+}

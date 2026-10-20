@@ -1,11 +1,16 @@
 import type { Request } from 'express'
 import { Router } from 'express'
-import { getDb, withTenantTx, toRawQuery } from '../db.js'
+import { getDb, withTenantTx, toRawQuery, type DrizzleDB } from '../db.js'
 import { v4 as uuidv4 } from '../uuid.js'
 import { hasPermission } from '../auth.js'
 import { buildCacheKey, cacheDeletePrefix } from '../cache.js'
 import { asDateOnly as _asDateOnly } from '../lib/date.utils.js'
 import { routeParam, sanitizeInlineFileName } from '../lib/utils.js'
+import { buildFormAttachmentContext, evaluateFormTriggers, validateFormTriggerDefinition } from '@lattice-policy/rules'
+import { formAttachmentFields } from '../services/form-attachment.service.js'
+import { isUsableRegulatoryStatus } from '../services/form-selection.js'
+import { previewForm } from '../services/forms.service.js'
+import { AppError } from '../errors/domain.errors.js'
 import {
   DOCUMENT_TEMPLATE_VARIABLES,
   DOCX_TEMPLATE_MIME_TYPE,
@@ -142,7 +147,14 @@ formsAdminRoutes.get('/', async (req, res) => {
                 ) AS has_approved_jurisdiction,
                 (SELECT COUNT(*)::int FROM forms_admin_jurisdictions j WHERE j.tenant_id = f.tenant_id AND j.form_id = f.form_id) AS jurisdiction_count,
                 (SELECT COUNT(*)::int FROM forms_admin_applicability a WHERE a.tenant_id = f.tenant_id AND a.form_id = f.form_id) AS applicability_count,
-                (SELECT COUNT(*)::int FROM forms_admin_triggers t WHERE t.tenant_id = f.tenant_id AND t.form_id = f.form_id) AS trigger_count
+                (SELECT COUNT(*)::int FROM forms_admin_triggers t WHERE t.tenant_id = f.tenant_id AND t.form_id = f.form_id) AS trigger_count,
+                ARRAY(SELECT DISTINCT a.product_code FROM forms_admin_applicability a WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true AND NULLIF(btrim(a.product_code), '') IS NOT NULL ORDER BY a.product_code) AS product_codes,
+                -- Generator scope fallback, so catalog filters keep forms with no explicit product:
+                -- a form with no active applicability rows matches by f.line_of_business (selectPolicyForms has_app).
+                EXISTS (SELECT 1 FROM forms_admin_applicability a WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true) AS has_applicability,
+                ARRAY(SELECT DISTINCT j.state_code FROM forms_admin_jurisdictions j WHERE j.tenant_id=f.tenant_id AND j.form_id=f.form_id ORDER BY j.state_code) AS state_codes,
+                ARRAY(SELECT DISTINCT tx FROM forms_admin_applicability a CROSS JOIN LATERAL unnest(a.transaction_types) tx WHERE a.tenant_id=f.tenant_id AND a.form_id=f.form_id AND a.active=true ORDER BY tx) AS transaction_types,
+                (SELECT o.template_source FROM forms_admin_output o WHERE o.tenant_id=f.tenant_id AND o.form_id=f.form_id LIMIT 1) AS template_source
            FROM forms_admin_forms f
           WHERE ${clauses.join(' AND ')}
           ORDER BY f.updated_at DESC, f.form_number ASC`,
@@ -164,6 +176,9 @@ formsAdminRoutes.post('/', async (req, res) => {
     return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
   }
 
+  if (payload.metadata != null && (typeof payload.metadata !== 'object' || Array.isArray(payload.metadata))) {
+    return res.status(400).json({ code: 'INVALID_INPUT', message: 'Form metadata must be an object.' })
+  }
   const normalized = normalizeFormPayload(payload)
   const validationError = validateCreateFormPayload(normalized)
   if (validationError) {
@@ -211,7 +226,7 @@ formsAdminRoutes.post('/', async (req, res) => {
           normalized.previousFormId,
           normalized.editLock,
           normalized.requireApprovedJurisdiction,
-          normalized.metadata,
+          withServerOwnedMetadata(normalized.metadata, null),
           actor,
           actor
         ]
@@ -491,6 +506,10 @@ formsAdminRoutes.get('/template-variables', (_req, res) => {
   return res.json({ variables: DOCUMENT_TEMPLATE_VARIABLES })
 })
 
+formsAdminRoutes.get('/attachment-fields', (req, res) => {
+  return res.json(formAttachmentFields(req.tenant!.tenantId, String(req.query.productCode || '')))
+})
+
 formsAdminRoutes.get('/:id', async (req, res) => {
   const tenantId = req.tenant!.tenantId
   const formId = routeParam(req.params.id)
@@ -522,6 +541,8 @@ formsAdminRoutes.patch('/:id', async (req, res) => {
   try {
     const updated = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
+      // Serialize with attachment-rule writes, which set the server-owned rules flag.
+      await q('SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND form_id=$2 FOR UPDATE', [tenantId, formId])
       const current = await loadFormRow(q, tenantId, formId)
       if (!current) return null
 
@@ -540,8 +561,11 @@ formsAdminRoutes.patch('/:id', async (req, res) => {
       ) {
         changes.require_approved_jurisdiction = payload.requireApprovedJurisdiction
       }
-      if (payload.metadata != null && JSON.stringify(payload.metadata) !== JSON.stringify(current.metadata || {})) {
-        changes.metadata = payload.metadata
+      // normalizeFormPayload defaults metadata to {}; only replace it when the caller sent it.
+      if (req.body?.metadata != null) {
+        if (typeof req.body.metadata !== 'object' || Array.isArray(req.body.metadata)) return { code: 'INVALID_INPUT', message: 'Form metadata must be an object.' }
+        const metadata = withServerOwnedMetadata(payload.metadata, current.metadata)
+        if (canonicalJson(metadata) !== canonicalJson(current.metadata || {})) changes.metadata = metadata
       }
 
       if (Object.keys(changes).length === 0) {
@@ -800,15 +824,17 @@ formsAdminRoutes.post('/:id/activate', async (req, res) => {
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
+      await q('SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND form_id=$2 FOR UPDATE', [tenantId, formId])
       const before = await loadFormDetails(q, tenantId, formId)
       if (!before.form) return null
       if (before.form.workflowStatus !== 'Approved') {
         return { code: 'INVALID_STATE', message: 'Only approved forms can be activated' }
       }
       if (before.form.requireApprovedJurisdiction) {
-        const approvedCount = before.jurisdictions.filter((j: any) => j.regulatoryStatus === 'Approved').length
+        // Same usable statuses as the attachment gate, so a form that would attach can be activated.
+        const approvedCount = before.jurisdictions.filter((j: any) => isUsableRegulatoryStatus(j.regulatoryStatus)).length
         if (approvedCount < 1) {
-          return { code: 'INVALID_STATE', message: 'Activation requires at least one approved jurisdiction' }
+          return { code: 'INVALID_STATE', message: 'Activation requires at least one approved or filed jurisdiction' }
         }
       }
 
@@ -1318,50 +1344,34 @@ formsAdminRoutes.get('/:id/triggers', async (req, res) => {
 })
 
 formsAdminRoutes.post('/:id/triggers', async (req, res) => {
-  return res.status(410).json({
-    code: 'FEATURE_DISABLED',
-    message: 'Trigger-rule authoring is disabled. Use explicit jurisdiction and applicability configuration.'
-  })
+  return writeAttachmentTrigger(req, res, 'create')
 })
 
 formsAdminRoutes.patch('/:id/triggers/:triggerId', async (req, res) => {
-  return res.status(410).json({
-    code: 'FEATURE_DISABLED',
-    message: 'Trigger-rule authoring is disabled. Use explicit jurisdiction and applicability configuration.'
-  })
+  return writeAttachmentTrigger(req, res, 'update')
 })
 
 formsAdminRoutes.delete('/:id/triggers/:triggerId', async (req, res) => {
-  const tenantId = req.tenant!.tenantId
-  const formId = routeParam(req.params.id)
-  const triggerId = routeParam(req.params.triggerId)
-
-  if (!isFormsEditor(req)) {
-    return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
-  }
-
+  const tenantId = req.tenant!.tenantId, formId = routeParam(req.params.id), triggerId = routeParam(req.params.triggerId), actor = currentActor(req)
+  if (!isFormsEditor(req)) return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
   try {
-    const deleted = await withTenantTx(tenantId, async (db) => {
+    const result = await withTenantTx(tenantId, async db => {
       const q = toRawQuery(db)
-      const form = await loadFormRow(q, tenantId, formId)
-      if (!form) return null
-      if (form.workflow_status === 'Approved' && form.edit_lock) {
-        return { code: 'LOCKED', message: 'Approved forms are edit-locked. Clone to create a new draft.' }
-      }
-      const result = await q(
-        `DELETE FROM forms_admin_triggers
-          WHERE tenant_id = $1 AND form_id = $2 AND trigger_id = $3`,
-        [tenantId, formId, triggerId]
-      )
-      if (!result.rowCount) return { code: 'NOT_FOUND' }
-      return { deleted: true }
+      const locked = await q('SELECT * FROM forms_admin_forms WHERE tenant_id=$1 AND form_id=$2 FOR UPDATE', [tenantId, formId])
+      const form = locked.rows[0]
+      if (!form) return 'NOT_FOUND'
+      if (form.workflow_status !== 'Draft' || form.active) return 'LOCKED'
+      const before = await q('SELECT * FROM forms_admin_triggers WHERE tenant_id=$1 AND form_id=$2 AND trigger_id=$3', [tenantId, formId, triggerId])
+      if (!before.rowCount) return 'NOT_FOUND'
+      await q('DELETE FROM forms_admin_triggers WHERE tenant_id=$1 AND form_id=$2 AND trigger_id=$3', [tenantId, formId, triggerId])
+      await insertAuditEvent(q, { tenantId, formId, entityType: 'AttachmentRule', entityId: triggerId, eventType: 'ATTACHMENT_RULE_DELETED', correlationId: uuidv4(), beforeSnapshot: mapTriggerRow(before.rows[0]), afterSnapshot: null, reason: normalizeLabel(req.body?.reason) || null, changedBy: actor })
+      return 'DELETED'
     })
-    if (!deleted) return res.status(404).json({ code: 'NOT_FOUND' })
-    if ((deleted as any).code === 'LOCKED') return res.status(409).json(deleted)
-    if ((deleted as any).code === 'NOT_FOUND') return res.status(404).json({ code: 'NOT_FOUND' })
+    if (result === 'NOT_FOUND') return res.status(404).json({ code: result })
+    if (result === 'LOCKED') return res.status(409).json({ code: result, message: 'Clone an inactive draft before editing attachment rules.' })
     return res.status(204).end()
-  } catch (e: any) {
-    return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
+  } catch {
+    return res.status(500).json({ code: 'DB_ERROR', message: 'Unable to delete the attachment rule.' })
   }
 })
 
@@ -1829,114 +1839,29 @@ formsAdminRoutes.get('/:id/audit', async (req, res) => {
 })
 
 formsAdminRoutes.post('/preview', async (req, res) => {
-  const tenantId = req.tenant!.tenantId
-  const payload = req.body || {}
-  const effectiveDate = parseDateOnly(payload.effectiveDate) || new Date().toISOString().slice(0, 10)
-  const lineOfBusiness = normalizeLabel(payload.lineOfBusiness)
-  const productCode = normalizeProductCode(payload.productCode)
-  const transactionType = normalizeTransactionType(payload.transactionType)
-  const stateCode = normalizeCode(payload.state)
-  const coverages = normalizeStringArray(payload.coverages).map((item) => item.toUpperCase())
-  const attributes = payload.attributes && typeof payload.attributes === 'object' ? payload.attributes : {}
-  const uw = payload.uw && typeof payload.uw === 'object' ? payload.uw : {}
-
+  const body = req.body || {}
+  const formId = typeof body.formId === 'string' ? body.formId : undefined
+  if (formId && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(formId)) return res.status(400).json({ code: 'INVALID_INPUT', message: 'Invalid form ID.' })
+  if (body.includeDraft === true && !formId) return res.status(400).json({ code: 'INVALID_INPUT', message: 'Draft preview requires an explicit form ID.' })
   try {
-    const result = await withTenantTx(tenantId, async (db) => {
-      const q = toRawQuery(db)
-      const formsRes = await q(
-        `SELECT *
-           FROM forms_admin_forms
-          WHERE tenant_id = $1
-            AND active = true
-            AND workflow_status = 'Approved'
-          ORDER BY updated_at DESC`,
-        [tenantId]
-      )
-      const formRows = formsRes.rows as FormRow[]
-      if (!formRows.length) return []
-
-      const formIds = formRows.map((row) => row.form_id)
-      const jurisdictionsRes = await q(
-        `SELECT * FROM forms_admin_jurisdictions
-          WHERE tenant_id = $1 AND form_id = ANY($2::uuid[])`,
-        [tenantId, formIds]
-      )
-      const applicabilityRes = await q(
-        `SELECT * FROM forms_admin_applicability
-          WHERE tenant_id = $1 AND form_id = ANY($2::uuid[]) AND active = true`,
-        [tenantId, formIds]
-      )
-      const outputRes = await q(
-        `SELECT * FROM forms_admin_output
-          WHERE tenant_id = $1 AND form_id = ANY($2::uuid[])`,
-        [tenantId, formIds]
-      )
-
-      const jurisdictionsByForm = mapRowsByForm(jurisdictionsRes.rows)
-      const applicabilityByForm = mapRowsByForm(applicabilityRes.rows)
-      const outputByForm = mapRowsByForm(outputRes.rows)
-
-      const attached: any[] = []
-      for (const form of formRows) {
-        const reasons: string[] = []
-        if (lineOfBusiness && form.line_of_business !== lineOfBusiness) continue
-
-        const jurisdictionRows = jurisdictionsByForm[form.form_id] || []
-        const jurisdictionMatch = pickMatchingJurisdiction(jurisdictionRows, stateCode, effectiveDate)
-        if (form.require_approved_jurisdiction && !jurisdictionMatch) {
-          continue
-        }
-        if (jurisdictionMatch) {
-          reasons.push(`Jurisdiction ${jurisdictionMatch.state_code} approved`)
-        }
-
-        const applicabilityRows = applicabilityByForm[form.form_id] || []
-        if (!isApplicabilityMatch(applicabilityRows, { lineOfBusiness, productCode, transactionType })) {
-          continue
-        }
-        if (applicabilityRows.length > 0) {
-          reasons.push('Applicability matched')
-        }
-
-        // Explicit, deterministic matrix only: jurisdiction + applicability + effective window.
-        // Coverage/UW/expression trigger inference is intentionally not used in attachment preview.
-        if (coverages.length || Object.keys(attributes).length || Object.keys(uw).length) {
-          reasons.push('Coverage/UW attributes are ignored in deterministic attachment mode')
-        }
-
-        const outputRow = (outputByForm[form.form_id] || [])[0]
-        attached.push({
-          formId: form.form_id,
-          formNumber: form.form_number,
-          formTitle: form.form_title,
-          editionDate: asDateOnly(form.edition_date),
-          authority: form.authority,
-          lineOfBusiness: form.line_of_business,
-          carrierCode: form.carrier_code,
-          packetPlacement: outputRow?.packet_placement || 'End',
-          sortOrder: Number(outputRow?.sort_order || 100),
-          reasons
-        })
-      }
-
-      attached.sort((a, b) => {
-        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
-        return String(a.formNumber).localeCompare(String(b.formNumber))
-      })
-      return attached
-    })
-
+    const result = await previewForm(getDb() as unknown as DrizzleDB, req.tenant!.tenantId, body, { formId, includeDraft: body.includeDraft === true })
     return res.json(result)
-  } catch (e: any) {
-    return res.status(500).json({ code: 'DB_ERROR', message: String(e?.message || e) })
+  } catch (error) {
+    if (error instanceof AppError) return res.status(error.statusCode).json({ code: error.code, message: error.message })
+    return res.status(500).json({ code: 'DB_ERROR', message: 'Unable to preview form attachment.' })
   }
 })
 
-formsAdminRoutes.post('/test-expression', async (req, res) => {
-  return res.status(410).json({
-    code: 'FEATURE_DISABLED',
-    message: 'Expression testing is disabled in deterministic attachment mode.'
-  })
+formsAdminRoutes.post('/test-expression', (req, res) => {
+  try {
+    const definition = { triggerType: 'Expression', conditionExpression: req.body?.expression }
+    validateFormTriggerDefinition(definition)
+    const context = buildFormAttachmentContext(req.body?.context || {})
+    const result = evaluateFormTriggers([{ ...definition, triggerId: 'test' }], context)
+    return res.json({ result: result.attach })
+  } catch {
+    return res.status(400).json({ code: 'INVALID_EXPRESSION', message: 'The attachment expression or test context is invalid.' })
+  }
 })
 
 async function transitionWorkflow(
@@ -1964,6 +1889,8 @@ async function transitionWorkflow(
   try {
     const result = await withTenantTx(tenantId, async (db) => {
       const q = toRawQuery(db)
+      // Serialize publication with draft rule writes on the same edition.
+      await q('SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND form_id=$2 FOR UPDATE', [tenantId, formId])
       const before = await loadFormDetails(q, tenantId, formId)
       if (!before.form) return null
       if (before.form.workflowStatus !== input.expectedCurrent) {
@@ -2142,7 +2069,13 @@ async function copyFormChildren(q: QueryFn, tenantId: string, sourceFormId: stri
     [tenantId, sourceFormId, targetFormId, actor]
   )
 
-  // Trigger/inference configuration is not copied in deterministic attachment mode.
+  await q(
+    `INSERT INTO forms_admin_triggers (tenant_id,form_id,trigger_type,condition_expression,suppress_expression,priority,active,created_by,updated_by)
+     SELECT t.tenant_id,$3,t.trigger_type,t.condition_expression,t.suppress_expression,t.priority,t.active,$4,$4
+       FROM forms_admin_triggers t JOIN forms_admin_forms f ON f.tenant_id=t.tenant_id AND f.form_id=t.form_id
+      WHERE t.tenant_id=$1 AND t.form_id=$2 AND f.metadata->>'attachmentRulesVersion'='1'`,
+    [tenantId, sourceFormId, targetFormId, actor]
+  )
 
   await q(
     `INSERT INTO forms_admin_output (
@@ -2359,7 +2292,13 @@ function mapFormSummaryRow(row: any) {
     hasApprovedJurisdiction: Boolean(row.has_approved_jurisdiction),
     jurisdictionCount: Number(row.jurisdiction_count || 0),
     applicabilityCount: Number(row.applicability_count || 0),
-    triggerCount: Number(row.trigger_count || 0)
+    triggerCount: Number(row.trigger_count || 0),
+    requireApprovedJurisdiction: row.require_approved_jurisdiction === true,
+    hasApplicability: Boolean(row.has_applicability),
+    productCodes: row.product_codes || [],
+    stateCodes: row.state_codes || [],
+    transactionTypes: row.transaction_types || [],
+    templateSource: row.template_source || null,
   }
 }
 
@@ -2599,11 +2538,70 @@ function validateApplicabilityPayload(payload: ReturnType<typeof normalizeApplic
   return null
 }
 
+/**
+ * attachmentRulesVersion switches a form onto attachment rules. Only the rule
+ * endpoints set it (after legacy rows are removed); a general metadata edit
+ * keeps the stored value, so it cannot revive legacy rules or silently turn
+ * rules off on a published edition.
+ */
+/** Key-order-independent JSON, so a resend of stored jsonb is not seen as a change. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
+function withServerOwnedMetadata(next: Record<string, unknown>, current: Record<string, unknown> | null | undefined) {
+  const { attachmentRulesVersion: _ignored, ...rest } = next
+  return current?.attachmentRulesVersion === undefined ? rest : { ...rest, attachmentRulesVersion: current.attachmentRulesVersion }
+}
+
+async function writeAttachmentTrigger(req: Request, res: any, mode: 'create' | 'update') {
+  if (!isFormsEditor(req)) return res.status(403).json({ code: 'FORBIDDEN', message: 'Forms admin role required' })
+  const tenantId = req.tenant!.tenantId, formId = routeParam(req.params.id), actor = currentActor(req)
+  const triggerId = mode === 'update' ? routeParam(req.params.triggerId) : uuidv4()
+  try {
+    const result = await withTenantTx(tenantId, async db => {
+      const q = toRawQuery(db)
+      const locked = await q('SELECT * FROM forms_admin_forms WHERE tenant_id=$1 AND form_id=$2 FOR UPDATE', [tenantId, formId])
+      const form = locked.rows[0]
+      if (!form) return { code: 'NOT_FOUND' }
+      if (form.workflow_status !== 'Draft' || form.active) return { code: 'LOCKED', message: 'Attachment rules can only be changed on an inactive draft. Clone the edition first.' }
+      const existing = await q('SELECT * FROM forms_admin_triggers WHERE tenant_id=$1 AND form_id=$2 ORDER BY priority, trigger_id', [tenantId, formId])
+      const before = existing.rows.find((row: any) => String(row.trigger_id) === triggerId)
+      if (mode === 'update' && !before) return { code: 'NOT_FOUND' }
+      if (form.metadata?.attachmentRulesVersion !== 1 && existing.rows.length) return { code: 'LEGACY_RULES_DISABLED', message: 'Remove legacy disabled rules before authoring safe attachment rules.' }
+      if (mode === 'create' && existing.rows.length >= 100) return { code: 'INVALID_INPUT', message: 'A form may have at most 100 attachment rules.' }
+      const input = { ...(before ? mapTriggerRow(before) : {}), ...req.body }
+      if (!TRIGGER_TYPES.includes(input.triggerType) || input.active != null && typeof input.active !== 'boolean') return { code: 'INVALID_INPUT', message: 'Invalid rule type or active flag.' }
+      if (input.priority != null && (typeof input.priority !== 'number' || !Number.isInteger(input.priority))) return { code: 'INVALID_INPUT', message: 'Rule priority must be an integer from 0 to 100000.' }
+      if (['conditionExpression', 'suppressExpression'].some(key => input[key] != null && typeof input[key] !== 'string')) return { code: 'INVALID_INPUT', message: 'Rule expressions must be text.' }
+      const normalized = normalizeTriggerPayload(input)
+      if (!Number.isInteger(normalized.priority) || normalized.priority < 0 || normalized.priority > 100000) return { code: 'INVALID_INPUT', message: 'Rule priority must be an integer from 0 to 100000.' }
+      try { validateFormTriggerDefinition(normalized) } catch { return { code: 'INVALID_INPUT', message: 'Invalid attachment expression. Use approved application fields and the shared rule expression language.' } }
+      const saved = mode === 'create'
+        ? await q(`INSERT INTO forms_admin_triggers (tenant_id,form_id,trigger_id,trigger_type,condition_expression,suppress_expression,priority,active,created_by,updated_by)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING *`, [tenantId, formId, triggerId, normalized.triggerType, normalized.conditionExpression || null, normalized.suppressExpression || null, normalized.priority, normalized.active, actor])
+        : await q(`UPDATE forms_admin_triggers SET trigger_type=$4,condition_expression=$5,suppress_expression=$6,priority=$7,active=$8,updated_by=$9,updated_at=now()
+            WHERE tenant_id=$1 AND form_id=$2 AND trigger_id=$3 RETURNING *`, [tenantId, formId, triggerId, normalized.triggerType, normalized.conditionExpression || null, normalized.suppressExpression || null, normalized.priority, normalized.active, actor])
+      await q(`UPDATE forms_admin_forms SET metadata=COALESCE(metadata,'{}'::jsonb) || '{"attachmentRulesVersion":1}'::jsonb,updated_by=$3,updated_at=now() WHERE tenant_id=$1 AND form_id=$2`, [tenantId, formId, actor])
+      await insertAuditEvent(q, { tenantId, formId, entityType: 'AttachmentRule', entityId: triggerId, eventType: mode === 'create' ? 'ATTACHMENT_RULE_CREATED' : 'ATTACHMENT_RULE_UPDATED', correlationId: uuidv4(), beforeSnapshot: before ? mapTriggerRow(before) : null, afterSnapshot: mapTriggerRow(saved.rows[0]), reason: normalizeLabel(req.body?.reason) || null, changedBy: actor })
+      return mapTriggerRow(saved.rows[0])
+    })
+    if ('code' in result) return res.status(result.code === 'NOT_FOUND' ? 404 : result.code === 'LOCKED' || result.code === 'LEGACY_RULES_DISABLED' ? 409 : 400).json(result)
+    return res.status(mode === 'create' ? 201 : 200).json(result)
+  } catch {
+    return res.status(500).json({ code: 'DB_ERROR', message: 'Unable to save the attachment rule.' })
+  }
+}
+
 function normalizeTriggerPayload(input: any) {
   return {
     triggerType: normalizeTriggerType(input?.triggerType) || 'Always',
-    conditionExpression: normalizeLabel(input?.conditionExpression),
-    suppressExpression: normalizeLabel(input?.suppressExpression),
+    conditionExpression: typeof input?.conditionExpression === 'string' ? input.conditionExpression.trim() : '',
+    suppressExpression: typeof input?.suppressExpression === 'string' ? input.suppressExpression.trim() : '',
     priority: Number.isFinite(Number(input?.priority)) ? Number(input.priority) : 100,
     active: input?.active == null ? true : Boolean(input.active)
   }
@@ -2768,72 +2766,6 @@ function isApplicabilityMatch(
   })
 }
 
-function evaluateTriggers(
-  rows: any[],
-  input: { coverages: string[]; attributes: Record<string, any>; uw: Record<string, any>; transactionType: string }
-): { attach: boolean; reason: string } {
-  if (!rows.length) return { attach: true, reason: 'No trigger rules configured' }
-  const coveragesSet = new Set(input.coverages.map((item) => item.toUpperCase()))
-  let attached = false
-  let suppressed = false
-  let reason = ''
-
-  for (const row of rows) {
-    const suppressExpression = normalizeLabel(row.suppress_expression)
-    if (suppressExpression) {
-      const suppress = evaluateExpression(suppressExpression, input)
-      if (suppress.result) {
-        suppressed = true
-        reason = `Suppressed by rule #${row.trigger_id}`
-        break
-      }
-    }
-
-    const triggerType = String(row.trigger_type || 'Always')
-    const expression = normalizeLabel(row.condition_expression)
-    let matched = false
-    if (triggerType === 'Always') {
-      matched = true
-    } else if (triggerType === 'Coverage Selected') {
-      if (expression) {
-        const tokens = expression
-          .split(/[|,]/)
-          .map((token) => token.trim().toUpperCase())
-          .filter(Boolean)
-        matched = tokens.some((token) => coveragesSet.has(token))
-      }
-    } else if (expression) {
-      matched = evaluateExpression(expression, input).result
-    }
-
-    if (matched) {
-      attached = true
-      reason = `${triggerType} matched`
-      break
-    }
-  }
-
-  if (suppressed) return { attach: false, reason }
-  return { attach: attached, reason: attached ? reason : 'No trigger rule matched' }
-}
-
-function evaluateExpression(
-  expression: string,
-  input: { coverages: string[]; attributes: Record<string, any>; uw: Record<string, any>; transactionType: string }
-): { result: boolean; error?: string } {
-  try {
-    const fn = new Function(
-      'coverages',
-      'attributes',
-      'uw',
-      'transactionType',
-      `return Boolean(${expression});`
-    ) as (coverages: string[], attributes: Record<string, any>, uw: Record<string, any>, transactionType: string) => boolean
-    return { result: Boolean(fn(input.coverages, input.attributes, input.uw, input.transactionType)) }
-  } catch (e: any) {
-    return { result: false, error: String(e?.message || e) }
-  }
-}
 
 function normalizeLabel(value: unknown): string {
   return String(value || '').trim().replace(/\s+/g, ' ')
