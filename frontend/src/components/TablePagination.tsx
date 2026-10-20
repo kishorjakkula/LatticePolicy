@@ -24,6 +24,7 @@ export function TablePagination({
 }: TablePaginationProps) {
   return (
     <Pagination
+      showRange
       className="table-pagination"
       page={page}
       pageSize={pageSize}

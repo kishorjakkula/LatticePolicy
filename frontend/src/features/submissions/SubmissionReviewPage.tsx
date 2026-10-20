@@ -291,7 +291,7 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
           {run.productReason && <p className="si-small" style={{ margin: '0 0 10px' }}><b>Product:</b> {productLabel(settings, submission.productCode)}. {run.productReason}</p>}
           <div className="si-small si-muted" style={{ borderTop: '1px solid var(--si-ai-border)', paddingTop: 8 }}>
             {typeof run.counts?.averageScore === 'number' && <><b>Average confidence {run.counts.averageScore}%</b> across {run.counts.drafted} drafted values. </>}
-            {run.label || 'Reader'} · read {run.documentsRead ?? '?'} of {run.documentsTotal ?? submission.documents.length} documents{run.finishedAt ? ` · ${formatDisplayDateTime(run.finishedAt)}` : ''}.
+            {run.label || 'Reader'} · read {run.documentsRead ?? '?'} of {run.documentsTotal ?? submission.documents.length} documents{run.finishedAt ? ` · ${formatDisplayDateTime(run.finishedAt, { includeTime: true })}` : ''}.
             {' '}The reader can be wrong; you approve the final data.
           </div>
           {Array.isArray(run.warnings) && run.warnings.length > 0 && (
@@ -349,7 +349,7 @@ function SidePanel({ submission, checks, settings }: { submission: SubmissionDet
         <ol className="si-activity">
           {submission.events.map((event, index) => (
             <li key={index}>
-              <time dateTime={event.createdAt}>{formatDisplayDateTime(event.createdAt)}</time>
+              <time dateTime={event.createdAt}>{formatDisplayDateTime(event.createdAt, { includeTime: true })}</time>
               <span className={`si-pill si-tone-${event.actorType === 'ai' ? 'ai' : event.actorType === 'system' ? 'info' : 'neutral'}`} style={{ marginRight: 6 }}>{actorText(event)}</span>
               {describeEvent(event)}
             </li>
@@ -615,7 +615,7 @@ export function SubmissionReviewPage() {
             <span className={`si-pill si-tone-${meta.tone}`}>{meta.label}</span>
             {submission.productCode && <span className="si-pill si-tone-ai"><Sparkle />{productLabel(settings, submission.productCode)}{submission.aiRun?.counts ? ' · detected' : ''}</span>}
             {submission.brokerName && <span className="si-muted">{submission.brokerName}</span>}
-            <span className="si-muted">Received {formatDisplayDateTime(submission.receivedAt)}</span>
+            <span className="si-muted">Received {formatDisplayDateTime(submission.receivedAt, { includeTime: true })}</span>
             {submission.assignedTo && <span className="si-muted">Reviewer: {submission.assignedTo}</span>}
           </div>
         </div>
@@ -668,7 +668,7 @@ export function SubmissionReviewPage() {
       )}
       {submission.status === 'COMPLETED' && (
         <div className="si-banner is-success" role="status">
-          <p><b>Approved by {submission.approvedBy}{submission.approvedAt ? ` on ${formatDisplayDateTime(submission.approvedAt)}` : ''}.</b> Draft quote {submission.quoteNumber} was created{submission.customerId ? ' for the customer' : ''}.</p>
+          <p><b>Approved by {submission.approvedBy}{submission.approvedAt ? ` on ${formatDisplayDateTime(submission.approvedAt, { includeTime: true })}` : ''}.</b> Draft quote {submission.quoteNumber} was created{submission.customerId ? ' for the customer' : ''}.</p>
           {submission.quoteId && <Link className="si-btn si-btn-primary" to={`/wizard?quoteId=${submission.quoteId}`}>Open quote {submission.quoteNumber}</Link>}
           {submission.customerId && canSeeCustomer && <Link className="si-btn" to={`/customers/${submission.customerId}`}>Open customer</Link>}
         </div>

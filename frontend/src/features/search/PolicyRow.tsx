@@ -5,9 +5,9 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { Checkbox } from '../../components/Checkbox'
 import { POLICY_STATUS_LEGEND, productLabel } from '../../shared/displayLabels'
 
-/** The legend explains each status; the workflow model calls Bound "Bind". */
+/** The legend explains each status. */
 export function policyStatusHint(status: string): string | undefined {
-  return POLICY_STATUS_LEGEND[status === 'Bind' ? 'Bound' : status]
+  return POLICY_STATUS_LEGEND[status]
 }
 
 function formatPremium(value: any): string {

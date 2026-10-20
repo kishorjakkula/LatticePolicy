@@ -59,7 +59,7 @@ describe('PolicyViewPage header', () => {
     state.policy = basePolicy()
     state.versions = [
       { versionId: 'v1', ...priorTerm, effectiveDate: priorTerm.policyEffectiveDate, transactionType: 'NB', transactionNumber: 'NB-1', processedDate: '2025-01-01T00:00:00Z', premium: { total: { amount: 500, currency: 'USD' } } },
-      { versionId: 'v2', ...currentTerm, effectiveDate: currentTerm.policyEffectiveDate, transactionType: 'Renew', transactionNumber: 'RN-1', processedDate: '2026-01-01T00:00:00Z', premium: { total: { amount: 542.82, currency: 'USD' } } },
+      { versionId: 'v2', ...currentTerm, effectiveDate: currentTerm.policyEffectiveDate, transactionType: 'Renew', transactionNumber: 'RN-1', processedDate: '2026-01-01T00:00:00Z', updatedDate: '2026-01-01T15:30:00Z', premium: { total: { amount: 542.82, currency: 'USD' } } },
     ]
   })
 
@@ -109,6 +109,8 @@ describe('PolicyViewPage header', () => {
     const renewalRow = screen.getByRole('button', { name: 'RN-1' }).closest('tr')!
     expect(within(renewalRow).getByText('Renewal')).toBeInTheDocument()
     expect(renewalRow).not.toHaveTextContent(/\bRenew\b/)
+    // Updated is a date-time: two same-day transactions must be told apart.
+    expect(renewalRow).toHaveTextContent(/\d{2}\/\d{2}\/\d{4} \d{1,2}:\d{2} (AM|PM)/)
   })
 
   it('shows the product display name in the summary and drops the bare term number', () => {

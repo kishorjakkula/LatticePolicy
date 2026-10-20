@@ -51,6 +51,21 @@ Phase 1, by requirement:
 - The policy h1 stays "Policy <number>" to keep heading checks; the insured is the first header fact.
 - The Policy Summary still repeats the term dates; they are removed in Phase 3 with its layout pass.
 - The UW queue's inline pager is replaced in Phase 2, when that screen is rebuilt (REQ-17).
+- REQ-6 is partly in this phase. "Cancel" keeps its position and label among the policy actions until REQ-12 reorders them in Phase 2 ("Cancel policy", last, danger style).
+- Review fixes (code review, Phase 1):
+  - Date-times keep their time: the policy Updated column, the customer dates, document generated, audit events and submission timestamps.
+  - Current-term premium restarts at new business, renewal and rewrite.
+  - The non-renew dialog date uses the shared formatter.
+  - The legend key "Bind" matches the status rows.
+  - The undefined `--ps-text-body` token is replaced.
+  - The Submissions primary button uses the primary token.
+  - The pager uses a labelled group, and table pagers show "Showing a–b of N" again.
+  - "No insured linked" shows for an empty customer record.
+  - The "As of" result moves focus to itself.
+  - Form documents are named by their form's title and code.
+- Accepted with follow-up (code review):
+  - Minor 3: an admin-chosen US `MM-DD-YYYY` setting reads as slashes, and TenantPage still offers it. To be decided with the product owner.
+  - Minor 8: dark-mode contrast on primary, tracked under REQ-15.
 - Unused wireframe CSS (148 lines inside media blocks) is left for the Phase 3 token pass.
 
 ## Checks run

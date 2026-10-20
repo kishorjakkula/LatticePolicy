@@ -64,7 +64,8 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 
 /** What each policy status means, for legends and tooltips. */
 export const POLICY_STATUS_LEGEND: Record<string, string> = {
-  Bound: 'Coverage bound; documents not yet issued.',
+  // "Bind" is the app's status name for a bound, not yet issued policy.
+  Bind: 'Coverage bound; documents not yet issued.',
   Issued: 'Documents issued; the term has not started yet.',
   'In Force': 'Issued and the current term has started.',
   Expired: 'The term ended; no coverage now.',

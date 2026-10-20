@@ -32,9 +32,13 @@ type PolicyDocument = {
  * one transaction stay distinguishable; the server only exposes that title in
  * the stored display name, ahead of the bracketed form code.
  */
-export function policyDocumentName(doc: Pick<PolicyDocument, 'type' | 'displayName' | 'transactionType'>): string {
+export function policyDocumentName(doc: Pick<PolicyDocument, 'type' | 'displayName' | 'transactionType'> & { forms?: Array<{ code?: string; title?: string }> }): string {
   if (String(doc.type || '').toUpperCase() === 'POLICY_FORM_DOCUMENT') {
-    const formTitle = /^(.+?\[[^\]]+\])/.exec(String(doc.displayName || ''))?.[1]
+    const form = Array.isArray(doc.forms) && doc.forms.length === 1 ? doc.forms[0] : null
+    // Prefer the form the document fills; else the title ahead of the bracketed code.
+    const formTitle = form?.title
+      ? `${form.title}${form.code ? ` [${form.code}]` : ''}`
+      : /^(.+?\[[^\]]+\])/.exec(String(doc.displayName || ''))?.[1]
     if (formTitle) return doc.transactionType ? `${formTitle} — ${transactionTypeLabel(doc.transactionType)}` : formTitle
   }
   return documentDisplayName(doc)
@@ -145,7 +149,7 @@ export function PolicyDocumentsPanel({ policyId }: PolicyDocumentsPanelProps) {
                     {doc.contentType ? archivedOutputFormat(doc.contentType) : '-'}
                     {doc.type && <div className="muted">{documentTypeLabel(doc.type)}</div>}
                   </td>
-                  <td>{formatDisplayDateTime(doc.generatedAt, { fallback: '-' })}</td>
+                  <td>{formatDisplayDateTime(doc.generatedAt, { fallback: '-', includeTime: true })}</td>
                   <td>
                     <span className={`badge ${integrityBadgeColor(doc.integrityStatus)}`}>
                       {doc.integrityStatus || 'UNVERIFIED'}

@@ -33,7 +33,7 @@ function compareDate(left: any, right: any): number {
 
 // Shared, tenant-aware date-time display (US: MM/DD/YYYY h:mm AM/PM).
 function formatDateTimeMmDdYyyyHm(value: any, fallback = ''): string {
-  return formatDisplayDateTime(value, { fallback })
+  return formatDisplayDateTime(value, { fallback, includeTime: true })
 }
 
 function customerStatusColor(status: string): string {

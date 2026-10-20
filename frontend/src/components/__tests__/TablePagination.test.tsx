@@ -11,7 +11,8 @@ describe('TablePagination renders the shared numbered pager', () => {
     render(<TablePagination page={1} pageSize={20} totalItems={183} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />)
 
     expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeInTheDocument()
-    expect(screen.getByText('Page 1 of 10')).toBeInTheDocument()
+    expect(screen.getByText('Showing 1–20 of 183 · Page 1 of 10')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Pages' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Page 10' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Go to previous page' })).toBeDisabled()
@@ -51,7 +52,7 @@ describe('TablePagination renders the shared numbered pager', () => {
 
   it('clamps an out-of-range page and shows "No results" for an empty list', () => {
     const { rerender } = render(<TablePagination page={99} pageSize={10} totalItems={25} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />)
-    expect(screen.getByText('Page 3 of 3')).toBeInTheDocument()
+    expect(screen.getByText('Showing 21–25 of 25 · Page 3 of 3')).toBeInTheDocument()
 
     rerender(<TablePagination page={1} pageSize={10} totalItems={0} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />)
     expect(screen.getByText('No results')).toBeInTheDocument()

@@ -107,7 +107,7 @@ function formatDate(value: unknown): string {
 }
 
 function formatDateTime(value: unknown): string {
-  return formatDisplayDateTime(value, { fallback: '' })
+  return formatDisplayDateTime(value, { fallback: '', includeTime: true })
 }
 
 function formatCurrencyAmount(value: unknown, currency = 'USD'): string {
@@ -624,7 +624,7 @@ export function PolicyViewPage() {
   const workflowStatus = derivePolicyWorkflowStatus(rawStatus, policy.term)
   // Premium of the current term only (earlier terms excluded); see computeCurrentTermPremium.
   const termPremium = computeCurrentTermPremium(adjustedVersions, policy?.term) || policy?.premium?.total || null
-  const statusLegend = POLICY_STATUS_LEGEND[workflowStatus === 'Bind' ? 'Bound' : workflowStatus] || ''
+  const statusLegend = POLICY_STATUS_LEGEND[workflowStatus] || ''
   const termStart = formatDate(policy.term?.effectiveDate)
   const termEnd = formatDate(policy.term?.expirationDate)
 
@@ -685,7 +685,7 @@ export function PolicyViewPage() {
           facts={
             <>
               <PageHeaderFact label="Named insured">
-                {!customer ? (
+                {!customer || !insuredLabel ? (
                   <span className="muted">No insured linked</span>
                 ) : customerId ? (
                   <Link to={`/customers/${encodeURIComponent(customerId)}`} title={insuredLabel}>
@@ -1185,7 +1185,7 @@ function NonRenewModal({ policy, busy, onClose, onSubmit }: NonRenewModalProps) 
     onSubmit(noticeDate, reasonCode, reason)
   }
 
-  const termEndLabel = policy.term?.expirationDate ? new Date(policy.term.expirationDate).toLocaleDateString() : 'term end'
+  const termEndLabel = policy.term?.expirationDate ? formatDate(policy.term.expirationDate) : 'term end'
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">

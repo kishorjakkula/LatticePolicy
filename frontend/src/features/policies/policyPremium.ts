@@ -57,6 +57,11 @@ function processedOrder(left: JsonRecord, right: JsonRecord): number {
  * A reinstatement that nets to ~0 after a cancellation adds back the cancelled
  * amount, so cancel + reinstate restores the term premium.
  */
+function startsTermPremium(type: unknown): boolean {
+  const key = String(type || '').trim().toLowerCase().replace(/[\s_-]+/g, '')
+  return ['nb', 'newbusiness', 'renew', 'renewal', 'rewrite'].includes(key)
+}
+
 export function computeCurrentTermPremium(
   versions: JsonRecord[],
   term: JsonRecord | null | undefined,
@@ -86,6 +91,13 @@ export function computeCurrentTermPremium(
     const amount = typeof total?.amount === 'number' ? total.amount : Number(total?.amount)
     if (total?.amount === null || total?.amount === undefined || !Number.isFinite(amount)) continue
 
+    // New business, renewal and rewrite carry the full term premium, so the
+    // running total restarts there (a rewrite on the original term replaces
+    // the cancelled new-business premium rather than adding to it).
+    if (startsTermPremium(version?.transactionType)) {
+      cumulative = 0
+      pendingCancelMagnitude = 0
+    }
     let delta = amount
     if (isCancelTransactionType(version?.transactionType) && amount < 0) {
       pendingCancelMagnitude = Math.abs(amount)

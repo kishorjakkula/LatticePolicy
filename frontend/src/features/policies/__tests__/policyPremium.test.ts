@@ -66,4 +66,14 @@ describe('computeCurrentTermPremium', () => {
       process.env.TZ = original
     }
   })
+
+  it('restarts at a rewrite on the original term instead of adding to the cancelled premium', () => {
+    const versions = [
+      { ...term1, transactionType: 'NB', processedDate: '2025-09-01T00:00:00Z', premium: money(500) },
+      { ...term1, transactionType: 'Cancel', processedDate: '2025-12-01T00:00:00Z', premium: money(-300) },
+      { ...term1, transactionType: 'Rewrite', processedDate: '2025-12-10T00:00:00Z', premium: money(520) },
+      { ...term1, transactionType: 'Endorse', processedDate: '2026-01-10T00:00:00Z', premium: money(15) },
+    ]
+    expect(computeCurrentTermPremium(versions, { effectiveDate: '2025-09-18', expirationDate: '2026-09-18' })?.amount).toBe(535)
+  })
 })

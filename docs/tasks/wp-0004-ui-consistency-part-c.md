@@ -38,11 +38,10 @@ Work package: WP-0004 (REQ-5 wireframe removal, REQ-6, REQ-13 select fix, REQ-18
 
 ## Not done here
 
-- `UwQueue` and `PlacementsPage` draw their own Prev/Next pager inline;
-  moving them to `Pagination` is a change in `features/uw` and
-  `features/placements`.
-- The app has no catch-all route, so removed URLs render an empty shell rather
-  than a not-found page.
+- `UwQueue` still draws its own Prev/Next pager; it moves to `Pagination` in
+  Phase 2 with the referral list rebuild (REQ-17). `PlacementsPage` now uses
+  `Pagination`, and unknown routes (including the removed wireframe URLs) show
+  `NotFoundPage` (both done in this phase).
 - The `.wizard-wireframes-*` / `.wireframe-*` rules in `styles.css` no longer
   match any component. They are left in place to keep this diff small, and can
   be removed in a follow-up.

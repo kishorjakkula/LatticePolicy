@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePolicyAsOf } from '../../api/hooks'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
@@ -68,10 +68,19 @@ interface PolicyAsOfResultProps {
 /** Point-in-time snapshot for the date chosen in the header; nothing when no date is chosen. */
 export function PolicyAsOfResult({ policyId, asOf }: PolicyAsOfResultProps) {
   const asOfState = usePolicyAsOf(policyId, asOf)
+  const regionRef = useRef<HTMLDivElement>(null)
+  // The result renders below the fold; bring it into view and move focus there
+  // so keyboard and screen-reader users know the header control did something.
+  useEffect(() => {
+    if (!asOf || !regionRef.current) return
+    regionRef.current.scrollIntoView?.({ block: 'start' })
+    regionRef.current.focus({ preventScroll: true })
+  }, [asOf])
   if (!asOf) return null
   const shownDate = formatDisplayDate(asOf, { fallback: asOf })
 
   return (
+    <div ref={regionRef} tabIndex={-1} role="region" aria-label={`Policy as of ${shownDate}`} aria-live="polite">
     <CollapsibleSection
       title={`Policy as of ${shownDate}`}
       className="card stack-card policy-section-card policy-asof-panel"
@@ -112,5 +121,6 @@ export function PolicyAsOfResult({ policyId, asOf }: PolicyAsOfResultProps) {
         </div>
       ) : null}
     </CollapsibleSection>
+    </div>
   )
 }
