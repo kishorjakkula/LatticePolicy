@@ -145,7 +145,7 @@ observability/    Optional monitoring stack configuration
 Prerequisites:
 
 - Docker Desktop
-- Node.js 20+ and npm, if running outside Docker
+- Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm, if running outside Docker
 
 Start the full local stack:
 

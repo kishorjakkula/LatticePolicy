@@ -20,7 +20,7 @@
     "framework"
   ],
   "engines": {
-    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "workspaces": [
     "packages/*",
@@ -50,7 +50,8 @@
     "test:server": "npm run test --workspace=server",
     "test:contracts": "npm run test:contracts --workspace=server",
     "test:coverage": "npm run test:coverage --workspace=frontend && npm run test:coverage --workspace=server",
-    "test:local": "npm run test:document-processor && npm run test:release-signer && npm run test:document-learning && npm run test:packages && npm run test:frontend && npm run test:server",
+    "test:node-runtime": "node --test scripts/node-runtime.test.mjs",
+    "test:local": "npm run test:node-runtime && npm run test:document-processor && npm run test:release-signer && npm run test:document-learning && npm run test:packages && npm run test:frontend && npm run test:server",
     "test": "sh scripts/test.sh",
     "test:docker": "sh scripts/test-docker.sh",
     "test:integration": "sh scripts/test-integration.sh",

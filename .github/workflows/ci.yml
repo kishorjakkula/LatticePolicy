@@ -41,6 +41,9 @@ jobs:
       - name: Test shared packages
         run: npm run test:packages
 
+      - name: Test Node runtime engine contracts
+        run: npm run test:node-runtime
+
       - name: Test private document processor
         run: npm run test:document-processor
 
