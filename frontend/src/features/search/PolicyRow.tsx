@@ -1,13 +1,13 @@
 import React from 'react'
 import { derivePolicyWorkflowStatus } from '../policies/statusModel'
 import { formatDisplayDate } from '../../shared/dateDisplay'
-import { StatusBadge } from '../../components/StatusBadge'
+import { StatusBadge, resolveStatus } from '../../components/StatusBadge'
 import { Checkbox } from '../../components/Checkbox'
 import { POLICY_STATUS_LEGEND, productLabel } from '../../shared/displayLabels'
 
 /** The legend explains each status. */
 export function policyStatusHint(status: string): string | undefined {
-  return POLICY_STATUS_LEGEND[status]
+  return POLICY_STATUS_LEGEND[resolveStatus(String(status || '')).label]
 }
 
 function formatPremium(value: any): string {

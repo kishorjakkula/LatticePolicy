@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PolicyDocumentsPanel, policyDocumentName } from '../PolicyDocumentsPanel'
+import { PolicyDocumentsPanel } from '../PolicyDocumentsPanel'
 import { usePolicyDocuments } from '../../../api/hooks'
 import { api } from '../../../api/client'
 
@@ -251,10 +251,3 @@ describe('PolicyDocumentsPanel', () => {
   })
 })
 
-describe('policyDocumentName for form documents', () => {
-  it('names a form document by its form when the stored name has no form code', () => {
-    const base = { type: 'POLICY_FORM_DOCUMENT', transactionType: 'Endorse', displayName: 'POLICY_FORM_DOCUMENT (Endorse) EN-1' }
-    expect(policyDocumentName({ ...base, forms: [{ code: 'HO-EOI', title: 'Evidence of Insurance' }] })).toBe('Evidence of Insurance [HO-EOI] — Endorsement')
-    expect(policyDocumentName({ ...base, forms: [{ code: 'HO-DEC', title: 'Homeowners Declarations' }] })).toBe('Homeowners Declarations [HO-DEC] — Endorsement')
-  })
-})

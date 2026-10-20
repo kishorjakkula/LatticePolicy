@@ -3538,6 +3538,20 @@ button:focus-visible {
   flex-wrap: wrap;
 }
 
+/* An action with its unavailable reason underneath (WP-0004 REQ-12). */
+.policy-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 180px;
+}
+
+.policy-action-reason {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ps-text-secondary);
+}
+
 .policy-action-row button {
   min-width: 118px;
   min-height: 42px;

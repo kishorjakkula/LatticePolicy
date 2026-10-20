@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, apiDetails } from '../../api/client'
@@ -21,7 +21,7 @@ import {
   readPendingTransactions,
   savePendingTransaction,
 } from '../wizard/pendingEndorsement'
-import { derivePolicyWorkflowStatus, policyStatusBadgeColor } from './statusModel'
+import { derivePolicyWorkflowStatus } from './statusModel'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { TransactionAuditPanel } from './TransactionAuditPanel'
 import { PolicyAsOfControl, PolicyAsOfResult } from './PolicyAsOfPanel'
@@ -29,6 +29,8 @@ import { PolicyDocumentsPanel } from './PolicyDocumentsPanel'
 import { computeCurrentTermPremium, isCancelTransactionType, isReinstateTransactionType } from './policyPremium'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { PageHeader, PageHeaderFact } from '../../components/PageHeader'
+import { useConfirmDialog } from '../../components/Dialog'
+import { StatusBadge, resolveStatus } from '../../components/StatusBadge'
 import { POLICY_STATUS_LEGEND, productLabel, transactionTypeLabel } from '../../shared/displayLabels'
 
 type JsonRecord = Record<string, any>
@@ -100,6 +102,32 @@ function findAuditLedgerEvents(timeline: JsonRecord | null | undefined, version:
   const ledger = Array.isArray(timeline?.ledger) ? timeline.ledger : []
   const num = String(version?.transactionNumber || '').trim()
   return ledger.filter((ev: JsonRecord) => String(ev?.payload?.transactionNumber || '').trim() === num)
+}
+
+/** A policy action that, when unavailable, says why instead of only greying out. */
+function PolicyActionButton({ label, onClick, busy, unavailableReason, className = 'btn-secondary' }: {
+  label: string
+  onClick: () => void
+  busy: boolean
+  unavailableReason: string
+  className?: string
+}) {
+  const reasonId = useId()
+  return (
+    <span className="policy-action">
+      <button
+        type="button"
+        className={className}
+        onClick={onClick}
+        disabled={busy || Boolean(unavailableReason)}
+        title={unavailableReason || undefined}
+        aria-describedby={unavailableReason ? reasonId : undefined}
+      >
+        {label}
+      </button>
+      {unavailableReason && <span id={reasonId} className="policy-action-reason">{unavailableReason}</span>}
+    </span>
+  )
 }
 
 function formatDate(value: unknown): string {
@@ -318,6 +346,7 @@ export function PolicyViewPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<VersionSortKey>('updatedDate')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -431,6 +460,16 @@ export function PolicyViewPage() {
     } catch (err: any) {
       setError(err.message || String(err))
     }
+  }
+
+  async function confirmReinstate() {
+    if (!policy) return
+    const confirmed = await askConfirm({
+      title: `Reinstate policy ${policy.policyNumber}?`,
+      description: `Coverage is restored effective ${formatDate(new Date().toISOString().slice(0, 10))}.`,
+      confirmLabel: 'Reinstate',
+    })
+    if (confirmed) await handleReinstate()
   }
 
   async function handleReinstate() {
@@ -621,10 +660,22 @@ export function PolicyViewPage() {
   const statusLower = rawStatus.toLowerCase()
   const lastVersion = adjustedVersions.length ? adjustedVersions[adjustedVersions.length - 1] : null
   const canReinstate = isCancelTransactionType(lastVersion?.transactionType) || (!lastVersion && statusLower === 'cancelled')
+  // Why an action is unavailable ('' = available). Shown next to the disabled
+  // button so users are not left guessing (WP-0004 REQ-12).
+  const loadingReason = 'Policy details are still loading.'
+  const cancelledReason = (verb: string) => `A cancelled policy cannot be ${verb}.`
+  const actionAvailability = {
+    endorse: statusLower === 'cancelled' ? cancelledReason('endorsed') : !currentPayload && !pendingByMode.endorse ? loadingReason : '',
+    renew: statusLower === 'cancelled' ? cancelledReason('renewed') : !currentPayload && !pendingByMode.renew ? loadingReason : '',
+    nonRenew: statusLower === 'cancelled' ? cancelledReason('non-renewed') : policy.nonRenewedAt ? 'A non-renewal notice was already issued.' : '',
+    reinstate: canReinstate ? '' : 'Only a cancelled policy can be reinstated.',
+    rewrite: !canReinstate ? 'Only a cancelled policy can be rewritten.' : !currentPayload && !pendingByMode.rewrite ? loadingReason : '',
+    cancel: statusLower === 'cancelled' ? 'The policy is already cancelled.' : !currentPayload && !pendingByMode.cancel ? loadingReason : '',
+  }
   const workflowStatus = derivePolicyWorkflowStatus(rawStatus, policy.term)
   // Premium of the current term only (earlier terms excluded); see computeCurrentTermPremium.
   const termPremium = computeCurrentTermPremium(adjustedVersions, policy?.term) || policy?.premium?.total || null
-  const statusLegend = POLICY_STATUS_LEGEND[workflowStatus] || ''
+  const statusLegend = POLICY_STATUS_LEGEND[resolveStatus(String(workflowStatus || '')).label] || ''
   const termStart = formatDate(policy.term?.effectiveDate)
   const termEnd = formatDate(policy.term?.expirationDate)
 
@@ -668,12 +719,9 @@ export function PolicyViewPage() {
           status={
             <>
               {/* The legend sits beside the badge so the badge text is the status alone. */}
-              <span
-                className={`badge ${policyStatusBadgeColor(workflowStatus)}`}
-                title={statusLegend || undefined}
-                aria-describedby={statusLegend ? 'policy-status-legend' : undefined}
-              >
-                {workflowStatus}
+              {/* The shared badge, so the header and search show the same status names. */}
+              <span title={statusLegend || undefined} aria-describedby={statusLegend ? 'policy-status-legend' : undefined}>
+                <StatusBadge status={String(workflowStatus || '')} />
               </span>
               {statusLegend && (
                 <span id="policy-status-legend" className="sr-only">
@@ -715,98 +763,74 @@ export function PolicyViewPage() {
           <div className="policy-actions-header">
             <h3>Policy Actions</h3>
             <div className="policy-action-row">
-              <button
-                type="button"
-                className="btn-secondary"
+              <PolicyActionButton
+                label={pendingByMode.endorse ? 'Continue Endorsement' : 'Endorse'}
                 onClick={() => handleStartTransaction('endorse')}
-                disabled={(!currentPayload && !pendingByMode.endorse) || busy || statusLower === 'cancelled'}
-              >
-                {pendingByMode.endorse ? 'Continue Endorsement' : 'Endorse'}
-              </button>
+                busy={busy}
+                unavailableReason={actionAvailability.endorse}
+              />
               {pendingByMode.endorse && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => handleClearPendingTransaction('endorse')}
-                  disabled={busy}
-                >
+                <button type="button" className="btn-secondary" onClick={() => handleClearPendingTransaction('endorse')} disabled={busy}>
                   Cancel Pending Endorsement
                 </button>
               )}
 
-              <button
-                type="button"
-                className="btn-danger"
-                onClick={() => handleStartTransaction('cancel')}
-                disabled={(!currentPayload && !pendingByMode.cancel) || busy || statusLower === 'cancelled'}
-              >
-                {pendingByMode.cancel ? 'Continue Cancellation' : 'Cancel'}
-              </button>
-              {pendingByMode.cancel && (
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => handleClearPendingTransaction('cancel')}
-                  disabled={busy}
-                >
-                  Cancel Pending Cancellation
-                </button>
-              )}
-
-              <button type="button" className="btn-secondary" onClick={() => handleReinstate()} disabled={busy || !canReinstate}>
-                Reinstate
-              </button>
-
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => handleStartTransaction('rewrite')}
-                disabled={(!currentPayload && !pendingByMode.rewrite) || busy || !canReinstate}
-              >
-                {pendingByMode.rewrite ? 'Continue Rewrite' : 'Rewrite'}
-              </button>
-              {pendingByMode.rewrite && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => handleClearPendingTransaction('rewrite')}
-                  disabled={busy}
-                >
-                  Cancel Pending Rewrite
-                </button>
-              )}
-
-              <button
-                type="button"
-                className="btn-secondary"
+              <PolicyActionButton
+                label={pendingByMode.renew ? 'Continue Renewal' : 'Renew'}
                 onClick={() => handleStartTransaction('renew')}
-                disabled={(!currentPayload && !pendingByMode.renew) || busy || statusLower === 'cancelled'}
-              >
-                {pendingByMode.renew ? 'Continue Renewal' : 'Renew'}
-              </button>
+                busy={busy}
+                unavailableReason={actionAvailability.renew}
+              />
               {pendingByMode.renew && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => handleClearPendingTransaction('renew')}
-                  disabled={busy}
-                >
+                <button type="button" className="btn-secondary" onClick={() => handleClearPendingTransaction('renew')} disabled={busy}>
                   Cancel Pending Renewal
                 </button>
               )}
 
-              <button
-                type="button"
-                className="btn-secondary"
+              <PolicyActionButton
+                label="Non-Renew"
                 onClick={() => setNonRenewModalOpen(true)}
-                disabled={busy || statusLower === 'cancelled' || !!policy.nonRenewedAt}
-                title={policy.nonRenewedAt ? 'Non-renewal already issued' : 'Issue non-renewal notice'}
-              >
-                Non-Renew
-              </button>
+                busy={busy}
+                unavailableReason={actionAvailability.nonRenew}
+              />
+
+              <PolicyActionButton
+                label="Reinstate"
+                onClick={() => void confirmReinstate()}
+                busy={busy}
+                unavailableReason={actionAvailability.reinstate}
+              />
+
+              <PolicyActionButton
+                label={pendingByMode.rewrite ? 'Continue Rewrite' : 'Rewrite'}
+                onClick={() => handleStartTransaction('rewrite')}
+                busy={busy}
+                unavailableReason={actionAvailability.rewrite}
+              />
+              {pendingByMode.rewrite && (
+                <button type="button" className="btn-secondary" onClick={() => handleClearPendingTransaction('rewrite')} disabled={busy}>
+                  Cancel Pending Rewrite
+                </button>
+              )}
+
+              {/* Destructive action last, in the danger style (WP-0004 REQ-6, REQ-12). */}
+              <PolicyActionButton
+                label={pendingByMode.cancel ? 'Continue Cancellation' : 'Cancel policy'}
+                className="btn-danger"
+                onClick={() => handleStartTransaction('cancel')}
+                busy={busy}
+                unavailableReason={actionAvailability.cancel}
+              />
+              {pendingByMode.cancel && (
+                <button type="button" className="btn-danger" onClick={() => handleClearPendingTransaction('cancel')} disabled={busy}>
+                  Cancel Pending Cancellation
+                </button>
+              )}
             </div>
           </div>
         </CollapsibleSection>
+
+        {confirmDialog}
 
         <CollapsibleSection title="Policy Summary" className="card policy-summary-card policy-section-card">
           <div className="policy-summary-grid">

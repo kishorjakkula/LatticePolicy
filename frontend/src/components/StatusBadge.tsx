@@ -22,7 +22,7 @@ interface StatusConfig {
  * { key, label } pair.  The key maps to a CSS modifier class
  * `.status-badge--{key}` defined in styles.css.
  */
-function resolveStatus(raw: string): StatusConfig {
+export function resolveStatus(raw: string): StatusConfig {
   const s = raw.trim().toLowerCase().replace(/[-_\s]+/g, '')
 
   if (s === 'inforce' || s === 'inforced') return { key: 'inforce',    label: 'In Force' }
