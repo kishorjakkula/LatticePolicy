@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { usePolicyAsOf } from '../../api/hooks'
 import { formatDisplayDate } from '../../shared/dateDisplay'
-
-interface PolicyAsOfPanelProps {
-  policyId: string
-}
+import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 function formatCurrency(value?: { amount: number; currency: string } | null): string {
   if (!value || !Number.isFinite(Number(value.amount))) return '-'
@@ -15,87 +12,105 @@ function formatCurrency(value?: { amount: number; currency: string } | null): st
   }
 }
 
-export function PolicyAsOfPanel({ policyId }: PolicyAsOfPanelProps) {
-  const [asOfInput, setAsOfInput] = useState('')
-  const [asOfQuery, setAsOfQuery] = useState<string | null>(null)
+interface PolicyAsOfControlProps {
+  /** The date currently being viewed, or null for the live policy. */
+  asOf: string | null
+  onChange: (asOf: string | null) => void
+}
 
-  const asOfState = usePolicyAsOf(policyId, asOfQuery)
+/** "As of" date control for the policy header; drives PolicyAsOfResult. */
+export function PolicyAsOfControl({ asOf, onChange }: PolicyAsOfControlProps) {
+  const [asOfInput, setAsOfInput] = useState(asOf || '')
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setAsOfQuery(asOfInput || null)
+    onChange(asOfInput || null)
   }
 
   function handleClear() {
     setAsOfInput('')
-    setAsOfQuery(null)
+    onChange(null)
   }
 
   return (
-    <div className="card stack-card policy-asof-panel" data-testid="policy-asof-panel">
-      <details className="policy-collapsible">
-        <summary className="policy-collapsible-summary">View policy as of a date</summary>
-        <div className="policy-collapsible-body">
-          <form className="row row-spaced" onSubmit={handleSubmit}>
-            <div className="col">
-              <label htmlFor="policy-asof-date">As of date</label>
-              <input
-                id="policy-asof-date"
-                type="date"
-                value={asOfInput}
-                onChange={(event) => setAsOfInput(event.target.value)}
-              />
-            </div>
-            <div className="col">
-              <button type="submit" className="btn" disabled={!asOfInput}>
-                View as of
-              </button>
-              {asOfQuery ? (
-                <button type="button" className="btn btn-secondary" onClick={handleClear}>
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </form>
+    <form
+      className="policy-asof-control"
+      style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}
+      onSubmit={handleSubmit}
+      aria-label="View policy as of a date"
+    >
+      <label htmlFor="policy-asof-date" className="sr-only">
+        As of date
+      </label>
+      <input
+        id="policy-asof-date"
+        type="date"
+        value={asOfInput}
+        onChange={(event) => setAsOfInput(event.target.value)}
+      />
+      <button type="submit" className="btn-secondary" disabled={!asOfInput}>
+        View as of
+      </button>
+      {asOf ? (
+        <button type="button" className="btn-secondary" onClick={handleClear}>
+          Clear
+        </button>
+      ) : null}
+    </form>
+  )
+}
 
-          {asOfQuery ? (
-            asOfState.isLoading ? (
-              <p className="muted">Loading state as of {formatDisplayDate(asOfQuery, { fallback: asOfQuery })}...</p>
-            ) : asOfState.error ? (
-              <p className="muted" role="alert">
-                Could not load policy state as of {formatDisplayDate(asOfQuery, { fallback: asOfQuery })}.
-              </p>
-            ) : asOfState.data ? (
-              <div data-testid="policy-asof-result">
-                <p className="muted">
-                  State as of {formatDisplayDate(asOfState.data.asOf, { fallback: asOfQuery })} — this is a
-                  point-in-time snapshot and may differ from the current live policy state shown above.
-                </p>
-                <div className="row row-spaced">
-                  <div className="col">
-                    <label>Segment Start</label>
-                    <div>{formatDisplayDate(asOfState.data.segmentStart, { fallback: '-' })}</div>
-                  </div>
-                  <div className="col">
-                    <label>Segment End</label>
-                    <div>{formatDisplayDate(asOfState.data.segmentEnd, { fallback: '-' })}</div>
-                  </div>
-                  <div className="col">
-                    <label>Premium Total</label>
-                    <div>{formatCurrency(asOfState.data.premium?.total)}</div>
-                  </div>
-                  <div className="col">
-                    <label>Fees / Taxes</label>
-                    <div>
-                      {formatCurrency(asOfState.data.premium?.fees)} / {formatCurrency(asOfState.data.premium?.taxes)}
-                    </div>
-                  </div>
-                </div>
+interface PolicyAsOfResultProps {
+  policyId: string
+  asOf: string | null
+}
+
+/** Point-in-time snapshot for the date chosen in the header; nothing when no date is chosen. */
+export function PolicyAsOfResult({ policyId, asOf }: PolicyAsOfResultProps) {
+  const asOfState = usePolicyAsOf(policyId, asOf)
+  if (!asOf) return null
+  const shownDate = formatDisplayDate(asOf, { fallback: asOf })
+
+  return (
+    <CollapsibleSection
+      title={`Policy as of ${shownDate}`}
+      className="card stack-card policy-section-card policy-asof-panel"
+      data-testid="policy-asof-panel"
+    >
+      {asOfState.isLoading ? (
+        <p className="muted">Loading state as of {shownDate}...</p>
+      ) : asOfState.error ? (
+        <p className="muted" role="alert">
+          Could not load policy state as of {shownDate}.
+        </p>
+      ) : asOfState.data ? (
+        <div data-testid="policy-asof-result">
+          <p className="muted">
+            State as of {formatDisplayDate(asOfState.data.asOf, { fallback: asOf })} — this is a point-in-time
+            snapshot and may differ from the current live policy state shown above.
+          </p>
+          <div className="row row-spaced">
+            <div className="col">
+              <div className="policy-summary-label">Segment Start</div>
+              <div>{formatDisplayDate(asOfState.data.segmentStart, { fallback: '-' })}</div>
+            </div>
+            <div className="col">
+              <div className="policy-summary-label">Segment End</div>
+              <div>{formatDisplayDate(asOfState.data.segmentEnd, { fallback: '-' })}</div>
+            </div>
+            <div className="col">
+              <div className="policy-summary-label">Premium Total</div>
+              <div>{formatCurrency(asOfState.data.premium?.total)}</div>
+            </div>
+            <div className="col">
+              <div className="policy-summary-label">Fees / Taxes</div>
+              <div>
+                {formatCurrency(asOfState.data.premium?.fees)} / {formatCurrency(asOfState.data.premium?.taxes)}
               </div>
-            ) : null
-          ) : null}
+            </div>
+          </div>
         </div>
-      </details>
-    </div>
+      ) : null}
+    </CollapsibleSection>
   )
 }

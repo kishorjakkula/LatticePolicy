@@ -963,6 +963,16 @@ select {
   cursor: pointer;
 }
 
+/* WP-0004 REQ-13: a closed select centres its own text, so vertical padding
+   only steals room from the label. Without this, a select given a smaller
+   height (32px) kept 9px top and bottom padding and clipped its text
+   ("Onen" for "Open"). */
+select:not([multiple]):not([size]) {
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: normal;
+}
+
 input[type="radio"],
 input[type="checkbox"] {
   width: auto;
@@ -1025,9 +1035,9 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0;
-  color: #fff;
+  color: var(--ps-on-primary);
   cursor: pointer;
-  background: var(--accent);
+  background: var(--ps-primary);
   box-shadow: none;
   transition:
     background-color 120ms ease,
@@ -1038,7 +1048,7 @@ button {
 button:hover {
   transform: none;
   filter: none;
-  background: var(--accent-strong);
+  background: var(--ps-primary-hover);
 }
 
 button:disabled {
@@ -1065,21 +1075,22 @@ button:focus-visible {
   background: color-mix(in srgb, var(--panel-soft) 75%, white);
 }
 
+/* Danger: outlined red, for destructive actions such as Cancel policy. */
 .btn-danger {
-  color: #991b1b;
-  border-color: #fca5a5;
-  background: #fee2e2;
+  color: var(--ps-danger);
+  border-color: var(--ps-danger-border);
+  background: transparent;
   box-shadow: none;
 }
 
 .btn-danger:hover {
-  background: #fecaca;
-  border-color: #f87171;
-  color: #7f1d1d;
+  background: var(--ps-danger-soft);
+  border-color: var(--ps-danger);
+  color: var(--ps-danger);
 }
 
 .btn-danger:focus-visible {
-  box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.2);
+  box-shadow: var(--ps-danger-focus);
 }
 
 .toolbar {
@@ -3420,18 +3431,16 @@ button:focus-visible {
 .wizard-nav-next {
   min-width: 210px;
   justify-content: center;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 88%, #4f7cff),
-    color-mix(in srgb, var(--accent-strong) 92%, #2851d8)
-  );
-  color: #fff;
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: 0 8px 18px rgb(59 130 246 / 0.18);
+  /* WP-0004 REQ-6: same primary token as every other primary action. */
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
+  border-color: var(--ps-primary);
+  box-shadow: none;
 }
 
 .wizard-nav-next:hover:not(:disabled) {
-  filter: brightness(1.02);
+  background: var(--ps-primary-hover);
+  border-color: var(--ps-primary-hover);
 }
 
 .review-footer {
@@ -3770,7 +3779,7 @@ button:focus-visible {
 }
 
 .policy-collapsible[open] .policy-collapsible-summary::before {
-  content: "-";
+  content: "\2212";
 }
 
 .policy-collapsible-body {
@@ -3872,14 +3881,41 @@ button:focus-visible {
   display: none;
 }
 
-.timeline-ledger-toggle::before {
-  content: "▸";
-  color: var(--muted);
-  font-size: 0.85rem;
+/* WP-0004 REQ-6: one disclosure style. Summaries use the same circle +/-
+   marker as CollapsibleSection; classed summaries may restyle it. */
+:where(details) > :where(summary) {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
 }
 
+:where(details) > :where(summary)::-webkit-details-marker {
+  display: none;
+}
+
+:where(details) > :where(summary)::before,
+.timeline-ledger-toggle::before {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+:where(details[open]) > :where(summary)::before,
 .timeline-ledger-collapsible[open] .timeline-ledger-toggle::before {
-  content: "▾";
+  content: "\2212";
 }
 
 .timeline-ledger-table {
@@ -4882,6 +4918,12 @@ code {
   --ps-primary-hover: #3651d4;
   --ps-primary-soft: #ebf0ff;
   --ps-primary-focus: 0 0 0 3px rgba(67, 97, 238, 0.2);
+  /* WP-0004 REQ-6: one primary action colour (above) and one danger style. */
+  --ps-on-primary: #ffffff;
+  --ps-danger: #b42318;
+  --ps-danger-border: #f3a19a;
+  --ps-danger-soft: #fef3f2;
+  --ps-danger-focus: 0 0 0 3px rgba(180, 35, 24, 0.2);
   --ps-text: #1a202c;
   --ps-text-secondary: #4a5568;
   --ps-text-muted: #94a3b8;
@@ -4939,6 +4981,11 @@ code {
   --ps-primary-hover: #4d6eee;
   --ps-primary-soft: rgba(67, 97, 238, 0.18);
   --ps-primary-focus: 0 0 0 3px rgba(95, 126, 255, 0.25);
+  --ps-on-primary: #ffffff;
+  --ps-danger: #f97066;
+  --ps-danger-border: rgba(249, 112, 102, 0.55);
+  --ps-danger-soft: rgba(249, 112, 102, 0.14);
+  --ps-danger-focus: 0 0 0 3px rgba(249, 112, 102, 0.28);
   --ps-text: #e8f0ff;
   --ps-text-secondary: #9bb0cf;
   --ps-text-muted: #5c7aa5;
@@ -5269,24 +5316,29 @@ code {
   background: var(--ps-primary-soft);
 }
 
+/* WP-0004 REQ-6: green is for success states (badges, toasts), not actions.
+   The "success" variant is kept for API compatibility and renders as primary. */
 .action-btn--success {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: #fff;
+  background: var(--ps-primary);
+  border-color: var(--ps-primary);
+  color: var(--ps-on-primary);
 }
 .action-btn--success:hover:not(:disabled) {
-  background: #15803d;
-  border-color: #15803d;
+  background: var(--ps-primary-hover);
+  border-color: var(--ps-primary-hover);
 }
 
 .action-btn--danger {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #991b1b;
+  background: transparent;
+  border-color: var(--ps-danger-border);
+  color: var(--ps-danger);
 }
 .action-btn--danger:hover:not(:disabled) {
-  background: #fecaca;
-  border-color: #f87171;
+  background: var(--ps-danger-soft);
+  border-color: var(--ps-danger);
+}
+.action-btn--danger:focus-visible {
+  box-shadow: var(--ps-danger-focus);
 }
 
 .action-btn:focus-visible {
@@ -7611,8 +7663,8 @@ code {
 
 .ps-filter-btn-search {
   padding: 9px 20px;
-  background: #4361ee;
-  color: #ffffff;
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
   border: none;
   border-radius: 8px;
   font-size: 13px;
@@ -7624,7 +7676,7 @@ code {
 }
 
 .ps-filter-btn-search:hover:not(:disabled) {
-  background: #3651d4;
+  background: var(--ps-primary-hover);
 }
 
 .ps-filter-btn-search:disabled {

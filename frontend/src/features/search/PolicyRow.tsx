@@ -3,6 +3,12 @@ import { derivePolicyWorkflowStatus } from '../policies/statusModel'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Checkbox } from '../../components/Checkbox'
+import { POLICY_STATUS_LEGEND, productLabel } from '../../shared/displayLabels'
+
+/** The legend explains each status; the workflow model calls Bound "Bind". */
+export function policyStatusHint(status: string): string | undefined {
+  return POLICY_STATUS_LEGEND[status === 'Bind' ? 'Bound' : status]
+}
 
 function formatPremium(value: any): string {
   const n = Number(value)
@@ -64,7 +70,7 @@ export const PolicyRow = React.memo(function PolicyRow({
       )}
       {show("product") && (
         <td data-col="product" data-label="Product" className="ps-col-secondary">
-          {p.productCode || '\u2014'}
+          {p.productCode ? productLabel(p.productCode) : '\u2014'}
         </td>
       )}
       {show("dates") && (
@@ -94,7 +100,7 @@ export const PolicyRow = React.memo(function PolicyRow({
         </td>
       )}
       {show("status") && (
-        <td data-col="status" data-label="Status">
+        <td data-col="status" data-label="Status" title={policyStatusHint(workflowStatus)}>
           <StatusBadge status={workflowStatus} />
         </td>
       )}

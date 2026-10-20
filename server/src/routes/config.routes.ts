@@ -24,7 +24,7 @@ configRoutes.get('/tenant/preferences', async (req, res, next) => {
     const db = getDb()
     if (!db) {
       const prefs = getMemoryTenantDatePreferences(tenantId)
-      const dateFormat = prefs.dateFormatsByCountry[prefs.defaultCountry] || 'MM-DD-YYYY'
+      const dateFormat = prefs.dateFormatsByCountry[prefs.defaultCountry] || 'MM/DD/YYYY'
       const responsePayload = {
         tenantId,
         defaultCountry: prefs.defaultCountry,

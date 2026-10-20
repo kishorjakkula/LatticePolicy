@@ -22,10 +22,11 @@ export const DATE_FORMAT_VALUES: DateFormatValue[] = [
   'YYYY/MM/DD'
 ]
 
-const DEFAULT_DATE_FORMAT: DateFormatValue = 'MM-DD-YYYY'
+// US carriers expect MM/DD/YYYY (WP-0004 REQ-7).
+const DEFAULT_DATE_FORMAT: DateFormatValue = 'MM/DD/YYYY'
 const DEFAULT_COUNTRY = 'US'
 const DEFAULT_FORMATS: Record<string, DateFormatValue> = {
-  US: 'MM-DD-YYYY',
+  US: 'MM/DD/YYYY',
   CA: 'MM-DD-YYYY'
 }
 const DEFAULT_POLICY_NUMBER_FORMATS: TenantPolicyNumberFormats = {

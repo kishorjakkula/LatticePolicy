@@ -68,6 +68,11 @@ export function Pagination({
   const canNext    = safePage < totalPages
 
   const pageRange = buildPageRange(safePage, totalPages, maxPageButtons)
+  // The picker always lists the size actually in use, so it never shows a
+  // different value from the one the results were fetched with.
+  const sizeOptions = pageSizeOptions.includes(safeSize)
+    ? pageSizeOptions
+    : [...pageSizeOptions, safeSize].sort((a, b) => a - b)
 
   return (
     <nav
@@ -140,7 +145,7 @@ export function Pagination({
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               aria-label="Results per page"
             >
-              {pageSizeOptions.map((opt) => (
+              {sizeOptions.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt} per page
                 </option>

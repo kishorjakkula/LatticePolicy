@@ -20,8 +20,6 @@ const PolicyViewPage = lazy(() => import('./features/policies/PolicyViewPage').t
 const InsuredsPage = lazy(() => import('./features/insureds/InsuredsPage'))
 const SearchPage = lazy(() => import('./features/search/SearchPage').then(m => ({ default: m.SearchPage })))
 const QuoteWizard = lazy(() => import('./features/wizard/QuoteWizard').then(m => ({ default: m.QuoteWizard })))
-const WizardWireframesPage = lazy(() => import('./features/wizard/WizardWireframesPage'))
-const HeaderWireframesPage = lazy(() => import('./features/layout/HeaderWireframesPage'))
 const UsersPage = lazy(() => import('./features/admin/UsersPage').then(m => ({ default: m.UsersPage })))
 const TenantPage = lazy(() => import('./features/admin/TenantPage').then(m => ({ default: m.TenantPage })))
 const UwQueue = lazy(() => import('./features/uw/UwQueue').then(m => ({ default: m.UwQueue })))
@@ -50,6 +48,7 @@ const JobsAdminPage = lazy(() => import('./features/admin/JobsAdminPage').then(m
 const UnderwritingAuthorityPage = lazy(() => import('./features/admin/UnderwritingAuthorityPage').then(m => ({ default: m.UnderwritingAuthorityPage })))
 const UnderwritingRulesPage = lazy(() => import('./features/admin/UnderwritingRulesPage').then(m => ({ default: m.UnderwritingRulesPage })))
 const CustomerPortalPage = lazy(() => import('./features/customerPortal/CustomerPortalPage').then(m => ({ default: m.CustomerPortalPage })))
+const NotFoundPage = lazy(() => import('./components/NotFoundPage').then(m => ({ default: m.NotFoundPage })))
 const ApiDocsRedirectPage = lazy(() => import('./features/apiDocs/ApiDocsRedirectPage').then(m => ({ default: m.ApiDocsRedirectPage })))
 
 export default function App() {
@@ -122,8 +121,6 @@ export default function App() {
             <Route path="/portal" element={<RequireAuth><RequirePermission permission="page.portal.view"><RequireCustomerIdentity><CustomerPortalPage /></RequireCustomerIdentity></RequirePermission></RequireAuth>} />
             <Route path="/search" element={<RequireAuth><RequirePermission permission="page.search.view"><SearchPage /></RequirePermission></RequireAuth>} />
             <Route path="/wizard" element={<RequireAuth><RequirePermission permission="page.wizard.view"><QuoteWizard /></RequirePermission></RequireAuth>} />
-            <Route path="/wizard-wireframes" element={<RequireAuth><RequirePermission permission="page.wizard.view"><WizardWireframesPage /></RequirePermission></RequireAuth>} />
-            <Route path="/header-wireframes" element={<RequireAuth><HeaderWireframesPage /></RequireAuth>} />
             <Route path="/insureds" element={<RequireAuth><InsuredsPage /></RequireAuth>} />
             <Route path="/policies/:id" element={<RequireAuth><RequirePermission permission="page.policy.view"><PolicyViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/customers/:id" element={<RequireAuth><RequirePermission permission="admin.customers.read"><CustomerViewPage /></RequirePermission></RequireAuth>} />
@@ -155,6 +152,7 @@ export default function App() {
               <Route path="underwriting-rules" element={<RequirePermission permission="admin.underwriting_rules.read"><UnderwritingRulesPage /></RequirePermission>} />
             </Route>
             <Route path="/admin/underwriting-companies" element={<Navigate to="/admin/uw-company" replace />} />
+            <Route path="*" element={<RequireAuth><NotFoundPage /></RequireAuth>} />
       </Routes>
     </Suspense>
   )

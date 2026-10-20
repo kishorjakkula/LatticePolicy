@@ -86,7 +86,12 @@ test.describe('customer administration', () => {
 
     // And the policy view links back to the customer.
     await page.goto(`/policies/${setup.policy.policyId}`)
-    await expect(page.getByRole('link', { name: new RegExp(setup.customer.customerKey) })).toBeVisible()
+    // The header names the insured and links to the customer record.
+    const customerHref = [setup.customer.customerId, setup.customer.customerKey]
+      .map((ref: string) => `a[href="/customers/${encodeURIComponent(ref)}"]`)
+      .join(', ')
+    await expect(page.getByTestId('policy-header').locator(customerHref)).toBeVisible()
+    await expect(page.getByTestId('policy-header')).not.toContainText('No insured linked')
   })
 
   test('sensitive identity fields are masked in API responses and reveal is audited', async ({ request, sessionFor }) => {

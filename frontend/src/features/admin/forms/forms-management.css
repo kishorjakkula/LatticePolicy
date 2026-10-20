@@ -26,3 +26,6 @@
   .forms-management .col { flex-basis: 100%; }
   .forms-management .row { grid-template-columns: minmax(0, 1fr); }
 }
+/* WP-0004 REQ-18: form numbers stay on one line; row actions show their text. */
+.forms-management .forms-list-nowrap { white-space: nowrap; overflow-wrap: normal; }
+.forms-management .forms-list-action { gap: 4px; padding: 0 10px; white-space: nowrap; }

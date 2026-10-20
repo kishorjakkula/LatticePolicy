@@ -28,6 +28,71 @@ const COVERAGE_LABELS: Record<string, string> = {
   COLL: 'Collision',
 }
 
+// Policy transaction types as stored (NB, RENEW, Endorse…) to the names users know.
+const TRANSACTION_LABELS: Record<string, string> = {
+  NB: 'New business',
+  NEWBUSINESS: 'New business',
+  NEW_BUSINESS: 'New business',
+  QUOTE: 'Quote',
+  BIND: 'Bind',
+  ISSUE: 'Issue',
+  ENDORSE: 'Endorsement',
+  ENDORSEMENT: 'Endorsement',
+  CANCEL: 'Cancellation',
+  CANCELLATION: 'Cancellation',
+  REINSTATE: 'Reinstatement',
+  REINSTATEMENT: 'Reinstatement',
+  RENEW: 'Renewal',
+  RENEWAL: 'Renewal',
+  REWRITE: 'Rewrite',
+  NONRENEW: 'Non-renewal',
+  NONRENEWAL: 'Non-renewal',
+  NON_RENEWAL: 'Non-renewal',
+}
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  POLICY_PACKET: 'Policy packet',
+  RATING_WORKSHEET: 'Rating worksheet',
+  POLICY_FORM_DOCUMENT: 'Policy form',
+  DECLARATIONS: 'Declarations',
+  ID_CARD: 'ID card',
+  QUOTE_SUMMARY: 'Quote summary',
+  BINDER: 'Binder',
+  CANCELLATION_NOTICE: 'Cancellation notice',
+  NONRENEWAL_NOTICE: 'Non-renewal notice',
+}
+
+/** What each policy status means, for legends and tooltips. */
+export const POLICY_STATUS_LEGEND: Record<string, string> = {
+  Bound: 'Coverage bound; documents not yet issued.',
+  Issued: 'Documents issued; the term has not started yet.',
+  'In Force': 'Issued and the current term has started.',
+  Expired: 'The term ended; no coverage now.',
+  Cancelled: 'Cancelled; no coverage now.',
+}
+
+export function transactionTypeLabel(value: unknown): string {
+  const code = String(value || '').trim()
+  return TRANSACTION_LABELS[code.toUpperCase().replace(/[\s-]+/g, '_')] || TRANSACTION_LABELS[code.toUpperCase().replace(/[\s_-]+/g, '')]
+    // Unknown codes read as sentence case: OUT_OF_SEQUENCE -> "Out of sequence".
+    || sentenceCase(code)
+}
+
+export function documentTypeLabel(value: unknown): string {
+  const code = String(value || '').trim()
+  return DOCUMENT_TYPE_LABELS[code.toUpperCase()] || sentenceCase(code)
+}
+
+/**
+ * A generated document's name for people: "Policy packet — Renewal". The stored
+ * name (e.g. "POLICY_PACKET (Renew) RN-…") is only used when no type is known.
+ */
+export function documentDisplayName(doc: { type?: unknown; transactionType?: unknown; displayName?: unknown }): string {
+  if (!doc.type) return String(doc.displayName || 'Document')
+  const type = documentTypeLabel(doc.type)
+  return doc.transactionType ? `${type} — ${transactionTypeLabel(doc.transactionType)}` : type
+}
+
 export function productLabel(value: unknown): string {
   const code = String(value || '').trim()
   return PRODUCT_LABELS[code.toLowerCase()] || humanizeCode(code)
@@ -41,6 +106,12 @@ export function statusLabel(value: unknown): string {
 export function coverageLabel(value: unknown): string {
   const code = String(value || '').trim()
   return COVERAGE_LABELS[code.toUpperCase()] || humanizeCode(code)
+}
+
+/** OUT_OF_SEQUENCE -> "Out of sequence". */
+function sentenceCase(code: string): string {
+  const text = humanizeCode(code).toLowerCase()
+  return text === '-' ? text : text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 export function humanizeCode(value: unknown): string {
