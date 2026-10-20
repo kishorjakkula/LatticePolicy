@@ -1,6 +1,7 @@
 import { formatDisplayDateTime } from '../../shared/dateDisplay'
 import { usePolicyDocuments } from '../../api/hooks'
 import { api } from '../../api/client'
+import { archivedOutputFormat, canOpenArchivedDocument } from '../../api/policies.api'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
 
 interface PolicyDocumentsPanelProps {
@@ -14,6 +15,12 @@ type PolicyDocument = {
   transactionNumber?: string | null
   integrityStatus?: string
   generatedAt?: string
+  status?: string
+  available?: boolean
+  contentType?: string
+  byteSize?: number
+  versionId?: string
+  transactionId?: string
 }
 
 function integrityBadgeColor(status?: string): string {
@@ -23,15 +30,24 @@ function integrityBadgeColor(status?: string): string {
   return 'yellow' // UNVERIFIED, or any other/unknown status
 }
 
-async function handleOpen(policyId: string, documentId: string) {
+async function handleOpen(policyId: string, doc: PolicyDocument) {
+  if (!canOpenArchivedDocument(doc)) return
+  const format = archivedOutputFormat(doc.contentType)
+  const native = format === 'DOCX' || format === 'XLSX'
   // Reserve the tab during the click; opening only after a fetch can be blocked.
-  const tab = window.open('about:blank', '_blank')
+  const tab = native ? null : window.open('about:blank', '_blank')
   if (tab) tab.opener = null
   try {
-    if (!tab) throw new Error('Allow pop-ups to open policy documents.')
-    const blob = await api.downloadPolicyDocument(policyId, documentId)
+    if (!native && !tab) throw new Error('Allow pop-ups to open policy documents.')
+    const blob = await api.downloadPolicyDocument(policyId, doc.documentId,
+      doc.versionId ? { versionId: doc.versionId, transactionId: doc.transactionId } : undefined)
     const url = URL.createObjectURL(blob)
-    tab.location.href = url
+    if (native) {
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${doc.documentId}.${format.toLowerCase()}`
+      link.click()
+    } else if (tab) tab.location.href = url
     window.setTimeout(() => URL.revokeObjectURL(url), 30000)
   } catch (err) {
     tab?.close()
@@ -82,8 +98,8 @@ export function PolicyDocumentsPanel({ policyId }: PolicyDocumentsPanelProps) {
               {documents.map((doc) => (
                 <tr key={doc.documentId}>
                   <td>{doc.displayName || doc.type || 'Document'}</td>
-                  <td>{doc.type || '-'}</td>
-                  <td className="id-mono">{doc.transactionNumber || '-'}</td>
+                  <td>{doc.type || '-'}<div className="muted">{archivedOutputFormat(doc.contentType)}</div></td>
+                  <td className="id-mono">{doc.transactionNumber || '-'}{doc.versionId && <div className="muted">Version {doc.versionId}</div>}</td>
                   <td>{formatDisplayDateTime(doc.generatedAt, { fallback: '-' })}</td>
                   <td>
                     <span className={`badge ${integrityBadgeColor(doc.integrityStatus)}`}>
@@ -94,11 +110,13 @@ export function PolicyDocumentsPanel({ policyId }: PolicyDocumentsPanelProps) {
                     <button
                       type="button"
                       className="table-link-button"
+                      disabled={!canOpenArchivedDocument(doc)}
+                      title={canOpenArchivedDocument(doc) ? doc.contentType : 'Archived output unavailable or not verified'}
                       onClick={() => {
-                        void handleOpen(policyId, doc.documentId)
+                        void handleOpen(policyId, doc)
                       }}
                     >
-                      Open
+                      {['DOCX', 'XLSX'].includes(archivedOutputFormat(doc.contentType)) ? 'Download' : 'Open'}
                     </button>
                   </td>
                 </tr>

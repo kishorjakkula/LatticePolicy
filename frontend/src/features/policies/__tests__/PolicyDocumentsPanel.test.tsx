@@ -17,6 +17,7 @@ vi.mock('../../../api/client', () => ({
 
 const mockUseDocuments = vi.mocked(usePolicyDocuments)
 const mockDownload = vi.mocked(api.downloadPolicyDocument)
+const ready = { status: 'READY', available: true, byteSize: 100, contentType: 'application/pdf', integrityStatus: 'VERIFIED' }
 
 describe('PolicyDocumentsPanel', () => {
   beforeEach(() => {
@@ -33,7 +34,7 @@ describe('PolicyDocumentsPanel', () => {
   })
 
   it('does not request content when the browser blocks the reserved tab', async () => {
-    mockUseDocuments.mockReturnValue({ data: { documents: [{ documentId: 'doc-1', type: 'POLICY_PACKET' }] }, isLoading: false, error: null } as any)
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, documentId: 'doc-1', type: 'POLICY_PACKET' }] }, isLoading: false, error: null } as any)
     vi.mocked(window.open).mockReturnValue(null)
     render(<PolicyDocumentsPanel policyId="policy-1" />)
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
@@ -106,6 +107,7 @@ describe('PolicyDocumentsPanel', () => {
       data: {
         documents: [
           {
+            ...ready,
             documentId: 'doc-1',
             displayName: 'Policy Document Packet',
             type: 'POLICY_PACKET',
@@ -123,7 +125,7 @@ describe('PolicyDocumentsPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
 
-    expect(mockDownload).toHaveBeenCalledWith('policy-1', 'doc-1')
+    expect(mockDownload).toHaveBeenCalledWith('policy-1', 'doc-1', undefined)
     expect(window.open).toHaveBeenCalled()
   })
 
@@ -132,10 +134,11 @@ describe('PolicyDocumentsPanel', () => {
       data: {
         documents: [
           {
+            ...ready,
             documentId: 'doc-1',
             displayName: 'Policy Document Packet',
             type: 'POLICY_PACKET',
-            integrityStatus: 'UNVERIFIED',
+            integrityStatus: 'VERIFIED',
             generatedAt: '2026-07-01T00:00:00.000Z',
           },
         ],
@@ -150,5 +153,31 @@ describe('PolicyDocumentsPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open' }))
 
     expect(window.alert).toHaveBeenCalledWith('Document download failed 409')
+  })
+
+  it.each([
+    { integrityStatus: 'FAILED' }, { integrityStatus: 'UNVERIFIED' },
+    { status: 'PENDING' }, { status: 'UNKNOWN' }, { available: false },
+    { byteSize: 0 }, { contentType: null },
+  ])('never opens an unavailable archive: %j', async (overrides) => {
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, ...overrides, documentId: 'doc' }] }, isLoading: false } as any)
+    render(<PolicyDocumentsPanel policyId="policy" />)
+    const open = screen.getByRole('button', { name: 'Open' })
+    expect(open).toBeDisabled()
+    await userEvent.click(open)
+    expect(mockDownload).not.toHaveBeenCalled()
+  })
+
+  it('retains exact version and transaction references on archive retrieval', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    mockUseDocuments.mockReturnValue({ data: { documents: [{ ...ready, documentId: 'doc', versionId: 'v1', transactionId: 'tx1', transactionNumber: 'END-1', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }] }, isLoading: false } as any)
+    mockDownload.mockResolvedValue(new Blob(['native bytes']))
+    render(<PolicyDocumentsPanel policyId="policy" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }))
+    expect(mockDownload).toHaveBeenCalledWith('policy', 'doc', { versionId: 'v1', transactionId: 'tx1' })
+    expect(screen.getByText('Version v1')).toBeInTheDocument()
+    expect(click).toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+    click.mockRestore()
   })
 })

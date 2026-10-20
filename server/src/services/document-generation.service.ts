@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from '../uuid.js'
 import { toRawQuery, type DrizzleDB } from '../db.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 import { logger } from '../logger.js'
+import { pinnedFormTriggerRules } from '@lattice-policy/rules'
+import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
 import {
   getDocumentStorageAdapter,
   renderAndStoreDocument,
@@ -44,6 +46,9 @@ export type PolicyDocumentContext = {
   versionId?: string | null
   generatedAt?: string | null
   inputSnapshot?: unknown
+  transaction?: Record<string, unknown>
+  policy?: Record<string, unknown>
+  uw?: Record<string, unknown>
   /** Premium of the transaction, for documents generated before its policy version is saved. */
   premium?: { total?: { amount?: number; currency?: string } | null; fees?: { amount?: number } | null; taxes?: { amount?: number } | null } | null
   requiredFormCodes?: string[]
@@ -359,7 +364,10 @@ export async function selectPolicyForms(
   const adminRows = await q(
     `SELECT f.form_id, f.form_number, f.form_title, f.edition_date, f.form_type,
             a.transaction_types, a.endorsement_change_criteria, o.output_format, o.packet_placement, o.sort_order,
-            d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata
+            d.visibility, d.delivery_methods, j.state_code, j.regulatory_status, f.metadata,
+            (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.priority, t.trigger_id)
+               FROM forms_admin_triggers t
+              WHERE t.tenant_id=f.tenant_id AND t.form_id=f.form_id AND t.active=true) AS attachment_triggers
        FROM forms_admin_forms f
        LEFT JOIN forms_admin_applicability a
          ON a.tenant_id = f.tenant_id AND a.form_id = f.form_id AND a.active = true
@@ -392,6 +400,19 @@ export async function selectPolicyForms(
 
   const forms: SelectedPolicyForm[] = []
   const seen = new Set<string>()
+  // Packet grouping label. The rule context only keeps it for new business.
+  const documentStage = context.transactionType === 'NB' ? 'Bind' : 'Issue'
+  // One rule context per transaction, built only if an opted-in form needs it.
+  const attachmentContext = lazyFormAttachmentContext({
+    payload: context.inputSnapshot,
+    productCode, state, effectiveDate, transactionType: context.transactionType,
+    transaction: { ...(context.transaction || {}), id: context.transactionId, number: context.transactionNumber, effectiveDate, stage: documentStage },
+    policy: { ...(context.policy || {}), policyNumber: context.policyNumber, policyId: context.policyId, versionId: context.versionId },
+    premium: context.premium,
+    uw: context.uw,
+  })
+  // The joins return a row per matching jurisdiction; a form's rules are evaluated once.
+  const adminDecisions = new Map<string, ReturnType<typeof evaluateConfiguredFormAttachment>>()
   for (const row of adminRows.rows as any[]) {
     if (!matchesTransactionType(row.transaction_types, context.transactionType)) continue
     if (normalizeTransactionType(context.transactionType) === 'endorse' &&
@@ -399,6 +420,12 @@ export async function selectPolicyForms(
     if (state && row.state_code && !['approved', 'active', 'filed'].includes(String(row.regulatory_status || '').toLowerCase())) continue
     const code = normalizeText(row.form_number)
     if (!code || seen.has(`admin:${row.form_id}`)) continue
+    let attachment = adminDecisions.get(String(row.form_id))
+    if (!attachment) {
+      attachment = evaluateConfiguredFormAttachment(row.metadata, row.attachment_triggers || [], attachmentContext)
+      adminDecisions.set(String(row.form_id), attachment)
+    }
+    if (!attachment.attach) continue
     const visibility = Array.isArray(row.visibility) && row.visibility.length ? row.visibility.map(String) : ['internal']
     seen.add(`admin:${row.form_id}`)
     forms.push({
@@ -413,6 +440,7 @@ export async function selectPolicyForms(
       customerSafe: isCustomerSafe(visibility),
       sortOrder: Number(row.sort_order || 100),
       metadata: {
+        stage: documentStage,
         source: 'forms_admin',
         sourceFormId: row.form_id || null,
         packetPlacement: row.packet_placement || 'End',
@@ -420,6 +448,9 @@ export async function selectPolicyForms(
         deliveryMethods: Array.isArray(row.delivery_methods) ? row.delivery_methods.map(String) : [],
         formMetadata: row.metadata || {},
         endorsementChangeCriteria: row.endorsement_change_criteria || null,
+        attachmentRuleIds: attachment.matchedRuleIds,
+        attachmentRulesVersion: row.metadata?.attachmentRulesVersion || null,
+        attachmentRules: row.metadata?.attachmentRulesVersion === 1 ? pinnedFormTriggerRules(row.attachment_triggers) : [],
       },
     })
   }
@@ -443,6 +474,8 @@ export async function selectPolicyForms(
     if (state && formState && formState !== state) continue
     const code = normalizeText(row.code)
     if (!code || seen.has(`catalog:${row.form_id}`)) continue
+    const catalogAttachment = evaluateConfiguredFormAttachment(applicability, applicability.attachmentRules || [], attachmentContext)
+    if (!catalogAttachment.attach) continue
     const visibility = Array.isArray(applicability.visibility) && applicability.visibility.length
       ? applicability.visibility.map(String)
       : ['internal']
@@ -459,9 +492,12 @@ export async function selectPolicyForms(
       customerSafe: isCustomerSafe(visibility),
       sortOrder: Number(applicability.sortOrder || 100),
       metadata: {
+        stage: documentStage,
         source: 'forms_catalog',
         render: row.render || {},
         endorsementChangeCriteria: applicability.endorsementChanges || null,
+        attachmentRuleIds: catalogAttachment.matchedRuleIds,
+        attachmentRules: applicability.attachmentRulesVersion === 1 ? pinnedFormTriggerRules(applicability.attachmentRules) : [],
       },
     })
   }

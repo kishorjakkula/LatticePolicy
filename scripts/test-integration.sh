@@ -46,6 +46,7 @@ DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@host.docker.internal:${HOST_P
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e DATABASE_URL="$DATABASE_URL" \
+  -e LATTICE_DISPOSABLE_TEST_DATABASE=true \
   -v "$PWD":/app \
   -v "$VOLUME":/app/node_modules \
   -w /app \

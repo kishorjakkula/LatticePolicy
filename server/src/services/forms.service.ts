@@ -1,6 +1,9 @@
 import { toRawQuery, withTenantTx, type DrizzleDB } from '../db.js'
 import { today, coerceDateOnly, asDateOnly } from '../lib/date.utils.js'
 import { sanitizeInlineFileName } from '../lib/utils.js'
+import { parseValidationTransaction } from '@lattice-policy/rules'
+import { BadRequestError } from '../errors/domain.errors.js'
+import { evaluateConfiguredFormAttachment, lazyFormAttachmentContext } from './form-attachment.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -66,7 +69,12 @@ function normalizeFormsPreviewTransactionType(value: unknown): string {
   if (raw === 'cancellation' || raw === 'cancel') return 'Cancellation'
   if (raw === 'reinstatement' || raw === 'reinstate') return 'Reinstatement'
   if (raw === 'rewrite') return 'Rewrite'
-  return ''
+  if (['nonrenewal', 'non-renewal', 'non_renewal', 'non renewal', 'nonrenew', 'non-renew'].includes(raw)) return 'NonRenewal'
+  // Other new-business names the rules engine accepts (NB, new_business,
+  // QuoteBind) keep the unfiltered preview; anything unknown is rejected
+  // rather than previewed as new business.
+  if (parseValidationTransaction(raw)) return ''
+  throw new BadRequestError('INVALID_INPUT', 'Unknown transaction type for form preview.')
 }
 
 function normalizeStateCode(value: unknown): string {
@@ -254,7 +262,8 @@ export { sanitizeInlineFileName }
 export async function previewForm(
   db: DrizzleDB,
   tenantId: string,
-  body: FormsPreviewBody
+  body: FormsPreviewBody,
+  options: { formId?: string; includeDraft?: boolean } = {},
 ): Promise<FormPreviewItem[]> {
   const lineOfBusiness = normalizeFormsPreviewLabel(body.lineOfBusiness)
   const productCode = normalizeFormsPreviewProductCode(body.productCode)
@@ -266,19 +275,19 @@ export async function previewForm(
     const q = toRawQuery(innerDb)
     const formsRes = await q(
       `SELECT form_id, carrier_code, authority, form_number, form_title, edition_date,
-              line_of_business, require_approved_jurisdiction
+              line_of_business, require_approved_jurisdiction, metadata
          FROM forms_admin_forms
         WHERE tenant_id = $1
-          AND active = true
-          AND workflow_status = 'Approved'
+          AND ($2::uuid IS NULL OR form_id=$2::uuid)
+          AND (($3::boolean AND workflow_status IN ('Draft','Reviewed','Approved')) OR (active = true AND workflow_status = 'Approved'))
         ORDER BY updated_at DESC`,
-      [tenantId]
+      [tenantId, options.formId || null, Boolean(options.includeDraft && options.formId)]
     )
     const forms = formsRes.rows || []
     if (!forms.length) return []
 
     const formIds = forms.map((row: any) => row.form_id)
-    const [jurisdictionsRes, applicabilityRes, outputRes] = await Promise.all([
+    const [jurisdictionsRes, applicabilityRes, outputRes, triggersRes] = await Promise.all([
       q(
         `SELECT form_id, state_code, regulatory_status, effective_date, sunset_date
            FROM forms_admin_jurisdictions
@@ -296,12 +305,24 @@ export async function previewForm(
            FROM forms_admin_output
           WHERE tenant_id = $1 AND form_id = ANY($2::uuid[])`,
         [tenantId, formIds]
+      ),
+      q(
+        `SELECT * FROM forms_admin_triggers
+          WHERE tenant_id=$1 AND form_id=ANY($2::uuid[]) AND active=true
+          ORDER BY priority, trigger_id`,
+        [tenantId, formIds]
       )
     ])
 
     const jurisdictionsByForm = mapRowsByFormId(jurisdictionsRes.rows || [])
     const applicabilityByForm = mapRowsByFormId(applicabilityRes.rows || [])
     const outputByForm = mapRowsByFormId(outputRes.rows || [])
+    const triggersByForm = mapRowsByFormId(triggersRes.rows || [])
+    const attachmentContext = lazyFormAttachmentContext({
+      ...body,
+      payload: body.payload || body,
+      productCode, state: stateCode, effectiveDate, transactionType,
+    })
 
     const attached: FormPreviewItem[] = []
     for (const form of forms) {
@@ -329,6 +350,10 @@ export async function previewForm(
       )
         continue
       if (applicabilityRows.length > 0) reasons.push('Applicability matched')
+
+      const decision = evaluateConfiguredFormAttachment(form.metadata, triggersByForm[String(form.form_id)] || [], attachmentContext)
+      if (!decision.attach) continue
+      reasons.push(decision.reason)
 
       const outputRow = (outputByForm[String(form.form_id)] || [])[0]
       attached.push({

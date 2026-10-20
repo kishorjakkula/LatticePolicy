@@ -13,7 +13,7 @@ import { rate } from '../rating.js'
 import { coerceDateOnly, today, asDateOnly } from '../lib/date.utils.js'
 import { csvEscape, fileExtensionForContentType, isUuidLike, routeParam, sanitizeInlineFileName } from '../lib/utils.js'
 import { requirePermission, hasPermission } from '../auth.js'
-import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument, retrieveStoredDocument, storeRatingWorksheet } from '../services/document-storage.service.js'
+import { regenerateAndVerifyDocument, retrieveAndVerifyStoredDocument } from '../services/document-storage.service.js'
 
 // ── local helpers (in-memory fallback only) ──────────────────────────────────
 
@@ -366,6 +366,7 @@ policyRoutes.get('/policies/:id/versions/:vid/details', requirePermission('page.
     const tenantId = req.tenant!.tenantId
     const id = routeParam(req.params.id)
     const vid = routeParam(req.params.vid)
+    if (!isUuidLike(id) || !isUuidLike(vid)) return res.status(400).json({ code: 'INVALID_ID' })
     const db = getDb()
     if (!db) {
       return res.status(501).json({ code: 'NOT_IMPLEMENTED', message: 'Details available only with DB configured.' })
@@ -442,7 +443,7 @@ policyRoutes.get(
       const result = await withTenantTx(tenantId, async (txDb) => {
         const q = toRawQuery(txDb)
         return q(
-          `SELECT document_id, version_id, type, hash, input_hash, form_set_hash,
+          `SELECT document_id, transaction_id, version_id, type, hash, input_hash, form_set_hash,
                   integrity_status, delivery_evidence, metadata, created_at
              FROM documents
             WHERE tenant_id = $1 AND policy_id = $2::uuid
@@ -456,6 +457,7 @@ policyRoutes.get(
         .map((row) => ({ row, metadata: toMetadataObject(row.metadata) }))
         .filter(({ metadata }) => access.isInternal || metadata.customerSafe === true)
         .map(({ row, metadata }) => ({
+          ...policyService.archivedDocumentReference(row),
           documentId: String(row.document_id),
           versionId: row.version_id || null,
           type: String(row.type),
@@ -586,6 +588,12 @@ policyRoutes.get(
       const tenantId = req.tenant!.tenantId
       const policyId = routeParam(req.params.id)
       const documentId = routeParam(req.params.documentId)
+      const versionId = req.query.versionId
+      const transactionId = req.query.transactionId
+      if ((versionId !== undefined && (typeof versionId !== 'string' || !isUuidLike(versionId)))
+        || (transactionId !== undefined && (typeof transactionId !== 'string' || !isUuidLike(transactionId)))) {
+        return res.status(400).json({ code: 'INVALID_DOCUMENT_SCOPE' })
+      }
       if (!isUuidLike(policyId) || !isUuidLike(documentId)) {
         return res.status(400).json({ code: 'INVALID_ID' })
       }
@@ -598,11 +606,13 @@ policyRoutes.get(
       const result = await withTenantTx(tenantId, async (txDb) => {
         const q = toRawQuery(txDb)
         return q(
-          `SELECT document_id, type, hash, metadata
+          `SELECT document_id, transaction_id, version_id, type, hash, integrity_status, metadata
              FROM documents
             WHERE tenant_id = $1 AND policy_id = $2::uuid AND document_id = $3::uuid
+              AND ($4::uuid IS NULL OR version_id = $4::uuid)
+              AND ($5::uuid IS NULL OR transaction_id = $5::uuid)
             LIMIT 1`,
-          [tenantId, policyId, documentId]
+          [tenantId, policyId, documentId, versionId || null, transactionId || null]
         )
       })
       if (!((result as any).rowCount > 0)) {
@@ -613,37 +623,13 @@ policyRoutes.get(
       if (!access.isInternal && metadata.customerSafe !== true) {
         return res.status(403).json({ code: 'FORBIDDEN', message: 'Document is not customer-safe' })
       }
-      let artifact = toMetadataObject(metadata.artifact)
-      // Legacy worksheets had a snapshot but no artifact or content hash.
-      if (!artifact.storageUri && row.type === 'RATING_WORKSHEET' && metadata.snapshot && String(row.hash || '').startsWith('rating:')) {
-        artifact = await storeRatingWorksheet({ tenantId, documentId, metadata })
-        row.hash = artifact.contentHash
-        await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
-          `UPDATE documents SET hash=$4, integrity_status='VERIFIED', metadata=$5::jsonb
-            WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
-          [tenantId, policyId, documentId, row.hash, JSON.stringify({ ...metadata, artifact })]
-        ))
+      const artifact = toMetadataObject(metadata.artifact)
+      if (!policyService.archivedDocumentReference(row).available) {
+        return res.status(409).json({ code: 'ARCHIVED_DOCUMENT_UNAVAILABLE' })
       }
       const storageUri = artifact.storageUri
       if (!storageUri) return res.status(404).json({ code: 'ARTIFACT_NOT_FOUND' })
-      let content = row.hash ? await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash)) : null
-      let recoveredContent = false
-      // Recover missing packet files from their original metadata only if the bytes
-      // match the recorded hash. Existing corrupt files must still fail integrity.
-      if (!content && row.type === 'POLICY_PACKET' && row.hash && !(await retrieveStoredDocument(String(storageUri)))) {
-        const recovered = await regenerateAndVerifyDocument({ tenantId, documentId, metadata: metadata as any, expectedHash: String(row.hash) })
-        if (recovered) {
-          content = await retrieveAndVerifyStoredDocument(recovered.storageUri, String(row.hash))
-          recoveredContent = Boolean(content)
-        }
-      }
-      if (!content && row.type === 'RATING_WORKSHEET' && metadata.snapshot && row.hash && !(await retrieveStoredDocument(String(storageUri)))) {
-        const recovered = await storeRatingWorksheet({ tenantId, documentId, metadata })
-        if (recovered.contentHash === String(row.hash)) {
-          content = await retrieveAndVerifyStoredDocument(recovered.storageUri, String(row.hash))
-          recoveredContent = Boolean(content)
-        }
-      }
+      const content = await retrieveAndVerifyStoredDocument(String(storageUri), String(row.hash))
       if (!content) {
         await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
           `UPDATE documents SET integrity_status='FAILED'
@@ -653,17 +639,13 @@ policyRoutes.get(
         return res.status(409).json({ code: 'ARTIFACT_INTEGRITY_FAILED' })
       }
 
-      if (recoveredContent) await withTenantTx(tenantId, async (txDb) => toRawQuery(txDb)(
-        `UPDATE documents SET integrity_status='VERIFIED' WHERE tenant_id=$1 AND policy_id=$2::uuid AND document_id=$3::uuid`,
-        [tenantId, policyId, documentId]
-      ))
-
       const resolvedContentType = String(artifact.contentType || 'application/octet-stream')
-      const fileExtension = fileExtensionForContentType(resolvedContentType)
+      const native = resolvedContentType.includes('officedocument')
+      const fileExtension = resolvedContentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? 'xlsx' : fileExtensionForContentType(resolvedContentType)
       res.setHeader('Content-Type', resolvedContentType)
       res.setHeader(
         'Content-Disposition',
-        `inline; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.${fileExtension}`)}"`
+        `${native ? 'attachment' : 'inline'}; filename="${sanitizeInlineFileName(`${row.type}-${documentId}.${fileExtension}`)}"`
       )
       res.setHeader('Cache-Control', 'no-store')
       return res.status(200).send(content)

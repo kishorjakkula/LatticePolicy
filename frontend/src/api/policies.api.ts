@@ -80,8 +80,27 @@ export const deleteAdditionalInterest = (policyId: string, aiId: string) =>
 export const getCancellationReasonCodes = () =>
   request<{ items: any[] }>('GET', '/v1/reference/cancellation-reason-codes')
 
-export const downloadPolicyDocument = async (policyId: string, documentId: string): Promise<Blob> => {
-  const url = `${config.apiBaseUrl}${API_PREFIX}/v1/policies/${encodeURIComponent(policyId)}/documents/${encodeURIComponent(documentId)}/content`
+export function canOpenArchivedDocument(doc: any): boolean {
+  return doc?.available === true && doc?.status === 'READY' && doc?.integrityStatus === 'VERIFIED'
+    && Number(doc?.byteSize) > 0 && Boolean(doc?.contentType)
+}
+
+export function archivedOutputFormat(contentType?: string): string {
+  contentType = contentType?.split(';', 1)[0].trim().toLowerCase()
+  if (contentType === 'application/pdf') return 'PDF'
+  if (contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'DOCX'
+  if (contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'XLSX'
+  if (contentType === 'text/html') return 'HTML'
+  return 'Unknown format'
+}
+
+export const downloadPolicyDocument = async (policyId: string, documentId: string, scope?: { versionId: string; transactionId?: string }): Promise<Blob> => {
+  const params = new URLSearchParams()
+  if (scope) {
+    params.set('versionId', scope.versionId)
+    if (scope.transactionId) params.set('transactionId', scope.transactionId)
+  }
+  const url = `${config.apiBaseUrl}${API_PREFIX}/v1/policies/${encodeURIComponent(policyId)}/documents/${encodeURIComponent(documentId)}/content${scope ? `?${params}` : ''}`
   const res = await fetch(url, { headers: { 'X-Tenant': tenantId(), 'X-Api-Version': config.apiVersion, ...authHeaders() } })
   if (!res.ok) {
     if (res.status === 401) handleUnauthorized()

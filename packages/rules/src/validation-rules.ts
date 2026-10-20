@@ -105,9 +105,16 @@ export type ValidationExtras = {
  * vocabulary.
  */
 export function normalizeValidationTransaction(value: string | null | undefined): ValidationTransaction {
+  return parseValidationTransaction(value) || 'new_business'
+}
+
+/** Like normalizeValidationTransaction, but returns null for an unrecognized name instead of defaulting. */
+export function parseValidationTransaction(value: string | null | undefined): ValidationTransaction | null {
   const key = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
   const aliases: Record<string, ValidationTransaction> = {
     quote: 'new_business',
+    bind: 'new_business',
+    quotebind: 'new_business',
     nb: 'new_business',
     new_business: 'new_business',
     newbusiness: 'new_business',
@@ -123,9 +130,10 @@ export function normalizeValidationTransaction(value: string | null | undefined)
     rewrite: 'rewrite',
     non_renew: 'non_renewal',
     nonrenew: 'non_renewal',
+    nonrenewal: 'non_renewal',
     non_renewal: 'non_renewal',
   }
-  return aliases[key] || 'new_business'
+  return Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key] : null
 }
 
 /**
