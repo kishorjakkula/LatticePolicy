@@ -128,7 +128,7 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
         </div>
         <div className="col">
           <label>Processed (System) Date</label>
-          <div>{formatDisplayDateTime(version.updatedDate, { fallback: '-' })}</div>
+          <div>{formatDisplayDateTime(version.updatedDate, { fallback: '-', includeTime: true })}</div>
         </div>
         <div className="col">
           <label>Valid / Effective Date</label>
@@ -293,7 +293,7 @@ export function TransactionAuditPanel({ policyId, version, timelineTransaction, 
                     <td>{event.event}</td>
                     <td>{event.fromState || '-'}</td>
                     <td>{event.toState || '-'}</td>
-                    <td>{formatDisplayDateTime(event.occurredAt, { fallback: '-' })}</td>
+                    <td>{formatDisplayDateTime(event.occurredAt, { fallback: '-', includeTime: true })}</td>
                     <td>{event.actor || 'system'}</td>
                   </tr>
                 ))}

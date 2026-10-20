@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { usePlacements, useCreatePlacementMutation, useTransitionPlacementStatusMutation } from '../../api/hooks'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { Pagination } from '../../components/Pagination'
 
 const STATUS_BADGE: Record<string, string> = {
   Submission: 'gray',
@@ -67,7 +68,6 @@ export function PlacementsPage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <div className="ps-page-shell">
@@ -146,14 +146,7 @@ export function PlacementsPage() {
               </tbody>
             </table>
           </CollapsibleSection>
-          <div className="ps-pagination-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="muted" style={{ fontSize: 13 }}>Total: {total}</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <ActionButton variant="secondary" size="sm" onClick={() => { if (page > 1) setPage(page - 1) }} disabled={page <= 1}>← Prev</ActionButton>
-              <span className="muted" style={{ fontSize: 13 }}>Page {page} / {totalPages}</span>
-              <ActionButton variant="secondary" size="sm" onClick={() => { if (page < totalPages) setPage(page + 1) }} disabled={page >= totalPages}>Next →</ActionButton>
-            </div>
-          </div>
+          <Pagination page={page} pageSize={pageSize} totalItems={total} onPageChange={setPage} />
         </>
       )}
     </div>

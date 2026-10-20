@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FormsManagementPage } from '../FormsManagementPage'
@@ -45,5 +45,17 @@ describe('Forms catalog scope filters', () => {
     }
     expect(screen.getByRole('row', { name: /NO-APP-AUTO/ })).toHaveTextContent('All auto products')
     expect(screen.getByRole('row', { name: /NO-APP-AUTO/ })).toHaveTextContent('All states')
+  })
+
+  it('shows readable list rows: one-line form numbers, labelled actions and "All states" (WP-0004 REQ-18)', async () => {
+    render(<FormsManagementPage />)
+    const unscoped = await screen.findByRole('row', { name: /ANY-PRODUCT/ })
+    expect(unscoped).toHaveTextContent('All states')
+    expect(screen.getByRole('row', { name: /AUTO-NO-STATE/ })).toHaveTextContent('No approved state')
+    expect(within(unscoped).getByRole('cell', { name: 'ANY-PRODUCT' })).toHaveClass('forms-list-nowrap')
+    const view = within(unscoped).getByRole('button', { name: 'View ANY-PRODUCT' })
+    const edit = within(unscoped).getByRole('button', { name: 'Edit ANY-PRODUCT' })
+    expect(view).toHaveTextContent(/View$/)
+    expect(edit).toHaveTextContent(/Edit$/)
   })
 })

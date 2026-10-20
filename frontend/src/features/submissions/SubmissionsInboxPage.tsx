@@ -106,7 +106,7 @@ export function SubmissionsInboxPage() {
   }
 
   return (
-    <div className="si-page">
+    <div className="si-page si-inbox">
       <div className="si-head">
         <div className="si-grow">
           <h1>Submissions</h1>
@@ -193,7 +193,7 @@ export function SubmissionsInboxPage() {
         ) : !items.length ? (
           <div className="si-empty">No submissions {stage ? 'in this stage' : 'yet'}. {canManage && !stage ? 'Upload a broker email or documents to start.' : ''}</div>
         ) : (
-          <div className="si-table-wrap">
+          <div className="si-table-wrap" data-testid="submission-queue-scroll" role="region" aria-label="Submission queue table" tabIndex={0}>
             <table className="si-table">
               <thead>
                 <tr>

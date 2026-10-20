@@ -100,7 +100,7 @@ test.describe('underwriting authority grants', () => {
       // Effective date shows the calendar date that was saved, in any timezone.
       const [year, month, day] = isoDate(0).split('-')
       const grantRow = page.getByRole('row').filter({ hasText: pl.label }).filter({ has: page.getByRole('cell', { name: 'Active', exact: true }) })
-      await expect(grantRow).toContainText(`${month}-${day}-${year}`)
+      await expect(grantRow).toContainText(`${month}/${day}/${year}`)
 
       // An out-of-scope state is still ungated.
       await page.getByLabel('Scope state code').fill('TX')

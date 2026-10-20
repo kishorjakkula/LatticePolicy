@@ -10,6 +10,8 @@ interface PaginationProps {
   /** Max numbered page buttons to show (excluding prev/next). Defaults to 7. */
   maxPageButtons?: number
   className?: string
+  /** Also show "Showing a–b of N" (tables without their own count). */
+  showRange?: boolean
 }
 
 /**
@@ -60,6 +62,7 @@ export function Pagination({
   pageSizeOptions = [10, 25, 50, 100],
   maxPageButtons = 7,
   className = '',
+  showRange = false,
 }: PaginationProps) {
   const safeSize   = Math.max(1, pageSize || 1)
   const totalPages = Math.max(1, Math.ceil((totalItems || 0) / safeSize))
@@ -68,6 +71,11 @@ export function Pagination({
   const canNext    = safePage < totalPages
 
   const pageRange = buildPageRange(safePage, totalPages, maxPageButtons)
+  // The picker always lists the size actually in use, so it never shows a
+  // different value from the one the results were fetched with.
+  const sizeOptions = pageSizeOptions.includes(safeSize)
+    ? pageSizeOptions
+    : [...pageSizeOptions, safeSize].sort((a, b) => a - b)
 
   return (
     <nav
@@ -77,13 +85,13 @@ export function Pagination({
       {/* Left: "Page X of Y" */}
       <span className="ps-pagination-info">
         {totalItems > 0
-          ? `Page ${safePage.toLocaleString()} of ${totalPages.toLocaleString()}`
+          ? `${showRange ? `Showing ${((safePage - 1) * safeSize + 1).toLocaleString()}–${Math.min(safePage * safeSize, totalItems).toLocaleString()} of ${totalItems.toLocaleString()} · ` : ''}Page ${safePage.toLocaleString()} of ${totalPages.toLocaleString()}`
           : 'No results'}
       </span>
 
       {/* Right: controls + size selector */}
       <div className="ps-pagination-right">
-        <div className="ps-pagination-controls" role="list">
+        <div className="ps-pagination-controls" role="group" aria-label="Pages">
           {/* ← Previous */}
           <button
             type="button"
@@ -140,7 +148,7 @@ export function Pagination({
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               aria-label="Results per page"
             >
-              {pageSizeOptions.map((opt) => (
+              {sizeOptions.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt} per page
                 </option>

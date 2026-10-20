@@ -23,9 +23,20 @@ test('each listed policy document has a distinct stage label and opens real cont
   const downloads: Download[] = []
   context.on('page', (tab) => tab.on('download', (download) => downloads.push(download)))
   const panel = page.getByTestId('policy-documents-panel')
+  // Rows read as names ("Policy packet — Issue"), each distinct by name and transaction number.
+  await expect(panel.locator('tbody tr[data-document-id]')).toHaveCount(documents.length)
+  const visibleNames = await panel
+    .locator('tbody tr[data-document-id]')
+    .evaluateAll((rows) => rows.map((row) => (row as HTMLTableRowElement).cells[0]?.innerText.trim()))
+  expect(new Set(visibleNames).size).toBe(documents.length)
+  for (const name of visibleNames) expect(name).not.toMatch(/POLICY_PACKET|RATING_WORKSHEET|_/)
   for (const [index, doc] of documents.entries()) {
-    const row = panel.getByRole('row').filter({ hasText: doc.displayName })
+    const row = panel.locator(`tr[data-document-id="${doc.documentId}"]`)
     await expect(row).toHaveCount(1)
+    await expect(row).toContainText(doc.type === 'RATING_WORKSHEET' ? 'Rating worksheet' : 'Policy packet')
+    if (doc.transactionNumber) await expect(row).toContainText(doc.transactionNumber)
+    // Version IDs stay under "Details", not inline.
+    if (doc.versionId) await expect(row).not.toContainText(doc.versionId)
     const downloadCount = downloads.length
     const popupPromise = context.waitForEvent('page')
     const responsePromise = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/documents/${doc.documentId}/content`))

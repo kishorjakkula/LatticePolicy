@@ -56,12 +56,22 @@ describe('forms catalog state filter', () => {
 })
 
 describe('forms catalog scope labels', () => {
-  it('explains why unscoped forms appear', () => {
+  it('says what applies rather than what is missing (WP-0004 REQ-18)', () => {
     expect(formScopeLabels(explicit)).toEqual({ products: 'personal-auto', states: 'CA' })
     expect(formScopeLabels({ ...explicit, hasApplicability: false, productCodes: [], stateCodes: [], requireApprovedJurisdiction: false }))
       .toEqual({ products: 'All personal-auto products', states: 'All states' })
-    expect(formScopeLabels({ ...explicit, stateCodes: ['ALL', 'CA'] }))
-      .toEqual({ products: 'personal-auto', states: 'All states, CA' })
-    expect(formScopeLabels({ ...explicit, productCodes: [], stateCodes: [] })).toEqual({ products: 'No product scope', states: 'No state scope' })
+    expect(formScopeLabels({ ...explicit, productCodes: [], stateCodes: [] })).toEqual({ products: 'No products', states: 'No approved state' })
+    expect(formScopeLabels({ hasApplicability: false, stateCodes: [] })).toEqual({ products: 'No products', states: 'No approved state' })
+  })
+  it('collapses an ALL jurisdiction row to "All states", in any case', () => {
+    expect(formScopeLabels({ ...explicit, stateCodes: ['ALL', 'CA'] }).states).toBe('All states')
+    expect(formScopeLabels({ ...explicit, stateCodes: ['all'] }).states).toBe('All states')
+  })
+  it('does not treat a code that merely contains ALL as all states', () => {
+    expect(formScopeLabels({ ...explicit, stateCodes: ['ALLX', 'XALL'] }).states).toBe('ALLX, XALL')
+  })
+  it('never says "All states" for a form that needs approval but has no state', () => {
+    expect(formScopeLabels({ ...explicit, stateCodes: [], requireApprovedJurisdiction: true }).states).toBe('No approved state')
+    expect(formScopeLabels({ ...explicit, stateCodes: [], requireApprovedJurisdiction: undefined }).states).toBe('No approved state')
   })
 })

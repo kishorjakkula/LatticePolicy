@@ -65,14 +65,21 @@ export function formMatchesScopeFilter(item: FormScopeSummary, filter: { product
   return formMatchesProductFilter(item, filter.product) && formMatchesStateFilter(item, filter.state)
 }
 
-/** Catalog list labels that say why an unscoped form appears under a filter. */
+/**
+ * Catalog list labels that say what applies (WP-0004 REQ-18), mirroring the
+ * product and state filters above: a form with no state rows applies in all
+ * states unless it requires an approved jurisdiction, in which case it applies
+ * in none until one is approved.
+ */
 export function formScopeLabels(item: FormScopeSummary): { products: string; states: string } {
   const products = item.hasApplicability === false
-    ? (item.lineOfBusiness ? `All ${item.lineOfBusiness} products` : 'No product scope')
-    : (item.productCodes || []).join(', ') || 'No product scope'
+    ? (item.lineOfBusiness ? `All ${item.lineOfBusiness} products` : 'No products')
+    : (item.productCodes || []).join(', ') || 'No products'
   const stateCodes = (item.stateCodes || []).map((code) => (code.toUpperCase() === 'ALL' ? 'All states' : code))
-  const states = stateCodes.length
-    ? stateCodes.join(', ')
-    : item.requireApprovedJurisdiction === false ? 'All states' : 'No state scope'
+  const states = stateCodes.includes('All states')
+    ? 'All states'
+    : stateCodes.length
+      ? stateCodes.join(', ')
+      : item.requireApprovedJurisdiction === false ? 'All states' : 'No approved state'
   return { products, states }
 }

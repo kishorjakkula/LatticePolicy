@@ -155,7 +155,7 @@ export function TenantPage() {
   const [mfaRequired, setMfaRequired] = useState(false)
   const [aiMlConfig, setAiMlConfig] = useState<AiMlConfigState>(defaultAiMlConfigState())
   const [dateFormatRows, setDateFormatRows] = useState<DateFormatRow[]>([
-    createDateFormatRow('US', 'MM-DD-YYYY'),
+    createDateFormatRow('US', 'MM/DD/YYYY'),
     createDateFormatRow('CA', 'MM-DD-YYYY')
   ])
   const [policyNumberRows, setPolicyNumberRows] = useState<PolicyNumberFormatRow[]>([
@@ -199,10 +199,10 @@ export function TenantPage() {
         dateFormatsByCountry[country] = row.format
       }
       if (!Object.keys(dateFormatsByCountry).length) {
-        dateFormatsByCountry.US = 'MM-DD-YYYY'
+        dateFormatsByCountry.US = 'MM/DD/YYYY'
       }
       if (!dateFormatsByCountry[defaultCountry]) {
-        dateFormatsByCountry[defaultCountry] = 'MM-DD-YYYY'
+        dateFormatsByCountry[defaultCountry] = 'MM/DD/YYYY'
       }
       const policyNumberFormatsByProduct: Record<string, string> = {}
       for (const row of policyNumberRows) {
