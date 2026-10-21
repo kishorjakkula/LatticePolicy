@@ -21,6 +21,10 @@ Prove the deployed system works end to end, not just the code in CI.
 - Use synthetic data only; never real customer data.
 - Before rerunning a failed test, copy its screenshots, trace and log into the
   work package (`evidence/`); a rerun clears Playwright's `test-results/`.
+- Run repeated or parallel journeys (`--repeat-each`) on the isolated stack
+  (`npm run test:e2e:isolated`), which gives each test its own client IP; the
+  local staging stack applies the per-IP rate limit and fails heavy runs with
+  `429`.
 
 ## You produce
 

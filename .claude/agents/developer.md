@@ -46,7 +46,8 @@ than you found it.
 - Treat code scanning (CodeQL) and dependency alerts raised on the pull request
   as defects to fix before Gate C.
 - Do not widen scope. If the design is wrong or incomplete, stop and return the
-  package to the architect.
+  package to the architect. When the implementation differs from a contract in
+  `02-design.md` (route, field, error code), say so in `05-implementation.md`.
 - Run the relevant checks before handing off: `npm run typecheck`, the tests for
   the touched workspaces, and the integration suite on a fresh database when
   persistence changes. Never point tests at a running demo or pilot database.

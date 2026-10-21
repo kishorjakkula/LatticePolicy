@@ -3,7 +3,7 @@
 
 - Track: **major** — coverages and premium shown to users (rating area is always major)
 - State: **in-progress**
-- Next: human approval at Gate C
+- Next: human approval at Gate D
 
 | Stage | Output | Status | Returns |
 | --- | --- | --- | --- |
@@ -17,9 +17,9 @@
 | Code Reviewer | `07-code-review.md` | done | 0 |
 | Security and Compliance | `08-security-compliance.md` | done | 0 |
 | Automation Test | `09-automation-tests.md` | done | 0 |
-| Deployment | `10-release.md` | pending | 0 |
-| End-to-End Test | `11-e2e-results.md` | pending | 0 |
-| Business Validation | `12-business-validation.md` | pending | 0 |
+| Deployment | `10-release.md` | done | 0 |
+| End-to-End Test | `11-e2e-results.md` | done | 0 |
+| Business Validation | `12-business-validation.md` | done | 0 |
 | Knowledge Curator | `13-lessons.md` | pending | 0 |
 
 ## Gates
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | A | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Approved (all five recommended answers accepted) |
 | B | approved | Kishor Kumar Jakkula (product owner) (2026-10-18) | Approve |
-| C | pending |  |  |
+| C | approved | kishorjakkula (code owner) (2026-10-19) | Merged PR #385 (25606a0); in chat: "I approve it" |
 | D | pending |  |  |
 
 ## History
@@ -51,3 +51,7 @@
 - 2026-10-18T16:40:41.055Z — Code Reviewer completed
 - 2026-10-18T16:45:45.331Z — Security and Compliance completed
 - 2026-10-18T16:45:45.481Z — Automation Test completed
+- 2026-10-19T00:50:37.837Z — Gate C approved by kishorjakkula (code owner): "Merged PR #385 (25606a0); in chat: "I approve it""
+- 2026-10-19T00:50:42.220Z — Deployment completed
+- 2026-10-19T00:50:42.331Z — End-to-End Test completed
+- 2026-10-19T01:01:45.033Z — Business Validation completed

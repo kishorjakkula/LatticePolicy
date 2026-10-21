@@ -84,6 +84,68 @@ test.describe('new business quote wizard', () => {
     await expect(page.getByRole('row').filter({ hasText: /NB-\d{8}-/ }).first()).toBeVisible()
   })
 
+  test('compatible company choices preserve answers; only an explicit product change asks before clearing them', async ({ page, signInAs }) => {
+    await signInAs(page, 'agent1')
+    await page.goto('/wizard')
+    await expectWizardStep(page, 1)
+    await selectProduct(page, { company: 'Sample Carrier Property', state: 'TX', productCode: 'homeowners' })
+    const homeownersCompany = (await fieldByLabel(page, 'Underwriting Company').locator('option:checked').textContent())?.trim() || ''
+    await continueToStep(page, 2)
+    await answerAllQualificationQuestions(page)
+    await page.getByRole('button', { name: /Back$/ }).click()
+    await expectWizardStep(page, 1)
+
+    const company = fieldByLabel(page, 'Underwriting Company')
+    await expect(company.locator('option')).toHaveText(['Select underwriting company', 'Sample Carrier Property'])
+    // Incompatible personal-auto companies are unavailable, not a destructive
+    // company-change path. Inspect actual saved payloads for silent data loss.
+    const savePayload = async () => {
+      const response = page.waitForResponse(response => response.url().includes('/api/v1/quotes/') && response.url().endsWith('/draft') && response.request().method() === 'PATCH')
+      await page.getByRole('button', { name: 'Save Draft' }).click()
+      const saved = await response
+      expect(saved.ok()).toBeTruthy()
+      return saved.request().postDataJSON().payload
+    }
+    const before = await savePayload()
+    expect(Object.values(before.qualificationAnswers)).toContain('yes')
+    await company.selectOption('')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    const deselected = await savePayload()
+    expect(deselected).toEqual({ ...before, underwritingCompanyId: '', underwritingCompanyName: '' })
+    await company.selectOption({ label: homeownersCompany })
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    const reselected = await savePayload()
+    expect(reselected).toEqual({ ...before, underwritingCompanyId: reselected.underwritingCompanyId })
+
+    for (const dismiss of ['Keep', 'Escape']) {
+      await fieldByLabel(page, 'Product').selectOption('personal-auto')
+      const dialog = page.getByRole('dialog', { name: 'Change product to Personal Auto?' })
+      await expect(dialog).toContainText('entered for Homeowners will be cleared')
+      if (dismiss === 'Keep') await dialog.getByRole('button', { name: 'Keep Homeowners' }).click()
+      else await page.keyboard.press('Escape')
+      await expect(dialog).toBeHidden()
+      await expect(fieldByLabel(page, 'Product')).toHaveValue('homeowners')
+      await expect(fieldByLabel(page, 'State')).toHaveValue('TX')
+      expect(await savePayload()).toEqual(reselected)
+    }
+    await expect(company.locator('option:checked')).toHaveText(homeownersCompany)
+    await continueToStep(page, 2)
+    for (const group of await page.getByRole('radiogroup').all()) {
+      await expect(group.getByRole('radio', { name: 'Yes' })).toBeChecked()
+    }
+    await page.getByRole('button', { name: /Back$/ }).click()
+    await fieldByLabel(page, 'Product').selectOption('personal-auto')
+    await page.getByRole('dialog').getByRole('button', { name: 'Change product' }).click()
+    await expect(fieldByLabel(page, 'Product')).toHaveValue('personal-auto')
+    await expect(company.locator('option')).toHaveText(['Select underwriting company', 'Sample Carrier Personal Lines'])
+    const changed = await savePayload()
+    expect(Object.values(changed.qualificationAnswers).every(value => value === '')).toBe(true)
+    for (const key of ['applicant', 'insureds', 'country', 'state', 'effectiveDate', 'termMonths', 'agencyId', 'agencyName', 'agencyCommissionPct',
+      'priorPolicyNumber', 'priorCarrier', 'priorExpirationDate', 'yearsWithPriorCarrier', 'billingMethod', 'paymentPlan', 'mailingAddress', 'additionalInterests']) {
+      expect(changed[key], key).toEqual(before[key])
+    }
+  })
+
   test('blocks each step until its required data is supplied', async ({ page, signInAs }) => {
     await signInAs(page, 'admin')
     const insured = insuredName()

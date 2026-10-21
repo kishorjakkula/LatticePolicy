@@ -935,6 +935,7 @@ export function QuoteWizard() {
   // The homeowners defaults the wizard applied itself (not the agent's choices).
   const autoDefaultCoveragesRef = useRef('')
   const [pendingProductChange, setPendingProductChange] = useState<QuoteProductCode | null>(null)
+  const [pendingCompanyChange, setPendingCompanyChange] = useState<string | null>(null)
   const [riskScreenChecked, setRiskScreenChecked] = useState(false)
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [setupChecked, setSetupChecked] = useState(false)
@@ -2192,6 +2193,51 @@ export function QuoteWizard() {
       return
     }
     onProductChange(code)
+  }
+
+  function companyRetainsProduct(nextName: string): boolean {
+    return !nextName || !q.productCode || underwritingCompanies.some(company => companyNameKey(company.name) === companyNameKey(nextName))
+  }
+
+  /** Compatible companies keep entered business data; destructive fallback still requires confirmation. */
+  function requestCompanyChange(nextName: string) {
+    if (isViewOnly || lockCoreProductFields || isCancellationMode) return
+    if (companyNameKey(q.underwritingCompanyName) === companyNameKey(nextName)) return
+    if (!companyRetainsProduct(nextName) && hasProductSpecificData()) {
+      setPendingCompanyChange(nextName)
+      return
+    }
+    onCompanyChange(nextName)
+  }
+
+  function onCompanyChange(nextName: string) {
+    setCompanyNotice(null)
+    if (companyRetainsProduct(nextName)) {
+      setQ(prev => ({ ...prev, underwritingCompanyId: '', underwritingCompanyName: nextName }))
+      setQuoteResp(null)
+      setQuoteDocumentModel(null)
+      resetBindingState()
+      return
+    }
+    setQ((prev) => {
+      if (companyNameKey(prev.underwritingCompanyName) === companyNameKey(nextName)) return prev
+      return {
+        ...prev,
+        underwritingCompanyId: '',
+        underwritingCompanyName: nextName,
+        country: '',
+        state: '',
+        productCode: '',
+        policyOffering: '',
+        qualificationAnswers: {},
+        risks: [],
+        coverages: []
+      }
+    })
+    setQuoteResp(null)
+    setQuoteDocumentModel(null)
+    resetBindingState()
+    setQualificationErrors({})
   }
 
   function onProductChange(code: QuoteProductCode) {
@@ -3626,6 +3672,21 @@ export function QuoteWizard() {
           }}
         />
       )}
+      {pendingCompanyChange !== null && q.productCode && (
+        <ProductChangeDialog
+          from={productLabel(q.productCode as ProductCode)}
+          to={pendingCompanyChange || 'no underwriting company'}
+          title={`Change underwriting company to ${pendingCompanyChange || 'no underwriting company'}?`}
+          description={`The product, state, coverages, risk details and qualification answers entered for ${productLabel(q.productCode as ProductCode)} will be cleared. Insureds are kept.`}
+          confirmLabel="Change company"
+          onKeep={() => setPendingCompanyChange(null)}
+          onChange={() => {
+            const next = pendingCompanyChange
+            setPendingCompanyChange(null)
+            onCompanyChange(next)
+          }}
+        />
+      )}
       {ackRequest && (
         <ValidationAcknowledgeDialog
           action={ackRequest.action}
@@ -3855,17 +3916,7 @@ export function QuoteWizard() {
                 aria-invalid={Boolean(setupErrors.underwritingCompanyName)}
                 aria-describedby={setupErrors.underwritingCompanyName ? 'wizard-setup-company-error' : undefined}
                 value={q.underwritingCompanyName || ''}
-                onChange={e => {
-                  // The company is chosen after the product and state (REQ-8), so
-                  // changing it keeps them; the rating is redone for the new company.
-                  const nextName = e.target.value
-                  setCompanyNotice(null)
-                  if (companyNameKey(q.underwritingCompanyName) === companyNameKey(nextName)) return
-                  setQ((prev) => ({ ...prev, underwritingCompanyId: '', underwritingCompanyName: nextName }))
-                  setQuoteResp(null)
-                  setQuoteDocumentModel(null)
-                  resetBindingState()
-                }}
+                onChange={e => requestCompanyChange(e.target.value)}
                 disabled={isCancellationMode || loadingUnderwritingCompanies || lockCoreProductFields || isViewOnly}
               >
                 <option value="">
@@ -5900,7 +5951,15 @@ function DwellingRiskEditor({ value, onChange }: { value: any; onChange: (v:any)
 }
 
 /** Confirms a product change that would clear the current product's coverages, risks and answers. */
-export function ProductChangeDialog({ from, to, onKeep, onChange }: { from: string; to: string; onKeep: () => void; onChange: () => void }) {
+export function ProductChangeDialog({ from, to, title, description, confirmLabel = 'Change product', onKeep, onChange }: {
+  from: string
+  to: string
+  title?: string
+  description?: string
+  confirmLabel?: string
+  onKeep: () => void
+  onChange: () => void
+}) {
   const keepRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const onKeepRef = useRef(onKeep)
@@ -5930,12 +5989,12 @@ export function ProductChangeDialog({ from, to, onKeep, onChange }: { from: stri
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="product-change-title">
       <div className="modal-panel" ref={panelRef}>
         <div className="modal-header">
-          <h3 id="product-change-title">Change product to {to}?</h3>
+          <h3 id="product-change-title">{title ?? `Change product to ${to}?`}</h3>
         </div>
-        <p>Coverages, risk details and qualification answers entered for {from} will be cleared. Insureds and policy details are kept.</p>
+        <p>{description ?? `Coverages, risk details and qualification answers entered for ${from} will be cleared. Insureds and policy details are kept.`}</p>
         <div className="product-change-actions" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button type="button" className="btn-secondary" ref={keepRef} onClick={onKeep}>Keep {from}</button>
-          <button type="button" onClick={onChange}>Change product</button>
+          <button type="button" onClick={onChange}>{confirmLabel}</button>
         </div>
       </div>
     </div>

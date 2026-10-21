@@ -29,13 +29,16 @@ type PolicyDocument = {
 /**
  * The name people read: "Policy packet — Renewal". A filled form document is
  * named by its form ("Auto Policy Declarations [PA-DEC]") so several forms from
- * one transaction stay distinguishable; the server only exposes that title in
- * the stored display name, ahead of the bracketed form code.
+ * one transaction stay distinguishable. Prefer single-form metadata, falling
+ * back to the title ahead of the bracketed form code in the stored name.
  */
-export function policyDocumentName(doc: Pick<PolicyDocument, 'type' | 'displayName' | 'transactionType'>): string {
+export function policyDocumentName(doc: Pick<PolicyDocument, 'type' | 'displayName' | 'transactionType'> & { forms?: Array<{ code?: string; title?: string }> }): string {
   if (String(doc.type || '').toUpperCase() === 'POLICY_FORM_DOCUMENT') {
-    // Form documents always store "<form title> [<code>] …" (document-generation.service).
-    const formTitle = /^(.+?\[[^\]]+\])/.exec(String(doc.displayName || ''))?.[1]
+    const form = Array.isArray(doc.forms) && doc.forms.length === 1 ? doc.forms[0] : null
+    // Prefer the form the document fills; else the title ahead of the bracketed code.
+    const formTitle = form?.title
+      ? `${form.title}${form.code ? ` [${form.code}]` : ''}`
+      : /^(.+?\[[^\]]+\])/.exec(String(doc.displayName || ''))?.[1]
     if (formTitle) return doc.transactionType ? `${formTitle} — ${transactionTypeLabel(doc.transactionType)}` : formTitle
   }
   return documentDisplayName(doc)
