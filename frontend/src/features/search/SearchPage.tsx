@@ -865,7 +865,7 @@ export function SearchPage() {
             <h1 className="ps-page-title">Policy Search</h1>
           </div>
           <div className="ps-page-header-actions">
-            <ActionButton variant="success" onClick={() => navigate("/wizard")}>
+            <ActionButton variant="primary" onClick={() => navigate("/wizard")}>
               New Quote
             </ActionButton>
             {mode === "customers" &&
@@ -948,7 +948,7 @@ export function SearchPage() {
       </div>
 
       {/* ===== Filter Panel ===== */}
-      <CollapsibleSection title="Filters" className="ps-filter-panel policy-section-card">
+      <CollapsibleSection title="Filters" className="ps-filter-panel policy-section-card" defaultOpen={!window.matchMedia?.('(max-width: 767px)')?.matches}>
         <form
           onSubmit={onSubmit}
           className="ps-filter-grid"

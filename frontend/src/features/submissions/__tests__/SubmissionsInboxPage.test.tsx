@@ -64,6 +64,7 @@ describe('SubmissionsInboxPage', () => {
 
     const css = readFileSync(resolve(__dirname, '../submissions.css'), 'utf8')
     expect(css).toMatch(/\.si-table-wrap\s*\{[^}]*overflow-x:\s*auto[^}]*max-width:\s*100%/)
+    expect(css).toMatch(/\.si-table-wrap\s*\{[^}]*position:\s*relative/)
     expect(css).toMatch(/\.si-inbox\s*\{[^}]*min-width:\s*0/)
     expect(css).toMatch(/\.si-inbox \.si-table-wrap\s*\{[^}]*contain:\s*inline-size/)
   })

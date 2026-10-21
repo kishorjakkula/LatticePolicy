@@ -57,6 +57,8 @@ test.describe('admin-configurable underwriting rules', () => {
       expect(referred.underwriting.reasons).toContain(reason)
       const blocked = await apiJson<any>(request, 'POST', `/api/v1/quotes/${referred.quoteId}/bind`, { token: admin.token, data: {}, expectedStatus: 400 })
       expect(blocked.code).toBe('UW_REFERRAL_REQUIRED')
+      const referralId = blocked.message.match(/Referral ([0-9a-f-]{36})/)?.[1]
+      expect(referralId).toBeTruthy()
 
       // Non-matching risk and out-of-scope state are untouched.
       const small = await createQuote(request, admin.token, productQuotePayload(cyber, { name: 'Refer Small', state: RULE_STATE }))
@@ -66,15 +68,14 @@ test.describe('admin-configurable underwriting rules', () => {
 
       // The underwriter sees the referral with the admin-authored reason and approves it.
       await signInAs(page, 'uw1')
-      await page.goto('/uw/queue')
-      const referralRow = page.getByRole('row').filter({ hasText: reason }).first()
-      await expect(referralRow).toContainText('Cyber')
-      await expect(referralRow).toContainText('Open')
-      page.once('dialog', (dialog) => void dialog.accept('Approved in E2E'))
-      await Promise.all([
-        page.waitForResponse((response) => response.url().includes('/uw/referrals/') && response.request().method() === 'PATCH' && response.ok()),
-        referralRow.getByRole('button', { name: 'Approve' }).click(),
-      ])
+      await page.goto(`/uw/queue/${referralId}`)
+      await expect(page.getByRole('region', { name: 'Why this was referred' })).toContainText(reason)
+      await expect(page.getByRole('region', { name: 'Key facts' })).toContainText('Cyber')
+      await page.getByRole('button', { name: 'Approve', exact: true }).click()
+      const decision = page.getByRole('dialog', { name: /Approve referral/ })
+      await decision.getByLabel('Reason (required)').fill('Approved in E2E after explicit review')
+      await decision.getByRole('button', { name: 'Approve', exact: true }).click()
+      await expect(page).toHaveURL(/\/uw\/queue$/)
 
       const bound = await apiJson<any>(request, 'POST', `/api/v1/quotes/${referred.quoteId}/bind`, { token: admin.token, data: {} })
       expect(bound.status).toBe('Bound')

@@ -40,7 +40,7 @@ test.describe('sign-in, sign-out, and session handling', () => {
     await loginThroughUi(page, 'uw1')
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Administration/ })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
   })
 
   test('login API enforces credentials and tenant', async ({ request }) => {

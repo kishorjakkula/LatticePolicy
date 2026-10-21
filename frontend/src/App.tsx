@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { NavLink, Route, Routes, Navigate, useLocation } from 'react-router-dom'
+import { Route, Routes, Navigate, useLocation } from 'react-router-dom'
 import { LoginPage } from './features/auth/LoginPage'
 import { Spinner } from './components/Spinner'
 import { useAuth } from './auth/AuthContext'
@@ -9,9 +9,9 @@ import { hasPermission } from './auth/permissions'
 import { config } from './config'
 import { getInitials } from './utils/initials'
 import { useGlobalSearch } from './hooks/useGlobalSearch'
-import { useMobileNav } from './hooks/useMobileNav'
 import { useMobileTableLabels } from './hooks/useMobileTableLabels'
-import { RequireAuth, RequireAdmin, RequirePermission, RequireCustomerIdentity, AdminIndexRedirect, HomeRedirect, hasCustomerIdentity } from './components/RouteGuards'
+import { RequireAuth, RequireAdmin, RequirePermission, RequireCustomerIdentity, HomeRedirect } from './components/RouteGuards'
+import { AppNav } from './components/AppNav'
 import { CarrierBrand } from './tenant/carrierBranding'
 import { authHeaders, tenantId } from './api/request'
 
@@ -23,12 +23,14 @@ const QuoteWizard = lazy(() => import('./features/wizard/QuoteWizard').then(m =>
 const UsersPage = lazy(() => import('./features/admin/UsersPage').then(m => ({ default: m.UsersPage })))
 const TenantPage = lazy(() => import('./features/admin/TenantPage').then(m => ({ default: m.TenantPage })))
 const UwQueue = lazy(() => import('./features/uw/UwQueue').then(m => ({ default: m.UwQueue })))
+const UwReferralDetail = lazy(() => import('./features/uw/UwReferralDetail').then(m => ({ default: m.UwReferralDetail })))
 const PlacementsPage = lazy(() => import('./features/placements/PlacementsPage').then(m => ({ default: m.PlacementsPage })))
 const SubmissionsInboxPage = lazy(() => import('./features/submissions/SubmissionsInboxPage').then(m => ({ default: m.SubmissionsInboxPage })))
 const SubmissionReviewPage = lazy(() => import('./features/submissions/SubmissionReviewPage').then(m => ({ default: m.SubmissionReviewPage })))
 const RatingWorkbenchPage = lazy(() => import('./features/rating/RatingWorkbenchPage').then(m => ({ default: m.RatingWorkbenchPage })))
 const AdministrationPage = lazy(() => import('./features/admin/AdministrationPage').then(m => ({ default: m.AdministrationPage })))
 const AdminShell = lazy(() => import('./features/admin/AdminShell').then(m => ({ default: m.AdminShell })))
+const AdminHomePage = lazy(() => import('./features/admin/AdminHomePage').then(m => ({ default: m.AdminHomePage })))
 const FormsManagementPage = lazy(() => import('./features/admin/FormsManagementPage').then(m => ({ default: m.FormsManagementPage })))
 const SecurityPage = lazy(() => import('./features/admin/SecurityPage').then(m => ({ default: m.SecurityPage })))
 const CustomersPage = lazy(() => import('./features/admin/CustomersPage').then(m => ({ default: m.CustomersPage })))
@@ -54,7 +56,6 @@ const ApiDocsRedirectPage = lazy(() => import('./features/apiDocs/ApiDocsRedirec
 export default function App() {
   const { token, user, logout } = useAuth()
   const location = useLocation()
-  const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : undefined)
   const isLoginRoute = location.pathname === '/login'
   const canUseGlobalSearch = hasPermission(user, 'page.search.view')
   const canSearchCustomers = hasPermission(user, 'admin.customers.read')
@@ -80,7 +81,6 @@ export default function App() {
     }
   }
 
-  const { mobileNavOpen, setMobileNavOpen } = useMobileNav()
   const {
     globalSearchQuery, setGlobalSearchQuery,
     setGlobalFocused,
@@ -89,15 +89,6 @@ export default function App() {
   } = useGlobalSearch({ token, isLoginRoute, canUseGlobalSearch, canSearchCustomers })
 
   useMobileTableLabels(token, location.pathname)
-
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊', permission: 'menu.search.view' },
-    { path: '/search', label: 'Search', icon: '🔍', permission: 'menu.search.view' },
-    { path: '/submissions', label: 'Submissions', icon: '📥', permission: 'menu.submissions.view' },
-    { path: '/rating', label: 'Rating', icon: '⚙️', permission: 'menu.rating.view' },
-    { path: '/portal', label: 'Portal', icon: '🌐', permission: 'menu.portal.view' },
-    { path: '/admin', label: 'Administration', icon: '🛠️', permission: 'menu.admin.view' }
-  ].filter((item) => hasPermission(user, item.permission) && (item.path !== '/portal' || hasCustomerIdentity(user)))
 
   const { data: tenantPrefs } = useTenantPreferences(!!token)
   useEffect(() => {
@@ -125,11 +116,12 @@ export default function App() {
             <Route path="/policies/:id" element={<RequireAuth><RequirePermission permission="page.policy.view"><PolicyViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/customers/:id" element={<RequireAuth><RequirePermission permission="admin.customers.read"><CustomerViewPage /></RequirePermission></RequireAuth>} />
             <Route path="/uw/queue" element={<RequireAuth><RequirePermission permission="page.uw_queue.view"><UwQueue /></RequirePermission></RequireAuth>} />
+            <Route path="/uw/queue/:referralId" element={<RequireAuth><RequirePermission permission="page.uw_queue.view"><UwReferralDetail /></RequirePermission></RequireAuth>} />
             <Route path="/placements" element={<RequireAuth><RequirePermission permission="page.placements.view"><PlacementsPage /></RequirePermission></RequireAuth>} />
             <Route path="/submissions" element={<RequireAuth><RequirePermission permission="page.submissions.view"><SubmissionsInboxPage /></RequirePermission></RequireAuth>} />
             <Route path="/submissions/:id" element={<RequireAuth><RequirePermission permission="page.submissions.view"><SubmissionReviewPage /></RequirePermission></RequireAuth>} />
             <Route path="/admin" element={<RequireAuth><RequireAdmin><AdminShell /></RequireAdmin></RequireAuth>}>
-              <Route index element={<AdminIndexRedirect />} />
+              <Route index element={<AdminHomePage />} />
               <Route path="forms" element={<RequirePermission permission="page.admin.forms.view"><FormsManagementPage /></RequirePermission>} />
               <Route path="uw-company" element={<RequirePermission permission="page.admin.uw_company.view"><AdministrationPage /></RequirePermission>} />
               <Route path="users" element={<RequirePermission permission="page.admin.users.view"><UsersPage /></RequirePermission>} />
@@ -177,42 +169,8 @@ export default function App() {
             <CarrierBrand className="topbar-logo" />
           </div>
 
-          {/* Mobile hamburger toggle */}
-          <button
-            type="button"
-            className="topnav-toggle"
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileNavOpen}
-            aria-controls="topnav-main"
-            onClick={() => setMobileNavOpen((open) => !open)}
-          >
-            {mobileNavOpen ? (
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
-
-          {/* Primary nav links */}
-          <nav id="topnav-main" className={`topnav ${mobileNavOpen ? 'is-open' : ''}`}>
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => setMobileNavOpen(false)}
-                className={({ isActive }) =>
-                  navClass({ isActive: isActive || (item.path === '/admin' && location.pathname.startsWith('/admin')) })
-                }
-              >
-                <span className="topnav-icon" aria-hidden="true">{item.icon}</span>
-                <span className="topnav-label">{item.label}</span>
-              </NavLink>
-            ))}
-          </nav>
+          {/* Primary nav: links, Work menu and the phone sheet */}
+          <AppNav />
 
           {/* Quick lookup */}
           {canUseGlobalSearch && (

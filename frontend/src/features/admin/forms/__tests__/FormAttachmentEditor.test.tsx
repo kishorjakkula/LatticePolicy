@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FormAttachmentEditor } from '../FormAttachmentEditor'
@@ -60,13 +60,20 @@ describe('Form attachment rule authoring', () => {
 
   it('updates and deletes existing triggers without changing other rules', async () => {
     api.listFormTriggers.mockResolvedValue([rule])
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     await open()
     await userEvent.click(await screen.findByRole('button', { name: 'Edit rule priority 10' }))
     fireEvent.change(screen.getByLabelText('Priority'), { target: { value: '20' } })
     await userEvent.click(screen.getByRole('button', { name: 'Update rule' }))
     await waitFor(() => expect(api.updateFormTrigger).toHaveBeenCalledWith('form-1', 'rule-1', expect.objectContaining({ priority: 20, suppressExpression: rule.suppressExpression })))
     await userEvent.click(screen.getByRole('button', { name: 'Delete rule priority 10' }))
+    let dialog = screen.getByRole('dialog', { name: 'Delete attachment rule priority 10' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(api.deleteFormTrigger).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete rule priority 10' }))
+    dialog = screen.getByRole('dialog', { name: 'Delete attachment rule priority 10' })
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toHaveClass('btn-danger')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(api.deleteFormTrigger).toHaveBeenCalledWith('form-1', 'rule-1'))
   })
 

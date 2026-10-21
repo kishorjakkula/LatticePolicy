@@ -1,8 +1,10 @@
-﻿import { useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+﻿import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ActionButton } from '../../components/ActionButton'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, adminApi } from '../../api/client'
+import { api, adminApi, apiUw } from '../../api/client'
+import { apiSubmissions } from '../../api/submissions.api'
+import { tenantId } from '../../api/request'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { derivePolicyWorkflowStatus } from '../policies/statusModel'
@@ -10,6 +12,10 @@ import { formatDisplayDateTime } from '../../shared/dateDisplay'
 import { useDashboardAiInsights } from '../../api/hooks'
 import { aiModelSummary, productLabel } from '../../shared/displayLabels'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { useWorkCounts, OPEN_REFERRAL_STATUS, REVIEW_SUBMISSION_STATUS } from '../../components/useWorkCounts'
+import { barWidth, buildAiTrend, loadPagedRows, renewalsDue } from './dashboardModel'
+import { DashboardWorkList } from './DashboardWorkList'
+import './dashboard.css'
 
 type PolicyStatus =
   | 'Draft'
@@ -82,6 +88,8 @@ const POLICY_STATUS_ORDER: PolicyStatus[] = [
 ]
 
 function monthKey(value: any): string {
+  const datePrefix = /^(\d{4}-(?:0[1-9]|1[0-2]))-\d{2}(?:T|$)/.exec(String(value || ''))
+  if (datePrefix) return datePrefix[1]
   const parsed = new Date(String(value || ''))
   if (Number.isNaN(parsed.getTime())) return ''
   const year = parsed.getFullYear()
@@ -108,13 +116,20 @@ function toNumber(value: any): number {
   return Number.isFinite(n) ? n : 0
 }
 
+function modelValue(value: unknown, style: 'count' | 'percent' | 'premium' = 'count'): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  if (style === 'percent') return `${Math.round(value * 100)}%`
+  if (style === 'premium') return `$${value.toLocaleString()}`
+  return String(Math.round(value))
+}
+
 function SimpleTrendChart({ points }: { points: MonthPoint[] }) {
-  const width = 740
+  const width = 360
   const height = 250
   const padTop = 18
   const padRight = 24
   const padBottom = 38
-  const padLeft = 36
+  const padLeft = 52
   const plotWidth = width - padLeft - padRight
   const plotHeight = height - padTop - padBottom
 
@@ -136,7 +151,7 @@ function SimpleTrendChart({ points }: { points: MonthPoint[] }) {
     .map((point, index) => `${toX(index)},${toY(point.quoteCount)}`)
     .join(' ')
 
-  const gridValues = [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(maxValue * ratio))
+  const gridValues = [...new Set([0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(maxValue * ratio)))]
 
   return (
     <div className="dashboard-trend-chart">
@@ -146,7 +161,7 @@ function SimpleTrendChart({ points }: { points: MonthPoint[] }) {
           return (
             <g key={value}>
               <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="var(--border)" strokeDasharray="3 4" />
-              <text x={6} y={y + 4} fill="var(--muted)" fontSize="11">{value}</text>
+              <text x={padLeft - 8} y={y + 4} textAnchor="end" fill="var(--muted)" fontSize="13">{value}</text>
             </g>
           )
         })}
@@ -158,7 +173,7 @@ function SimpleTrendChart({ points }: { points: MonthPoint[] }) {
           <g key={point.label}>
             <circle cx={toX(index)} cy={toY(point.policyCount)} r="3.5" fill="var(--accent-strong)" />
             <circle cx={toX(index)} cy={toY(point.quoteCount)} r="3.5" fill="var(--success)" />
-            <text x={toX(index)} y={height - 12} fill="var(--muted)" textAnchor="middle" fontSize="11">
+            <text x={toX(index)} y={height - 12} fill="var(--muted)" textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fontSize="13">
               {point.label}
             </text>
           </g>
@@ -181,47 +196,83 @@ function SimpleTrendChart({ points }: { points: MonthPoint[] }) {
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const canReadPortfolio = hasPermission(user, 'page.search.view')
+  const canReadReferrals = ['page.uw_queue.view', 'uw.referrals.read'].every((code) => hasPermission(user, code))
+  const canReadSubmissions = ['page.submissions.view', 'submissions.read'].every((code) => hasPermission(user, code))
+  const canReadPolicies = canReadPortfolio && hasPermission(user, 'page.policy.view')
+  const counts = useWorkCounts({ referrals: canReadReferrals, submissions: canReadSubmissions })
+  const scope = [user?.tenantId || tenantId(), user?.id || user?.username || null]
+  const referralCountKey = ['uw-referrals', ...scope, 'count', OPEN_REFERRAL_STATUS]
+  const submissionCountKey = ['submissions', ...scope, 'count', REVIEW_SUBMISSION_STATUS]
+  // Observe the shared hook's cache for honest loading/error/time states without another request.
+  const referralsQuery = useQuery({ queryKey: referralCountKey, queryFn: () => apiUw.listReferrals(1, 1, OPEN_REFERRAL_STATUS), enabled: false })
+  const submissionsQuery = useQuery({ queryKey: submissionCountKey, queryFn: () => apiSubmissions.list(REVIEW_SUBMISSION_STATUS, 1, 1), enabled: false })
   const canSearchCustomers = hasPermission(user, 'admin.customers.read')
   const qc = useQueryClient()
 
-  const { data: policiesData, isLoading: policiesLoading, error: policiesError, refetch: refetchPolicies } = useQuery({
-    queryKey: ['dashboard', 'policies'],
+  const policiesQuery = useQuery({
+    queryKey: ['dashboard', user?.tenantId, user?.id, 'policies'],
     queryFn: () => loadPagedRows((page, pageSize) =>
       api.searchPolicies('', { page, pageSize, sortBy: 'effectiveDate', sortDir: 'desc' })
     ),
     staleTime: 60_000,
+    enabled: canReadPortfolio,
+    retry: false,
   })
+  const { data: policiesData, error: policiesError, refetch: refetchPolicies } = policiesQuery
 
-  const { data: quotesData, isLoading: quotesLoading, error: quotesError, refetch: refetchQuotes } = useQuery({
-    queryKey: ['dashboard', 'quotes'],
+  const quotesQuery = useQuery({
+    queryKey: ['dashboard', user?.tenantId, user?.id, 'quotes'],
     queryFn: () => loadPagedRows((page, pageSize) =>
       api.searchQuotes('', { page, pageSize, sortBy: 'effectiveDate', sortDir: 'desc' })
     ),
     staleTime: 60_000,
+    enabled: canReadPortfolio,
+    retry: false,
   })
+  const { data: quotesData, error: quotesError, refetch: refetchQuotes } = quotesQuery
 
-  const { data: customersData, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
-    queryKey: ['dashboard', 'customers'],
-    queryFn: () => canSearchCustomers ? adminApi.searchCustomers({ limit: 500 }) : Promise.resolve([]),
+  const customersQuery = useQuery({
+    queryKey: ['dashboard', user?.tenantId, user?.id, 'customers'],
+    queryFn: () => adminApi.searchCustomers({ limit: 500 }),
     staleTime: 60_000,
+    enabled: canSearchCustomers,
+    retry: false,
   })
+  const { data: customersData, refetch: refetchCustomers } = customersQuery
 
-  const { data: aiInsightsData, isLoading: aiLoading, refetch: refetchAi } = useDashboardAiInsights()
+  const aiQuery = useDashboardAiInsights()
+  const { data: aiInsightsData, refetch: refetchAi } = aiQuery
 
-  const loading = policiesLoading || quotesLoading || customersLoading || aiLoading
-  const error = policiesError ? String(policiesError) : (quotesError ? String(quotesError) : null)
+  const queries = [policiesQuery, quotesQuery, aiQuery, ...(canSearchCustomers ? [customersQuery] : []), ...(canReadReferrals ? [referralsQuery] : []), ...(canReadSubmissions ? [submissionsQuery] : [])]
+  const loading = queries.some((query) => query.isFetching)
+  const error = queries.some((query) => query.isError)
+  const stale = queries.some((query) => query.dataUpdatedAt > 0 && now - query.dataUpdatedAt >= 60_000)
 
   const policies: any[] = policiesData ?? []
   const quotes: any[] = quotesData ?? []
   const customers: any[] = Array.isArray(customersData) ? customersData : []
-  const aiInsights: DashboardAiInsights | null = aiInsightsData?.aiInsights ?? null
-  const lastRefreshedAt = ''
+  const aiInsights: DashboardAiInsights | null = !aiQuery.isError && aiInsightsData?.aiInsights?.enabled ? aiInsightsData.aiInsights : null
+  const lastRefreshedAt = queries.every((query) => query.dataUpdatedAt > 0)
+    ? new Date(Math.min(...queries.map((query) => query.dataUpdatedAt))).toISOString() : ''
+  const due = renewalsDue(policies, new Date(now))
+  const aiTrend = buildAiTrend(aiInsights?.trend, new Date(now))
+  const workKind = searchParams.get('work')
 
   const loadDashboard = () => {
     void refetchPolicies()
     void refetchQuotes()
-    void refetchCustomers()
+    if (canSearchCustomers) void refetchCustomers()
     void refetchAi()
+    if (canReadReferrals) void qc.refetchQueries({ queryKey: referralCountKey, exact: true })
+    if (canReadSubmissions) void qc.refetchQueries({ queryKey: submissionCountKey, exact: true })
+    void qc.invalidateQueries({ queryKey: ['dashboard', 'review-list'] })
   }
 
   const statusCounts = useMemo(() => {
@@ -306,33 +357,62 @@ export function DashboardPage() {
             <ActionButton variant="secondary" size="sm" onClick={() => void loadDashboard()} loading={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </ActionButton>
-            <ActionButton variant="success" onClick={() => navigate('/wizard')}>
+            {hasPermission(user, 'page.wizard.view') && <ActionButton variant="primary" onClick={() => navigate('/wizard')}>
               New Quote
-            </ActionButton>
-          </div>
-        </div>
-        <div className="dashboard-kpi-grid dashboard-summary-grid">
-          <div className="dashboard-kpi-card">
-            <label>Total Policies</label>
-            <strong>{policies.length}</strong>
-          </div>
-          <div className="dashboard-kpi-card">
-            <label>In Force Policies</label>
-            <strong>{statusCounts['In Force']}</strong>
-          </div>
-          <div className="dashboard-kpi-card">
-            <label>Open Quotes</label>
-            <strong>{quotes.length}</strong>
-          </div>
-          <div className="dashboard-kpi-card">
-            <label>Customers</label>
-            <strong>{canSearchCustomers ? customers.length : '-'}</strong>
-            {canSearchCustomers && <span className="muted">Active: {activeCustomers}</span>}
+            </ActionButton>}
           </div>
         </div>
       </section>
 
-      {error && <p className="error">{error}</p>}
+      <CollapsibleSection as="section" className="dashboard-my-work" title="My work" aria-label="My work">
+        <div className="dashboard-kpi-grid dashboard-work-grid">
+          {canReadPortfolio && <Link className="dashboard-kpi-card" to="/search?mode=quotes">
+            <span>Open quotes</span>{' '}
+            <strong>{quotesError ? 'Unavailable' : quotesData ? quotes.length : 'Loading...'}</strong>
+          </Link>}
+          {canReadReferrals && <Link className="dashboard-kpi-card" to="/uw/queue?status=Open">
+            <span>Open referrals</span>{' '}
+            <strong>{referralsQuery.isError ? 'Unavailable' : counts.referrals ?? (referralsQuery.isPending ? 'Loading...' : 'Unavailable')}</strong>
+          </Link>}
+          {canReadSubmissions && <Link className="dashboard-kpi-card" to="/dashboard?work=submissions">
+            <span>Submissions to review</span>{' '}
+            <strong>{submissionsQuery.isError ? 'Unavailable' : counts.submissions ?? (submissionsQuery.isPending ? 'Loading...' : 'Unavailable')}</strong>{' '}
+            <span>Ready for review</span>
+          </Link>}
+          {canReadPolicies && <Link className="dashboard-kpi-card" to="/dashboard?work=renewals">
+            <span>Renewals due</span>{' '}
+            <strong>{policiesError ? 'Unavailable' : policiesData ? due.length : 'Loading...'}</strong>{' '}
+            <span>Next 30 days</span>
+          </Link>}
+        </div>
+      </CollapsibleSection>
+
+      {error && <p className="error" role="alert">Some dashboard data could not be refreshed. Failed counts are unavailable; any retained portfolio data is stale. Use Refresh to retry.</p>}
+      {loading && <p role="status">Refreshing dashboard data...</p>}
+      {stale && !loading && <p role="status">Some dashboard data is older than one minute. Refresh for current figures.</p>}
+      {workKind === 'submissions' && canReadSubmissions && <DashboardWorkList kind="submissions" renewals={[]} policiesAvailable={false} />}
+      {workKind === 'renewals' && canReadPolicies && <DashboardWorkList kind="renewals" renewals={due} policiesAvailable={!!policiesData && !policiesError} />}
+
+      <CollapsibleSection as="section" className="dashboard-portfolio" title="Portfolio" defaultOpen={!window.matchMedia('(max-width: 600px)').matches}>
+        <div className="dashboard-kpi-grid dashboard-summary-grid">
+          <div className="dashboard-kpi-card">
+            <label>Total Policies</label>
+            <strong>{policiesData ? policies.length : 'Unavailable'}</strong>
+          </div>
+          <div className="dashboard-kpi-card">
+            <label>In Force Policies</label>
+            <strong>{policiesData ? statusCounts['In Force'] : 'Unavailable'}</strong>
+          </div>
+          <div className="dashboard-kpi-card">
+            <label>Open Quotes</label>
+            <strong>{quotesData ? quotes.length : 'Unavailable'}</strong>
+          </div>
+          <div className="dashboard-kpi-card">
+            <label>Customers</label>
+            <strong>{canSearchCustomers && customersData ? `${customers.length}${customers.length >= 500 ? '+' : ''}` : 'Unavailable'}</strong>
+            {canSearchCustomers && customersData && <span className="muted">Active in loaded customers: {activeCustomers}</span>}
+          </div>
+        </div>
 
 
       <div className="summary-grid dashboard-panels-grid">
@@ -343,14 +423,14 @@ export function DashboardPage() {
           <div className="dashboard-bars">
             {POLICY_STATUS_ORDER.map((status) => {
               const count = toNumber(statusCounts[status])
-              const width = Math.max(4, Math.round((count / statusMax) * 100))
+              const width = barWidth(count, statusMax)
               return (
-                <div key={status} className="dashboard-bar-row">
+                <div key={status} className="dashboard-bar-row" aria-label={`${status}: ${policiesData ? count : 'unavailable'}`}>
                   <span className="dashboard-bar-label">{status}</span>
                   <div className="dashboard-bar-track">
                     <div className="dashboard-bar-fill" style={{ width: `${width}%` }} />
                   </div>
-                  <span className="dashboard-bar-value">{count}</span>
+                  <span className="dashboard-bar-value">{policiesData ? count : '-'}</span>
                 </div>
               )
             })}
@@ -364,7 +444,7 @@ export function DashboardPage() {
           <div className="dashboard-bars">
             {productCounts.length === 0 && <p className="muted">No policy data available.</p>}
             {productCounts.map(([productCode, count]) => {
-              const width = Math.max(4, Math.round((toNumber(count) / productMax) * 100))
+              const width = barWidth(count, productMax)
               return (
                 <div key={productCode} className="dashboard-bar-row">
                   <span className="dashboard-bar-label">{productLabel(productCode)}</span>
@@ -379,6 +459,8 @@ export function DashboardPage() {
         </CollapsibleSection>
       </div>
 
+      {aiQuery.isError && <p role="alert">AI insights unavailable. Refresh to retry.</p>}
+      {!aiQuery.isPending && !aiQuery.isError && !aiInsights && <p className="muted">AI insights are not enabled or available.</p>}
       {aiInsights && (
         <CollapsibleSection as="section" className="policy-section-card dashboard-section-card">
           <div className="policy-section-header dashboard-section-header">
@@ -386,29 +468,31 @@ export function DashboardPage() {
               <h3>AI Insights and Predictions</h3>
               <p className="muted dashboard-section-subtitle">
                 {aiModelSummary(aiInsights)}
+                {aiInsights.generatedAt && <> · Generated {formatDisplayDateTime(aiInsights.generatedAt, { includeTime: true })}</>}
               </p>
             </div>
           </div>
           <div className="dashboard-ai-metrics">
             <div className="dashboard-ai-metric">
               <label>Portfolio Health</label>
-              <strong>{Math.round(toNumber(aiInsights.portfolioHealthScore))}</strong>
+              <strong>{modelValue(aiInsights.portfolioHealthScore)}</strong>
             </div>
             <div className="dashboard-ai-metric">
               <label>Conversion Rate</label>
-              <strong>{Math.round(toNumber(aiInsights.conversionRate) * 100)}%</strong>
+              <strong>{modelValue(aiInsights.conversionRate, 'percent')}</strong>
             </div>
             <div className="dashboard-ai-metric">
               <label>Cancellation Rate</label>
-              <strong>{Math.round(toNumber(aiInsights.cancellationRate) * 100)}%</strong>
+              <strong>{modelValue(aiInsights.cancellationRate, 'percent')}</strong>
             </div>
             <div className="dashboard-ai-metric">
               <label>Expiring in 30 Days</label>
-              <strong>{toNumber(aiInsights.expiringNext30Days)}</strong>
+              <strong>{modelValue(aiInsights.expiringNext30Days)}</strong>
             </div>
           </div>
 
-          <table className="table">
+          <div className="dashboard-table-scroll" role="region" aria-label="Model predictions" tabIndex={0}>
+          <table className="dashboard-data-table">
             <thead>
               <tr>
                 <th>Prediction Horizon</th>
@@ -422,24 +506,26 @@ export function DashboardPage() {
             <tbody>
               <tr>
                 <td>Next 30 Days</td>
-                <td>{toNumber(aiInsights.predictions?.next30Days?.projectedQuotes)}</td>
-                <td>{toNumber(aiInsights.predictions?.next30Days?.projectedPolicies)}</td>
-                <td>{Math.round(toNumber(aiInsights.predictions?.next30Days?.projectedConversionRate) * 100)}%</td>
-                <td>{Math.round(toNumber(aiInsights.predictions?.next30Days?.projectedCancellationRate) * 100)}%</td>
-                <td>${toNumber(aiInsights.predictions?.next30Days?.projectedPremium).toLocaleString()}</td>
+                <td>{modelValue(aiInsights.predictions?.next30Days?.projectedQuotes)}</td>
+                <td>{modelValue(aiInsights.predictions?.next30Days?.projectedPolicies)}</td>
+                <td>{modelValue(aiInsights.predictions?.next30Days?.projectedConversionRate, 'percent')}</td>
+                <td>{modelValue(aiInsights.predictions?.next30Days?.projectedCancellationRate, 'percent')}</td>
+                <td>{modelValue(aiInsights.predictions?.next30Days?.projectedPremium, 'premium')}</td>
               </tr>
               <tr>
                 <td>Next 90 Days</td>
-                <td>{toNumber(aiInsights.predictions?.next90Days?.projectedQuotes)}</td>
-                <td>{toNumber(aiInsights.predictions?.next90Days?.projectedPolicies)}</td>
-                <td>{Math.round(toNumber(aiInsights.predictions?.next90Days?.projectedConversionRate) * 100)}%</td>
+                <td>{modelValue(aiInsights.predictions?.next90Days?.projectedQuotes)}</td>
+                <td>{modelValue(aiInsights.predictions?.next90Days?.projectedPolicies)}</td>
+                <td>{modelValue(aiInsights.predictions?.next90Days?.projectedConversionRate, 'percent')}</td>
                 <td>-</td>
                 <td>-</td>
               </tr>
             </tbody>
           </table>
+          </div>
 
-          <table className="table">
+          <div className="dashboard-table-scroll" role="region" aria-label="Actual and future forecast by month" tabIndex={0}>
+          <table className="dashboard-data-table">
             <thead>
               <tr>
                 <th>Month</th>
@@ -452,22 +538,22 @@ export function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {(aiInsights.trend?.historical || []).map((row, index) => {
-                const forecastRow = (aiInsights.trend?.forecast || [])[index]
+              {aiTrend.map((row) => {
                 return (
                   <tr key={`trend-${row.monthKey}`}>
-                    <td>{row.monthLabel}</td>
-                    <td>{toNumber(row.quotes)}</td>
-                    <td>{toNumber(row.policies)}</td>
-                    <td>{toNumber(row.cancellations)}</td>
-                    <td>{forecastRow ? toNumber(forecastRow.projectedQuotes) : '-'}</td>
-                    <td>{forecastRow ? toNumber(forecastRow.projectedPolicies) : '-'}</td>
-                    <td>{forecastRow ? toNumber(forecastRow.projectedCancellations) : '-'}</td>
+                    <th scope="row">{row.label}</th>
+                    <td>{row.actual?.quotes ?? '-'}</td>
+                    <td>{row.actual?.policies ?? '-'}</td>
+                    <td>{row.actual?.cancellations ?? '-'}</td>
+                    <td>{row.forecast?.projectedQuotes ?? '-'}</td>
+                    <td>{row.forecast?.projectedPolicies ?? '-'}</td>
+                    <td>{row.forecast?.projectedCancellations ?? '-'}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+          </div>
 
           <div className="dashboard-ai-text-grid">
             <div>
@@ -505,34 +591,14 @@ export function DashboardPage() {
         </div>
         <SimpleTrendChart points={trendPoints} />
       </CollapsibleSection>
+      </CollapsibleSection>
 
       <p className="muted dashboard-refreshed">
-        Last refreshed: {formatDisplayDateTime(lastRefreshedAt, { fallback: '-' })}
+        Last refreshed: {formatDisplayDateTime(lastRefreshedAt, { fallback: 'Not yet fully loaded', includeTime: true })}
+        {error && ' (refresh incomplete)'}
       </p>
     </div>
   )
-}
-
-async function loadPagedRows(
-  fetchPage: (page: number, pageSize: number) => Promise<{ items?: any[]; total?: number }>
-): Promise<any[]> {
-  const pageSize = 100
-  const maxPages = 25
-  const all: any[] = []
-  let page = 1
-  let total = 0
-
-  while (page <= maxPages) {
-    const response = await fetchPage(page, pageSize)
-    const items = Array.isArray(response?.items) ? response.items : []
-    if (page === 1) {
-      total = Number(response?.total || items.length)
-    }
-    all.push(...items)
-    if (!items.length || all.length >= total) break
-    page += 1
-  }
-  return all
 }
 
 export default DashboardPage

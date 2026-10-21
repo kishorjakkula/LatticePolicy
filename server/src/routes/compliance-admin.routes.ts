@@ -1,10 +1,11 @@
 import type { Request } from 'express'
 import { Router } from 'express'
+import { z } from 'zod'
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
 import { hasPermission } from '../auth.js'
 import { normalizeOfacName } from '../lib/policy-compliance.js'
 import { routeParam } from '../lib/utils.js'
-import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/domain.errors.js'
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../errors/domain.errors.js'
 
 export const complianceAdminRoutes = Router()
 
@@ -145,6 +146,53 @@ complianceAdminRoutes.post('/eligibility', async (req, res) => {
     return result.rows[0]
   })
   res.status(201).json(row)
+})
+
+const bulkEligibilitySchema = z.object({
+  ids: z.array(z.uuid().transform(id => id.toLowerCase())).min(1).max(500)
+    .refine(ids => new Set(ids).size === ids.length, 'Duplicate eligibility IDs'),
+  status: z.enum(ELIGIBILITY_STATUSES),
+  reason: z.string().trim().min(1).max(2000),
+}).strict()
+
+complianceAdminRoutes.post('/eligibility/bulk', async (req, res) => {
+  if (!canManage(req)) throw new ForbiddenError('FORBIDDEN')
+  const parsed = bulkEligibilitySchema.safeParse(req.body)
+  if (!parsed.success) throw new BadRequestError('INVALID_INPUT', 'Supply 1-500 unique eligibility IDs, a valid status, and a reason (1-2000 characters)')
+  const { status, reason } = parsed.data
+  const ids = parsed.data.ids.slice().sort()
+  const tenantId = req.tenant!.tenantId
+  try {
+    const items = await withTenantTx(tenantId, async db => {
+      const q = toRawQuery(db)
+      // A bounded wait reports contention; sorted locks avoid overlapping-batch deadlocks.
+      await q("SET LOCAL lock_timeout = '5s'")
+      const before = await q(
+        `SELECT * FROM product_state_eligibility
+          WHERE tenant_id=$1 AND eligibility_id=ANY($2::uuid[])
+          ORDER BY eligibility_id FOR UPDATE`, [tenantId, ids])
+      if (before.rows.length !== ids.length) throw new NotFoundError('NOT_FOUND', 'Eligibility record not found')
+      const updated = await q(
+        `UPDATE product_state_eligibility SET status=$3
+          WHERE tenant_id=$1 AND eligibility_id=ANY($2::uuid[]) RETURNING *`, [tenantId, ids, status])
+      const afterById = new Map(updated.rows.map((row: any) => [row.eligibility_id, row]))
+      for (const row of before.rows) {
+        await q(
+          `INSERT INTO ledger_events (tenant_id,entity_type,entity_id,event,from_state,to_state,payload,actor)
+           VALUES ($1,'ProductStateEligibility',$2,'ELIGIBILITY_STATUS_CHANGED',$3,$4,$5::jsonb,$6)`,
+          [tenantId, row.eligibility_id, row.status, status,
+            JSON.stringify({ reason, before: row, after: afterById.get(row.eligibility_id), actorType: 'user' }),
+            currentActorId(req)])
+      }
+      return ids.map(id => afterById.get(id))
+    })
+    res.json({ updated: items.length, items })
+  } catch (error) {
+    if (['55P03', '40P01', '40001'].includes((error as { code?: string }).code || '')) {
+      throw new ConflictError('CONCURRENT_CHANGE', 'Eligibility records are busy. Refresh and retry.')
+    }
+    throw error
+  }
 })
 
 complianceAdminRoutes.patch('/eligibility/:id', async (req, res) => {

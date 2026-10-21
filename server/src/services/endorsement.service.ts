@@ -26,7 +26,7 @@ import { today, coerceDateOnly, asDateOnly, round2, proRataFactor } from '../lib
 import { applyJsonPatch, diffPayloadPaths, getByPath, type PatchOp } from '../lib/patch.utils.js'
 import { validatePolicyTransactionState, type PolicyTransactionAction } from '../lib/transaction-state.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
-import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { PolicyReferralRequiredError, resolveReferralGateForActor } from './uw-referral.service.js'
 import { assertProductRules } from './product-rules.service.js'
 import { carryProductPin, ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
@@ -793,6 +793,12 @@ export async function executeEndorsement(
       {
         policyId,
         transactionType: 'Endorse',
+        proposal: {
+          payload: newPayload, premium: newPrem,
+          baseVersion: { versionId: ctx.latestVersionId, timelineVersion: await loadCurrentTimelineVersion(q, tenantId, policyId),
+            status: policyRow.status },
+          underwriting: uw, authority,
+        },
         productCode: policyField(policyRow, 'productCode', 'product_code'),
         insuredName: newPayload?.insureds?.primary
           ? `${newPayload.insureds.primary.firstName || ''} ${newPayload.insureds.primary.lastName || ''}`.trim()
@@ -806,10 +812,7 @@ export async function executeEndorsement(
       overrideReason
     )
     if (gate.blocked) {
-      throw new BadRequestError(
-        'UW_REFERRAL_REQUIRED',
-        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
-      )
+      throw new PolicyReferralRequiredError(gate.referral)
     }
     referralId = gate.referral.referralId
   }

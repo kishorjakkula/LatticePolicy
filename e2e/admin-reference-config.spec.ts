@@ -3,17 +3,24 @@ import { uniqueName } from './support/api'
 import { fieldByLabel } from './support/wizard'
 
 test.describe('administration: reference configuration', () => {
-  test('administration shell lists every section and defaults to Forms', async ({ page, signInAs }) => {
+  test('administration shell opens on the admin home and lists every section in four groups', async ({ page, signInAs }) => {
     await signInAs(page, 'admin')
     await page.goto('/admin')
-    await expect(page).toHaveURL(/\/admin\/forms/)
+    await expect(page).toHaveURL(/\/admin$/)
+    await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
     const nav = page.getByRole('complementary').getByRole('navigation')
-    for (const section of [
-      'Forms', 'Underwriting Companies', 'Users', 'Tenant', 'Security', 'Customers', 'Agency Onboarding', 'Notifications',
-      'Compliance', 'Data Import', 'Operations Dashboard', 'Exposure', 'Reinsurance', 'Bordereaux', 'Jobs',
-      'Underwriting Authority', 'Underwriting Rules',
-    ]) {
-      await expect(nav.getByRole('link', { name: section, exact: true })).toBeVisible()
+    const groups: Record<string, string[]> = {
+      'Products & rules': ['Forms', 'Validation Rules', 'Underwriting Rules', 'Underwriting Authority', 'Compliance'],
+      Partners: ['Underwriting Companies', 'Agency Onboarding', 'Customers'],
+      Operations: ['Jobs', 'Data Import', 'Operations Dashboard', 'Bordereaux', 'Reinsurance', 'Exposure'],
+      Platform: ['Users', 'Security', 'Tenant', 'Notifications', 'LLM Releases', 'AI Audit'],
+    }
+    await expect(nav.getByRole('heading')).toHaveText(Object.keys(groups))
+    for (const [group, sections] of Object.entries(groups)) {
+      const list = nav.getByRole('list', { name: group, exact: true })
+      for (const section of sections) {
+        await expect(list.getByRole('link', { name: section, exact: true })).toBeVisible()
+      }
     }
     await nav.getByRole('link', { name: 'Underwriting Rules', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Underwriting Rules' })).toBeVisible()
@@ -40,8 +47,8 @@ test.describe('administration: reference configuration', () => {
     await expect(row).toContainText('NV')
     await expect(row).toContainText(/Active/)
 
-    page.once('dialog', (dialog) => void dialog.accept())
     await row.getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('dialog', { name: `Delete underwriting company ${name}` }).getByRole('button', { name: 'Delete' }).click()
     await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0)
   })
 
@@ -68,13 +75,18 @@ test.describe('administration: reference configuration', () => {
     await signInAs(page, 'admin')
     await page.goto('/admin/compliance')
     await expect(page.getByRole('heading', { name: 'Compliance' })).toBeVisible()
-    await expect(page.getByRole('row').filter({ hasText: 'Commercial Auto' }).filter({ hasText: 'CA' }).first()).toContainText('ACTIVE')
+    const eligibility = page.getByRole('region', { name: 'Product and state eligibility', exact: true })
+    await expect(eligibility.getByRole('columnheader', { name: 'Commercial Auto', exact: true })).toBeVisible()
+    const california = eligibility.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'CA', exact: true }) })
+    const commercialAuto = california.getByRole('cell').filter({ has: page.getByRole('checkbox', { name: 'Select Commercial Auto CA', exact: true }) })
+    await expect(commercialAuto).toHaveText('Active')
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
 
     await page.getByRole('button', { name: 'OFAC Review Queue' }).click()
     await expect(page.getByRole('main')).toContainText(/OFAC|review/i)
     await page.getByRole('button', { name: 'State/Product Eligibility' }).click()
-    await expect(page.getByPlaceholder('personal-auto')).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Product Code', exact: true })).toBeVisible()
+    await expect(eligibility).toBeVisible()
   })
 
   test('creates and previews a notification template', async ({ page, signInAs }) => {

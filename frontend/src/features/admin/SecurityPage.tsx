@@ -11,6 +11,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { useConfirmDialog } from '../../components/Dialog'
+import { hasPermission } from '../../auth/permissions'
+import { useAuthStore } from '../../store/auth.store'
+import './compliance-security.css'
 
 type PermissionDef = {
   permissionCode: string
@@ -88,12 +92,32 @@ function sameCodes(a: string[], b: string[]): boolean {
   return left.every((code, index) => code === right[index])
 }
 
+function permissionName(permission: PermissionDef): string {
+  const label = permission.label.replace(/^(Admin API|API|Admin Menu|Menu|Page):\s*/i, '')
+    .replace(/\bUW\b/g, 'Underwriting').replace(/[_-]/g, ' ')
+  return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase()
+}
+
+function permissionArea(permission: PermissionDef): string {
+  const resource = permission.resourceKey.toLowerCase().replace(/_/g, '.')
+  if (/portal/.test(resource)) return 'Portal'
+  if (/\bai\b|llm|submission/.test(resource)) return 'AI'
+  if (/\buw\b|underwrit/.test(resource)) return 'Underwriting'
+  if (/rating/.test(resource)) return 'Rating'
+  if (/admin|security|config/.test(resource)) return 'Administration'
+  return 'Policies'
+}
+
 export function SecurityPage() {
+  const user = useAuthStore(state => state.user)
+  const canManage = hasPermission(user, 'admin.security.manage')
+  const [permissionSearch, setPermissionSearch] = useState('')
   const [userRoleDrafts, setUserRoleDrafts] = useState<Record<string, string[]>>({})
   const [selectedRoleCode, setSelectedRoleCode] = useState<string>('')
   const [draft, setDraft] = useState<RoleDraft>(emptyDraft)
   const [isNewRole, setIsNewRole] = useState(false)
   const [saving, setSaving] = useState(false)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
   const [savingUserId, setSavingUserId] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
 
@@ -110,6 +134,8 @@ export function SecurityPage() {
   )
   const relationships: RelationshipPayload | null = relationshipsData ?? null
   const loading = permissionsLoading || rolesLoading || relLoading
+  const systemRole = !isNewRole && roles.some(role => role.roleCode === draft.roleCode && role.isSystem)
+  const readOnly = !canManage || systemRole || saving
 
   // Initialize user role drafts when relationships load
   useEffect(() => {
@@ -126,15 +152,16 @@ export function SecurityPage() {
   const updateUserRolesMutation = useUpdateSecurityUserRolesMutation()
 
   const groupedPermissions = useMemo(() => {
-    const buckets: Record<string, PermissionDef[]> = { menu: [], page: [], api: [] }
+    const buckets: Record<string, PermissionDef[]> = {}
     for (const item of permissions) {
-      const key = item.scope || 'api'
+      if (permissionSearch && !`${permissionName(item)} ${item.description} ${item.permissionCode} ${permissionArea(item)}`.toLowerCase().includes(permissionSearch.toLowerCase())) continue
+      const key = permissionArea(item)
       if (!buckets[key]) buckets[key] = []
       buckets[key].push(item)
     }
     Object.values(buckets).forEach((arr) => arr.sort((a, b) => (a.sortOrder - b.sortOrder) || a.label.localeCompare(b.label)))
     return buckets
-  }, [permissions])
+  }, [permissions, permissionSearch])
 
   const assignableRoles = useMemo(
     () => roles.filter((role) => role.active !== false).sort((a, b) => a.roleCode.localeCompare(b.roleCode)),
@@ -165,6 +192,7 @@ export function SecurityPage() {
 
   // Auto-select first role when roles load and keep selected role synced with refreshed data
   useEffect(() => {
+    if (isNewRole) return
     if (!selectedRoleCode && roles.length) {
       applyRole(roles[0], false)
       return
@@ -173,7 +201,7 @@ export function SecurityPage() {
       const existing = roles.find((x) => x.roleCode === selectedRoleCode)
       if (existing) applyRole(existing, false)
     }
-  }, [roles, selectedRoleCode])
+  }, [roles, selectedRoleCode, isNewRole])
 
   const beginNewRole = () => {
     setIsNewRole(true)
@@ -192,6 +220,7 @@ export function SecurityPage() {
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault()
+    if (readOnly) return
     setSaving(true)
     setError(null)
     try {
@@ -226,8 +255,8 @@ export function SecurityPage() {
   }
 
   const onDelete = async () => {
-    if (!draft.roleCode) return
-    if (!confirm(`Delete role "${draft.roleCode}"?`)) return
+    if (!draft.roleCode || readOnly) return
+    if (!(await askConfirm({ title: `Delete role ${draft.roleCode}`, confirmLabel: 'Delete', danger: true }))) return
     setSaving(true)
     setError(null)
     try {
@@ -255,6 +284,7 @@ export function SecurityPage() {
   }
 
   const saveUserRoleMapping = async (userId: string) => {
+    if (!canManage) return
     setSavingUserId(userId)
     setError(null)
     try {
@@ -268,10 +298,10 @@ export function SecurityPage() {
 
   return (
     <div className="ps-admin-page">
+      {confirmDialog}
       <div className="ps-page-header">
         <div>
           <h2 className="ps-page-title">Security</h2>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>Map permissions to roles and map roles to users.</p>
         </div>
       </div>
       {error && <p className="error">{error}</p>}
@@ -280,7 +310,7 @@ export function SecurityPage() {
         <CollapsibleSection className="security-roles card">
           <div className="panel-header">
             <h3>Roles</h3>
-            <button type="button" onClick={beginNewRole}>New Role</button>
+            {canManage && <button type="button" onClick={beginNewRole}>New Role</button>}
           </div>
           <div className="ps-table-card" style={{ margin: '0 -20px -20px', borderRadius: '0 0 12px 12px', border: 'none', borderTop: '1px solid var(--border)', boxShadow: 'none' }}>
           <table className="table table-sticky-header">
@@ -317,11 +347,14 @@ export function SecurityPage() {
 
         <CollapsibleSection className="security-editor card">
           <h3>{isNewRole ? 'New Role' : `Role: ${draft.roleCode || '-'}`}</h3>
+          {systemRole && <p className="muted">System role (read-only)</p>}
           <form onSubmit={onSave}>
+            <fieldset disabled={readOnly} className="cs-role-fields">
             <div className="row">
               <div className="col" style={{ maxWidth: 240 }}>
-                <label>Role Code</label>
+                <label htmlFor="security-role-code">Role Code</label>
                 <input
+                  id="security-role-code"
                   value={draft.roleCode}
                   onChange={(e) => setDraft((prev) => ({ ...prev, roleCode: e.target.value }))}
                   disabled={!isNewRole}
@@ -329,16 +362,18 @@ export function SecurityPage() {
                 />
               </div>
               <div className="col">
-                <label>Role Name</label>
+                <label htmlFor="security-role-name">Role Name</label>
                 <input
+                  id="security-role-name"
                   value={draft.roleName}
                   onChange={(e) => setDraft((prev) => ({ ...prev, roleName: e.target.value }))}
                   placeholder="Display name"
                 />
               </div>
               <div className="col" style={{ maxWidth: 180 }}>
-                <label>Status</label>
+                <label htmlFor="security-role-status">Status</label>
                 <select
+                  id="security-role-status"
                   value={draft.active ? 'active' : 'inactive'}
                   onChange={(e) => setDraft((prev) => ({ ...prev, active: e.target.value === 'active' }))}
                 >
@@ -348,35 +383,13 @@ export function SecurityPage() {
               </div>
             </div>
 
-            <label>Description</label>
+            <label htmlFor="security-role-description">Description</label>
             <input
+              id="security-role-description"
               value={draft.description}
               onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="Purpose of this role"
             />
-
-            <div className="security-permission-groups">
-              {(['menu', 'page', 'api'] as const).map((scope) => (
-                <div key={scope} className="security-permission-group">
-                  <h4>{scope === 'api' ? 'API Permissions' : `${scope.charAt(0).toUpperCase()}${scope.slice(1)} Permissions`}</h4>
-                  <div className="security-permissions-grid">
-                    {(groupedPermissions[scope] || []).map((permission) => (
-                      <label key={permission.permissionCode} className="security-permission-item">
-                        <input
-                          type="checkbox"
-                          checked={draft.permissionCodes.includes(permission.permissionCode)}
-                          onChange={() => togglePermission(permission.permissionCode)}
-                        />
-                        <span>
-                          <strong>{permission.label}</strong>
-                          <small className="muted">{permission.description}</small>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
 
             <div className="security-actions">
               <button type="submit" disabled={saving || !draft.roleCode || !draft.roleName}>
@@ -385,7 +398,7 @@ export function SecurityPage() {
               {!isNewRole && (
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="btn-danger"
                   onClick={onDelete}
                   disabled={saving || roles.find((x) => x.roleCode === draft.roleCode)?.isSystem}
                 >
@@ -393,9 +406,36 @@ export function SecurityPage() {
                 </button>
               )}
             </div>
+            </fieldset>
           </form>
         </CollapsibleSection>
       </div>
+
+      <CollapsibleSection title="Role permissions" className="stack-card">
+        <label>Search permissions<input type="search" value={permissionSearch} onChange={event => setPermissionSearch(event.target.value)} /></label>
+        <div className="cs-matrix-scroll" tabIndex={0} role="region" aria-label="Role and permission matrix">
+          <table className="table cs-matrix">
+            <thead><tr><th scope="col">Permission</th>{roles.map(role => <th scope="col" key={role.roleCode}>
+              <button type="button" className="table-link-button" onClick={() => applyRole(role, false)}>{role.roleName}</button>
+            </th>)}{isNewRole && <th scope="col">{draft.roleName || 'New role'}</th>}</tr></thead>
+            {Object.entries(groupedPermissions).sort(([a], [b]) => a.localeCompare(b)).map(([area, items]) => <tbody key={area}>
+              <tr><th scope="rowgroup" colSpan={roles.length + 1 + Number(isNewRole)}>{area}</th></tr>
+              {items.map(permission => <tr key={permission.permissionCode}>
+                <th scope="row" title={permission.description}>{permissionName(permission)} <small className="muted">({permission.scope === 'api' ? 'API' : permission.scope})</small></th>
+                {roles.map(role => {
+                  const editing = !isNewRole && selectedRoleCode === role.roleCode
+                  return <td key={role.roleCode}><input type="checkbox" aria-label={`${role.roleName}: ${permissionName(permission)} (${permission.scope})`}
+                    checked={(editing ? draft.permissionCodes : role.permissionCodes).includes(permission.permissionCode)}
+                    disabled={!editing || readOnly} onChange={() => togglePermission(permission.permissionCode)} /></td>
+                })}
+                {isNewRole && <td><input type="checkbox" aria-label={`${draft.roleName || 'New role'}: ${permissionName(permission)} (${permission.scope})`}
+                  checked={draft.permissionCodes.includes(permission.permissionCode)} disabled={readOnly} onChange={() => togglePermission(permission.permissionCode)} /></td>}
+              </tr>)}
+            </tbody>)}
+          </table>
+          {!Object.keys(groupedPermissions).length && <p className="muted">{permissionsLoading ? 'Loading permissions...' : 'No permissions match your search.'}</p>}
+        </div>
+      </CollapsibleSection>
 
       <CollapsibleSection className="card stack-card">
         <div className="panel-header">
@@ -468,6 +508,7 @@ export function SecurityPage() {
                         <label key={`${user.userId}-${role.roleCode}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <input
                             type="checkbox"
+                            disabled={!canManage || savingUserId === user.userId}
                             checked={draftRoles.includes(role.roleCode)}
                             onChange={() => toggleUserRole(user.userId, role.roleCode)}
                           />
@@ -484,7 +525,7 @@ export function SecurityPage() {
                     <button
                       className="btn-secondary"
                       type="button"
-                      disabled={!dirty || savingUserId === user.userId}
+                      disabled={!canManage || !dirty || savingUserId === user.userId}
                       onClick={() => saveUserRoleMapping(user.userId)}
                     >
                       {savingUserId === user.userId ? 'Saving...' : 'Save Roles'}

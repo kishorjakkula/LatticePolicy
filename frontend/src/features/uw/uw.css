@@ -1,0 +1,195 @@
+/* UW referral queue and detail (WP-0004 REQ-1, REQ-17). Tokens only. */
+
+.uw-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.uw-queue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.uw-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ps-text-secondary);
+}
+
+.uw-inline-field select {
+  width: auto;
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.uw-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.uw-referral-table th,
+.uw-referral-table td {
+  vertical-align: middle;
+}
+
+.uw-referral-table .uw-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.uw-truncate {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uw-reasons {
+  max-width: 280px;
+}
+
+.uw-empty {
+  text-align: center;
+  padding: 24px;
+}
+
+.uw-assignee {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.uw-referral-detail .ps-content-card {
+  margin-top: 16px;
+}
+
+.uw-reason-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: var(--ps-text);
+  font-weight: 600;
+}
+
+.uw-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 28px;
+  margin: 0;
+}
+
+.uw-fact {
+  min-width: 0;
+}
+
+.uw-fact dt {
+  color: var(--ps-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.uw-fact dd {
+  margin: 0;
+  color: var(--ps-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.uw-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.uw-authority-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.uw-authority-note:not(.muted) {
+  color: var(--ps-danger);
+}
+
+.uw-history {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.uw-history li {
+  border-bottom: 1px solid var(--ps-border);
+  padding-bottom: 8px;
+  font-size: 13px;
+}
+
+.uw-history-meta {
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.uw-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.uw-context-title,
+.uw-proposal-group h4 {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--ps-text);
+}
+
+.uw-proposal-group {
+  min-width: 0;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ps-border);
+  overflow-wrap: anywhere;
+}
+
+.uw-material-facts {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+}
+
+.uw-material-facts .uw-material-facts {
+  border-left: 1px solid var(--ps-border);
+  padding-left: 12px;
+}
+
+.uw-material-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.uw-material-facts dd,
+.uw-material-list {
+  font-weight: 400;
+}
+
+.uw-proposal-warning {
+  color: var(--ps-danger);
+  margin: 0 0 12px;
+}
+
+@media (max-width: 480px) {
+  .uw-referral-detail .uw-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

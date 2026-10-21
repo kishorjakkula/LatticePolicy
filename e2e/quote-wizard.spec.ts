@@ -1,5 +1,5 @@
 import { expect, test } from './support/fixtures'
-import { uniqueName } from './support/api'
+import { apiJson, isoDate, uniqueName } from './support/api'
 import {
   answerAllQualificationQuestions,
   continueToStep,
@@ -24,8 +24,13 @@ test.describe('new business quote wizard', () => {
     await page.goto('/wizard')
     await expect(page.getByRole('heading', { name: 'New Quote Wizard' })).toBeVisible()
     await expectWizardStep(page, 1)
+    // WP-0004 REQ-8: billing is not asked in step 1, and one progress indicator.
+    await expect(page.getByText('Billing Method')).toHaveCount(0)
+    await expect(page.locator('.wizard-nav-progress-dots')).toHaveCount(0)
 
     await selectProduct(page)
+    // The header summarises the quote instead of repeating the effective date.
+    await expect(page.getByTestId('wizard-quote-summary')).toContainText(/Personal Auto · CA · Effective \d{2}\/\d{2}\/\d{4}/)
     await continueToStep(page, 2)
     await expect(page.getByRole('main')).toContainText(/Quote #\s*Q\d{8}-/)
 
@@ -50,6 +55,13 @@ test.describe('new business quote wizard', () => {
     // WP-0002: never another product's coverages (the homeowners set seen in the defect).
     await expect(page.getByRole('row').filter({ hasText: /\bEND_(WB|PPRC|ORD|ERC)\b|Dwelling/ })).toHaveCount(0)
     await expect(page.getByRole('status').filter({ hasText: 'Pending' })).toBeVisible()
+    await expect(page.getByTestId('wizard-quote-summary')).toContainText(/Personal Auto · CA · \$[\d,]+\.\d{2}/)
+
+    // Billing is chosen on the Premium step, before bind; it does not undo the rating.
+    const payment = page.locator('.wizard-section').filter({ has: page.getByRole('heading', { name: 'Payment' }) })
+    await payment.getByRole('radio', { name: /Direct bill/ }).check()
+    await payment.getByLabel('Payment Plan').selectOption('monthly')
+    await expect(page.getByText('Coverage Premium Allocation')).toBeVisible()
 
     await continueToStep(page, 8)
     await expect(page.getByRole('row').filter({ hasText: 'PA-DEC' }).first()).toBeVisible()
@@ -95,6 +107,11 @@ test.describe('new business quote wizard', () => {
     await continueToStep(page, 4)
 
     // Vehicle details are mandatory.
+    // Carrier/demo defaults can prefill these fields. Clear the exact values
+    // whose validation this scenario is exercising instead of assuming blank.
+    await fieldByLabel(page, 'Make').fill('')
+    await fieldByLabel(page, 'VIN').fill('')
+    await fieldByLabel(page, 'Garaging ZIP').fill('')
     await page.getByRole('button', { name: /^Continue to/ }).click()
     await expect(page.getByText('Make is required')).toBeVisible()
     await expect(page.getByText('VIN is required')).toBeVisible()
@@ -137,15 +154,55 @@ test.describe('new business quote wizard', () => {
     await expectWizardStep(page, 2)
   })
 
-  test('limits the product list to the selected underwriting company', async ({ page, signInAs }) => {
+  test('asks product and term first and limits the companies to those that write the product', async ({ page, signInAs }) => {
     await signInAs(page, 'admin')
 
     await page.goto('/wizard')
-    await fieldByLabel(page, 'Underwriting Company').selectOption({ label: 'Sample Carrier Property' })
+    // WP-0004 REQ-8: product and term first, then company and agency, then prior insurance.
+    const stepOne = page.locator('.wizard-section')
+    await expect(stepOne.getByRole('heading')).toHaveText(['Product & term', 'Company & agency', 'Prior Insurance'])
+    await expect(stepOne.first().locator('label')).toHaveText(['Country', 'State', 'Product', 'Effective Date', 'Term', 'Policy Offering'])
+    await expect(fieldByLabel(page, 'Product')).toBeDisabled()
+
     await fieldByLabel(page, 'Country').selectOption('US')
     await fieldByLabel(page, 'State').selectOption('TX')
-    const product = fieldByLabel(page, 'Product')
-    await expect(product.locator('option')).toHaveText(['Select product', 'Homeowners'])
+    await fieldByLabel(page, 'Product').selectOption('homeowners')
+    const company = fieldByLabel(page, 'Underwriting Company')
+    await expect(company.locator('option')).toHaveText(['Select underwriting company', 'Sample Carrier Property'])
+
+    // A company that does not write the newly chosen product is cleared, with a notice.
+    await fieldByLabel(page, 'Product').selectOption('personal-auto')
+    const keepOrChange = page.getByRole('button', { name: 'Change product' })
+    if (await keepOrChange.isVisible()) await keepOrChange.click()
+    await expect(company.locator('option')).toHaveText(['Select underwriting company', 'Sample Carrier Personal Lines'])
+    await expect(page.getByRole('status').filter({ hasText: 'Sample Carrier Property does not write Personal Auto in TX, so it was cleared.' })).toBeVisible()
+  })
+
+  test('reopens a draft saved with billing and shows it on the Premium step', async ({ page, request, sessionFor, signInAs }) => {
+    const { token } = await sessionFor('admin')
+    // A draft saved before WP-0004, when billing was asked in step 1; the payload fields are unchanged.
+    const draft = await apiJson<any>(request, 'POST', '/api/v1/quotes/draft', {
+      token,
+      data: {
+        progressStep: 7,
+        payload: {
+          productCode: 'personal-auto', country: 'US', state: 'CA', effectiveDate: isoDate(30), termMonths: 12,
+          underwritingCompanyName: 'Sample Carrier Personal Lines', billingMethod: 'agency', paymentPlan: 'quarterly',
+        },
+      },
+    })
+    await signInAs(page, 'admin')
+    await page.goto(`/wizard?quoteId=${draft.quoteId}`)
+    await expectWizardStep(page, 7)
+    const payment = page.locator('.wizard-section').filter({ has: page.getByRole('heading', { name: 'Payment' }) })
+    await expect(payment.getByRole('radio', { name: 'Agency bill' })).toBeChecked()
+    await expect(payment.getByLabel('Payment Plan')).toHaveValue('quarterly')
+
+    await page.getByRole('button', { name: /Product & term/ }).click()
+    await expectWizardStep(page, 1)
+    await expect(page.getByText('Billing Method')).toHaveCount(0)
+    await expect(fieldByLabel(page, 'Product')).toHaveValue('personal-auto')
+    await expect(fieldByLabel(page, 'Underwriting Company')).toHaveValue('Sample Carrier Personal Lines')
   })
 
   // Regression: the Insureds step used the admin customer API, which the agent

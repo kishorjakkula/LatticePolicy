@@ -1,5 +1,18 @@
 # UI design — WP-0004
 
+## Approved Extension (Gate B, 2026-10-21)
+
+See `02a-referral-proposal-binding.md`. Referral detail must show the immutable
+proposed transaction facts the person is approving, not silently substitute
+the latest policy/quote. Present transaction/date, proposed premium and limits,
+relevant risk/coverage changes and the base version beside clearly labelled
+current facts. Preserve the existing permission-aware decision panel and
+required reason dialog. If evidence is legacy/unknown or the proposal changed,
+state that a fresh review is required; do not offer an implied approval or
+editable evidence. Use the existing responsive facts/sections and shared
+controls. Gate B was approved with "approved." Implementation and automated
+verification are recorded in the implementation/test handoffs.
+
 Built on the existing design system (`CollapsibleSection`, `RadioGroup`,
 `StatusBadge`, `TablePagination`, `EmptyState`, `Toast`, `--ps-*` tokens). Evidence:
 the review screenshots of 2026-10-20 and the "LatticePolicy UI and Flow Review" doc.

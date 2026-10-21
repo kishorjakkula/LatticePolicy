@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface PaginationProps {
   page: number
@@ -64,6 +64,16 @@ export function Pagination({
   className = '',
   showRange = false,
 }: PaginationProps) {
+  const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)')?.matches ?? false)
+  const [sizeOpen, setSizeOpen] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 767px)')
+    if (!media) return
+    const update = () => { setCompact(media.matches); setSizeOpen(false) }
+    update()
+    media.addEventListener?.('change', update)
+    return () => media.removeEventListener?.('change', update)
+  }, [])
   const safeSize   = Math.max(1, pageSize || 1)
   const totalPages = Math.max(1, Math.ceil((totalItems || 0) / safeSize))
   const safePage   = Math.min(Math.max(1, page || 1), totalPages)
@@ -76,6 +86,18 @@ export function Pagination({
   const sizeOptions = pageSizeOptions.includes(safeSize)
     ? pageSizeOptions
     : [...pageSizeOptions, safeSize].sort((a, b) => a - b)
+  const sizePicker = (
+    <select
+      className="ps-pagination-size-select"
+      value={safeSize}
+      onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+      aria-label="Results per page"
+    >
+      {sizeOptions.map((opt) => (
+        <option key={opt} value={opt}>{opt} per page</option>
+      ))}
+    </select>
+  )
 
   return (
     <nav
@@ -102,6 +124,10 @@ export function Pagination({
           >
             ← Previous
           </button>
+
+          <span className="ps-pagination-compact" aria-label={`Page ${safePage} of ${totalPages}`}>
+            {safePage} / {totalPages}
+          </span>
 
           {/* Numbered pages + ellipsis */}
           {pageRange.map((p, idx) =>
@@ -141,20 +167,12 @@ export function Pagination({
 
         {/* Page-size selector */}
         {onPageSizeChange && (
-          <div className="ps-pagination-size">
-            <select
-              className="ps-pagination-size-select"
-              value={safeSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              aria-label="Results per page"
-            >
-              {sizeOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt} per page
-                </option>
-              ))}
-            </select>
-          </div>
+          compact ? (
+            <details className="ps-pagination-size" open={sizeOpen} onToggle={(event) => setSizeOpen(event.currentTarget.open)}>
+              <summary aria-label="Page size options" title="Page size options">{safeSize}</summary>
+              {sizePicker}
+            </details>
+          ) : <div className="ps-pagination-size">{sizePicker}</div>
         )}
       </div>
     </nav>

@@ -1,0 +1,81 @@
+/* Grouped administration menu and admin home (WP-0004 REQ-5). Tokens only. */
+
+.ps-admin-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.ps-admin-nav-group-title {
+  margin: 0;
+  padding: 4px 10px 2px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ps-text-secondary);
+}
+
+.ps-admin-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 767px) {
+  .ps-admin-nav-group {
+    flex-basis: 100%;
+  }
+
+  .ps-admin-nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Admin home ───────────────────────────────────────────────────── */
+
+.admin-home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-home-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-sm);
+  background: var(--ps-surface);
+  color: var(--ps-text);
+}
+
+.admin-home-item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-home-item-count {
+  font-weight: 700;
+}
+
+.admin-home-item--error {
+  border-color: var(--ps-danger-border);
+  background: var(--ps-danger-soft);
+}
+
+.admin-home-status {
+  margin: 0 0 8px;
+  color: var(--ps-text-secondary);
+}

@@ -6,6 +6,7 @@ import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { RadioGroup } from '../../components/RadioGroup'
+import { ReasonDialog, useConfirmDialog, useReasonDialog } from '../../components/Dialog'
 import { FormAttachmentEditor } from './forms/FormAttachmentEditor'
 import { FormScenarioTest } from './forms/FormScenarioTest'
 import { formMatchesScopeFilter, formScopeLabels, useFormsScopeCatalog, type FormScopeSummary } from './forms/useFormsScopeCatalog'
@@ -115,6 +116,11 @@ export function FormsManagementPage() {
 
   const { data: detailRaw, refetch: refetchDetail } = useForm(selectedFormId)
   const detail: FormDetail | undefined = detailRaw as FormDetail | undefined
+  const { dialog: reasonDialog, askReason } = useReasonDialog()
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
+  const [editionDateRequest, setEditionDateRequest] = useState<{ resolve: (value: string | null) => void } | null>(null)
+  const askEditionDate = () => new Promise<string | null>((resolve) => setEditionDateRequest({ resolve }))
+  const selectedFormLabel = () => (detail?.form?.formNumber ? `form ${detail.form.formNumber}` : 'this form')
 
   const { data: templateVariablesData, isLoading: templateVariablesLoading } = useFormTemplateVariables()
   const templateVariables: TemplateVariable[] = (templateVariablesData as any)?.variables ?? []
@@ -317,26 +323,26 @@ export function FormsManagementPage() {
       if (action === 'submit') {
         await api.submitForm(selectedFormId, formDraft.changeReason || undefined)
       } else if (action === 'approve') {
-        const reason = prompt('Approval reason') || ''
+        const reason = (await askReason({ title: `Approve ${selectedFormLabel()}`, confirmLabel: 'Approve' })) || ''
         if (!reason.trim()) return
         await api.approveForm(selectedFormId, reason.trim())
       } else if (action === 'activate') {
-        const reason = prompt('Activation reason') || ''
+        const reason = (await askReason({ title: `Activate ${selectedFormLabel()}`, confirmLabel: 'Activate' })) || ''
         if (!reason.trim()) return
         await api.activateForm(selectedFormId, reason.trim())
       } else if (action === 'deactivate') {
-        const reason = prompt('Deactivation reason') || ''
+        const reason = (await askReason({ title: `Deactivate ${selectedFormLabel()}`, confirmLabel: 'Deactivate', danger: true })) || ''
         if (!reason.trim()) return
         await api.deactivateForm(selectedFormId, reason.trim())
       } else if (action === 'clone') {
-        const editionDate = prompt('New edition date (MM/YYYY)') || ''
+        const editionDate = (await askEditionDate()) || ''
         if (!editionDate.trim()) return
         const cloned = await api.cloneForm(selectedFormId, { editionDate })
         const cloneId = cloned?.form?.formId
         void refetchForms()
         if (cloneId) setSelectedFormId(cloneId)
       } else if (action === 'delete') {
-        if (!confirm('Delete this form record?')) return
+        if (!(await askConfirm({ title: `Delete ${selectedFormLabel()}`, confirmLabel: 'Delete', danger: true }))) return
         await api.deleteForm(selectedFormId, formDraft.changeReason || undefined)
         resetNewForm()
         void refetchForms()
@@ -441,7 +447,7 @@ export function FormsManagementPage() {
       setTemplateUploadResult(null)
       let reason = ''
       if (detail?.form?.workflowStatus === 'Approved' && detail?.form?.editLock) {
-        reason = (prompt('Reason for template change on approved form') || '').trim()
+        reason = ((await askReason({ title: `Replace template for ${selectedFormLabel()}`, help: 'This form is approved; the change is recorded with this reason.', confirmLabel: 'Replace template' })) || '').trim()
         if (!reason) return
       }
       const response = await api.uploadFormTemplateAsset(selectedFormId, templateFile, reason || undefined)
@@ -470,7 +476,7 @@ export function FormsManagementPage() {
     try {
       let reason = ''
       if (detail?.form?.workflowStatus === 'Approved' && detail?.form?.editLock) {
-        reason = (prompt('Reason for template removal on approved form') || '').trim()
+        reason = ((await askReason({ title: `Remove template from ${selectedFormLabel()}`, help: 'This form is approved; the removal is recorded with this reason.', confirmLabel: 'Remove template', danger: true })) || '').trim()
         if (!reason) return
       }
       await api.deleteFormTemplateAsset(selectedFormId, reason || undefined)
@@ -513,6 +519,25 @@ export function FormsManagementPage() {
 
   return (
     <div className="ps-admin-page forms-management">
+      {reasonDialog}
+      {confirmDialog}
+      {editionDateRequest && (
+        <ReasonDialog
+          title={`Create new edition of ${selectedFormLabel()}`}
+          label="Edition date"
+          help="MM/YYYY"
+          confirmLabel="Create edition"
+          onConfirm={(value) => {
+            if (!EDITION_DATE_PATTERN.test(value)) throw new Error('Enter the edition date as MM/YYYY, for example 04/2026.')
+            editionDateRequest.resolve(value)
+            setEditionDateRequest(null)
+          }}
+          onCancel={() => {
+            editionDateRequest.resolve(null)
+            setEditionDateRequest(null)
+          }}
+        />
+      )}
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Forms Administration</h2></div>
         <div className="ps-page-header-actions">
@@ -860,6 +885,9 @@ export function FormsManagementPage() {
     </div>
   )
 }
+
+/** New edition dates are entered as MM/YYYY (month 01-12), matching the server's parser. */
+const EDITION_DATE_PATTERN = /^(0[1-9]|1[0-2])\/\d{4}$/
 
 function labelForSection(key: SectionKey): string {
   if (key === 'catalog') return 'Details & scope'

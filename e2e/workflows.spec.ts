@@ -33,7 +33,14 @@ test.describe('browser workflows', () => {
     await expect(page.getByRole('heading', { name: 'UW Referrals' })).toBeVisible()
     const referralTable = page.getByRole('table')
     await expect(referralTable.getByText('Open', { exact: true }).first()).toBeVisible()
-    await expect(referralTable.getByRole('button', { name: 'Approve' }).first()).toBeVisible()
+    await expect(referralTable.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0)
+    const open = referralTable.getByRole('link', { name: 'Open', exact: true }).first()
+    const referralPath = await open.getAttribute('href')
+    expect(referralPath).toMatch(/^\/uw\/queue\/[0-9a-f-]{36}$/i)
+    await open.click()
+    await expect.poll(() => new URL(page.url()).pathname).toBe(referralPath)
+    await expect(page.getByRole('region', { name: 'Why this was referred', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Decision', exact: true }).getByRole('button', { name: 'Approve', exact: true })).toBeVisible()
   })
 
   test('customer can open portal list and policy summary', async ({ page, request }) => {
@@ -56,24 +63,32 @@ test.describe('browser workflows', () => {
     await page.setViewportSize({ width: 390, height: 844 })
 
     await page.goto('/search')
-    const nav = page.locator('#topnav-main')
-    await expect(nav).not.toHaveClass(/is-open/)
+    // On phones the link row is hidden and the menu button opens a sheet.
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeHidden()
+    const sheet = page.getByRole('navigation', { name: 'Menu' })
+    await expect(sheet).toHaveCount(0)
 
     const toggle = page.getByLabel('Toggle navigation menu')
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await toggle.click()
-    await expect(nav).toHaveClass(/is-open/)
+    await expect(sheet).toBeVisible()
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(sheet.getByRole('heading', { name: 'Work', exact: true })).toBeVisible()
+    const work = sheet.getByRole('list', { name: 'Work', exact: true })
+    await expect(work.getByRole('link', { name: /^Submissions/ })).toBeVisible()
+    await expect(work.getByRole('link', { name: /^Referrals/ })).toBeVisible()
+    await expect(work.getByRole('link', { name: 'Placements', exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
     await toggle.click()
-    await expect(nav).not.toHaveClass(/is-open/)
+    await expect(sheet).toHaveCount(0)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
     await toggle.click()
-    await expect(nav).toHaveClass(/is-open/)
-    await page.getByRole('link', { name: /Dashboard/ }).click()
+    await expect(sheet).toBeVisible()
+    await sheet.getByRole('link', { name: 'Home', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-    await expect(nav).not.toHaveClass(/is-open/)
+    await expect(sheet).toHaveCount(0)
   })
 
   test('search filters, pagination, and policy detail navigation work in the browser', async ({ page, request }) => {

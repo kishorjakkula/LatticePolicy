@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -49,10 +49,62 @@ describe('ReasonDialog', () => {
   })
 })
 
+describe('ReasonDialog secret field', () => {
+  it('masks the value and sends it untrimmed', async () => {
+    const onConfirm = vi.fn()
+    render(<ReasonDialog title="Reset password" label="New password" confirmLabel="Reset password" secret onConfirm={onConfirm} onCancel={vi.fn()} />)
+    const field = screen.getByLabelText('New password (required)')
+    expect(field).toHaveAttribute('type', 'password')
+    await userEvent.type(field, ' pass word ')
+    await userEvent.click(screen.getByRole('button', { name: 'Reset password' }))
+    expect(onConfirm).toHaveBeenCalledWith(' pass word ')
+  })
+})
+
 describe('ConfirmDialog', () => {
   it('uses the danger style for destructive actions', () => {
     render(<ConfirmDialog title="Delete form?" confirmLabel="Delete" danger onConfirm={vi.fn()} onCancel={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('btn-danger')
+  })
+})
+
+describe.each(['confirm', 'reason'] as const)('%s dialog in flight', (kind) => {
+  it('blocks dismissal and duplicate submissions, traps focus, and permits retry after failure', async () => {
+    let reject: (error: Error) => void = () => {}
+    const onConfirm = vi.fn().mockImplementationOnce(() => new Promise<void>((_, fail) => { reject = fail }))
+      .mockResolvedValueOnce(undefined)
+    const onCancel = vi.fn()
+    const props = { title: 'Save decision', confirmLabel: 'Save', onConfirm, onCancel }
+    render(kind === 'confirm' ? <ConfirmDialog {...props} /> : <ReasonDialog {...props} initialValue="Reviewed" />)
+    const save = screen.getByRole('button', { name: 'Save' })
+    await userEvent.dblClick(save)
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(save).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    await userEvent.keyboard('{Escape}{Tab}')
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+    if (kind === 'reason') fireEvent.submit(save.closest('form')!)
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    await act(async () => { reject(new Error('Please retry')) })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please retry')
+    expect(save).toBeEnabled()
+    if (kind === 'reason') expect(screen.getByLabelText('Reason (required)')).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+    await userEvent.click(save)
+    expect(onConfirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('wraps keyboard focus within enabled controls', async () => {
+    const props = { title: 'Save decision', confirmLabel: 'Save', onConfirm: vi.fn(), onCancel: vi.fn() }
+    render(kind === 'confirm' ? <ConfirmDialog {...props} /> : <ReasonDialog {...props} />)
+    const first = kind === 'confirm' ? screen.getByRole('button', { name: 'Cancel' }) : screen.getByLabelText('Reason (required)')
+    first.focus()
+    await userEvent.tab({ shift: true })
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus()
+    await userEvent.tab()
+    expect(first).toHaveFocus()
   })
 })
 

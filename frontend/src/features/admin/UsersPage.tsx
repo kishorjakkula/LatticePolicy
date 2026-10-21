@@ -2,6 +2,7 @@ import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { FormEvent, useMemo, useState } from 'react'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
+import { useConfirmDialog, useReasonDialog } from '../../components/Dialog'
 import {
   useUsers,
   useSecurityRoles,
@@ -28,6 +29,8 @@ export function UsersPage() {
   const [password, setPassword] = useState('')
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['agent'])
   const [customerRef, setCustomerRef] = useState('')
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
+  const { dialog: reasonDialog, askReason } = useReasonDialog()
 
   const { data: usersData, isLoading: usersLoading, error: usersError } = useUsers()
   const { data: rolesData, isLoading: rolesLoading, error: rolesError } = useSecurityRoles()
@@ -64,8 +67,9 @@ export function UsersPage() {
     try { await updateMutation.mutateAsync({ id, patch }) } catch (e: any) { setFormError(e.message || String(e)) }
   }
 
-  const onDelete = async (id: string) => {
-    if (!confirm('Delete user?')) return
+  const onDelete = async (user: User) => {
+    if (!(await askConfirm({ title: `Delete user ${user.username}`, description: 'The user can no longer sign in.', confirmLabel: 'Delete', danger: true }))) return
+    const id = user.id
     setFormError(null)
     try { await deleteMutation.mutateAsync(id) } catch (e: any) { setFormError(e.message || String(e)) }
   }
@@ -81,7 +85,14 @@ export function UsersPage() {
 
   const onEditRoles = async (user: User) => {
     const suggested = user.roles.join(',')
-    const raw = prompt('Roles (comma):', suggested)
+    const raw = await askReason({
+      title: `Edit roles for ${user.username}`,
+      label: 'Roles',
+      help: `Comma-separated role codes. Available: ${availableRoles.map((x) => x.roleCode).join(', ') || 'none'}.`,
+      confirmLabel: 'Save roles',
+      optional: true,
+      initialValue: suggested,
+    })
     if (raw == null) return
     const requested = raw.split(',').map((x) => x.trim()).filter(Boolean)
     const available = new Set(availableRoles.map((x) => x.roleCode))
@@ -95,14 +106,28 @@ export function UsersPage() {
 
   const onEditCustomerLink = async (user: User) => {
     const suggested = user.customerKey || user.customerId || ''
-    const raw = prompt('Linked customer (Customer # or customer UUID). Leave blank to clear.', suggested)
+    const raw = await askReason({
+      title: `Link customer to ${user.username}`,
+      label: 'Linked customer',
+      help: 'Customer # or customer UUID. Leave blank to clear the link.',
+      confirmLabel: 'Save link',
+      optional: true,
+      initialValue: suggested,
+    })
     if (raw == null) return
     const nextRef = raw.trim()
     await onUpdate(user.id, { customerRef: nextRef || null })
   }
 
+  const onResetPassword = async (user: User) => {
+    const pw = await askReason({ title: `Reset password for ${user.username}`, label: 'New password', confirmLabel: 'Reset password', secret: true })
+    if (pw) await onUpdate(user.id, { password: pw })
+  }
+
   return (
     <div className="ps-admin-page">
+      {confirmDialog}
+      {reasonDialog}
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Users</h2></div>
       </div>
@@ -160,9 +185,9 @@ export function UsersPage() {
               <td style={{ display:'flex', gap:8 }}>
                 <button className="btn-secondary" onClick={()=>onEditRoles(u)}>Edit Roles</button>
                 <button className="btn-secondary" onClick={()=>onEditCustomerLink(u)}>Link Customer</button>
-                <button className="btn-secondary" onClick={()=>{ const pw = prompt('New password:'); if (pw) onUpdate(u.id, { password: pw }) }}>Reset Password</button>
+                <button className="btn-secondary" onClick={()=>void onResetPassword(u)}>Reset Password</button>
                 <button className="btn-secondary" onClick={()=>onUpdate(u.id, { disabled: !u.disabled })}>{u.disabled ? 'Enable' : 'Disable'}</button>
-                <button className="btn-secondary" onClick={()=>onDelete(u.id)}>Delete</button>
+                <button className="btn-secondary" onClick={()=>onDelete(u)}>Delete</button>
               </td>
             </tr>
           ))}

@@ -3,6 +3,7 @@
    proposed from what a person confirmed. */
 :root {
   --si-ai: #5b35c4;
+  --si-on-ai: #fff;
   --si-ai-text: #3b2391;
   --si-ai-soft: #f3effd;
   --si-ai-border: #d9cdf7;
@@ -19,6 +20,7 @@
 
 [data-theme="dark"] {
   --si-ai: #a58bff;
+  --si-on-ai: #120a2e;
   --si-ai-text: #d8ccff;
   --si-ai-soft: rgba(165, 139, 255, 0.14);
   --si-ai-border: rgba(165, 139, 255, 0.4);
@@ -57,8 +59,7 @@
 .si-card-pad { padding: 16px; }
 .si-card h2, .si-card h3 { margin: 0 0 8px; font-size: 15px; font-weight: 800; }
 
-.si-ai-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--si-ai); color: #fff; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
-[data-theme="dark"] .si-ai-tag { color: #120a2e; }
+.si-ai-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--si-ai); color: var(--si-on-ai); font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .si-ai-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; background: var(--si-ai-soft); border: 1px solid var(--si-ai-border); border-radius: var(--radius-lg); padding: 12px 16px; color: var(--si-ai-text); }
 .si-ai-note p { margin: 0; flex: 1 1 420px; }
 
@@ -85,7 +86,7 @@ textarea.si-input { padding: 8px 10px; min-height: 64px; resize: vertical; }
 .si-stages { display: flex; flex-wrap: wrap; gap: 8px; }
 .si-stage { font: inherit; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--panel); color: var(--text); cursor: pointer; }
 .si-stage[aria-pressed="true"] { background: var(--text); color: var(--panel); border-color: var(--text); }
-.si-table-wrap { overflow-x: auto; max-width: 100%; }
+.si-table-wrap { overflow-x: auto; max-width: 100%; position: relative; }
 /* Submissions list (WP-0004 REQ-14): at phone width the queue table scrolls
    inside its own wrapper and the page never scrolls sideways. min-width: 0
    lets the page shrink inside the app's flex layout, and inline-size
@@ -107,7 +108,7 @@ textarea.si-input { padding: 8px 10px; min-height: 64px; resize: vertical; }
 .si-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
 .si-steps li { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--si-neutral-bg); color: var(--si-neutral-fg); }
 .si-steps li.is-done { background: var(--si-high-bg); color: var(--si-high-fg); font-weight: 600; }
-.si-steps li.is-current { background: var(--accent); color: #fff; font-weight: 700; }
+.si-steps li.is-current { background: var(--ps-primary); color: var(--ps-on-primary); font-weight: 700; }
 .si-steps li.is-failed { background: var(--si-low-bg); color: var(--si-low-fg); font-weight: 700; }
 .si-columns { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .si-col-docs { flex: 1 1 340px; min-width: 0; overflow: hidden; }
@@ -123,6 +124,8 @@ textarea.si-input { padding: 8px 10px; min-height: 64px; resize: vertical; }
 .si-line.is-source { background: var(--si-highlight); outline: 2px solid var(--si-ai); margin: 4px 0; padding: 4px 6px; }
 .si-source-label { display: block; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--si-ai-text); text-transform: uppercase; letter-spacing: 0.4px; }
 .si-section { overflow: hidden; }
+.si-section-title { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
+.si-section-summary { font-weight: 500; }
 .si-section-head { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); }
 .si-field { padding: 12px 16px; border-top: 1px solid var(--border); }
 .si-section-head + .si-field { border-top: 0; }
@@ -154,14 +157,14 @@ textarea.si-input { padding: 8px 10px; min-height: 64px; resize: vertical; }
 .si-banner.is-success { background: var(--si-high-bg); color: var(--si-high-fg); }
 .si-banner.is-info { background: var(--accent-soft); color: var(--accent-strong); }
 
-.si-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--panel); border-top: 1px solid var(--border-strong); box-shadow: 0 -6px 18px rgba(16, 24, 40, 0.08); }
+.si-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--panel); border-top: 1px solid var(--border-strong); box-shadow: var(--shadow-md); }
 .si-dock-inner { max-width: 1400px; margin: 0 auto; padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .si-progress { height: 8px; border-radius: 4px; background: var(--panel-soft); margin-top: 6px; overflow: hidden; }
 .si-progress > span { display: block; height: 8px; border-radius: 4px; background: var(--accent); transition: width 0.3s ease; }
 .si-progress.is-complete > span { background: var(--success); }
 
 /* Approval */
-.si-overlay { position: fixed; inset: 0; z-index: 40; background: rgba(16, 24, 40, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.si-overlay { position: fixed; inset: 0; z-index: 40; background: var(--ps-overlay); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .si-dialog { width: min(880px, 100%); background: var(--panel); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
 .si-dialog-head { padding: 18px 20px; border-bottom: 1px solid var(--border); }
 .si-dialog-head h2 { margin: 0; font-size: 20px; }

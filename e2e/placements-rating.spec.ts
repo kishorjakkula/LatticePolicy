@@ -30,10 +30,12 @@ test.describe('large commercial placements', () => {
     }
 
     // Declining asks for a reason and is terminal.
-    page.once('dialog', (dialog) => void dialog.accept('Market declined (E2E)'))
+    await row.getByRole('button', { name: 'Declined', exact: true }).click()
+    const declineDialog = page.getByRole('dialog', { name: `Decline placement for ${insuredName}` })
+    await declineDialog.getByLabel('Reason (optional)').fill('Market declined (E2E)')
     await Promise.all([
       page.waitForResponse((response) => response.url().includes('/api/v1/placements/') && response.request().method() !== 'GET' && response.ok()),
-      row.getByRole('button', { name: 'Declined', exact: true }).click(),
+      declineDialog.getByRole('button', { name: 'Decline', exact: true }).click(),
     ])
     await expect(row).toContainText('Declined')
     await expect(row.getByRole('button')).toHaveCount(0)

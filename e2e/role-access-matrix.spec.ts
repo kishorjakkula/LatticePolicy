@@ -55,6 +55,40 @@ test.describe('role-based route access', () => {
   }
 })
 
+test.describe('navigation follows role permissions', () => {
+  test('agent sees Submissions under Work but no Referrals, and makes no referral count request', async ({ page, signInAs }) => {
+    const referralRequests: string[] = []
+    page.on('request', (req) => {
+      if (req.url().includes('/v1/uw/referrals')) referralRequests.push(req.url())
+    })
+    await signInAs(page, 'agent1')
+    await page.goto('/search')
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    const work = nav.getByRole('button', { name: 'Work', exact: true })
+    await expect(work).toHaveAttribute('aria-expanded', 'false')
+    await work.click()
+    await expect(work).toHaveAttribute('aria-expanded', 'true')
+    // Waiting for the submissions count means the header's count requests have run.
+    await expect(nav.getByRole('link', { name: /^Submissions\s*,\s*\d+ to review$/ })).toBeVisible()
+    await expect(nav.getByRole('link', { name: /Referrals/ })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Placements', exact: true })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
+    expect(referralRequests).toEqual([])
+  })
+
+  test('underwriter sees Work > Referrals with the open referral count', async ({ page, signInAs }) => {
+    await signInAs(page, 'uw1')
+    await page.goto('/search')
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await nav.getByRole('button', { name: 'Work', exact: true }).click()
+    const referrals = nav.getByRole('link', { name: /^Referrals\s*,\s*\d+ open$/ })
+    await expect(referrals).toBeVisible()
+    await referrals.click()
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/uw/queue')
+    await expect(nav.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
+  })
+})
+
 test.describe('backend authorization and tenancy', () => {
   test('API rejects missing credentials, missing tenant, and cross-tenant tokens', { tag: '@smoke' }, async ({ request, sessionFor }) => {
     const admin = await sessionFor('admin')

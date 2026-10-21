@@ -29,7 +29,7 @@
       "writes": "02-design.md",
       "gateAfter": null,
       "status": "done",
-      "returns": 0
+      "returns": 1
     },
     {
       "id": "ui-designer",
@@ -52,7 +52,7 @@
       "name": "Developer",
       "writes": "05-implementation.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -60,7 +60,7 @@
       "name": "Unit Test",
       "writes": "06-unit-tests.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -68,7 +68,7 @@
       "name": "Code Reviewer",
       "writes": "07-code-review.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -76,7 +76,7 @@
       "name": "Security and Compliance",
       "writes": "08-security-compliance.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -84,7 +84,7 @@
       "name": "Automation Test",
       "writes": "09-automation-tests.md",
       "gateAfter": "C",
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -132,10 +132,10 @@
     {
       "gate": "B",
       "approvedBy": "Kishor Jakkula",
-      "approvedAt": "2026-10-20",
+      "approvedAt": "2026-10-21",
       "waivedBy": null,
       "waivedAt": null,
-      "note": "approve"
+      "note": "approved."
     },
     {
       "gate": "C",
@@ -182,6 +182,46 @@
     {
       "at": "2026-10-20T04:39:00.131Z",
       "event": "Gate B approved by Kishor Jakkula: \"approve\""
+    },
+    {
+      "at": "2026-10-21T16:48:14.265Z",
+      "event": "returned to Software Architect: Independent review found that approval can be reused after materially changed exposure with the same reason. Immutable proposal binding requires a database/design extension beyond the approved no-migration scope; reopen Gate B for human review. (Gate B reopened)"
+    },
+    {
+      "at": "2026-10-21T16:48:53.498Z",
+      "event": "Software Architect completed"
+    },
+    {
+      "at": "2026-10-21T16:48:53.763Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-21T16:48:53.928Z",
+      "event": "Test Designer completed"
+    },
+    {
+      "at": "2026-10-21T16:53:48.777Z",
+      "event": "Gate B approved by Kishor Jakkula: \"approved.\""
+    },
+    {
+      "at": "2026-10-21T17:12:19.013Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-21T17:12:19.167Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-21T17:12:19.352Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-21T17:12:19.523Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-21T17:12:19.689Z",
+      "event": "Automation Test completed"
     }
   ]
 }

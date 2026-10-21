@@ -8,7 +8,7 @@
   font-size: 0.95rem;
 }
 .validation-findings__group {
-  border: 1px solid var(--ps-border, #e2e8f0);
+  border: 1px solid var(--ps-border);
   border-left-width: 4px;
   border-radius: var(--ps-radius-sm, 8px);
   padding: 10px 14px;
@@ -26,17 +26,17 @@
   margin: 2px 0;
 }
 .validation-findings__group--error {
-  border-left-color: #c53030;
-  background: #fff5f5;
-  color: #742a2a;
+  border-left-color: var(--ps-danger);
+  background: var(--ps-danger-soft);
+  color: var(--ps-danger);
 }
 .validation-findings__group--warning {
-  border-left-color: #b7791f;
-  background: #fffaf0;
-  color: #744210;
+  border-left-color: var(--ps-warning);
+  background: var(--ps-warning-soft);
+  color: var(--ps-warning);
 }
 .validation-findings__field {
-  color: var(--ps-text-secondary, #4a5568);
+  color: var(--ps-text-secondary);
   font-size: 0.85rem;
 }
 .validation-ack__confirm {

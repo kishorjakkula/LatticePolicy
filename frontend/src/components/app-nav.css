@@ -1,0 +1,149 @@
+/* Header navigation (WP-0004 REQ-5). Colours come from the --ps-* tokens only. */
+
+/* ── Work menu (desktop) ───────────────────────────────────────────── */
+
+.app-nav .app-nav-menu {
+  position: relative;
+}
+
+.app-nav .app-nav-menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ps-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-nav .app-nav-menu-button:hover,
+.app-nav .app-nav-menu-button[aria-expanded="true"],
+.app-nav .app-nav-menu-button.active {
+  background: var(--ps-surface);
+  border-color: var(--ps-border);
+  color: var(--ps-text);
+}
+
+.app-nav .app-nav-menu-button:focus-visible,
+.app-nav-link:focus-visible {
+  outline: none;
+  box-shadow: var(--ps-primary-focus);
+}
+
+.app-nav-caret {
+  flex-shrink: 0;
+}
+
+.app-nav .app-nav-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 120;
+  min-width: 200px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--ps-surface);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-sm);
+  box-shadow: var(--ps-shadow-md);
+}
+
+.app-nav .app-nav-menu-list[hidden] {
+  display: none;
+}
+
+.app-shell-topnav .app-nav .app-nav-menu-list a {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  color: var(--ps-text);
+}
+
+/* ── Count badge ──────────────────────────────────────────────────── */
+
+.app-nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: var(--ps-radius-pill);
+  background: var(--ps-primary);
+  color: var(--ps-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Phone sheet ──────────────────────────────────────────────────── */
+
+.app-nav-sheet {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .app-nav-sheet {
+    display: block;
+    order: 10;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--ps-border);
+  }
+
+  .app-nav-sheet ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .app-nav-sheet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .app-nav-sheet-group {
+    padding: 6px 0;
+  }
+
+  .app-nav-sheet-heading {
+    margin: 0 0 4px;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ps-text-secondary);
+  }
+
+  .app-nav-sheet .app-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--ps-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .app-nav-sheet .app-nav-link:hover,
+  .app-nav-sheet .app-nav-link.active {
+    background: var(--ps-surface);
+  }
+}

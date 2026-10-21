@@ -1,5 +1,20 @@
 # Test design — WP-0004
 
+## Approved Security Extension (Gate B, 2026-10-21)
+
+`02a-referral-proposal-binding.md` adds immutable reviewed-proposal evidence.
+Required regressions: same reason/date but increased limit or materially
+changed risk/coverage/premium/base version must not reuse an earlier approval;
+unchanged retry after human approval succeeds. Cover new business, endorsement,
+renewal and rewrite through real HTTP and PostgreSQL, including concurrent
+attempts and failed writes. Unit tests prove canonical key-order stability and
+material-input sensitivity. API tests reject client-forged context and evidence
+updates, enforce tenant/authority permissions and preserve legacy history.
+UI/browser tests compare displayed immutable proposed facts with stored
+evidence and require new review on changed/legacy proposals. Migration and
+independent security review are required. Gate B was approved with "approved."
+Actual results, not this plan, determine completion.
+
 Layers: unit (vitest, server and frontend), component (React Testing Library),
 API integration (real PostgreSQL), E2E (Playwright, isolated stack), standards
 (source scans), accessibility (axe in Playwright). All data is synthetic.

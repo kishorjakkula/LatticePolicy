@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { useConfirmDialog } from '../../components/Dialog'
 import { RadioGroup } from '../../components/RadioGroup'
 import { setSubmissionField, useIntakeSettings, useSubmission, useSubmissionAction, useSubmissionChecks } from '../../api/hooks'
 import { queryKeys } from '../../api/queryKeys'
@@ -218,7 +219,7 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
           <div className="si-field-input">
             <select id={inputId} className={`si-input${changed || field.edited ? ' is-edited' : ''}${!draft ? ' is-empty' : ''}`} value={draft} disabled={!canEdit || busy || accepted}
               onFocus={onSelect} onChange={(event) => { setDraft(event.target.value); void send('set', event.target.value) }}>
-              <option value="">{field.confidence === 'missing' ? 'Not in the documents. Choose…' : 'Choose…'}</option>
+              <option value="">Choose…</option>
               {field.options.map((option) => <option key={option} value={option}>{displayValue(field, option, settings)}</option>)}
               {draft && !field.options.includes(draft) && <option value={draft}>{draft}</option>}
             </select>
@@ -227,7 +228,7 @@ function FieldRow({ submission, field, selected, onSelect, canEdit, settings }: 
           <div className="si-field-input">
             <input id={inputId} className={`si-input${changed || field.edited ? ' is-edited' : ''}${!draft ? ' is-empty' : ''}`} value={draft}
               type={field.type === 'date' ? 'date' : 'text'} inputMode={field.type === 'number' ? 'decimal' : undefined}
-              placeholder={field.confidence === 'missing' ? 'Not in the documents. Enter a value' : ''} disabled={!canEdit || busy || accepted}
+              placeholder={field.confidence === 'missing' ? 'Enter value' : ''} disabled={!canEdit || busy || accepted}
               onFocus={onSelect} onChange={(event) => setDraft(event.target.value)} onBlur={() => { if (changed) void send('set', draft) }} onKeyDown={onKeyDown} />
           </div>
         )}
@@ -550,7 +551,9 @@ export function SubmissionReviewPage() {
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [docId, setDocId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'attention'>('all')
+  // Review opens on what needs a person (REQ-9); everything is one click away.
+  const [filter, setFilter] = useState<'all' | 'attention'>('attention')
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
   const [approving, setApproving] = useState(false)
   const [declining, setDeclining] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
@@ -580,12 +583,14 @@ export function SubmissionReviewPage() {
   }, [fields, selectedKey])
 
   const sections = useMemo(() => {
-    const out: Array<{ title: string; fields: SubmissionField[]; total: number; done: number }> = []
+    const out: Array<{ title: string; fields: SubmissionField[]; total: number; done: number; found: number }> = []
     for (const field of fields) {
       let section = out.find((item) => item.title === field.section)
-      if (!section) { section = { title: field.section, fields: [], total: 0, done: 0 }; out.push(section) }
+      if (!section) { section = { title: field.section, fields: [], total: 0, done: 0, found: 0 }; out.push(section) }
       section.total++
       if (field.status === 'accepted') section.done++
+      // "Found" means the documents gave a value (or several to choose from).
+      if (field.confidence !== 'missing') section.found++
       if (filter === 'all' || needsAttention(field)) section.fields.push(field)
     }
     return out.filter((section) => section.fields.length)
@@ -594,6 +599,18 @@ export function SubmissionReviewPage() {
   const run = async <T,>(promise: Promise<T>) => {
     setActionError(null)
     try { return await promise } catch (err) { setActionError(apiErrorMessage(err)); return undefined }
+  }
+
+  // The bulk action says how many values it confirms before it changes anything (REQ-9).
+  // Each value is still recorded as confirmed by this reviewer; the AI never confirms.
+  const acceptAllHigh = async () => {
+    const count = highLeft
+    const ok = await askConfirm({
+      title: `Accept ${count} high-confidence value${count === 1 ? '' : 's'}?`,
+      description: `${count === 1 ? 'This value is' : `These ${count} values are`} marked confirmed by you, as drafted. Check them against the source documents first; you can undo any of them before approval.`,
+      confirmLabel: `Accept ${count}`,
+    })
+    if (ok) await run(acceptHigh.mutateAsync(undefined))
   }
 
   if (isLoading) return <div className="si-page"><div className="si-empty">Loading submission…</div></div>
@@ -711,7 +728,8 @@ export function SubmissionReviewPage() {
               )}
             </div>
             {sections.map((section) => (
-              <CollapsibleSection key={section.title} as="section" className="si-card si-section" title={<span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, width: '100%' }}><span>{section.title}</span><span className="si-muted si-small" style={{ fontWeight: 500 }}>{section.done} of {section.total} confirmed</span></span>}>
+              <CollapsibleSection key={section.title} as="section" className="si-card si-section" defaultOpen={section.found > 0}
+                title={<span className="si-section-title"><span>{section.title}</span><span className="si-muted si-small si-section-summary">{section.found} of {section.total} found · {section.done} confirmed</span></span>}>
                 {section.fields.map((field) => (
                   <FieldRow key={field.key} submission={submission} field={field} selected={field.key === selectedKey} onSelect={() => { setSelectedKey(field.key); setDocId(null) }} canEdit={canManage && reviewable} settings={settings} />
                 ))}
@@ -738,7 +756,7 @@ export function SubmissionReviewPage() {
               <div className="si-small si-muted" style={{ marginTop: 4 }}>Nothing is created until a person approves. The AI never approves on its own.</div>
             </div>
             {canManage && (
-              <button type="button" className="si-btn si-btn-lg" disabled={!highLeft || acceptHigh.isPending} onClick={() => void run(acceptHigh.mutateAsync(undefined))}>
+              <button type="button" className="si-btn si-btn-lg" disabled={!highLeft || acceptHigh.isPending} onClick={() => void acceptAllHigh()}>
                 Accept all high confidence ({highLeft})
               </button>
             )}
@@ -750,6 +768,7 @@ export function SubmissionReviewPage() {
         </div>
       )}
 
+      {confirmDialog}
       {approving && <ApprovalDialog submission={submission} checks={checks} settings={settings} canApprove={canApprove} onClose={() => { setApproving(false); void qc.invalidateQueries({ queryKey: queryKeys.submissions.detail(id) }) }} />}
     </div>
   )

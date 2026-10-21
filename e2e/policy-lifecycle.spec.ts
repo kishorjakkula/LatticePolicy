@@ -95,7 +95,6 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await walkTransactionWizardToIssue(page, async (step) => {
       if (step === 1) await fieldByLabel(page, 'Cancellation Reason Code').selectOption('VEHICLE_SOLD')
     })
-    page.once('dialog', (dialog) => void dialog.accept())
     await page.getByRole('button', { name: 'Cancel Transaction' }).click()
 
     await page.goto(`/policies/${policy.policyId}`)

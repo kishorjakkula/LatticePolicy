@@ -154,7 +154,7 @@ export function DataImportPage() {
           <tbody>
             {batchRows.length === 0 && <tr><td colSpan={9} className="muted">No import batches</td></tr>}
             {batchRows.map(batch => (
-              <tr key={batch.batchId} style={{ background: selectedBatchId === batch.batchId ? 'var(--surface-hover, #f5f5f5)' : undefined }}>
+              <tr key={batch.batchId} style={{ background: selectedBatchId === batch.batchId ? 'var(--panel-soft)' : undefined }}>
                 <td>{batch.entityType}</td>
                 <td>{batch.sourceSystem}</td>
                 <td>{batch.status}</td>

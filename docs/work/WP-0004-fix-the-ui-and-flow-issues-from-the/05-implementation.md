@@ -1,8 +1,8 @@
 # Implementation — WP-0004
 
-Status: Phase 1 (quick wins) implemented. Phases 2 (workflow) and 3
-(restructure) follow on the same branch line as separate pull requests; this
-stage is not complete until all three land.
+Status: Phase 1 is historical; Phase 2/3 and the approved proposal-binding
+extension are implemented on `latticepolicy/wp-0004-phase2`. Final local
+verification and independent re-review passed. Gate C remains unapproved.
 
 - Branch: `latticepolicy/wp-0004-ui-flow` (built on PR #391's branch).
 - Task note: `docs/tasks/wp-0004-ui-consistency-part-c.md` (styles and pager); this file for the rest.
@@ -82,3 +82,61 @@ Phase 1, Node 24.21:
   - A "Cancelled" exact-text check failed because the legend text sat inside the badge.
   - Both are fixed (calendar-date comparison with a US-time-zone test; legend moved beside the badge).
   - Rerun of the policy specs (policy-lifecycle, production-policy-scenarios, policy-documents, multi-product, admin-customers): 21 passed.
+
+## Phase 2/3 working-tree continuation (2026-10-20)
+
+The initial status above describes the committed Phase 1 baseline. The current
+branch is `latticepolicy/wp-0004-phase2`; Phase 2/3 changes are implemented in
+the working tree and are undergoing combined verification. No merge, release
+or production deployment is authorized by these results.
+
+- REQ-1/17: detail-only referral decisions, reason enforcement, richer queue,
+  oldest-first Open triage and explicit review links from the wizard.
+- REQ-2: shared in-app dialogs across users, customers, compliance, placements
+  and form lifecycle actions, including pending-request and keyboard behavior.
+- REQ-5: permission-aware Work menu/counts, grouped administration and admin
+  attention home. Count caches include tenant and user; logout hides counts.
+- REQ-8/9: product/term-first wizard, compatible company selection and billing
+  at Premium; needs-attention submission review and counted bulk confirmation.
+- REQ-10: eligibility matrix and 1-500-record atomic status changes with one
+  before/after actor/reason audit per row; grouped searchable permission matrix.
+- REQ-11: real authorized work counts/links, honest unavailable/stale states,
+  zero-length bars, future-only forecasts and local-calendar renewal windows.
+- REQ-14/15/16: compact phone pager and wizard stepper, collapsed phone search
+  filters, theme-token source guard, readable primary/status/muted tokens,
+  keyboard regressions and light/dark browser accessibility checks.
+- REQ-19: server-paged AI audit with exact model/user/date filters, total and
+  accessible detail panel; no audit-chain or raw historical-data mutation.
+- API integration: detailed OpenAPI filters, paging and bulk contracts; CI's
+  service database is explicitly marked disposable for the guarded suites.
+
+### Referral rollback correction
+
+Independent review found that fresh policy referrals could be rolled back with
+the rejected endorsement/renewal/rewrite. Services now throw a typed internal
+`PolicyReferralRequiredError` carrying server-evaluated work-item context.
+Only those three HTTP mutation routes wrap their existing transaction with
+`withPersistentPolicyReferral`: policy work fully rolls back first, then a new
+tenant transaction retains/reuses only the referral and returns its committed
+ID. Advisory locking serializes rejected retries. No unrelated error is caught
+as a referral, no rejected policy writes are committed, and decision authority
+remains at the explicit decision endpoint. New HTTP integration tests cover all
+three flows, simultaneous first attempts, unchanged pre-approval state and
+successful explicit-approval retries.
+
+### Detailed handoffs
+
+See `docs/tasks/wp-0004-workflow-regressions.md`,
+`wp-0004-referral-detail-only.md`, `wp-0004-phase3-compliance-security.md`,
+`wp-0004-phase3-dashboard.md` and `wp-0004-phase3-ai-audit.md`. Their scoped
+results are not substitutes for final combined verification or human Gates C/D.
+
+### Approved Proposal Binding (2026-10-21)
+
+See `docs/tasks/wp-0004-referral-proposal-binding.md` for migration 067,
+canonical immutable evidence, four transaction callers, protected rollback
+retention, exact-fingerprint lookup and current/proposed UI display. Independent
+review identified concurrent new-business consumption and a spoofable UI
+redaction marker; both were corrected with real HTTP concurrency and component
+regressions. Quote revalidation and approval consumption now share the policy
+creation transaction. No production deployment or merge was performed.

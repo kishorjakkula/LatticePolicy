@@ -34,7 +34,7 @@
 }
 .llm-releases__lede,
 .llm-releases__hint {
-  color: var(--ps-text-muted, #5b6472);
+  color: var(--ps-text-muted);
   max-width: 760px;
 }
 .llm-releases__grid {
@@ -55,14 +55,14 @@
   max-width: 680px;
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid var(--ps-border, #d9dee6);
+  border-top: 1px solid var(--ps-border);
 }
 .llm-releases__token {
   display: grid;
   gap: 6px;
   padding: 12px;
   margin-bottom: 16px;
-  border: 1px solid var(--ps-border, #d9dee6);
+  border: 1px solid var(--ps-border);
   border-radius: 8px;
 }
 .llm-releases__token code {

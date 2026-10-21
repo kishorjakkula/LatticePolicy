@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiUw } from '../client'
 import { queryKeys } from '../queryKeys'
+import type { UwReferralDecision, UwReferralSort } from '../uw.api'
 
 // ---------------------------------------------------------------------------
 // UW authority grants
@@ -49,10 +50,10 @@ export function useUpdateUwAuthorityGrantMutation() {
 // UW referrals
 // ---------------------------------------------------------------------------
 
-export function useUwReferrals(page: number, pageSize: number, status?: string) {
+export function useUwReferrals(page: number, pageSize: number, status?: string, sort?: UwReferralSort) {
   return useQuery({
-    queryKey: queryKeys.uwReferrals.list(page, pageSize, status),
-    queryFn: () => apiUw.listReferrals(page, pageSize, status),
+    queryKey: queryKeys.uwReferrals.list(page, pageSize, status, sort),
+    queryFn: () => apiUw.listReferrals(page, pageSize, status, sort),
   })
 }
 
@@ -95,7 +96,7 @@ export function useDecideReferralMutation() {
       reason,
     }: {
       referralId: string
-      decision: 'Approved' | 'Declined' | 'InfoRequested'
+      decision: UwReferralDecision
       reason?: string
     }) => apiUw.decideReferral(referralId, decision, reason),
     onSuccess: () => {

@@ -1,101 +1,87 @@
-import { FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ActionButton } from '../../components/ActionButton'
-import { formatDisplayDate } from '../../shared/dateDisplay'
+import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { Pagination } from '../../components/Pagination'
+import { useToast } from '../../components/Toast'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
+import { useAssignReferralMutation, useUnderwriters, useUwReferrals } from '../../api/hooks'
+import type { UwReferral, UwReferralSort } from '../../api/uw.api'
+import { productLabel } from '../../shared/displayLabels'
 import {
-  useAddReferralCommentMutation,
-  useAssignReferralMutation,
-  useDecideReferralMutation,
-  useUwReferrals,
-} from '../../api/hooks'
-import { productLabel, statusLabel } from '../../shared/displayLabels'
-import { CollapsibleSection } from '../../components/CollapsibleSection'
+  REFERRAL_STATUS_BADGE,
+  assigneeLabel,
+  insuredDisplay,
+  isDecidable,
+  premiumLabel,
+  reasonLabel,
+  referralAge,
+  referralErrorMessage,
+  referralStatusLabel,
+} from './referralDisplay'
+import './uw.css'
 
-const STATUS_BADGE: Record<string, string> = {
-  Open: 'yellow',
-  InfoRequested: 'yellow',
-  Approved: 'green',
-  Declined: 'red',
-  Withdrawn: 'gray',
+const STATUS_OPTIONS = [
+  { value: 'Open', label: 'Open' },
+  { value: 'InfoRequested', label: 'Info requested' },
+  { value: 'Approved', label: 'Approved' },
+  { value: 'Declined', label: 'Declined' },
+  { value: '', label: 'All' },
+]
+
+/** Mirrors the server default: an Open queue is worked oldest first. */
+function defaultSortFor(status: string): UwReferralSort {
+  return status === 'Open' ? 'oldest' : 'newest'
 }
 
+/**
+ * Underwriting referral queue (WP-0004 REQ-1, REQ-17): a triage list only.
+ * Decisions are made from the referral detail view, which shows the reasons
+ * first and asks for a reason; rows offer "Open" and "Assign to me".
+ */
 export function UwQueue() {
   const { user } = useAuth()
+  const toast = useToast()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>('Open')
-  const [selectedReferral, setSelectedReferral] = useState<any | null>(null)
-  const [assignedTo, setAssignedTo] = useState('')
-  const [commentText, setCommentText] = useState('')
-  const [actionError, setActionError] = useState<string | null>(null)
-  const navigate = useNavigate()
+  const [sort, setSort] = useState<UwReferralSort>('oldest')
+  const [assigningId, setAssigningId] = useState<string | null>(null)
   const canDecide = hasPermission(user, 'uw.referrals.decide')
+  const currentUserId = user?.id ? String(user.id) : null
 
-  const { data, isLoading, error } = useUwReferrals(page, pageSize, statusFilter || undefined)
-  const items = data?.items ?? []
-  const total = data?.total ?? 0
-
-  const decideMutation = useDecideReferralMutation()
+  const { data, isLoading, error } = useUwReferrals(page, pageSize, statusFilter || undefined, sort)
+  const items: UwReferral[] = data?.items ?? []
+  const total = Number(data?.total ?? 0)
   const assignMutation = useAssignReferralMutation()
-  const commentMutation = useAddReferralCommentMutation()
+  const underwriters = useUnderwriters()
+  const underwriterNames = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const item of (underwriters.data as any)?.items ?? []) {
+      if (item?.userId) names.set(String(item.userId), String(item.displayName || item.username || ''))
+    }
+    return names
+  }, [underwriters.data])
 
-  const openReferral = (referral: any) => {
-    setSelectedReferral(referral)
-    setAssignedTo(referral.assignedTo || '')
-    setCommentText('')
-    setActionError(null)
+  const onStatusChange = (status: string) => {
+    setStatusFilter(status)
+    setSort(defaultSortFor(status))
+    setPage(1)
   }
 
-  const onAssign = async (event: FormEvent) => {
-    event.preventDefault()
-    const nextAssignee = assignedTo.trim()
-    if (!selectedReferral || !nextAssignee) return
-    setActionError(null)
+  const assignToMe = async (referral: UwReferral) => {
+    if (!currentUserId) return
+    setAssigningId(referral.referralId)
     try {
-      const updated = await assignMutation.mutateAsync({
-        referralId: selectedReferral.referralId,
-        assignedTo: nextAssignee,
-      })
-      setSelectedReferral((current: any) => ({ ...current, ...updated }))
-    } catch (e: any) {
-      setActionError(e.message || String(e))
+      await assignMutation.mutateAsync({ referralId: referral.referralId, assignedTo: currentUserId })
+      toast.success('Referral assigned to you', insuredDisplay(referral))
+    } catch (e) {
+      toast.error('Could not assign the referral', referralErrorMessage(e))
+    } finally {
+      setAssigningId(null)
     }
   }
-
-  const onAddComment = async (event: FormEvent) => {
-    event.preventDefault()
-    const text = commentText.trim()
-    if (!selectedReferral || !text) return
-    setActionError(null)
-    try {
-      const updated = await commentMutation.mutateAsync({
-        referralId: selectedReferral.referralId,
-        text,
-      })
-      setSelectedReferral((current: any) => ({ ...current, ...updated }))
-      setCommentText('')
-    } catch (e: any) {
-      setActionError(e.message || String(e))
-    }
-  }
-
-  const onDecide = async (v: any, decision: 'Approved' | 'Declined' | 'InfoRequested') => {
-    const reason = window.prompt(
-      decision === 'Approved' ? 'Approval reason (required):' : 'Decision note:'
-    ) || ''
-    if (decision === 'Approved' && !reason.trim()) return
-    try {
-      await decideMutation.mutateAsync({ referralId: v.referralId, decision, reason })
-    } catch (e: any) {
-      alert(e.message || String(e))
-    }
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const canPrev = page > 1
-  const canNext = page < totalPages
 
   return (
     <div className="ps-page-shell">
@@ -107,147 +93,111 @@ export function UwQueue() {
       <div className="ps-page-header">
         <div>
           <h1 className="ps-page-title">UW Referrals</h1>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>Items requiring underwriter approval</p>
+          <p className="muted uw-subtitle">Quotes and transactions waiting for an underwriting decision</p>
         </div>
-        <div className="ps-page-header-actions">
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-            style={{ width: 'auto', height: 32, minHeight: 32, fontSize: 13 }}
-          >
-            <option value="Open">Open</option>
-            <option value="InfoRequested">Info Requested</option>
-            <option value="Approved">Approved</option>
-            <option value="Declined">Declined</option>
-            <option value="">All</option>
-          </select>
-          <ActionButton variant="success" onClick={() => navigate('/wizard')}>+ New Quote</ActionButton>
+        <div className="ps-page-header-actions uw-queue-filters">
+          <label className="uw-inline-field">
+            <span>Status</span>
+            <select value={statusFilter} onChange={(e) => onStatusChange(e.target.value)}>
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="uw-inline-field">
+            <span>Sort</span>
+            <select value={sort} onChange={(e) => { setSort(e.target.value as UwReferralSort); setPage(1) }}>
+              <option value="oldest">Oldest first</option>
+              <option value="newest">Newest first</option>
+            </select>
+          </label>
         </div>
       </div>
-      {error && <p className="error">{String(error)}</p>}
+      {error && <p className="error" role="alert">{referralErrorMessage(error)}</p>}
       {isLoading ? (
         <div className="muted">Loading…</div>
       ) : (
         <>
-          <CollapsibleSection title="Referral List" className="ps-table-card">
-            <table className="table">
-              <thead>
-                <tr><th>Policy #</th><th>Product</th><th>Transaction</th><th>Effective Date</th><th>Reasons</th><th>Status</th><th>Assigned To</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {items.length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: 'center', padding: '24px' }}>No referrals found</td></tr>}
-                {items.map((v: any) => (
-                  <tr key={v.referralId}>
-                    <td>{v.policyNumber || <span className="muted">Pre-bind (quote)</span>}</td>
-                    <td>{productLabel(v.productCode)}</td>
-                    <td>{statusLabel(v.transactionType)}</td>
-                    <td>{formatDisplayDate(v.effectiveDate, { fallback: '-' })}</td>
-                    <td className="muted" style={{ maxWidth: 260 }}>{(v.reasons || []).join('; ') || '-'}</td>
-                    <td><span className={`badge ${STATUS_BADGE[v.status] || 'gray'}`}>{v.status}</span></td>
-                    <td className="muted">{v.assignedTo || '-'}</td>
-                    <td style={{ display:'flex', gap: 6 }}>
-                      <ActionButton variant="secondary" size="sm" onClick={() => openReferral(v)}>Review</ActionButton>
-                      {v.policyId && (
-                        <ActionButton variant="secondary" size="sm" onClick={() => navigate(`/policies/${v.policyId}`)}>Open</ActionButton>
-                      )}
-                      {(v.status === 'Open' || v.status === 'InfoRequested') && (
-                        <>
-                          <ActionButton variant="success" size="sm" onClick={() => onDecide(v, 'Approved')} disabled={!canDecide}>Approve</ActionButton>
-                          <ActionButton variant="secondary" size="sm" onClick={() => onDecide(v, 'Declined')} disabled={!canDecide}>Decline</ActionButton>
-                        </>
-                      )}
-                    </td>
+          <CollapsibleSection title="Referral list" className="ps-table-card">
+            <div className="uw-table-scroll">
+              <table className="table uw-referral-table">
+                <thead>
+                  <tr>
+                    <th scope="col" aria-sort={sort === 'oldest' ? 'descending' : 'ascending'}>Age</th>
+                    <th scope="col">Insured</th>
+                    <th scope="col">Product</th>
+                    <th scope="col" className="uw-num">Premium</th>
+                    <th scope="col">Reasons</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Assigned</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </CollapsibleSection>
-          <div className="ps-pagination-footer" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <div className="muted" style={{ fontSize: 13 }}>Total: {total}</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <ActionButton variant="secondary" size="sm" onClick={() => { if (canPrev) setPage(page-1) }} disabled={!canPrev}>← Prev</ActionButton>
-              <span className="muted" style={{ fontSize: 13 }}>Page {page} / {totalPages}</span>
-              <ActionButton variant="secondary" size="sm" onClick={() => { if (canNext) setPage(page+1) }} disabled={!canNext}>Next →</ActionButton>
-              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }} style={{ width: 'auto', height: 32, minHeight: 32, fontSize: 13 }}>
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-              </select>
-            </div>
-          </div>
-          {selectedReferral && (
-            <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="referral-review-title">
-              <div className="modal-panel">
-                <div className="modal-header">
-                  <div>
-                    <h2 id="referral-review-title">Referral review</h2>
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      {selectedReferral.policyNumber || 'Pre-bind quote'} · {selectedReferral.productCode || 'Unknown product'}
-                    </div>
-                  </div>
-                  <ActionButton variant="secondary" size="sm" onClick={() => setSelectedReferral(null)}>Close</ActionButton>
-                </div>
-
-                {actionError && <p className="error" role="alert">{actionError}</p>}
-
-                <form onSubmit={onAssign} style={{ marginBottom: 20 }}>
-                  <label htmlFor="referral-assignee">Assignee user UUID</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-                    <input
-                      id="referral-assignee"
-                      value={assignedTo}
-                      onChange={(event) => setAssignedTo(event.target.value)}
-                      placeholder="Enter a user UUID"
-                      pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}"
-                      title="Enter a valid user UUID"
-                      disabled={!canDecide || assignMutation.isPending}
-                    />
-                    <ActionButton
-                      type="submit"
-                      size="sm"
-                      disabled={!canDecide || !assignedTo.trim() || assignMutation.isPending}
-                    >
-                      {assignMutation.isPending ? 'Assigning…' : 'Assign'}
-                    </ActionButton>
-                  </div>
-                </form>
-
-                <section aria-labelledby="referral-comments-title">
-                  <h3 id="referral-comments-title">Comments</h3>
-                  {(selectedReferral.comments || []).length === 0 ? (
-                    <p className="muted">No comments yet.</p>
-                  ) : (
-                    <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
-                      {(selectedReferral.comments || []).map((comment: any, index: number) => (
-                        <div key={`${comment.at || 'comment'}-${index}`} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                          <div style={{ fontSize: 13 }}>{comment.text}</div>
-                          <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
-                            {comment.by || 'Unknown user'}{comment.at ? ` · ${formatDisplayDate(comment.at, { fallback: '' })}` : ''}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                </thead>
+                <tbody>
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="muted uw-empty">
+                        {statusFilter === 'Open' ? 'No open referrals. Referred quotes appear here.' : 'No referrals found'}
+                      </td>
+                    </tr>
                   )}
-                  <form onSubmit={onAddComment}>
-                    <label htmlFor="referral-comment">Add comment</label>
-                    <textarea
-                      id="referral-comment"
-                      rows={3}
-                      value={commentText}
-                      onChange={(event) => setCommentText(event.target.value)}
-                      placeholder="Add underwriting context"
-                      disabled={commentMutation.isPending}
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                      <ActionButton type="submit" size="sm" disabled={!commentText.trim() || commentMutation.isPending}>
-                        {commentMutation.isPending ? 'Adding…' : 'Add comment'}
-                      </ActionButton>
-                    </div>
-                  </form>
-                </section>
-              </div>
+                  {items.map((referral) => {
+                    const reasons = (referral.reasons || []).map(reasonLabel)
+                    const insured = insuredDisplay(referral)
+                    const mine = !!currentUserId && referral.assignedTo === currentUserId
+                    return (
+                      <tr key={referral.referralId} data-referral-id={referral.referralId}>
+                        <td title={referral.createdAt || undefined}>{referralAge(referral.createdAt)}</td>
+                        <td className="uw-truncate" title={insured}>{insured}</td>
+                        <td>{productLabel(referral.productCode)}</td>
+                        <td className="uw-num">{premiumLabel(referral.premium)}</td>
+                        <td className="muted uw-reasons">{reasons.join('; ') || '-'}</td>
+                        <td>
+                          <span className={`badge ${REFERRAL_STATUS_BADGE[referral.status] || 'gray'}`}>
+                            {referralStatusLabel(referral.status)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="uw-assignee">
+                            <span className={referral.assignedTo ? undefined : 'muted'}>
+                              {assigneeLabel(referral.assignedTo, currentUserId, underwriterNames)}
+                            </span>
+                            {canDecide && currentUserId && !mine && isDecidable(referral) && (
+                              <ActionButton
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void assignToMe(referral)}
+                                disabled={assigningId === referral.referralId}
+                              >
+                                {assigningId === referral.referralId ? 'Assigning…' : 'Assign to me'}
+                              </ActionButton>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <Link
+                            to={`/uw/queue/${encodeURIComponent(referral.referralId)}`}
+                            className="action-btn action-btn--secondary action-btn--sm"
+                          >
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
+          </CollapsibleSection>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+            pageSizeOptions={[10, 20, 50]}
+            showRange
+          />
         </>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { auditRadioControls } from './support/radio-standard'
 import type { Page } from '@playwright/test'
-import { createWizardReadyPolicy } from './support/api'
+import { apiJson, createWizardReadyPolicy, quotePayload, uniqueName } from './support/api'
 import { expect, test } from './support/fixtures'
 
 // UI standard: every section on a working screen is a CollapsibleSection.
@@ -18,6 +18,7 @@ const SCREENS: Array<{ name: string; path: string }> = [
   { name: 'underwriting queue', path: '/uw/queue' },
   { name: 'placements', path: '/placements' },
   { name: 'submissions', path: '/submissions' },
+  { name: 'administration home', path: '/admin' },
   { name: 'admin forms', path: '/admin/forms' },
   { name: 'admin underwriting companies', path: '/admin/uw-company' },
   { name: 'admin users', path: '/admin/users' },
@@ -102,6 +103,23 @@ test.describe('UI standard: every screen section is collapsible', () => {
     await signInAs(page, 'admin')
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('heading', { name: 'Policy Actions' })).toBeVisible()
+    await auditScreen(page)
+  })
+
+  test('referral detail', async ({ page, request, sessionFor, signInAs }) => {
+    const admin = await sessionFor('admin')
+    const payload = quotePayload(uniqueName('Detail audit')) as any
+    payload.risks[0].annualMiles = 60_000
+    const quote = await apiJson<any>(request, 'POST', '/api/v1/quotes', { token: admin.token, data: payload })
+    const blocked = await apiJson<any>(request, 'POST', `/api/v1/quotes/${quote.quoteId}/bind`, {
+      token: admin.token, data: {}, expectedStatus: 400,
+    })
+    expect(blocked.code).toBe('UW_REFERRAL_REQUIRED')
+    const id = blocked.message.match(/Referral ([0-9a-f-]{36})/)?.[1]
+    expect(id).toBeTruthy()
+    await signInAs(page, 'admin')
+    await page.goto(`/uw/queue/${id}`)
+    await expect(page.getByRole('heading', { name: /Referral:/ })).toBeVisible()
     await auditScreen(page)
   })
 })

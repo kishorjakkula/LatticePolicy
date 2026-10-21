@@ -39,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   state.keys = []
   state.trail.data = {
+    total: 2,
     counts: { ai: 1, automation: 0, person: 1, system: 0 },
     items: [
       entry({}),
@@ -73,7 +74,7 @@ describe('AI audit trail', () => {
   it('filters by who acted from the summary cards', () => {
     render(<AiAuditPage />)
     fireEvent.click(screen.getByRole('button', { name: /^1\s*AI/ }))
-    expect(state.keys[state.keys.length - 2]).toEqual(['ai-audit', expect.any(String), { source: 'all', actor: 'ai' }])
+    expect(state.keys[state.keys.length - 2]).toEqual(['ai-audit', expect.any(String), { source: 'all', actorKind: 'ai', offset: 0, limit: 25 }])
   })
   it('shows the recorded detail and hash for an entry', () => {
     render(<AiAuditPage />)
@@ -88,7 +89,7 @@ describe('AI audit trail', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<AiAuditPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
-    await waitFor(() => expect(aiAuditApi.exportCsv).toHaveBeenCalledWith({ source: 'all', actor: 'all', search: undefined }))
+    await waitFor(() => expect(aiAuditApi.exportCsv).toHaveBeenCalledWith({ source: 'all', actorKind: 'all' }))
     await waitFor(() => expect(createObjectURL).toHaveBeenCalled())
     vi.unstubAllGlobals()
   })

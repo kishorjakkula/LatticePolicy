@@ -45,8 +45,8 @@ type NotificationRow = {
 }
 
 const SEVERITY_COLORS: Record<'danger' | 'warning' | 'neutral', string> = {
-  danger: '#c0392b',
-  warning: '#b7791f',
+  danger: 'var(--ps-danger)',
+  warning: 'var(--ps-warning)',
   neutral: 'inherit',
 }
 
@@ -174,7 +174,7 @@ function SummaryCard({ label, value, danger = false }: { label: string; value: n
   return (
     <div className="ps-table-card" style={{ padding: 12, minWidth: 160 }}>
       <div className="muted" style={{ fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 600, color: danger && value > 0 ? 'var(--color-danger, #c0392b)' : undefined }}>
+      <div style={{ fontSize: 24, fontWeight: 600, color: danger && value > 0 ? 'var(--ps-danger)' : undefined }}>
         {value}
       </div>
     </div>

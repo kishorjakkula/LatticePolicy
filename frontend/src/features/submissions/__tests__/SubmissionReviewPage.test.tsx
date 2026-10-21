@@ -110,6 +110,8 @@ describe('SubmissionReviewPage', () => {
         reason: 'Two documents disagree.' }),
     ]), isLoading: false })
     renderPage()
+    // Review opens on "Needs attention"; the high-confidence FEIN is under "All values".
+    fireEvent.click(screen.getByRole('button', { name: /^All values/ }))
 
     expect(screen.getAllByText('AI draft').length).toBeGreaterThan(0)
     expect(screen.getByText('Average confidence 84%')).toBeInTheDocument()
@@ -138,6 +140,7 @@ describe('SubmissionReviewPage', () => {
     expect(screen.getByRole('button', { name: 'Continue to approval' })).toBeDisabled()
     expect(screen.getByText('0 of 1 values confirmed')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: /^All values/ }))
     fireEvent.change(screen.getByLabelText('FEIN'), { target: { value: '84-2219032' } })
     fireEvent.click(screen.getByRole('button', { name: /Confirm FEIN/ }))
     await waitFor(() => expect(mockUpdateField).toHaveBeenCalledWith('sub-1', 'fein', { action: 'accept', value: '84-2219032' }))
@@ -275,5 +278,88 @@ describe('SubmissionReviewPage', () => {
     renderPage()
     expect(screen.queryByRole('button', { name: 'Enter values by hand' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+  })
+
+  describe('review defaults (WP-0004 REQ-9)', () => {
+    const missing = (key: string, section: string, label: string, type: SubmissionField['type'] = 'text') =>
+      field({ key, section, label, type, options: type === 'select' ? ['direct', 'agency'] : [], aiValue: null, value: null, confidence: 'missing', confidenceScore: null, evidence: [], reason: null })
+
+    it('opens on "Needs attention", hiding high-confidence values until "All values" is chosen', () => {
+      mockUseSubmission.mockReturnValue({ data: submission([
+        field({}),
+        field({ key: 'phone', label: 'Insured phone', confidence: 'medium', confidenceScore: 70 }),
+      ]), isLoading: false })
+      renderPage()
+      expect(screen.getByRole('button', { name: 'Needs attention (1)' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'All values (2)' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByLabelText('Insured phone')).toBeInTheDocument()
+      expect(screen.queryByLabelText('FEIN')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'All values (2)' }))
+      expect(screen.getByLabelText('FEIN')).toBeInTheDocument()
+    })
+
+    it('summarises each group as found of total and starts groups with nothing found collapsed', () => {
+      mockUseSubmission.mockReturnValue({ data: submission([
+        field({ section: 'Insured', confidence: 'medium' }),
+        missing('phone', 'Insured', 'Insured phone'),
+        missing('email', 'Insured', 'Insured email'),
+        // A conflict was found in the documents (twice), so it counts as found.
+        field({ key: 'priorPolicyNumber', section: 'Prior insurance', label: 'Prior policy number', aiValue: null, value: null, confidence: 'conflict', evidence: [],
+          alternatives: [{ value: 'P-1', documentId: 'doc-1', line: 0, page: null, quote: 'P-1', verified: true }, { value: 'P-2', documentId: 'doc-1', line: 1, page: null, quote: 'P-2', verified: true }] }),
+        missing('billingMethod', 'Billing', 'Billing method', 'select'),
+        missing('paymentPlan', 'Billing', 'Payment plan', 'select'),
+      ]), isLoading: false })
+      renderPage()
+      const group = (title: string) => screen.getByText(title, { selector: '.si-section-title > span:first-child' }).closest('section')!
+      expect(within(group('Insured')).getByText('1 of 3 found · 0 confirmed')).toBeInTheDocument()
+      expect(within(group('Prior insurance')).getByText('1 of 1 found · 0 confirmed')).toBeInTheDocument()
+      expect(within(group('Billing')).getByText('0 of 2 found · 0 confirmed')).toBeInTheDocument()
+      expect(within(group('Insured')).getByRole('button', { name: 'Collapse section' })).toHaveAttribute('aria-expanded', 'true')
+      const billingToggle = within(group('Billing')).getByRole('button', { name: 'Expand section' })
+      expect(billingToggle).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByLabelText('Billing method')).not.toBeVisible()
+      fireEvent.click(billingToggle)
+      expect(screen.getByLabelText('Billing method')).toBeVisible()
+    })
+
+    it('uses a short placeholder for values not found and keeps "Not found" in the badge', () => {
+      mockUseSubmission.mockReturnValue({ data: submission([missing('phone', 'Insured', 'Insured phone'), missing('billingMethod', 'Insured', 'Billing method', 'select')]), isLoading: false })
+      renderPage()
+      expect(screen.getByLabelText('Insured phone')).toHaveAttribute('placeholder', 'Enter value')
+      expect(screen.getByLabelText('Billing method').querySelector('option[value=""]')).toHaveTextContent(/^Choose…$/)
+      expect(screen.queryByText(/Not in the documents/)).not.toBeInTheDocument()
+      expect(screen.getAllByText('Not found')).toHaveLength(2)
+    })
+
+    it('states how many values "Accept all high confidence" will accept and changes nothing until confirmed', async () => {
+      const acceptHigh = vi.fn().mockResolvedValue({ count: 12 })
+      const { apiSubmissions } = await import('../../../api/submissions.api')
+      const original = apiSubmissions.acceptHighConfidence
+      ;(apiSubmissions as any).acceptHighConfidence = acceptHigh
+      try {
+        const high = Array.from({ length: 12 }, (_, index) => field({ key: `high-${index}`, label: `High ${index}` }))
+        // Not counted: already accepted, edited away from the AI value, or not high confidence.
+        const others = [
+          field({ key: 'done', label: 'Done', status: 'accepted' }),
+          field({ key: 'edited', label: 'Edited', value: 'changed', edited: true }),
+          field({ key: 'medium', label: 'Medium', confidence: 'medium' }),
+        ]
+        mockUseSubmission.mockReturnValue({ data: submission([...high, ...others]), isLoading: false })
+        renderPage()
+        fireEvent.click(screen.getByRole('button', { name: 'Accept all high confidence (12)' }))
+        const dialog = screen.getByRole('dialog', { name: 'Accept 12 high-confidence values?' })
+        expect(acceptHigh).not.toHaveBeenCalled()
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(acceptHigh).not.toHaveBeenCalled()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Accept all high confidence (12)' }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Accept 12' }))
+        await waitFor(() => expect(acceptHigh).toHaveBeenCalledTimes(1))
+        expect(acceptHigh).toHaveBeenCalledWith('sub-1')
+      } finally {
+        ;(apiSubmissions as any).acceptHighConfidence = original
+      }
+    })
   })
 })

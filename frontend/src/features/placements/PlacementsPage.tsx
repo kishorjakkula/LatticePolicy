@@ -7,6 +7,7 @@ import { hasPermission } from '../../auth/permissions'
 import { usePlacements, useCreatePlacementMutation, useTransitionPlacementStatusMutation } from '../../api/hooks'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { Pagination } from '../../components/Pagination'
+import { useReasonDialog } from '../../components/Dialog'
 
 const STATUS_BADGE: Record<string, string> = {
   Submission: 'gray',
@@ -46,6 +47,7 @@ export function PlacementsPage() {
 
   const createMutation = useCreatePlacementMutation()
   const transitionMutation = useTransitionPlacementStatusMutation()
+  const { dialog: reasonDialog, askReason } = useReasonDialog()
 
   const onCreate = async () => {
     if (!insuredName.trim()) return
@@ -59,8 +61,14 @@ export function PlacementsPage() {
     }
   }
 
-  const onTransition = async (placementId: string, toStatus: string) => {
-    const reason = toStatus === 'Declined' || toStatus === 'Withdrawn' ? window.prompt('Reason:') || '' : ''
+  const onTransition = async (placementId: string, toStatus: string, insuredName: string) => {
+    let reason = ''
+    if (toStatus === 'Declined' || toStatus === 'Withdrawn') {
+      const verb = toStatus === 'Declined' ? 'Decline' : 'Withdraw'
+      const answer = await askReason({ title: `${verb} placement for ${insuredName}`, confirmLabel: verb, danger: true, optional: true })
+      if (answer === null) return
+      reason = answer
+    }
     try {
       await transitionMutation.mutateAsync({ placementId, toStatus, reason: reason || undefined })
     } catch (e: any) {
@@ -71,6 +79,7 @@ export function PlacementsPage() {
 
   return (
     <div className="ps-page-shell">
+      {reasonDialog}
       <nav className="ps-breadcrumbs" aria-label="Breadcrumb">
         <Link to="/dashboard" className="ps-breadcrumb-link">Home</Link>
         <span className="ps-breadcrumb-sep" aria-hidden="true">/</span>
@@ -136,7 +145,7 @@ export function PlacementsPage() {
                     <td><span className={`badge ${STATUS_BADGE[p.status] || 'gray'}`}>{p.status}</span></td>
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {canManage && (NEXT_STATUS[p.status] || []).map((next) => (
-                        <ActionButton key={next} variant="secondary" size="sm" onClick={() => onTransition(p.placementId, next)}>
+                        <ActionButton key={next} variant="secondary" size="sm" onClick={() => onTransition(p.placementId, next, p.insuredName)}>
                           {next}
                         </ActionButton>
                       ))}

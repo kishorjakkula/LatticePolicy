@@ -36,8 +36,8 @@ test.describe('user administration', () => {
     const blocked = await apiStatus(request, 'POST', '/auth/login', { data: { tenantId, username, password: createdUserPassword } })
     expect([401, 403]).toContain(blocked.status)
 
-    page.once('dialog', (dialog) => void dialog.accept())
     await row.getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('dialog', { name: `Delete user ${username}` }).getByRole('button', { name: 'Delete' }).click()
     await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
   })
 
@@ -66,12 +66,13 @@ test.describe('roles and permissions', () => {
 
     await page.getByRole('button', { name: 'agent', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Role: agent' })).toBeVisible()
-    await expect(page.getByRole('checkbox', { name: /^Menu: Search/ })).toBeChecked()
-    await expect(page.getByRole('checkbox', { name: /^Menu: Administration/ })).not.toBeChecked()
+    const permissions = page.getByRole('region', { name: 'Role and permission matrix', exact: true })
+    await expect(permissions.getByRole('checkbox', { name: 'Agent: Search (menu)', exact: true })).toBeChecked()
+    await expect(permissions.getByRole('checkbox', { name: 'Agent: Administration (menu)', exact: true })).not.toBeChecked()
 
     await page.getByRole('button', { name: 'underwriter', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Role: underwriter' })).toBeVisible()
-    await expect(page.getByRole('checkbox', { name: /^Menu: UW Queue/ })).toBeChecked()
+    await expect(permissions.getByRole('checkbox', { name: 'Underwriter: Underwriting queue (menu)', exact: true })).toBeChecked()
   })
 
   test('a custom role grants exactly the permissions mapped to it', async ({ request, sessionFor }) => {

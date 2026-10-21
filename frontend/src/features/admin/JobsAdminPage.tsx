@@ -29,9 +29,9 @@ type JobRunRow = {
 const RUN_STATUSES = ['Queued', 'Running', 'Succeeded', 'Retry', 'DeadLettered', 'Cancelled']
 
 const SEVERITY_COLORS: Record<'danger' | 'warning' | 'success' | 'neutral', string> = {
-  danger: '#c0392b',
-  warning: '#b7791f',
-  success: '#2e7d32',
+  danger: 'var(--ps-danger)',
+  warning: 'var(--ps-warning)',
+  success: 'var(--ps-success)',
   neutral: 'inherit',
 }
 

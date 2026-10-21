@@ -1,0 +1,43 @@
+.ai-audit__detail-overlay {
+  --ps-ai-audit-backdrop: rgba(0, 0, 0, 0.45);
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: var(--ps-ai-audit-backdrop);
+  display: flex;
+  justify-content: flex-end;
+}
+.ai-audit__detail-panel {
+  width: min(620px, 100%);
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 20px;
+  background: var(--ps-surface);
+  color: var(--ps-text);
+  border-left: 1px solid var(--ps-border);
+}
+.ai-audit__detail-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.ai-audit__detail-panel .ai-audit__entry {
+  display: block;
+}
+.ai-audit__detail-panel dt { margin-top: 16px; }
+.ai-audit__detail-panel dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.ai-audit__detail-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-audit .ai-audit__filters { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.ai-audit .ps-pagination { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .ai-audit .ps-pagination { flex-direction: row; flex-wrap: nowrap; gap: 8px; }
+  .ai-audit .ps-pagination-info { display: inline; order: 1; white-space: normal; font-size: 12px; }
+  .ai-audit .ps-pagination-right,
+  .ai-audit .ps-pagination-controls { display: contents; }
+  .ai-audit .ps-page-btn--nav:first-child { order: 0; }
+  .ai-audit .ps-page-btn--nav:last-child { order: 2; }
+  .ai-audit .ps-pagination-controls .ps-page-btn:not(.ps-page-btn--nav),
+  .ai-audit .ps-page-ellipsis { display: none; }
+}

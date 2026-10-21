@@ -7,6 +7,8 @@ import {
   assignReferral,
   addReferralComment,
   decideReferral,
+  REFERRAL_SORTS,
+  type ReferralSort,
 } from '../services/uw-referral.service.js'
 import {
   listUwFieldsForProduct,
@@ -332,17 +334,24 @@ function isUnderwriter(req: any): boolean {
   return roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
 }
 
-// GET /uw/referrals
+// GET /uw/referrals?status=&sort=oldest|newest&page=&pageSize=
 // Lists underwriting referrals for the tenant, optionally filtered by status.
-// Returns empty result set when no DB is configured.
+// sort defaults to oldest first for status=Open (a work queue), otherwise
+// newest first; any other value is rejected with 400 INVALID_SORT. Each item
+// carries premium (Money or null). Returns empty result set when no DB is configured.
 uwRoutes.get('/uw/referrals', requirePermission('uw.referrals.read'), (req, res, next) => {
   const tenantId = req.tenant!.tenantId
+  const rawSort = req.query.sort
+  if (rawSort !== undefined && (typeof rawSort !== 'string' || !REFERRAL_SORTS.includes(rawSort as ReferralSort))) {
+    return res.status(400).json({ code: 'INVALID_SORT', message: "sort must be one of 'oldest', 'newest'" })
+  }
+  const sort = rawSort as ReferralSort | undefined
   const db = getDb()
   if (!db) return res.json({ items: [], total: 0, page: 1, pageSize: 20 })
   const page = Math.max(1, Number(req.query.page || 1))
   const pageSize = Math.max(1, Math.min(100, Number(req.query.pageSize || 20)))
   const status = typeof req.query.status === 'string' ? req.query.status : undefined
-  withTenantTx(tenantId, (innerDb) => listReferrals(innerDb, tenantId, { status, page, pageSize }))
+  withTenantTx(tenantId, (innerDb) => listReferrals(innerDb, tenantId, { status, sort, page, pageSize }))
     .then((result) => res.json(result))
     .catch((err) => next(err))
 })
@@ -390,6 +399,8 @@ uwRoutes.post('/uw/referrals/:referralId/comments', requirePermission('uw.referr
 // Body: { decision: 'Approved' | 'Declined' | 'InfoRequested', reason?: string }
 // Requires an underwriter-permission actor; the decision authorizes (or blocks)
 // the pending bind/renewal/rewrite/endorsement that created this referral.
+// Approved and Declined need a non-blank reason (400 REASON_REQUIRED, enforced
+// in decideReferral so the /approve and /decline aliases apply it too).
 uwRoutes.patch('/uw/referrals/:referralId/decide', requirePermission('uw.referrals.decide'), (req, res, next) => {
   const tenantId = req.tenant!.tenantId
   const decision = (req.body?.decision || '').toString().trim()
