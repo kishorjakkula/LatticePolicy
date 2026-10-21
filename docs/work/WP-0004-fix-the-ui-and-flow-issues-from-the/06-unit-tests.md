@@ -40,7 +40,7 @@ referrals, separate approval and successful retry.
 - Full frontend: 87 files, **586 passed** (including malicious redaction-marker regression).
 - Full server: 93 files, **942 passed**.
 - Full PostgreSQL integration: 41 files, **298 passed** with tenant RLS;
-  migration 067 applied on a newly created disposable database.
+  Migration 069 applied on a newly created disposable database.
 - Root typecheck and explicit server build passed with Node 22.23.3.
 - Focused canonicalization and referral gate tests: **113 passed**. Covers
   unchanged approval reuse, same-reason changed limits, risk, premium, coverage,

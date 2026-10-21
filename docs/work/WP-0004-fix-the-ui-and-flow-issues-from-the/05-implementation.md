@@ -133,7 +133,7 @@ results are not substitutes for final combined verification or human Gates C/D.
 
 ### Approved Proposal Binding (2026-10-21)
 
-See `docs/tasks/wp-0004-referral-proposal-binding.md` for migration 067,
+See `docs/tasks/wp-0004-referral-proposal-binding.md` for Migration 069,
 canonical immutable evidence, four transaction callers, protected rollback
 retention, exact-fingerprint lookup and current/proposed UI display. Independent
 review identified concurrent new-business consumption and a spoofable UI

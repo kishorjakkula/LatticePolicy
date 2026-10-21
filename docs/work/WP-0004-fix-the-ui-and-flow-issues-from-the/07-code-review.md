@@ -17,7 +17,7 @@ Independent sessions Mendel and Boyle reviewed the Phase 2/3 changes. Findings:
 | --- | --- | --- |
 | Major | Rejected endorsement/renewal/rewrite rolled back their referral, so explicit review could not complete. | Fixed with rollback-first work-item retention; real HTTP tests cover all three flows and concurrent attempts. Independent review found no further rollback/lock-order issue. |
 | Major | Ordinary approval reused when new authority requirements appear. | Fixed: exact proposal binding and escalation HTTP regression; independently re-reviewed. |
-| Major | Approved, unconsumed referral can authorize materially increased exposure producing the same reason code. | Verified fixed: approved migration 067, immutable evidence/hash and changed-limit regressions in all four flows. Gibbs independently re-reviewed. |
+| Major | Approved, unconsumed referral can authorize materially increased exposure producing the same reason code. | Verified fixed: approved Migration 069, immutable evidence/hash and changed-limit regressions in all four flows. Gibbs independently re-reviewed. |
 | Major | Concurrent new-business binds can spend one unconsumed approval twice. | Verified fixed: quote and approval locked/revalidated in the policy-creation transaction; concurrent real HTTP regression creates exactly one policy. |
 | Major | A client field named redactedSha256 hides sibling material facts in the detail view. | Verified fixed: singleton 64-hex marker only; sibling risk/coverage regression added. |
 | Minor | Different proposal shadows an exact-match approval and creates duplicate work. | Verified fixed: select latest decision within the matching fingerprint; A/B/A regression. |

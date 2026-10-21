@@ -3,7 +3,7 @@
 Status: scoped local security review completed; no open high/critical finding
 identified in this change. Independent reviewers: Mendel, Boyle and Gibbs,
 separate from the developer. Gate B extension explicitly approved 2026-10-21;
-migration 067 implemented. No human Gate C/D approval or production certification.
+Migration 069 implemented. No human Gate C/D approval or production certification.
 
 | Check | Result | Notes |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ migration 067 implemented. No human Gate C/D approval or production certificatio
 
 | Severity | Finding | Resolution | Outcome |
 | --- | --- | --- | --- |
-| High | Same reason/date approval can authorize a materially changed proposal. | Approved immutable evidence/hash and migration 067, all four caller paths tested; independently re-reviewed. | Verified fixed. |
+| High | Same reason/date approval can authorize a materially changed proposal. | Approved immutable evidence/hash and Migration 069, all four caller paths tested; independently re-reviewed. | Verified fixed. |
 | High | Concurrent binds spend one approval twice. | Quote and approval locks/revalidation inside the policy-creation transaction; real HTTP race regression. | Verified fixed. |
 | High | Client redaction-marker field hides material sibling facts. | Exact singleton 64-hex marker handling; malicious sibling risk/coverage test. | Verified fixed. |
 | Medium | Cross-principal count cache and dialog/contrast/rollback regressions. | Implemented focused fixes and automated regressions; independent review evidence in `07-code-review.md`. | Fixed for tested scope, not overall production certification. |

@@ -8,7 +8,7 @@ This is implementation approval, not permission to merge or deploy production.
 
 ## Implementation
 
-- Migration 067 adds nullable `proposal_hash` and `proposal_snapshot` evidence
+- Migration 069 adds nullable `proposal_hash` and `proposal_snapshot` evidence
   to tenant-protected referrals. Existing rows remain unknown, not backfilled.
   A database trigger prevents rewriting either evidence column.
 - Server canonicalization sorts object keys, preserves array order, includes
