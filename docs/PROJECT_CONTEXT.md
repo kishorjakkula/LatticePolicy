@@ -94,11 +94,20 @@ Major feature areas:
 - `features/policies/PolicyViewPage.tsx`: policy detail, versions, timeline, actions.
 - `features/customerPortal/CustomerPortalPage.tsx`: customer-safe portal.
 - `features/dashboard/DashboardPage.tsx`: dashboard and AI insights.
-- `features/uw/UwQueue.tsx`: underwriting referrals.
+- `features/uw/UwQueue.tsx` and `UwReferralDetail.tsx`: oldest-first work queue
+  and permission-aware, reason-required decisions from the detail view.
 - `features/rating/RatingWorkbenchPage.tsx`: actuarial workbook import/version/publish.
 - `features/admin/*`: users, tenant settings, security, customers, forms, onboarding, underwriting companies.
 
 Frontend API modules live in `frontend/src/api/*.api.ts`, with React Query hooks in `frontend/src/api/hooks/*.hooks.ts`.
+
+Underwriting approval is specific to immutable server-evaluated proposal
+evidence (migration 069), including material policy data, rated premium,
+underwriting/authority evaluation and base policy version. Changed or legacy
+evidence requires fresh explicit review. New-business approval consumption is
+atomic with policy creation; rejected policy mutations roll back before the
+referral is retained separately. See
+`docs/tasks/wp-0004-referral-proposal-binding.md` for boundaries and tests.
 
 ## Domain Model
 

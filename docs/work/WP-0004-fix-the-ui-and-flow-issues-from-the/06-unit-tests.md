@@ -54,6 +54,27 @@ referrals, separate approval and successful retry.
 Browser and independent review outcomes are recorded separately. These counts
 supersede earlier snapshot counts above; they do not approve Gate C.
 
+## Post-Main Integration And Local Deployment Request
+
+Final 2026-10-21 reruns after incorporating `origin/main` (`e218c94`) and
+renumbering the referral migration to 069:
+
+- Frontend: **88 files / 594 passed** with bounded workers, including compatible
+  company preservation and the main form-metadata naming regression.
+- Server: **93 files / 942 passed** with bounded workers.
+- Fresh PostgreSQL: **42 files / 299 passed**, tenant RLS enabled. Includes the
+  new legacy 067/068 migration-number upgrade test and immutable legacy evidence.
+- Root typecheck, server build, module boundaries, agent sync and delivery
+  checks passed. The Docker image builds also compile both application workspaces.
+- Processor 19 passed / 1 opt-in native OCR skipped; signer 3, learning 20,
+  shared rules 221 passed. No GPU/model accuracy result is inferred.
+- The intervening parallel DB/browser run was invalidated by Docker's confirmed
+  host disk-full shutdown. Recovery preserved application volumes; the final
+  database run above used another freshly provisioned container and passed.
+
+See `docs/tasks/wp-0004-local-deployment-pr.md` for the local preview and
+infrastructure record; browser results are in `09-automation-tests.md`.
+
 ## Requirement coverage
 
 | Requirement | Tests |

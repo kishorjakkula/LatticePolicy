@@ -1,9 +1,27 @@
 # Automation tests — WP-0004
 
-Status: final full isolated browser run **161 passed** (2026-10-21).
-Gate B extension approved and implemented; no merge approval.
+Status: final post-main-merge regression **162 passed**, one Chromium worker,
+on a fresh isolated Docker stack after recovering Docker's disk-full failure.
+See `docs/tasks/wp-0004-local-deployment-pr.md` for the deployment and incident
+record. No merge approval.
 
-## Latest Verification
+## Final Post-Main Deployment Regression
+
+- Runtime revision `0a06f2a`, including company/product preservation safeguards
+  and migration 069. Both local Docker images rebuilt successfully.
+- Final fresh database integration: **299 passed**. Once it completed, started
+  the isolated browser stack with verified images and `--no-build`, checked
+  API/UI readiness, then ran Playwright with one worker: **162 passed**, no
+  failures or skipped serial tests. No runtime assertions/timeouts were weakened.
+- Demo and pilot databases were not automated test targets. Application
+  volumes survived Docker recovery; temporary test volumes were cleaned up.
+- Final synthetic referral screenshots are in `evidence/local-regression/`.
+  Desktop evidence was inspected; browser checks verify its server fingerprint,
+  proposed risk values, reviewed premium and mobile width constraints.
+- Earlier results below are historical. Remote CI, human code-owner merge,
+  formal merged-main staging and carrier/business approval remain separate.
+
+## Earlier Verified Snapshot
 
 - Rebuilt both Docker images from the final runtime code, applied migrations
   on fresh isolated volumes and ran `npm run test:e2e:isolated -- --workers=2`:

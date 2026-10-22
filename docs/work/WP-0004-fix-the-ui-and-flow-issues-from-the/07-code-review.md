@@ -11,6 +11,12 @@ Did not independently rerun PostgreSQL/browser suites; parent results are in
 their separate handoffs. Phase 1 sections below are historical. Gate C remains
 a human action; local review does not assert remote CI is green.
 
+Post-main integration re-review (2026-10-21): Rawls, independent session
+`01a15fc3-96bd-73e1-a8b5-635e976076eb`, found no actionable bugs in the
+company/product preservation integration, form naming, pager/theme resolutions
+or migration-069 upgrade. Independently ran 48 focused tests across five files.
+No database/browser jobs or human gate approvals were performed by that reviewer.
+
 Independent sessions Mendel and Boyle reviewed the Phase 2/3 changes. Findings:
 
 | Severity | Finding | Outcome |
