@@ -1,4 +1,6 @@
 import { RadioGroup } from '../../components/RadioGroup'
+import { useId } from 'react'
+import './wizard-stepper.css'
 import { FieldError } from '../../components/FieldError'
 import { validateQuoteSetup } from './setupValidation'
 ﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -54,6 +56,21 @@ import { CollapsibleSection } from '../../components/CollapsibleSection'
 type ProductCode = string
 type QuoteProductCode = ProductCode | ''
 type WizardMode = 'quote' | 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
+
+export function referralReviewPath(error: unknown): string | null {
+  let response = error as { code?: string; message?: string }
+  const message = response?.message || ''
+  // The request client wraps the server's JSON error envelope in Error.message.
+  if (response?.code !== 'UW_REFERRAL_REQUIRED') {
+    const start = message.indexOf('{')
+    if (start < 0) return null
+    try { response = JSON.parse(message.slice(start)) } catch { return null }
+  }
+  if (response?.code !== 'UW_REFERRAL_REQUIRED') return null
+  const id = response.message?.match(/\bReferral ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i)?.[1]
+  return id ? `/uw/queue/${encodeURIComponent(id)}` : '/uw/queue'
+}
+
 type UnderwritingCompanyConfig = {
   companyId: string
   name: string
@@ -789,6 +806,23 @@ function configMatchesState(configState: string, selectedState: string): boolean
   return normalizedConfigState === 'ALL' || normalizedConfigState === normalizedSelectedState
 }
 
+/**
+ * The company configurations that write the selected product in the selected
+ * country and state. Step 1 asks product and state before the company (REQ-8);
+ * a selection not made yet does not narrow the list.
+ */
+export function underwritingCompaniesFor<T extends { productCode: string; country: string; state: string }>(
+  configs: T[],
+  selection: { country?: string; state?: string; productCode?: string }
+): T[] {
+  return configs.filter((item) => {
+    if (selection.productCode && item.productCode !== selection.productCode) return false
+    if (selection.country && normalizeCountryCode(item.country) !== selection.country) return false
+    if (selection.state && !configMatchesState(item.state, selection.state)) return false
+    return true
+  })
+}
+
 function resolveUnderwritingCompanyConfig(
   state: QuoteState,
   configs: UnderwritingCompanyConfig[]
@@ -905,6 +939,8 @@ export function QuoteWizard() {
   const [riskScreenChecked, setRiskScreenChecked] = useState(false)
   const [q, setQ] = useState<QuoteState>({ ...defaultState })
   const [setupChecked, setSetupChecked] = useState(false)
+  // Why the underwriting company was cleared after a product or state change.
+  const [companyNotice, setCompanyNotice] = useState<string | null>(null)
   const setupErrors = setupChecked ? validateQuoteSetup(q) : {}
   const [action, setAction] = useState<'rate' | 'bind' | 'issue' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -919,7 +955,7 @@ export function QuoteWizard() {
   const [boundPolicy, setBoundPolicy] = useState<{ policyId: string; policyNumber: string } | null>(null)
   const [issued, setIssued] = useState(false)
   const [boundModifyMode, setBoundModifyMode] = useState(false)
-  const [overrideReason, setOverrideReason] = useState<string>('')
+  const [referralReviewHref, setReferralReviewHref] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [qualificationErrors, setQualificationErrors] = useState<Record<string, string>>({})
   const [draft, setDraft] = useState<QuoteDraft | null>(null)
@@ -1003,7 +1039,7 @@ export function QuoteWizard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const toast = useToast()
-  const canUwOverride = !!(hasPermission(user, 'uw.referrals.decide') || user?.roles?.includes('underwriter') || user?.roles?.includes('admin'))
+  const canOpenReferrals = hasPermission(user, 'page.uw_queue.view')
   const canViewCustomerInAdmin = !!(hasPermission(user, 'page.admin.customers.view') && hasPermission(user, 'admin.customers.read'))
   const canViewCustomerClassic = !!hasPermission(user, 'admin.customers.read')
   const canViewCustomerDetails = canViewCustomerInAdmin || canViewCustomerClassic
@@ -1230,7 +1266,7 @@ export function QuoteWizard() {
 
   const riskStepTitle = productRiskLabel(q.productCode)
   const steps = useMemo(() => [
-    { id: 1, title: 'Product' },
+    { id: 1, title: 'Product & term' },
     { id: 2, title: 'Qualification Questions' },
     { id: 3, title: 'Insureds' },
     { id: 4, title: riskStepTitle },
@@ -1429,26 +1465,23 @@ export function QuoteWizard() {
   function buildQuotePayload(state: QuoteState, insuredState: InsuredState = normalizedInsureds): any {
     return buildWizardQuotePayload(state, insuredState)
   }
-  const selectedUnderwriterName = companyNameKey(q.underwritingCompanyName)
-  const companyScopedConfigs = useMemo(() => {
-    if (!selectedUnderwriterName) return underwritingConfigurations
-    return underwritingConfigurations.filter((item) => companyNameKey(item.name) === selectedUnderwriterName)
-  }, [underwritingConfigurations, selectedUnderwriterName])
-
+  // Step 1 asks country, state and product first (REQ-8), so they are offered
+  // from every configured company; the companies are then narrowed to the ones
+  // that write the chosen product in the chosen state.
   const countryOptions = useMemo(() => {
     const allowed = new Set<string>()
-    companyScopedConfigs.forEach((item) => {
+    underwritingConfigurations.forEach((item) => {
       allowed.add(item.country)
     })
     const out: Array<{ code: CountryCode; label: string }> = []
     if (allowed.has('US')) out.push({ code: 'US', label: 'USA' })
     if (allowed.has('CA')) out.push({ code: 'CA', label: 'Canada' })
     return out
-  }, [companyScopedConfigs])
+  }, [underwritingConfigurations])
 
   const stateOptions = useMemo(() => {
     if (!q.country) return []
-    const scoped = companyScopedConfigs.filter((item) => {
+    const scoped = underwritingConfigurations.filter((item) => {
       if (item.country !== q.country) return false
       if (q.productCode && item.productCode !== q.productCode) return false
       return true
@@ -1462,17 +1495,17 @@ export function QuoteWizard() {
         .filter((code) => code && code !== 'ALL')
     )
     return regionCatalog.filter((entry) => allowed.has(entry.code))
-  }, [companyScopedConfigs, q.country, q.productCode])
+  }, [underwritingConfigurations, q.country, q.productCode])
 
   const availableProductCodes = useMemo(() => {
     const codes = new Set<ProductCode>()
-    companyScopedConfigs.forEach((item) => {
+    underwritingConfigurations.forEach((item) => {
       if (q.country && item.country !== q.country) return
       if (q.state && !configMatchesState(item.state, q.state)) return
       codes.add(item.productCode)
     })
     return Array.from(codes).sort((a, b) => productLabel(a).localeCompare(productLabel(b)))
-  }, [companyScopedConfigs, q.country, q.state])
+  }, [underwritingConfigurations, q.country, q.state])
 
   const qualificationQuestions = useMemo(() => {
     return qualificationQuestionsForProduct(q.productCode, q.qualificationAnswers)
@@ -1483,8 +1516,8 @@ export function QuoteWizard() {
   }, [q.productCode])
 
   const underwritingCompanies = useMemo(() => {
-    return dedupeCompanyNames(underwritingConfigurations)
-  }, [underwritingConfigurations])
+    return dedupeCompanyNames(underwritingCompaniesFor(underwritingConfigurations, { country: q.country, state: q.state, productCode: q.productCode }))
+  }, [underwritingConfigurations, q.country, q.state, q.productCode])
 
   useEffect(() => {
     const visibleKeys = new Set(qualificationQuestions.map((question) => question.key))
@@ -1515,14 +1548,8 @@ export function QuoteWizard() {
         changed = true
       }
 
-      if (!lockCoreProductFields && next.underwritingCompanyName) {
-        const hasUnderwriter = underwritingCompanies.some((item) => companyNameKey(item.name) === companyNameKey(next.underwritingCompanyName))
-        if (underwritingCompanies.length > 0 && !hasUnderwriter) {
-          next.underwritingCompanyName = ''
-          next.underwritingCompanyId = ''
-          changed = true
-        }
-      }
+      // A company that does not write the chosen product and state is cleared,
+      // with a notice, by the effect below.
 
       if (!lockCoreProductFields && next.country && countryOptions.length > 0 && !countryOptions.some((entry) => entry.code === next.country)) {
         next.country = ''
@@ -1682,6 +1709,21 @@ export function QuoteWizard() {
     loadingUnderwriterOptions
   ])
 
+  // Changing the product, country or state after choosing a company that does
+  // not write that combination clears the company and says why (REQ-8).
+  useEffect(() => {
+    if (isViewOnly || lockCoreProductFields || loadingUnderwritingCompanies) return
+    const selectedKey = companyNameKey(q.underwritingCompanyName)
+    if (!selectedKey || underwritingCompanies.length === 0) return
+    if (underwritingCompanies.some((item) => companyNameKey(item.name) === selectedKey)) return
+    const removedName = q.underwritingCompanyName
+    const where = [q.productCode ? productLabel(q.productCode) : '', q.state].filter(Boolean).join(' in ')
+    setQ((prev) => (companyNameKey(prev.underwritingCompanyName) === selectedKey
+      ? { ...prev, underwritingCompanyName: '', underwritingCompanyId: '' }
+      : prev))
+    setCompanyNotice(`${removedName} does not write ${where || 'this selection'}, so it was cleared.`)
+  }, [isViewOnly, lockCoreProductFields, loadingUnderwritingCompanies, underwritingCompanies, q.underwritingCompanyName, q.productCode, q.state])
+
   useEffect(() => {
     exitSnapshotRef.current = {
       quoteId: draft?.quoteId || '',
@@ -1746,6 +1788,7 @@ export function QuoteWizard() {
   }
 
   function resetBindingState() {
+    setReferralReviewHref(null)
     setBoundPolicy(null)
     setIssued(false)
     setIssuedTransactionVersion(null)
@@ -1754,7 +1797,9 @@ export function QuoteWizard() {
   }
 
   function snapshotFromState(state: QuoteState, insuredState: InsuredState = normalizedInsureds): string {
-    const payload = buildQuotePayload(state, insuredState)
+    // Billing is chosen on the Premium step after rating and does not change the
+    // premium, so editing it there must not discard the rating (REQ-8).
+    const { billingMethod: _billingMethod, paymentPlan: _paymentPlan, ...payload } = buildQuotePayload(state, insuredState)
     try {
       return JSON.stringify(payload)
     } catch {
@@ -1833,7 +1878,6 @@ export function QuoteWizard() {
       : q.effectiveDate
     const uwContext = {
       decision: quoteResp?.underwriting?.decision || undefined,
-      overrideReason: overrideReason.trim() || undefined,
     }
     const previewPayload = buildQuotePayload(q)
 
@@ -1907,8 +1951,7 @@ export function QuoteWizard() {
     wizardMode,
     transactionEffectiveDate,
     isPolicyTransactionMode,
-    endorsementPreview,
-    overrideReason
+    endorsementPreview
   ])
 
   async function loadQuoteFromServer(quoteId: string) {
@@ -2152,10 +2195,15 @@ export function QuoteWizard() {
     onProductChange(code)
   }
 
-  /** Company select: each company has its own products, so a change clears the product too; confirm first. */
+  function companyRetainsProduct(nextName: string): boolean {
+    return !nextName || !q.productCode || underwritingCompanies.some(company => companyNameKey(company.name) === companyNameKey(nextName))
+  }
+
+  /** Compatible companies keep entered business data; destructive fallback still requires confirmation. */
   function requestCompanyChange(nextName: string) {
+    if (isViewOnly || lockCoreProductFields || isCancellationMode) return
     if (companyNameKey(q.underwritingCompanyName) === companyNameKey(nextName)) return
-    if (q.productCode && hasProductSpecificData()) {
+    if (!companyRetainsProduct(nextName) && hasProductSpecificData()) {
       setPendingCompanyChange(nextName)
       return
     }
@@ -2163,6 +2211,14 @@ export function QuoteWizard() {
   }
 
   function onCompanyChange(nextName: string) {
+    setCompanyNotice(null)
+    if (companyRetainsProduct(nextName)) {
+      setQ(prev => ({ ...prev, underwritingCompanyId: '', underwritingCompanyName: nextName }))
+      setQuoteResp(null)
+      setQuoteDocumentModel(null)
+      resetBindingState()
+      return
+    }
     setQ((prev) => {
       if (companyNameKey(prev.underwritingCompanyName) === companyNameKey(nextName)) return prev
       return {
@@ -2914,15 +2970,17 @@ export function QuoteWizard() {
     if (!quoteResp?.quoteId || boundPolicy || locked) return
     setAction('bind'); setError(null); setValidationResult(null)
     try {
-      const override = (quoteResp.underwriting && quoteResp.underwriting.decision === 'Refer' && canUwOverride && overrideReason.trim()) ? { overrideReason: overrideReason.trim() } : undefined
       const acks = acknowledgementList(acknowledged)
-      const payload = override || acks ? { ...(override || {}), ...(acks ? { validationAcknowledgements: acks } : {}) } : undefined
+      const payload = acks ? { validationAcknowledgements: acks } : undefined
       const res = await api.bindQuote(quoteResp.quoteId, payload)
+      setReferralReviewHref(null)
       setBoundPolicy({ policyId: res.policyId, policyNumber: res.policyNumber })
       setIssued(false)
       setDraft(prev => prev ? { ...prev, status: 'Converted', progressStep: steps.length } : prev)
       applyLocalQuoteAudit('Converted', steps.length)
     } catch (e: any) {
+      const reviewPath = referralReviewPath(e)
+      if (reviewPath) { setReferralReviewHref(reviewPath); return }
       if (!showValidationStop(e, 'bind')) setError(coverageErrorMessage(e) || e.message || String(e))
     } finally { setAction(null) }
   }
@@ -2967,23 +3025,22 @@ export function QuoteWizard() {
           if (transactionNumber) reinstatePayload.transactionNumber = transactionNumber
           version = await api.reinstatePolicy(boundPolicy.policyId, { ...reinstatePayload, ...ackBody } as any)
         } else if (wizardMode === 'rewrite') {
-          const rewritePayload: { effectiveDate: string; payload: any; overrideReason?: string; transactionNumber?: string } = {
+          const rewritePayload: { effectiveDate: string; payload: any; transactionNumber?: string } = {
             effectiveDate: transactionEffectiveDate,
-            payload,
-            overrideReason: overrideReason.trim() || undefined
+            payload
           }
           if (transactionNumber) rewritePayload.transactionNumber = transactionNumber
           version = await api.rewritePolicy(boundPolicy.policyId, { ...rewritePayload, ...ackBody } as any)
         } else {
-          const renewPayload: { effectiveDate: string; payload: any; overrideReason?: string; transactionNumber?: string } = {
+          const renewPayload: { effectiveDate: string; payload: any; transactionNumber?: string } = {
             effectiveDate: transactionEffectiveDate,
-            payload,
-            overrideReason: overrideReason.trim() || undefined
+            payload
           }
           if (transactionNumber) renewPayload.transactionNumber = transactionNumber
           version = await api.renewPolicy(boundPolicy.policyId, { ...renewPayload, ...ackBody } as any)
         }
         clearPendingTransaction(boundPolicy.policyId, wizardMode as PendingTransactionMode)
+        setReferralReviewHref(null)
         setIssuedTransactionVersion(version)
         setIssued(true)
         const txLabels: Record<string, string> = { endorse: 'Endorsement', cancel: 'Cancellation', reinstate: 'Reinstatement', rewrite: 'Rewrite', renew: 'Renewal' }
@@ -3018,6 +3075,8 @@ export function QuoteWizard() {
         }
       }
     } catch (e: any) {
+      const reviewPath = referralReviewPath(e)
+      if (reviewPath) { setReferralReviewHref(reviewPath); return }
       if (showValidationStop(e, 'issue')) return
       const msg = coverageErrorMessage(e) || e.message || String(e)
       setError(msg)
@@ -3385,16 +3444,12 @@ export function QuoteWizard() {
   }
 
   const uwDecision = quoteResp?.underwriting?.decision
-  const needsOverride = uwDecision === 'Refer' && canUwOverride
-  const overrideReady = overrideReason.trim().length >= 3
   const requiresRatingBeforeIssue = isPolicyTransactionMode && wizardMode !== 'reinstate'
   const bindDisabledReason = (() => {
     if (issued) return 'Policy already issued'
     if (boundPolicy) return 'Policy already bound'
     if (!quoteResp) return 'Rate premium first'
     if (uwDecision === 'Decline') return 'Underwriting declined this risk'
-    if (uwDecision === 'Refer' && !canUwOverride) return 'Awaiting underwriting approval'
-    if (needsOverride && !overrideReady) return 'Provide override reason to override'
     return null
   })()
   const issueDisabledReason = (() => {
@@ -3511,6 +3566,14 @@ export function QuoteWizard() {
   const headerPrimaryNumberValue = String(transactionNumber || (showQuoteNumber ? draft?.quoteNumber : '') || '').trim()
   const headerEffectiveValue = String(isPolicyTransactionMode ? transactionEffectiveDate : q.effectiveDate || '').trim()
   const displayEffectiveValue = headerEffectiveValue ? formatDisplayDate(headerEffectiveValue) : '-'
+  // New business shows what is being quoted instead of repeating the effective
+  // date (REQ-8): product, state and date, then the premium once rated.
+  const headerPremium = formatMoney(visiblePremium?.total)
+  const quoteSummaryValue = [
+    q.productCode ? productLabel(q.productCode) : '',
+    q.state,
+    headerPremium || (headerEffectiveValue ? `Effective ${displayEffectiveValue}` : '')
+  ].filter(Boolean).join(' · ') || '-'
   return (
     <div className="card page-shell wizard-shell">
       <div className="wizard-breadcrumbs" aria-label="Breadcrumb">
@@ -3562,10 +3625,17 @@ export function QuoteWizard() {
                 <div className="wizard-meta-card-value wizard-meta-primary">{headerPrimaryNumberValue}</div>
               </div>
             )}
-            <div className="wizard-meta-card">
-              <div className="wizard-meta-card-label">{isPolicyTransactionMode ? 'Effective' : 'Quote Effective'}</div>
-              <div className="wizard-meta-card-value wizard-meta-primary">{displayEffectiveValue}</div>
-            </div>
+            {isPolicyTransactionMode ? (
+              <div className="wizard-meta-card">
+                <div className="wizard-meta-card-label">Effective</div>
+                <div className="wizard-meta-card-value wizard-meta-primary">{displayEffectiveValue}</div>
+              </div>
+            ) : (
+              <div className="wizard-meta-card" data-testid="wizard-quote-summary">
+                <div className="wizard-meta-card-label">{headerPremium ? 'Quote premium' : 'Quote'}</div>
+                <div className="wizard-meta-card-value wizard-meta-primary">{quoteSummaryValue}</div>
+              </div>
+            )}
           </div>
           {loadingDraft && <div className="muted wizard-meta-line">Loading saved quote…</div>}
         </div>
@@ -3725,7 +3795,119 @@ export function QuoteWizard() {
           )}
           </CollapsibleSection>
           )}
-          <CollapsibleSection className="wizard-section" title="Company & Agency">
+          <CollapsibleSection className="wizard-section" title="Product & term">
+          <div className="row">
+            <div className="col">
+              <label htmlFor="wizard-setup-country">Country</label>
+              <select
+                id="wizard-setup-country"
+                aria-invalid={Boolean(setupErrors.country)}
+                aria-describedby={setupErrors.country ? 'wizard-setup-country-error' : undefined}
+                value={q.country || ''}
+                onChange={e => {
+                  const nextCountry = e.target.value ? normalizeCountryCode(e.target.value) : ''
+                  setQ({ ...q, country: nextCountry, state: '' })
+                }}
+                disabled={isCancellationMode || isViewOnly}
+              >
+                <option value="">{countryOptions.length ? 'Select country' : 'No country configured'}</option>
+                {countryOptions.map((entry) => (
+                  <option key={entry.code} value={entry.code}>{entry.label}</option>
+                ))}
+              </select>
+              <FieldError id="wizard-setup-country-error" message={setupErrors.country} />
+            </div>
+            <div className="col">
+              <label htmlFor="wizard-setup-state">State</label>
+              <select
+                id="wizard-setup-state"
+                aria-invalid={Boolean(setupErrors.state)}
+                aria-describedby={setupErrors.state ? 'wizard-setup-state-error' : undefined}
+                value={q.state || ''}
+                onChange={e => setQ({ ...q, state: normalizeRegionCode(e.target.value) })}
+                disabled={isCancellationMode || !q.country || isViewOnly}
+              >
+                <option value="">{stateOptions.length ? 'Select state/province' : 'No state/province configured'}</option>
+                {stateOptions.map((state) => (
+                  <option key={state.code} value={state.code}>{state.code} - {state.name}</option>
+                ))}
+              </select>
+              <FieldError id="wizard-setup-state-error" message={setupErrors.state} />
+            </div>
+            <div className="col">
+              <label htmlFor="wizard-setup-product">Product</label>
+              <select
+                id="wizard-setup-product"
+                aria-invalid={Boolean(setupErrors.productCode)}
+                aria-describedby={setupErrors.productCode ? 'wizard-setup-product-error' : undefined}
+                value={q.productCode || ''}
+                onChange={e => requestProductChange(e.target.value as QuoteProductCode)}
+                disabled={lockCoreProductFields || !q.country || !q.state || loadingUnderwritingCompanies || isViewOnly}
+              >
+                <option value="">
+                  {!q.country || !q.state
+                    ? 'Select country and state first'
+                    : availableProductCodes.length
+                      ? 'Select product'
+                      : 'No products configured'}
+                </option>
+                {q.productCode && !availableProductCodes.includes(q.productCode as ProductCode) && (
+                  <option value={q.productCode}>{q.productCode}</option>
+                )}
+                {availableProductCodes.map((code) => (
+                  <option key={code} value={code}>{productLabel(code)}</option>
+                ))}
+              </select>
+              <FieldError id="wizard-setup-product-error" message={setupErrors.productCode} />
+            </div>
+          </div>
+          <div className="row">
+            <div className="col">
+              <label htmlFor="wizard-setup-date">Effective Date</label>
+              <input
+                id="wizard-setup-date"
+                aria-invalid={Boolean(setupErrors.effectiveDate)}
+                aria-describedby={setupErrors.effectiveDate ? 'wizard-setup-date-error' : undefined}
+                type="date"
+                value={q.effectiveDate}
+                onChange={e => {
+                  const nextEffectiveDate = e.target.value
+                  setQ({ ...q, effectiveDate: nextEffectiveDate })
+                  if (!isPolicyTransactionMode) {
+                    setTransactionEffectiveDate(nextEffectiveDate)
+                    if (transactionDateDirty) {
+                      setTransactionDateDirty(false)
+                    }
+                  }
+                }}
+                disabled={isCancellationMode || lockCoreProductFields || isViewOnly}
+              />
+              <FieldError id="wizard-setup-date-error" message={setupErrors.effectiveDate} />
+            </div>
+            <div className="col">
+              <label>Term</label>
+              <select aria-invalid={Boolean(setupErrors.termMonths)} aria-describedby={setupErrors.termMonths ? 'wizard-setup-term-error' : undefined} value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
+                <option value={6}>6 months</option>
+                <option value={12}>12 months</option>
+              </select>
+              <FieldError id="wizard-setup-term-error" message={setupErrors.termMonths} />
+            </div>
+            <div className="col">
+              <label>Policy Offering</label>
+              <select
+                value={q.policyOffering || ''}
+                onChange={(event) => setQ((prev) => ({ ...prev, policyOffering: event.target.value }))}
+                disabled={isCancellationMode || lockCoreProductFields || isViewOnly || !q.productCode}
+              >
+                <option value="">{q.productCode ? 'Select policy offering' : 'Select product first'}</option>
+                {policyOfferingOptions.map((offering) => (
+                  <option key={offering} value={offering}>{offering}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          </CollapsibleSection>
+          <CollapsibleSection className="wizard-section" title="Company & agency">
           <div className="row">
             <div className="col uw-company-col">
               <label htmlFor="wizard-setup-company">Underwriting Company</label>
@@ -3742,7 +3924,9 @@ export function QuoteWizard() {
                     ? 'Loading companies...'
                     : underwritingCompanies.length
                       ? 'Select underwriting company'
-                      : 'No underwriting company configured'}
+                      : q.productCode
+                        ? 'No company writes this product here'
+                        : 'No underwriting company configured'}
                 </option>
                 {underwritingCompanies.map((company: any) => (
                   <option key={company.name} value={company.name}>
@@ -3751,6 +3935,7 @@ export function QuoteWizard() {
                 ))}
               </select>
               <FieldError id="wizard-setup-company-error" message={setupErrors.underwritingCompanyName} />
+              {companyNotice && <div className="muted wizard-help" role="status">{companyNotice}</div>}
             </div>
           </div>
           <div className="row">
@@ -3854,109 +4039,7 @@ export function QuoteWizard() {
               />
             </div>
           </div>
-          </CollapsibleSection>
-          <CollapsibleSection className="wizard-section" title="Product & Term">
           <div className="row">
-            <div className="col">
-              <label htmlFor="wizard-setup-date">Effective Date</label>
-              <input
-                id="wizard-setup-date"
-                aria-invalid={Boolean(setupErrors.effectiveDate)}
-                aria-describedby={setupErrors.effectiveDate ? 'wizard-setup-date-error' : undefined}
-                type="date"
-                value={q.effectiveDate}
-                onChange={e => {
-                  const nextEffectiveDate = e.target.value
-                  setQ({ ...q, effectiveDate: nextEffectiveDate })
-                  if (!isPolicyTransactionMode) {
-                    setTransactionEffectiveDate(nextEffectiveDate)
-                    if (transactionDateDirty) {
-                      setTransactionDateDirty(false)
-                    }
-                  }
-                }}
-                disabled={isCancellationMode || lockCoreProductFields || isViewOnly}
-              />
-              <FieldError id="wizard-setup-date-error" message={setupErrors.effectiveDate} />
-            </div>
-            <div className="col">
-              <label htmlFor="wizard-setup-country">Country</label>
-              <select
-                id="wizard-setup-country"
-                aria-invalid={Boolean(setupErrors.country)}
-                aria-describedby={setupErrors.country ? 'wizard-setup-country-error' : undefined}
-                value={q.country || ''}
-                onChange={e => {
-                  const nextCountry = e.target.value ? normalizeCountryCode(e.target.value) : ''
-                  setQ({ ...q, country: nextCountry, state: '' })
-                }}
-                disabled={isCancellationMode || isViewOnly}
-              >
-                <option value="">{countryOptions.length ? 'Select country' : 'No country configured'}</option>
-                {countryOptions.map((entry) => (
-                  <option key={entry.code} value={entry.code}>{entry.label}</option>
-                ))}
-              </select>
-              <FieldError id="wizard-setup-country-error" message={setupErrors.country} />
-            </div>
-            <div className="col">
-              <label htmlFor="wizard-setup-state">State</label>
-              <select
-                id="wizard-setup-state"
-                aria-invalid={Boolean(setupErrors.state)}
-                aria-describedby={setupErrors.state ? 'wizard-setup-state-error' : undefined}
-                value={q.state || ''}
-                onChange={e => setQ({ ...q, state: normalizeRegionCode(e.target.value) })}
-                disabled={isCancellationMode || !q.country || isViewOnly}
-              >
-                <option value="">{stateOptions.length ? 'Select state/province' : 'No state/province configured'}</option>
-                {stateOptions.map((state) => (
-                  <option key={state.code} value={state.code}>{state.code} - {state.name}</option>
-                ))}
-              </select>
-              <FieldError id="wizard-setup-state-error" message={setupErrors.state} />
-            </div>
-            <div className="col">
-              <label htmlFor="wizard-setup-product">Product</label>
-              <select
-                id="wizard-setup-product"
-                aria-invalid={Boolean(setupErrors.productCode)}
-                aria-describedby={setupErrors.productCode ? 'wizard-setup-product-error' : undefined}
-                value={q.productCode || ''}
-                onChange={e => requestProductChange(e.target.value as QuoteProductCode)}
-                disabled={lockCoreProductFields || !q.country || !q.state || loadingUnderwritingCompanies || isViewOnly}
-              >
-                <option value="">
-                  {!q.country || !q.state
-                    ? 'Select country and state first'
-                    : availableProductCodes.length
-                      ? 'Select product'
-                      : 'No products configured'}
-                </option>
-                {q.productCode && !availableProductCodes.includes(q.productCode as ProductCode) && (
-                  <option value={q.productCode}>{q.productCode}</option>
-                )}
-                {availableProductCodes.map((code) => (
-                  <option key={code} value={code}>{productLabel(code)}</option>
-                ))}
-              </select>
-              <FieldError id="wizard-setup-product-error" message={setupErrors.productCode} />
-            </div>
-          </div>
-          <div className="row">
-            <div className="col">
-              <label>Policy Offering</label>
-              <select
-                value={q.policyOffering || ''}
-                onChange={(event) => setQ((prev) => ({ ...prev, policyOffering: event.target.value }))}
-                disabled={isCancellationMode || lockCoreProductFields || isViewOnly || !q.productCode}
-              >
-                <option value="">{q.productCode ? 'Select policy offering' : 'Select product first'}</option>
-                {policyOfferingOptions.map((offering) => (
-                  <option key={offering} value={offering}>{offering}</option>
-                ))}
-              </select>
-            </div>
             <div className="col">
               <label>Underwriter</label>
               <select
@@ -3983,14 +4066,6 @@ export function QuoteWizard() {
                   <option key={option.userId} value={option.userId}>{option.displayName}</option>
                 ))}
               </select>
-            </div>
-            <div className="col">
-              <label>Term</label>
-              <select aria-invalid={Boolean(setupErrors.termMonths)} aria-describedby={setupErrors.termMonths ? 'wizard-setup-term-error' : undefined} value={q.termMonths} onChange={e => setQ({ ...q, termMonths: Number(e.target.value) })} disabled={isCancellationMode || isViewOnly}>
-                <option value={6}>6 months</option>
-                <option value={12}>12 months</option>
-              </select>
-              <FieldError id="wizard-setup-term-error" message={setupErrors.termMonths} />
             </div>
           </div>
           </CollapsibleSection>
@@ -4029,9 +4104,6 @@ export function QuoteWizard() {
             </div>
           </div>
           <PriorInsuranceExtras value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
-          </CollapsibleSection>
-          <CollapsibleSection className="wizard-section" title="Billing">
-            <BillingFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
           </CollapsibleSection>
         </section>
       )}
@@ -4107,14 +4179,14 @@ export function QuoteWizard() {
             />
           </div>
           {primarySearchResults.length > 0 && (
-            <div className="search-results" style={{ marginBottom: 16, border: '1px solid #ddd', borderRadius: 4, padding: 8 }}>
+            <div className="search-results" style={{ marginBottom: 16, border: '1px solid var(--ps-border)', borderRadius: 4, padding: 8 }}>
               <div className="muted" style={{ marginBottom: 8, fontSize: '0.9em' }}>Select from results:</div>
               {primarySearchResults.map((result) => (
                 <div
                   key={result.id || result.customerKey}
                   className="search-result"
                   onClick={() => { void selectPrimaryInsured(result) }}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid #eee', cursor: primarySelecting ? 'wait' : 'pointer', opacity: primarySelecting ? 0.7 : 1 }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid var(--ps-border-light)', cursor: primarySelecting ? 'wait' : 'pointer', opacity: primarySelecting ? 0.7 : 1 }}
                 >
                   <div style={{ flex: 1 }}>
                     <div><strong>{result.displayName || result.name || `${result.firstName || ''} ${result.lastName || ''}`}</strong></div>
@@ -4285,14 +4357,14 @@ export function QuoteWizard() {
             />
           </div>
           {secondarySearchResults.length > 0 && (
-            <div className="search-results" style={{ marginBottom: 16, border: '1px solid #ddd', borderRadius: 4, padding: 8 }}>
+            <div className="search-results" style={{ marginBottom: 16, border: '1px solid var(--ps-border)', borderRadius: 4, padding: 8 }}>
               <div className="muted" style={{ marginBottom: 8, fontSize: '0.9em' }}>Select from results:</div>
               {secondarySearchResults.map((result) => (
                 <div
                   key={result.id || result.customerKey}
                   className="search-result"
                   onClick={() => { void selectSecondaryInsured(result) }}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid #eee', cursor: secondarySelecting ? 'wait' : 'pointer', opacity: secondarySelecting ? 0.7 : 1 }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid var(--ps-border-light)', cursor: secondarySelecting ? 'wait' : 'pointer', opacity: secondarySelecting ? 0.7 : 1 }}
                 >
                   <div style={{ flex: 1 }}>
                     <div><strong>{result.displayName || result.name || `${result.firstName || ''} ${result.lastName || ''}`}</strong></div>
@@ -4383,14 +4455,14 @@ export function QuoteWizard() {
             </div>
           )}
           {additionalSearchResults.length > 0 && (
-            <div className="search-results" style={{ marginBottom: 12, border: '1px solid #ddd', borderRadius: 4, padding: 8 }}>
+            <div className="search-results" style={{ marginBottom: 12, border: '1px solid var(--ps-border)', borderRadius: 4, padding: 8 }}>
               <div className="muted" style={{ marginBottom: 8, fontSize: '0.9em' }}>Select from results:</div>
               {additionalSearchResults.map((result) => (
                 <div
                   key={result.id || result.customerKey}
                   className="search-result"
                   onClick={() => { void selectAdditionalInsured(result) }}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid #eee', cursor: additionalSelecting ? 'wait' : 'pointer', opacity: additionalSelecting ? 0.7 : 1 }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: '1px solid var(--ps-border-light)', cursor: additionalSelecting ? 'wait' : 'pointer', opacity: additionalSelecting ? 0.7 : 1 }}
                 >
                   <div style={{ flex: 1 }}>
                     <div><strong>{result.displayName || result.name || `${result.firstName || ''} ${result.lastName || ''}`}</strong></div>
@@ -4842,16 +4914,8 @@ export function QuoteWizard() {
                   )}
                   {quoteResp?.underwriting && quoteResp.underwriting.decision === 'Refer' && (
                     <div className="block-spaced">
-                      {canUwOverride ? (
-                        <div className="row">
-                          <div className="col">
-                            <label>Override Reason (required to bind)</label>
-                            <input value={overrideReason} onChange={e=>setOverrideReason(e.target.value)} placeholder="Provide rationale for UW override" disabled={locked || isCancellationMode || isViewOnly} />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="muted">Refer: Contact underwriter to approve; agents cannot bind without override.</div>
-                      )}
+                      <div className="muted">Underwriting referral requires a recorded approval before this transaction can proceed.</div>
+                      {canOpenReferrals && <Link to={referralReviewHref || '/uw/queue'} target="_blank" rel="noopener noreferrer">Open referral review</Link>}
                     </div>
                   )}
                   </CollapsibleSection>
@@ -4989,17 +5053,6 @@ export function QuoteWizard() {
                       </div>
                     )}
                     {aiInsightsPanel}
-                    {(quoteResp?.underwriting && quoteResp.underwriting.decision === 'Refer') && !canUwOverride && (
-                      <div className="block-spaced">
-                        <button
-                          className="btn-secondary"
-                        disabled={locked || isViewOnly}
-                        onClick={()=>alert('Submitted for UW review. Please follow up with underwriting.')}
-                      >
-                        Submit for UW
-                      </button>
-                    </div>
-                  )}
                   </CollapsibleSection>
                 </>
               )}
@@ -5015,6 +5068,10 @@ export function QuoteWizard() {
               )}
             </div>
           )}
+          {/* Billing is asked here, before bind, rather than in step 1 (REQ-8). Same quote fields, so saved drafts keep their values. */}
+          <CollapsibleSection className="wizard-section" title="Payment">
+            <BillingFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
+          </CollapsibleSection>
         </section>
       )}
 
@@ -5134,6 +5191,15 @@ export function QuoteWizard() {
         </section>
       )}
 
+      {referralReviewHref && (
+        <div className="block-spaced" role="alert">
+          <p>Awaiting underwriting approval. This transaction has not been completed.</p>
+          {canOpenReferrals
+            ? <Link to={referralReviewHref} target="_blank" rel="noopener noreferrer">Open referral detail</Link>
+            : <p>Contact your underwriter for a referral decision.</p>}
+        </div>
+      )}
+
       {step === steps.length ? (
         <ReviewFooter
           onBack={() => attemptStepChange(Math.max(1, step - 1))}
@@ -5183,7 +5249,7 @@ export function QuoteWizard() {
   )
 }
 
-function Stepper({
+export function Stepper({
   steps,
   active,
   allDone = false,
@@ -5194,19 +5260,43 @@ function Stepper({
   allDone?: boolean
   onSelect: (step: number) => void
 }) {
+  const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 767px)').matches ?? false)
+  const [expanded, setExpanded] = useState(false)
+  const listId = useId()
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 767px)')
+    if (!media) return
+    const update = () => { setCompact(media.matches); setExpanded(false) }
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => { setExpanded(false) }, [active])
   const currentStep = allDone ? steps.length : active
+  const currentTitle = steps.find(step => step.id === currentStep)?.title || ''
   const progressPct = Math.max(0, Math.min(100, (currentStep / Math.max(steps.length, 1)) * 100))
   return (
     <div className="stepper">
       <div className="stepper-panel">
-        <div className="stepper-panel-head">
+        {compact ? (
+          <button
+            type="button"
+            className="wizard-stepper-toggle"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => setExpanded(value => !value)}
+          >
+            <span>Step {currentStep} of {steps.length}: {currentTitle}</span>
+            <span className="wizard-stepper-chevron" aria-hidden="true" />
+          </button>
+        ) : <div className="stepper-panel-head">
           <div className="stepper-panel-label">Workflow</div>
           <div className="stepper-panel-count">{currentStep} of {steps.length}</div>
-        </div>
+        </div>}
         <div className="stepper-progress" aria-hidden="true">
           <span style={{ width: `${progressPct}%` }} />
         </div>
-        <div className="stepper-list">
+        <div id={listId} className={`stepper-list${compact ? ' wizard-stepper-compact-list' : ''}`} hidden={compact && !expanded}>
           {steps.map(s => {
             const stepDone = allDone || active > s.id
             return (
@@ -5214,7 +5304,7 @@ function Stepper({
                 type="button"
                 key={s.id}
                 className={`step ${active === s.id ? 'active' : ''} ${stepDone ? 'done' : ''}`}
-                onClick={() => onSelect(s.id)}
+                onClick={() => { onSelect(s.id); setExpanded(false) }}
                 aria-current={active === s.id ? 'step' : undefined}
               >
                 <span className="bubble" aria-hidden="true">
@@ -5362,14 +5452,6 @@ function WizardNav({
             {saveBusy ? 'Saving…' : 'Save Draft'}
           </button>
         )}
-        <div className="wizard-nav-progress-dots" aria-hidden="true">
-          {Array.from({ length: max }).map((_, index) => (
-            <span
-              key={`wizard-dot-${index + 1}`}
-              className={`wizard-nav-dot ${index + 1 <= step ? 'active' : ''}`}
-            />
-          ))}
-        </div>
       </div>
       <button type="button" className="wizard-nav-next" onClick={onNext} disabled={step >= max || !!nextDisabled}>
         {nextDisabled ? 'Saving…' : nextCta}
@@ -6210,7 +6292,7 @@ function HomeownersCoverageEditor({ cfg, selections, onChange, disabled }: { cfg
               type="button"
               key={limit}
               className="btn-secondary"
-              style={{ borderColor: baseLimit === limit ? 'var(--accent, #0ea5e9)' : undefined, fontWeight: baseLimit === limit ? 600 : undefined }}
+              style={{ borderColor: baseLimit === limit ? 'var(--ps-primary)' : undefined, fontWeight: baseLimit === limit ? 600 : undefined }}
               onClick={() => updateCoverage('A', { limit })}
               disabled={disabled}>
               {formatCurrency(limit)}

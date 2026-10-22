@@ -21,7 +21,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await expect(header).toContainText(/Premium this term\s*\$[\d,]+\.\d{2}/)
 
     // Actions that are valid for an in-force policy are enabled; the rest are not.
-    for (const name of ['Endorse', 'Cancel', 'Renew', 'Non-Renew']) {
+    for (const name of ['Endorse', 'Cancel policy', 'Renew', 'Non-Renew']) {
       await expect(page.getByRole('button', { name, exact: true })).toBeEnabled()
     }
     await expect(page.getByRole('button', { name: 'Reinstate', exact: true })).toBeDisabled()
@@ -65,7 +65,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await signInAs(page, 'admin')
 
     await page.goto(`/policies/${policy.policyId}`)
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('button', { name: 'Cancel policy', exact: true }).click()
     await expect(page).toHaveURL(/mode=cancel/)
     await expect(page.getByRole('heading', { name: 'Cancellation Wizard' })).toBeVisible()
 
@@ -82,7 +82,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Reinstate', exact: true })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Endorse', exact: true })).toBeDisabled()
-    await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Cancel policy', exact: true })).toBeDisabled()
   })
 
   test('a cancellation started in the wizard can be abandoned without changing the policy', async ({ page, request, sessionFor, signInAs }) => {
@@ -91,17 +91,16 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await signInAs(page, 'admin')
 
     await page.goto(`/policies/${policy.policyId}`)
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('button', { name: 'Cancel policy', exact: true }).click()
     await walkTransactionWizardToIssue(page, async (step) => {
       if (step === 1) await fieldByLabel(page, 'Cancellation Reason Code').selectOption('VEHICLE_SOLD')
     })
-    page.once('dialog', (dialog) => void dialog.accept())
     await page.getByRole('button', { name: 'Cancel Transaction' }).click()
 
     await page.goto(`/policies/${policy.policyId}`)
     await expect(page.getByRole('heading', { name: `Policy ${policy.policyNumber}` })).toBeVisible()
     await expect(page.getByRole('main')).toContainText('In Force')
-    await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Cancel policy', exact: true })).toBeEnabled()
   })
 
   // Regression: the cancellation wizard re-validated the read-only vehicle step,
@@ -113,7 +112,7 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await signInAs(page, 'admin')
 
     await page.goto(`/policies/${policy.policyId}`)
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('button', { name: 'Cancel policy', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Cancellation Wizard' })).toBeVisible()
     await walkTransactionWizardToIssue(page, async (step) => {
       if (step === 1) await fieldByLabel(page, 'Cancellation Reason Code').selectOption('REPLACED_COVERAGE')
@@ -156,14 +155,18 @@ test.describe('policy lifecycle transactions in the browser', () => {
     await expect(page.getByRole('main')).toContainText('Cancelled')
     await expect(page.getByRole('row').filter({ hasText: /CN-\d{8}-/ }).first()).toContainText('Cancellation')
 
-    // Reinstatement is a single action on the policy view (no wizard).
+    // Reinstatement is a single action on the policy view (no wizard), confirmed first.
+    await page.getByRole('button', { name: 'Reinstate', exact: true }).click()
+    const confirmDialog = page.getByRole('dialog', { name: /Reinstate policy/ })
+    await expect(confirmDialog).toContainText('Coverage is restored effective')
     await Promise.all([
       page.waitForResponse((response) => response.url().includes(`/policies/${policy.policyId}/reinstate`) && response.ok()),
-      page.getByRole('button', { name: 'Reinstate', exact: true }).click(),
+      confirmDialog.getByRole('button', { name: 'Reinstate', exact: true }).click(),
     ])
     await expect(page.getByRole('row').filter({ hasText: /RI-\d{8}-/ }).first()).toContainText('Reinstatement')
     await expect(page.getByRole('main')).toContainText('In Force')
     await expect(page.getByRole('button', { name: 'Reinstate', exact: true })).toBeDisabled()
+    await expect(page.getByText('Only a cancelled policy can be reinstated.')).toBeVisible()
   })
 
   test('starts a renewal from the policy view', async ({ page, request, sessionFor, signInAs }) => {

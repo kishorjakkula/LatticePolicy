@@ -29,7 +29,7 @@ import {
   buildPolicyDocumentPacket,
   persistPolicyDocumentPacket,
 } from './document-generation.service.js'
-import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { PolicyReferralRequiredError, resolveReferralGateForActor } from './uw-referral.service.js'
 import { assertCoveragesDefined, assertProductRules, sameRiskData } from './product-rules.service.js'
 import { carryProductPin, pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
@@ -904,6 +904,12 @@ export async function renewPolicy(
       {
         policyId,
         transactionType: 'Renew',
+        proposal: {
+          payload, premium: prem,
+          baseVersion: { versionId: ctx.latestVersionId, timelineVersion: await loadCurrentTimelineVersion(q, tenantId, policyId),
+            status: policyRow.status },
+          underwriting: uw, authority,
+        },
         productCode: policyProductCode(policyRow),
         insuredName: payload?.insureds?.primary
           ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
@@ -917,10 +923,7 @@ export async function renewPolicy(
       overrideReason
     )
     if (gate.blocked) {
-      throw new BadRequestError(
-        'UW_REFERRAL_REQUIRED',
-        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
-      )
+      throw new PolicyReferralRequiredError(gate.referral)
     }
     referralId = gate.referral.referralId
   }
@@ -1232,6 +1235,12 @@ export async function rewritePolicy(
       {
         policyId,
         transactionType: 'Rewrite',
+        proposal: {
+          payload, premium: prem,
+          baseVersion: { versionId: ctx.latestVersionId, timelineVersion: await loadCurrentTimelineVersion(q, tenantId, policyId),
+            status: policyRow.status },
+          underwriting: uw, authority,
+        },
         productCode: policyProductCode(policyRow),
         insuredName: payload?.insureds?.primary
           ? `${payload.insureds.primary.firstName || ''} ${payload.insureds.primary.lastName || ''}`.trim()
@@ -1245,10 +1254,7 @@ export async function rewritePolicy(
       overrideReason
     )
     if (gate.blocked) {
-      throw new BadRequestError(
-        'UW_REFERRAL_REQUIRED',
-        `Underwriting decision is Refer. Referral ${gate.referral.referralId} requires underwriter approval before this transaction can proceed.`
-      )
+      throw new PolicyReferralRequiredError(gate.referral)
     }
     referralId = gate.referral.referralId
   }

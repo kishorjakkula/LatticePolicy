@@ -1,0 +1,64 @@
+.wizard-shell .wizard-stepper-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+.wizard-stepper-toggle > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wizard-stepper-chevron {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.wizard-stepper-toggle[aria-expanded='true'] .wizard-stepper-chevron {
+  transform: rotate(225deg);
+}
+
+.wizard-shell .wizard-stepper-compact-list[hidden] {
+  display: none;
+}
+
+.wizard-shell .wizard-stepper-compact-list:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  min-width: 0;
+}
+
+.wizard-shell .wizard-stepper-compact-list .step {
+  min-width: 0;
+  width: 100%;
+  letter-spacing: 0;
+}
+
+.wizard-stepper-compact-list .step-copy,
+.wizard-stepper-compact-list .step-line {
+  min-width: 0;
+}
+
+.wizard-stepper-compact-list .label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -63,7 +63,7 @@ describe('transaction and document display names', () => {
   })
 
   it('describes every policy status in the legend', () => {
-    for (const status of ['Bind', 'Issued', 'In Force', 'Expired', 'Cancelled']) {
+    for (const status of ['Bound', 'Issued', 'In Force', 'Expired', 'Cancelled']) {
       expect(POLICY_STATUS_LEGEND[status]).toBeTruthy()
     }
   })

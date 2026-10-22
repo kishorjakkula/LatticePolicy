@@ -21,6 +21,7 @@ test('product changes replace qualification questions and require fresh confirma
   await expect.poll(async () => (await apiJson<any>(request, 'GET', '/api/v1/submissions/' + submission.submissionId, { token })).status, { timeout: 30000 }).toBe('READY_FOR_REVIEW')
   await signInAs(page, 'uw1')
   await page.goto('/submissions/' + submission.submissionId)
+  await page.getByRole('button', { name: /^All values/ }).click()
   await expect(page.getByRole('combobox', { name: /No property claims in last 5 years/ })).toBeVisible()
   await page.getByRole('combobox', { name: /^Product/ }).selectOption('cyber')
   const mfa = page.getByRole('combobox', { name: /MFA enforced for all remote/ })

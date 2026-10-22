@@ -43,8 +43,15 @@ test.describe('pre-bind internal consistency check', () => {
     await page.goto('/uw/queue')
     await expect(page.getByRole('row').filter({ hasText: /PRIOR_NONPAYMENT|non-?payment/i }).first()).toBeVisible()
 
-    // Once approved the same quote binds.
-    await apiJson<any>(request, 'PATCH', `/api/v1/uw/referrals/${referralId}/approve`, { token: admin.token, data: { notes: 'Verified payment plan (E2E)' } })
+    const overrideAttempt = await apiJson<any>(request, 'POST', `/api/v1/quotes/${contradicting.quoteId}/bind`, {
+      token: admin.token, data: { overrideReason: 'Admin reviewed inline' }, expectedStatus: 400,
+    })
+    expect(overrideAttempt.code).toBe('UW_REFERRAL_REQUIRED')
+    const unchanged = await apiJson<any>(request, 'GET', `/api/v1/uw/referrals/${referralId}`, { token: admin.token })
+    expect(unchanged).toEqual(referral)
+
+    // Once explicitly approved the same quote binds.
+    await apiJson<any>(request, 'PATCH', `/api/v1/uw/referrals/${referralId}/approve`, { token: admin.token, data: { reason: 'Verified payment plan (E2E)' } })
     const bound = await apiJson<any>(request, 'POST', `/api/v1/quotes/${contradicting.quoteId}/bind`, { token: admin.token, data: {} })
     expect(bound.status).toBe('Bound')
   })

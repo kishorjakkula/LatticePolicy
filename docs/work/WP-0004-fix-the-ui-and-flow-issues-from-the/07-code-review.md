@@ -1,5 +1,40 @@
 # Code review — WP-0004
 
+## Current Merge Status (2026-10-21)
+
+Independent re-review passed for the proposal-binding extension: no remaining
+open blocker/major finding identified. Gibbs (separate session
+`01a15f67-4d5e-7c22-b316-08cd03bc7814`) reviewed the migration, canonicalization,
+four callers, rollback boundary, concurrency and frontend evidence display.
+Independently ran 174 focused server tests and 29 frontend tests, all passed.
+Did not independently rerun PostgreSQL/browser suites; parent results are in
+their separate handoffs. Phase 1 sections below are historical. Gate C remains
+a human action; local review does not assert remote CI is green.
+
+Post-main integration re-review (2026-10-21): Rawls, independent session
+`01a15fc3-96bd-73e1-a8b5-635e976076eb`, found no actionable bugs in the
+company/product preservation integration, form naming, pager/theme resolutions
+or migration-069 upgrade. Independently ran 48 focused tests across five files.
+No database/browser jobs or human gate approvals were performed by that reviewer.
+
+Independent sessions Mendel and Boyle reviewed the Phase 2/3 changes. Findings:
+
+| Severity | Finding | Outcome |
+| --- | --- | --- |
+| Major | Rejected endorsement/renewal/rewrite rolled back their referral, so explicit review could not complete. | Fixed with rollback-first work-item retention; real HTTP tests cover all three flows and concurrent attempts. Independent review found no further rollback/lock-order issue. |
+| Major | Ordinary approval reused when new authority requirements appear. | Fixed: exact proposal binding and escalation HTTP regression; independently re-reviewed. |
+| Major | Approved, unconsumed referral can authorize materially increased exposure producing the same reason code. | Verified fixed: approved Migration 069, immutable evidence/hash and changed-limit regressions in all four flows. Gibbs independently re-reviewed. |
+| Major | Concurrent new-business binds can spend one unconsumed approval twice. | Verified fixed: quote and approval locked/revalidated in the policy-creation transaction; concurrent real HTTP regression creates exactly one policy. |
+| Major | A client field named redactedSha256 hides sibling material facts in the detail view. | Verified fixed: singleton 64-hex marker only; sibling risk/coverage regression added. |
+| Minor | Different proposal shadows an exact-match approval and creates duplicate work. | Verified fixed: select latest decision within the matching fingerprint; A/B/A regression. |
+| Minor | Tenant/user count-cache isolation, pending Escape/double-submit, focus escape after failure. | Parent fixes and focused regressions added; independent recheck verified the dialog corrections. |
+| Minor | Forced-white dark primary/active-page text and populated search contrast. | Token corrections and browser checks added; final combined run pending. |
+| Minor | Renewal dates shifted at UTC midnight. | Local calendar bounds and New York/Tokyo regressions; independently verified fixed by Boyle. |
+| Minor | Pager mobile-close/desktop-resize race and obsolete referral queue selectors. | Corrected with a mobile-only disclosure and stable-ID/detail-view tests. Final combined browser evidence recorded in automation handoff. |
+
+No reviewer approved Gate C or business sign-off. No merge or production
+deployment was performed in this continuation.
+
 > Code reviewer (separate session from the developer). Fill every placeholder below (the flow will not complete the stage while any remain).
 
 - Reviewer session / tool: independent Code Reviewer agent session (Claude Code, stage 7), separate from the developer sessions.
@@ -9,11 +44,12 @@
 
 Scope: REQ-3, REQ-4, REQ-6, REQ-7, REQ-13, REQ-14 (Submissions list), REQ-18, the wireframe removal and the not-found route.
 
-Result: **returned to the developer.** One major finding is open. There are no blockers.
+Historical first-pass result: returned to the developer with one major finding.
+It was fixed and independently re-reviewed below; it is not currently open.
 
 | Severity | File:line | Finding | Failure scenario | Outcome |
 | --- | --- | --- | --- | --- |
-| Major | `frontend/src/features/policies/PolicyViewPage.tsx:109-110,919`; `frontend/src/features/customers/CustomerViewPage.tsx:35-36,338-339,392-393` | Two date-time columns lost their time. The removed `formatLedgerTimestamp` and the old customer formatter printed `MM-DD-YYYY HH:MM`. Their replacements call `formatDisplayDateTime(value, { fallback })` without `includeTime: true`, and that function returns the date only unless `includeTime` is set. The comment in `CustomerViewPage` ("US: MM/DD/YYYY h:mm AM/PM") and `05-implementation.md` both describe output the code does not produce. | A policy has an endorsement and a cancellation processed on the same day. The Transactions "Updated" column (the default sort, descending) shows `10/17/2026` for both rows, so the user cannot see which came first. The customer page's policy and quote Created/Updated columns lose their times in the same way. This fails the REQ-7 acceptance criterion "date-times include AM/PM" and regresses the old display. Checked: `formatDisplayDateTime('2026-10-17T14:05:00Z', {fallback:''})` returns `10/17/2026`. | Returned. Fix: pass `includeTime: true` in both helpers. Add a unit test that asserts `h:mm AM/PM` in the Transactions Updated cell and the customer view rows. |
+| Major | `frontend/src/features/policies/PolicyViewPage.tsx:109-110,919`; `frontend/src/features/customers/CustomerViewPage.tsx:35-36,338-339,392-393` | Two date-time columns lost their time by omitting includeTime. | Same-day transactions and customer records could not be distinguished by their displayed time. | Verified fixed by the Phase 1 independent re-review below: includeTime true and date-time regression assertions. |
 | Minor | `frontend/src/features/policies/policyPremium.ts:79-93` | The term premium adds every in-term transaction, including a second full-term transaction. A rewrite stores a full-term premium, not a delta. When a rewrite's term dates equal the original term's, NB + Cancel + Rewrite are all added. This is not a regression: the old code did the same. | NB $500, mid-term cancel −$300, then a rewrite effective on the original inception date for $520. The header shows $720 instead of $520 (reproduced with Node). | Returned (minor). Suggested fix: restart the running total at each NB, Renew or Rewrite version (`cumulative = amount`) instead of adding to it. Add a unit test for this case. |
 | Minor | `frontend/src/features/policies/PolicyViewPage.tsx:1188` | The non-renew modal still builds its own date: `new Date(expirationDate).toLocaleDateString()`. This parses a date-only value as UTC and ignores the tenant's format. REQ-7 covers policy screens. Pre-existing. | A user west of UTC opens Non-renew for a policy that expires on 09/18/2027. The modal says "9/17/2027", one day early, on a notice-related screen. | Returned (minor). Use `formatDisplayDate`. |
 | Minor | `frontend/src/shared/dateDisplay.ts:122-124` | Every stored US `MM-DD-YYYY` setting is read as `MM/DD/YYYY`, including one an admin chose on purpose. `TenantPage` still offers `MM-DD-YYYY` for the US and saves it without any effect. | A tenant admin picks MM-DD-YYYY for the US and saves. The setting is stored but never displayed, with no message. | Accepted for Phase 1 because it is documented in `05-implementation.md`. Follow-up: hide or relabel that option for the US, or migrate the stored data. |
@@ -72,3 +108,44 @@ Result: **returned to the developer.** One major finding is open. There are no b
 ### Merge
 
 The major finding blocks Gate C until it is fixed and re-verified. The minor findings can be fixed in this PR or recorded as Phase 2 or Phase 3 follow-ups.
+
+## Re-check — Phase 1 fixes — 2026-10-20
+
+Diff reviewed: `git diff 840b443..f66b308`. The working tree was identical to f66b308 for `frontend/`. Same reviewer session as above.
+
+Result: **the major finding is resolved. Nothing blocks Gate C.** Two minors stay open as non-blocking follow-ups (the policy-header "Bind" text and the form-document naming path), plus the two accepted minors.
+
+| Finding | Status | Evidence |
+| --- | --- | --- |
+| Major: date-times lost their time | **Fixed** | Verified: `PolicyViewPage.formatDateTime` and `CustomerViewPage.formatDateTimeMmDdYyyyHm` pass `includeTime: true`; document/audit/submission date-time call sites and the policy-header regression passed the independent Phase 1 re-review. |
+| Minor 1: rewrite on the original term adds up | **Fixed** | `startsTermPremium` resets the running total and the pending cancel at NB, NewBusiness, Renew, Renewal and Rewrite. Leaving out Issue is correct: a $0 Issue version would otherwise wipe the term. Node probes on f66b308: rewrite at inception gives 520 (was 720); flat cancel then rewrite gives 520; NB + $0 Issue + $20 endorsement gives 520; the earlier cases are unchanged. The new unit test (500, −300, 520, +15 gives 535) passes. |
+| Minor 2: non-renew modal date | **Fixed** | `PolicyViewPage.tsx:1188` uses the module's date-only `formatDate` (the shared formatter with the UTC path). |
+| Minor 3: legacy US format | Accepted, follow-up | Recorded in `05-implementation.md`. |
+| Minor 4: "Bind" against "Bound" | **Partly fixed, open (minor)** | Correction to my first review: search rows and the search legend both render through `StatusBadge`, which already shows "Bind" as **"Bound"** (`StatusBadge.tsx:30`). The search screen was therefore consistent before and still is. The legend key is now `Bind`, so the tooltip lookups in the header and search rows work without the remap. The **policy header badge** is a plain span that still shows the raw text "Bind" (`PolicyViewPage.tsx`, status slot), so it still differs from "Bound" on search. Follow-up: render the header status through `StatusBadge` or the same label. |
+| Minor 5: form document names | **Resolved in practice. The new code path is not reached by the real API.** | Form documents store `metadata.code` and `metadata.title` (`document-generation.service.ts:548-549`), and the route builds `displayName` as `Title [CODE]`. `code` is always set because it is upper-cased during selection, so the bracket regex already gave distinct names. The new `doc.forms[0]` branch never runs for real form documents: the route sends `forms: metadata.forms || []`, and form documents have no `metadata.forms`. The new unit test uses a shape the API does not return. This is harmless and does not block. Follow-up: read `title`/`code` from the route, or drop the branch. |
+| Minor 6: undefined token | **Fixed** | `search.css` now uses `--ps-text-secondary`, which is defined on `:root` and in dark mode. |
+| Minor 7: second primary colour | **Fixed** | `.si-btn-primary` uses `--ps-primary`, `--ps-on-primary` and `--ps-primary-hover`. |
+| Minor 8: dark-mode contrast | Accepted, follow-up | Tracked under REQ-15. |
+| Minor 9: pager role and lost count | **Fixed** | The inner controls are `role="group" aria-label="Pages"` inside `nav "Pagination"`. `showRange` is opt-in and turned on only by `TablePagination`. The search page keeps its own count and does not double it. With zero items it still shows "No results". The test asserts "Showing 1–20 of 183 · Page 1 of 10" and "Showing 21–25 of 25 · Page 3 of 3". |
+| Minor 10: empty insured; as-of feedback | **Fixed** | `!customer \|\| !insuredLabel` shows "No insured linked". In `PolicyAsOfResult` the hooks run before the early return (no change in hook order). The effect scrolls to and focuses the `tabIndex=-1` region after commit when `asOf` changes, and it does nothing when the date is cleared. |
+| Minor 11: stale docs; REQ-6 ordering | **Fixed** | The task note now names only UwQueue as pending (Phase 2, REQ-17). `05-implementation.md` records the Cancel ordering as deferred to Phase 2 (REQ-12) and lists the review fixes. |
+
+New defects: none found in the fix diff. Small observation, not a finding: `aria-live="polite"` on the focused as-of region may announce the loading text and then the result. That is acceptable.
+
+Checks run (Node 24.21, from `frontend/`):
+
+- `npx vitest run src/features/policies src/shared src/components src/features/search src/features/submissions src/features/customers src/features/admin/forms src/__tests__`: 26 files, 179 tests passed.
+- Node probes of `policyPremium.ts` at f66b308 (results above).
+- No Docker or e2e runs.
+
+Merge: there are no open blockers or majors, so the code-review stage is done for Phase 1. Minors 4 (header text), 5 (unreachable branch), 3 and 8 are non-blocking follow-ups. Gate C is the human merge approval.
+
+## Independent PR #394 CI Follow-Up Review
+
+A separate reviewer session inspected the two enforcement environment additions
+and related documentation. No actionable correctness or security findings.
+Both runners use the existing transaction-local restricted RLS role; disposable
+database guards and targets remain intact. No assertion, policy or application
+authorization was weakened. Reviewer shell syntax and whitespace checks passed;
+the reviewer did not independently rerun the database suite. Parent-run results
+are recorded in `09-automation-tests.md`. Human Gate C remains pending.

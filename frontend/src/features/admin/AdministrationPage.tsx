@@ -2,6 +2,7 @@ import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { FormEvent, useMemo, useState } from 'react'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
+import { useConfirmDialog } from '../../components/Dialog'
 import {
   defaultRegionForCountry,
   normalizeCountryCode,
@@ -55,6 +56,7 @@ export function AdministrationPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<CompanyDraft>(EMPTY_DRAFT)
   const [formError, setFormError] = useState<string | null>(null)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
   const regionOptions = useMemo(() => [ALL_REGION_OPTION, ...regionsForCountry(draft.country)], [draft.country])
 
   const { data: rawItems, isLoading, error: loadError } = useAdminUnderwritingCompanies({ includeInactive: true })
@@ -139,7 +141,7 @@ export function AdministrationPage() {
   }
 
   const onDelete = async (item: UnderwritingCompany) => {
-    if (!confirm(`Delete underwriting company "${item.name}"?`)) return
+    if (!(await askConfirm({ title: `Delete underwriting company ${item.name}`, confirmLabel: 'Delete', danger: true }))) return
     setFormError(null)
     try {
       await deleteMutation.mutateAsync(item.companyId)
@@ -155,6 +157,7 @@ export function AdministrationPage() {
 
   return (
     <div className="ps-admin-page">
+      {confirmDialog}
       <div className="ps-page-header">
         <div><h2 className="ps-page-title">Underwriting Companies</h2></div>
       </div>

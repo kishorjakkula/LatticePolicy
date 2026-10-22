@@ -17,6 +17,7 @@ import {
 } from '../persistence.js'
 import * as endorsementService from '../services/endorsement.service.js'
 import * as lifecycleService from '../services/lifecycle.service.js'
+import { withPersistentPolicyReferral } from '../services/uw-referral.service.js'
 import { rate } from '../rating.js'
 import { assertProductRules } from '../services/product-rules.service.js'
 import { pinToCurrentProduct } from '../lib/product-snapshot.js'
@@ -229,13 +230,13 @@ transactionRoutes.post(
       }
 
       const { acknowledged, body } = takeAcknowledgements(req.body)
-      const result = await req.tx(async (db) => {
+      const result = await withPersistentPolicyReferral(tenantId, () => req.tx(async (db) => {
         await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
           level: 'issue', transaction: 'endorsement', payload: body.payload, acknowledged, actor: actorOf(req),
           transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason, notes: body.notes },
         })
         return endorsementService.executeEndorsement(db, tenantId, routeParam(req.params.id), body, req.user)
-      })
+      }))
       return res.json(result)
     } catch (err: any) {
       next(err)
@@ -364,13 +365,13 @@ transactionRoutes.post('/policies/:id/rewrite', requirePermission('page.policy.v
 
     if (db) {
       const { acknowledged, body } = takeAcknowledgements(req.body)
-      const result = await req.tx(async (db) => {
+      const result = await withPersistentPolicyReferral(tenantId, () => req.tx(async (db) => {
         await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
           level: 'issue', transaction: 'rewrite', payload: body.payload, acknowledged, actor: actorOf(req),
           transactionFacts: { effectiveDate: body.effectiveDate, reason: body.reason, overrideReason: body.overrideReason },
         })
         return lifecycleService.rewritePolicy(db, tenantId, routeParam(req.params.id), body, req.user)
-      })
+      }))
       return ok(res, result)
     }
 
@@ -458,13 +459,13 @@ transactionRoutes.post('/policies/:id/renew', requirePermission('page.policy.vie
 
     if (db) {
       const { acknowledged, body } = takeAcknowledgements(req.body)
-      const result = await req.tx(async (db) => {
+      const result = await withPersistentPolicyReferral(tenantId, () => req.tx(async (db) => {
         await runPolicyValidationGate(db, tenantId, routeParam(req.params.id), {
           level: 'issue', transaction: 'renewal', payload: body.payload, acknowledged, actor: actorOf(req),
           transactionFacts: { effectiveDate: body.effectiveDate, overrideReason: body.overrideReason },
         })
         return lifecycleService.renewPolicy(db, tenantId, routeParam(req.params.id), body, req.user)
-      })
+      }))
       return res.json(result)
     }
 

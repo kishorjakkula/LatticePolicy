@@ -1,0 +1,17 @@
+.cs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-block: 12px;
+}
+
+.cs-filters label { min-width: 0; }
+.cs-filters select { max-width: 100%; }
+.cs-check { display: inline-flex; align-items: center; gap: 8px; }
+.cs-check input[type="checkbox"] { flex: 0 0 auto; }
+.cs-matrix-scroll { max-width: 100%; overflow-x: auto; }
+.cs-matrix { width: 100%; }
+.cs-matrix th, .cs-matrix td { min-width: 130px; white-space: normal; overflow-wrap: anywhere; }
+.cs-matrix input[type="checkbox"] { width: 24px; height: 24px; }
+.cs-role-fields { border: 0; padding: 0; margin: 0; min-width: 0; }

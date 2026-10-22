@@ -46,7 +46,7 @@ test.describe('collapsible screen sections', () => {
     await signInAs(page, 'admin')
     await page.goto('/wizard')
 
-    for (const title of ['Company & Agency', 'Product & Term', 'Prior Insurance']) {
+    for (const title of ['Product & term', 'Company & agency', 'Prior Insurance']) {
       await expect(page.getByRole('heading', { name: title })).toBeVisible()
     }
     // New business has no transaction details section.

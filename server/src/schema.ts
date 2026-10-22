@@ -425,6 +425,8 @@ export const notes = pgTable('notes', {
 })
 
 export const underwritingReferrals = pgTable('underwriting_referrals', {
+  proposalHash: text('proposal_hash'),
+  proposalSnapshot: jsonb('proposal_snapshot'),
   referralId: uuid('referral_id').primaryKey().default(sql`uuid_generate_v4()`),
   tenantId: text('tenant_id').notNull(),
   quoteId: uuid('quote_id').references(() => quotes.quoteId, { onDelete: 'set null' }),

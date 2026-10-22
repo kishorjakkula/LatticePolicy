@@ -1,12 +1,16 @@
 import { v4 as uuidv4 } from '../uuid.js'
-import { toRawQuery, type DrizzleDB } from '../db.js'
+import { toRawQuery, withTenantTx, type DrizzleDB } from '../db.js'
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/domain.errors.js'
-import { isUuidLike } from '../lib/utils.js'
+import { asDateOnly } from '../lib/date.utils.js'
+import { referralProposalEvidence, type ReferralProposalInput } from '../lib/referral-proposal.js'
 
 export type ReferralStatus = 'Open' | 'Approved' | 'Declined' | 'InfoRequested' | 'Withdrawn'
 export type ReferralDecision = 'Approved' | 'Declined' | 'InfoRequested'
+const RETAINED_EVIDENCE = Symbol('server-evaluated referral evidence')
 
 export interface ReferralGateContext {
+  [RETAINED_EVIDENCE]?: ReturnType<typeof referralProposalEvidence>
+  proposal?: ReferralProposalInput
   quoteId?: string | null
   policyId?: string | null
   transactionId?: string | null
@@ -30,6 +34,8 @@ function mapRow(row: any) {
   if (!row) return null
   return {
     referralId: row.referral_id,
+    proposalHash: row.proposal_hash || null,
+    proposalSnapshot: row.proposal_snapshot || null,
     quoteId: row.quote_id,
     policyId: row.policy_id,
     transactionId: row.transaction_id,
@@ -63,25 +69,25 @@ function mapRow(row: any) {
 async function findExistingReferral(
   db: DrizzleDB,
   tenantId: string,
-  ctx: ReferralGateContext
+  ctx: ReferralGateContext,
+  proposalHash: string | null
 ): Promise<any | null> {
   const q = toRawQuery(db)
   if (ctx.quoteId) {
     const r = await q(
-      `SELECT * FROM underwriting_referrals
-        WHERE tenant_id=$1 AND quote_id=$2
-        ORDER BY created_at DESC LIMIT 1`,
-      [tenantId, ctx.quoteId]
+      `SELECT *, effective_date::text AS effective_date FROM underwriting_referrals
+        WHERE tenant_id=$1 AND quote_id=$2 AND ($3::text IS NULL OR proposal_hash=$3)
+        ORDER BY created_at DESC, referral_id DESC LIMIT 1`,
+      [tenantId, ctx.quoteId, proposalHash]
     )
     return r.rows[0] || null
   }
   if (ctx.policyId) {
     const r = await q(
-      `SELECT * FROM underwriting_referrals
-        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type=$3
-          AND status IN ('Open','InfoRequested','Approved')
-        ORDER BY created_at DESC LIMIT 1`,
-      [tenantId, ctx.policyId, ctx.transactionType]
+      `SELECT *, effective_date::text AS effective_date FROM underwriting_referrals
+        WHERE tenant_id=$1 AND policy_id=$2 AND transaction_type=$3 AND ($4::text IS NULL OR proposal_hash=$4)
+        ORDER BY created_at DESC, referral_id DESC LIMIT 1`,
+      [tenantId, ctx.policyId, ctx.transactionType, proposalHash]
     )
     return r.rows[0] || null
   }
@@ -100,13 +106,26 @@ export async function resolveReferralGate(
   ctx: ReferralGateContext
 ): Promise<ReferralGateResult> {
   const q = toRawQuery(db)
-  const existing = await findExistingReferral(db, tenantId, ctx)
+  if (ctx.authorityOverrideRequired && !ctx.reasons.some(reason => reason.startsWith('AUTHORITY_'))) {
+    ctx = { ...ctx, reasons: [...ctx.reasons, 'AUTHORITY_OVERRIDE_REQUIRED'] }
+  }
+  // Quote gates have no surrounding policy lock. Policy gates serialize on the
+  // policy row; their rollback-retention path takes its own advisory lock later.
+  if (ctx.quoteId) await q('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+    JSON.stringify(['quote-referral', tenantId, ctx.quoteId]),
+  ])
+  const evidence = ctx[RETAINED_EVIDENCE] || referralProposalEvidence(tenantId, ctx)
+  const existing = await findExistingReferral(db, tenantId, ctx, evidence.proposalHash)
+  const sameDate = asDateOnly(existing?.effective_date) === asDateOnly(ctx.effectiveDate)
+  const coversReasons = ctx.reasons.every(reason => (existing?.reasons || []).includes(reason))
+  const exactProposal = !!evidence.proposalHash && existing?.proposal_hash === evidence.proposalHash
+  const reusable = existing && exactProposal && sameDate && coversReasons && !existing.transaction_id && !existing.version_id
 
-  if (existing && existing.status === 'Approved') {
+  if (reusable && existing.status === 'Approved') {
     return { blocked: false, referral: mapRow(existing) }
   }
 
-  if (existing && (existing.status === 'Open' || existing.status === 'InfoRequested')) {
+  if (reusable && (existing.status === 'Open' || existing.status === 'InfoRequested')) {
     return { blocked: true, referral: mapRow(existing) }
   }
 
@@ -117,8 +136,8 @@ export async function resolveReferralGate(
     `INSERT INTO underwriting_referrals
        (referral_id, tenant_id, quote_id, policy_id, transaction_id, version_id,
         product_code, agency_id, insured_name, effective_date, transaction_type,
-        status, priority, reasons, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Open','Normal',$12,$13)
+        status, priority, reasons, created_by, proposal_hash, proposal_snapshot)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Open','Normal',$12,$13,$14,$15::jsonb)
      RETURNING *`,
     [
       referralId,
@@ -134,6 +153,8 @@ export async function resolveReferralGate(
       ctx.transactionType,
       ctx.reasons || [],
       ctx.createdBy || null,
+      evidence.proposalHash,
+      evidence.proposalSnapshot ? JSON.stringify(evidence.proposalSnapshot) : null,
     ]
   )
   return { blocked: true, referral: mapRow(r.rows[0]) }
@@ -146,68 +167,133 @@ export interface ReferralActor {
   permissions?: string[]
 }
 
-function isUnderwriterActor(actor?: ReferralActor | null): boolean {
-  const roles = actor?.roles || []
-  const permissions = actor?.permissions || []
-  return roles.includes('underwriter') || roles.includes('admin') || permissions.includes('uw.referrals.decide')
-}
-
-function canOverrideAuthority(actor?: ReferralActor | null): boolean {
-  return (actor?.permissions || []).includes('uw.authority.override')
-}
-
 /**
- * Resolves the referral gate for a transaction attempt, allowing an
- * underwriter-permission actor to self-decide (Approve) inline when they
- * supply a reason — this preserves the existing "UW overrides at
- * submit-time" UX while still recording a real referral + decision instead
- * of trusting a client-supplied override flag. Non-underwriter actors are
- * always blocked until a separate underwriter approves the open referral.
+ * Transaction attempts never decide referrals. Approval must be recorded by
+ * the explicit referral decision endpoint after review (WP-0004 REQ-1).
+ * Retain the actor/reason arguments for caller compatibility only.
  */
 export async function resolveReferralGateForActor(
   db: DrizzleDB,
   tenantId: string,
   ctx: ReferralGateContext,
-  actor?: ReferralActor | null,
-  overrideReason?: string
+  _actor?: ReferralActor | null,
+  _overrideReason?: string
 ): Promise<ReferralGateResult> {
-  const gate = await resolveReferralGate(db, tenantId, ctx)
-  const isUw = isUnderwriterActor(actor)
-  const reason = (overrideReason || '').trim()
-  const authorityReferral = ctx.authorityOverrideRequired
-    || (gate.referral?.reasons || []).some((value: unknown) => String(value).startsWith('AUTHORITY_'))
-  const canInlineApprove = authorityReferral ? canOverrideAuthority(actor) : isUw
-  if (gate.blocked && canInlineApprove && reason) {
-    const decidedBy = actor?.id && isUuidLike(actor.id) ? actor.id : null
-    const decided = await decideReferral(db, tenantId, gate.referral.referralId, {
-      decision: 'Approved',
-      reason,
-      decidedBy,
-      isUnderwriter: true,
-      canOverrideAuthority: canOverrideAuthority(actor),
-    })
-    return { blocked: false, referral: decided }
+  return resolveReferralGate(db, tenantId, ctx)
+}
+
+/** Carries only server-evaluated context across the rejected policy transaction. */
+export class PolicyReferralRequiredError extends BadRequestError {
+  readonly referralContext: ReferralGateContext
+  constructor(referral: NonNullable<ReturnType<typeof mapRow>>) {
+    super('UW_REFERRAL_REQUIRED', `Referral ${referral.referralId} requires underwriter approval before this transaction can proceed.`)
+    this.referralContext = {
+      policyId: referral.policyId,
+      transactionType: referral.transactionType,
+      productCode: referral.productCode,
+      insuredName: referral.insuredName,
+      effectiveDate: referral.effectiveDate,
+      reasons: referral.reasons,
+      agencyId: referral.agencyId,
+      createdBy: referral.createdBy,
+      [RETAINED_EVIDENCE]: { proposalHash: referral.proposalHash, proposalSnapshot: referral.proposalSnapshot },
+    }
   }
-  return gate
+}
+
+/** Roll back all policy writes first; then retain only the underwriting work item. */
+export async function withPersistentPolicyReferral<T>(tenantId: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    if (!(error instanceof PolicyReferralRequiredError)) throw error
+    const context = error.referralContext
+    const gate = await withTenantTx(tenantId, async db => {
+      const q = toRawQuery(db)
+      // Serialize rejected retries without holding the rolled-back policy lock.
+      await q('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        JSON.stringify(['policy-referral', tenantId, context.policyId, context.transactionType]),
+      ])
+      return resolveReferralGate(db, tenantId, context)
+    })
+    throw new BadRequestError('UW_REFERRAL_REQUIRED',
+      `Referral ${gate.referral.referralId} ${gate.blocked ? 'requires underwriter approval' : 'has been approved; retry this transaction'}.`)
+  }
+}
+
+export type ReferralSort = 'oldest' | 'newest'
+export const REFERRAL_SORTS: readonly ReferralSort[] = ['oldest', 'newest']
+
+/** Open referrals are a work queue, so they default to oldest first. */
+export function defaultReferralSort(status?: string | null): ReferralSort {
+  return status === 'Open' ? 'oldest' : 'newest'
+}
+
+export interface ReferralMoney {
+  amount: number
+  currency: string
+}
+
+function toMoney(amount: unknown, currency: unknown): ReferralMoney | null {
+  if (amount === null || amount === undefined || amount === '') return null
+  const value = Number(amount)
+  if (!Number.isFinite(value)) return null
+  const code = typeof currency === 'string' && currency.trim().length === 3 ? currency.trim().toUpperCase() : 'USD'
+  return { amount: value, currency: code }
+}
+
+/**
+ * Premium shown in the referral queue: the latest version of the referral's
+ * policy when it has one (renewal, endorsement, rewrite, or a new-business
+ * referral already bound), otherwise the rated quote's total for pre-bind
+ * referrals. Null when neither has been rated.
+ */
+function referralPremium(row: any): ReferralMoney | null {
+  const fromPolicy = toMoney(row.latest_premium_amount, row.latest_premium_currency)
+  if (fromPolicy) return fromPolicy
+  const total = row.quote_premium?.total
+  return total ? toMoney(total.amount, total.currency) : null
+}
+
+// Referral plus its policy number and premium. Every join is tenant-scoped;
+// the lateral picks the policy's latest version through
+// idx_policy_versions_policy (tenant_id, policy_id, processed_at DESC).
+const REFERRAL_VIEW_SELECT = `SELECT r.*, p.policy_number,
+            lv.premium_total AS latest_premium_amount, lv.currency AS latest_premium_currency,
+            qt.premium AS quote_premium
+       FROM underwriting_referrals r
+       LEFT JOIN policies p ON p.policy_id = r.policy_id AND p.tenant_id = r.tenant_id
+       LEFT JOIN LATERAL (
+         SELECT v.premium_total, v.currency
+           FROM policy_versions v
+          WHERE v.tenant_id = r.tenant_id AND v.policy_id = r.policy_id
+          ORDER BY v.processed_at DESC, v.version_id DESC
+          LIMIT 1
+       ) lv ON true
+       LEFT JOIN quotes qt ON qt.quote_id = r.quote_id AND qt.tenant_id = r.tenant_id`
+
+function mapViewRow(row: any) {
+  return { ...mapRow(row), policyNumber: row.policy_number || null, premium: referralPremium(row) }
 }
 
 export async function listReferrals(
   db: DrizzleDB,
   tenantId: string,
-  opts: { status?: string; page: number; pageSize: number }
+  opts: { status?: string; sort?: ReferralSort; page: number; pageSize: number }
 ) {
   const q = toRawQuery(db)
   const page = Math.max(1, opts.page)
   const pageSize = Math.max(1, Math.min(100, opts.pageSize))
   const offset = (page - 1) * pageSize
   const statusFilter = opts.status ? opts.status : null
+  const sort: ReferralSort = opts.sort && REFERRAL_SORTS.includes(opts.sort) ? opts.sort : defaultReferralSort(statusFilter)
+  // Fixed SQL fragments only; the sort value never reaches the query text.
+  const orderBy = sort === 'oldest' ? 'r.created_at ASC, r.referral_id ASC' : 'r.created_at DESC, r.referral_id DESC'
   const r = await q(
-    `SELECT r.*, p.policy_number
-       FROM underwriting_referrals r
-       LEFT JOIN policies p ON p.policy_id = r.policy_id AND p.tenant_id = r.tenant_id
+    `${REFERRAL_VIEW_SELECT}
       WHERE r.tenant_id = $1
         AND ($2::text IS NULL OR r.status = $2)
-      ORDER BY r.created_at DESC
+      ORDER BY ${orderBy}
       LIMIT ${pageSize} OFFSET ${offset}`,
     [tenantId, statusFilter]
   )
@@ -218,21 +304,19 @@ export async function listReferrals(
         AND ($2::text IS NULL OR status = $2)`,
     [tenantId, statusFilter]
   )
-  const items = r.rows.map((row: any) => ({ ...mapRow(row), policyNumber: row.policy_number || null }))
-  return { items, total: Number(totalResult.rows[0]?.total || 0), page, pageSize }
+  const items = r.rows.map(mapViewRow)
+  return { items, total: Number(totalResult.rows[0]?.total || 0), page, pageSize, sort }
 }
 
 export async function getReferral(db: DrizzleDB, tenantId: string, referralId: string) {
   const q = toRawQuery(db)
   const r = await q(
-    `SELECT r.*, p.policy_number
-       FROM underwriting_referrals r
-       LEFT JOIN policies p ON p.policy_id = r.policy_id AND p.tenant_id = r.tenant_id
+    `${REFERRAL_VIEW_SELECT}
       WHERE r.tenant_id = $1 AND r.referral_id = $2`,
     [tenantId, referralId]
   )
   if (!r.rowCount) throw new NotFoundError('REFERRAL_NOT_FOUND')
-  return { ...mapRow(r.rows[0]), policyNumber: r.rows[0].policy_number || null }
+  return mapViewRow(r.rows[0])
 }
 
 export async function assignReferral(
@@ -284,7 +368,7 @@ export async function decideReferral(
   }
   const q = toRawQuery(db)
   const existing = await q(
-    `SELECT * FROM underwriting_referrals WHERE tenant_id=$1 AND referral_id=$2`,
+    `SELECT * FROM underwriting_referrals WHERE tenant_id=$1 AND referral_id=$2 FOR UPDATE`,
     [tenantId, referralId]
   )
   if (!existing.rowCount) throw new NotFoundError('REFERRAL_NOT_FOUND')
@@ -300,6 +384,13 @@ export async function decideReferral(
   const authorityReferral = (current.reasons || []).some(value => String(value).startsWith('AUTHORITY_'))
   if (input.decision === 'Approved' && authorityReferral && (!input.canOverrideAuthority || !reason)) {
     throw new ForbiddenError('AUTHORITY_OVERRIDE_REQUIRED')
+  }
+  // Approve and Decline are recorded underwriting decisions and always carry a
+  // reason (WP-0004 REQ-1); Request info keeps an optional comment. Enforced
+  // here so /decide, /approve and /decline cannot diverge. Checked after the
+  // authority rule so an authority referral keeps its existing 403.
+  if ((input.decision === 'Approved' || input.decision === 'Declined') && !reason) {
+    throw new BadRequestError('REASON_REQUIRED', 'A reason is required to approve or decline a referral')
   }
   const commentEntry = reason
     ? [{ by: input.decidedBy, text: reason, at: new Date().toISOString(), decision: input.decision }]

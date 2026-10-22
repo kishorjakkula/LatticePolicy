@@ -75,7 +75,8 @@ describe('PolicyViewPage header', () => {
     expect(term?.textContent).toContain('–')
     expect(term?.textContent).not.toBe('-')
     const status = within(header).getByText('In Force')
-    expect(status).toHaveAttribute('title', 'Issued and the current term has started.')
+    expect(status.closest('[title]')).toHaveAttribute('title', 'Issued and the current term has started.')
+    expect(status).toHaveClass('status-badge')
     const premium = within(header).getByText('Premium this term').nextElementSibling
     expect(premium).toHaveTextContent('$542.82')
     // Not the sum of both terms.
@@ -117,5 +118,20 @@ describe('PolicyViewPage header', () => {
     renderPage()
     expect(screen.getAllByText('Personal Auto').length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText('personal-auto')).not.toBeInTheDocument()
+  })
+})
+
+describe('policy actions (WP-0004 REQ-12)', () => {
+  it('puts Cancel policy last in the danger style and explains unavailable actions', () => {
+    renderPage()
+    const row = document.querySelector('.policy-action-row') as HTMLElement
+    const labels = within(row).getAllByRole('button').map((button) => button.textContent)
+    expect(labels[labels.length - 1]).toBe('Cancel policy')
+    expect(within(row).getByRole('button', { name: 'Cancel policy' })).toHaveClass('btn-danger')
+
+    const reinstate = within(row).getByRole('button', { name: 'Reinstate' })
+    expect(reinstate).toBeDisabled()
+    expect(reinstate).toHaveAccessibleDescription('Only a cancelled policy can be reinstated.')
+    expect(within(row).getByText('Only a cancelled policy can be rewritten.')).toBeInTheDocument()
   })
 })

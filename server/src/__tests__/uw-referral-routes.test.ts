@@ -18,7 +18,8 @@ vi.mock('../services/uw-referral.service.js', () => ({
   getReferral: vi.fn(),
   assignReferral: vi.fn(),
   addReferralComment: vi.fn(),
-  decideReferral: vi.fn()
+  decideReferral: vi.fn(),
+  REFERRAL_SORTS: ['oldest', 'newest']
 }))
 
 import { getDb, withTenantTx, toRawQuery } from '../db.js'

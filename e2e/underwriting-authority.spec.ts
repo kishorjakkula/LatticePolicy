@@ -62,6 +62,21 @@ test.describe('underwriting authority grants', () => {
       const blocked = await apiJson<any>(request, 'POST', `/api/v1/quotes/${quote.quoteId}/bind`, { token: agent.token, data: {}, expectedStatus: 400 })
       expect(blocked.code).toBe('UW_REFERRAL_REQUIRED')
 
+      const referralId = String(blocked.message).match(/Referral ([0-9a-f-]{36})/)![1]
+      const referral = await apiJson<any>(request, 'GET', `/api/v1/uw/referrals/${referralId}`, { token: admin.token })
+      const overrideAttempt = await apiJson<any>(request, 'POST', `/api/v1/quotes/${quote.quoteId}/bind`, {
+        token: admin.token, data: { overrideReason: 'Senior underwriting override' }, expectedStatus: 400,
+      })
+      expect(overrideAttempt.code).toBe('UW_REFERRAL_REQUIRED')
+      expect(await apiJson<any>(request, 'GET', `/api/v1/uw/referrals/${referralId}`, { token: admin.token })).toEqual(referral)
+      const agentRetry = await apiJson<any>(request, 'POST', `/api/v1/quotes/${quote.quoteId}/bind`, { token: agent.token, data: {}, expectedStatus: 400 })
+      const agentReferralId = String(agentRetry.message).match(/Referral ([0-9a-f-]{36})/)![1]
+      await apiJson<any>(request, 'PATCH', `/api/v1/uw/referrals/${agentReferralId}/decide`, {
+        token: admin.token, data: { decision: 'Approved', reason: 'Senior review approved the requested premium' },
+      })
+      const approvedBind = await apiJson<any>(request, 'POST', `/api/v1/quotes/${quote.quoteId}/bind`, { token: agent.token, data: {} })
+      expect(approvedBind.status).toBe('Bound')
+
       // Revoking the grant from the UI lifts the gate again.
       await Promise.all([
         page.waitForResponse((response) => response.url().includes('/uw/authority-grants/') && response.request().method() === 'PATCH' && response.ok()),

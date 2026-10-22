@@ -35,6 +35,7 @@ import {
 } from './document-generation.service.js'
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
+import { canonicalProposal } from '../lib/referral-proposal.js'
 import { assertProductRules } from './product-rules.service.js'
 import { ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
@@ -525,6 +526,12 @@ export async function bindQuote(
           insuredName: insuredDisplayName || null,
           effectiveDate: quote.payload?.effectiveDate || null,
           reasons: allReferralReasons,
+          proposal: {
+            payload: quote.payload, premium: quote.premium, baseVersion: null,
+            underwriting: { decision: quote.uw, aggregation: aggregationEvaluation,
+              consistency: internalConsistency, externalVerification: externalVerificationReasons },
+            authority,
+          },
           authorityOverrideRequired: authorityReasons.length > 0,
           createdBy: normalizedActorId,
         },
@@ -667,6 +674,26 @@ export async function bindQuote(
   // ── 8. Big transaction block ────────────────────────────────────────────────
   await withTenantTx(tenantId, async (txDb) => {
     const q = toRawQuery(txDb)
+    // Validate the evaluated quote under the same lock as policy creation and
+    // referral consumption. A concurrent bind cannot spend this approval twice.
+    const current = await q(`SELECT payload, underwriting, premium, status, converted_policy_id
+      FROM quotes WHERE tenant_id=$1 AND quote_id=$2 FOR UPDATE`, [tenantId, quoteId])
+    const latest = current.rows[0]
+    if (!latest) throw new NotFoundError('QUOTE_NOT_FOUND')
+    if (latest.converted_policy_id || latest.status === 'Converted') {
+      throw new BadRequestError('QUOTE_ALREADY_BOUND', 'This quote has already been bound.')
+    }
+    if (canonicalProposal({ payload: latest.payload, uw: latest.underwriting, premium: latest.premium }) !== canonicalProposal(quote)) {
+      throw new BadRequestError('QUOTE_CHANGED', 'The quote changed during bind. Review the latest quote and retry.')
+    }
+    if (referralId) {
+      const approval = await q(`SELECT status, transaction_id, version_id FROM underwriting_referrals
+        WHERE tenant_id=$1 AND referral_id=$2 FOR UPDATE`, [tenantId, referralId])
+      const approved = approval.rows[0]
+      if (!approved || approved.status !== 'Approved' || approved.transaction_id || approved.version_id) {
+        throw new BadRequestError('UW_REFERRAL_REQUIRED', 'The referral approval is no longer available. Retry for a fresh review.')
+      }
+    }
 
     // Policy number generation
     policyNumber = await generatePolicyNumber({

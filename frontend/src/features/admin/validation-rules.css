@@ -4,7 +4,7 @@
 .validation-rules__lede,
 .validation-rules__hint,
 .validation-rules__muted {
-  color: var(--ps-text-secondary, #4a5568);
+  color: var(--ps-text-secondary);
 }
 .validation-rules__lede {
   max-width: 860px;
@@ -24,9 +24,9 @@
   min-width: 44px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--ps-border, #e2e8f0);
-  background: var(--ps-surface, #fff);
-  color: var(--ps-text, #1a202c);
+  border: 1px solid var(--ps-border);
+  background: var(--ps-surface);
+  color: var(--ps-text);
   font-weight: 600;
   cursor: pointer;
 }
@@ -59,7 +59,7 @@
 .validation-rules__fieldset {
   display: grid;
   gap: 12px;
-  border: 1px solid var(--ps-border, #e2e8f0);
+  border: 1px solid var(--ps-border);
   border-radius: var(--ps-radius-sm, 8px);
   padding: 12px 16px 16px;
   min-width: 0;
@@ -89,12 +89,12 @@
   font-weight: 700;
 }
 .validation-rules__severity--error {
-  background: #fed7d7;
-  color: #822727;
+  background: var(--ps-danger-soft);
+  color: var(--ps-danger);
 }
 .validation-rules__severity--warning {
-  background: #feebc8;
-  color: #7b341e;
+  background: var(--ps-warning-soft);
+  color: var(--ps-warning);
 }
 .validation-rules__actions {
   display: flex;
@@ -110,7 +110,7 @@
   margin-left: auto;
 }
 .validation-rules__problems {
-  color: #822727;
+  color: var(--ps-danger);
   margin: 0;
 }
 .validation-rules__history li {

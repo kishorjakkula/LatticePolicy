@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { hasPermission } from '../../auth/permissions'
+import './admin-nav.css'
 
 function adminMenuClass({ isActive }: { isActive: boolean }) {
   return `ps-admin-nav-link${isActive ? ' ps-admin-nav-link--active' : ''}`
@@ -17,8 +18,64 @@ function readSidebarCollapsed() {
   }
 }
 
+type AdminMenuItem = { path: string; label: string; permission: string }
+type AdminMenuGroup = { id: string; label: string; items: AdminMenuItem[] }
+
+// Grouped administration menu (WP-0004 REQ-5). Each item keeps the menu
+// permission it had before grouping; the routes in App.tsx and the API still
+// enforce access.
+export const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
+  {
+    id: 'products',
+    label: 'Products & rules',
+    items: [
+      { path: '/admin/forms', label: 'Forms', permission: 'menu.admin.forms.view' },
+      { path: '/admin/validation-rules', label: 'Validation Rules', permission: 'menu.admin.validation_rules.view' },
+      { path: '/admin/underwriting-rules', label: 'Underwriting Rules', permission: 'admin.underwriting_rules.read' },
+      { path: '/admin/underwriting-authority', label: 'Underwriting Authority', permission: 'uw.authority.read' },
+      { path: '/admin/compliance', label: 'Compliance', permission: 'menu.admin.compliance.view' },
+    ],
+  },
+  {
+    id: 'partners',
+    label: 'Partners',
+    items: [
+      { path: '/admin/uw-company', label: 'Underwriting Companies', permission: 'menu.admin.uw_company.view' },
+      { path: '/admin/onboarding', label: 'Agency Onboarding', permission: 'menu.admin.onboarding.view' },
+      { path: '/admin/customers', label: 'Customers', permission: 'menu.admin.customers.view' },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Operations',
+    items: [
+      { path: '/admin/jobs', label: 'Jobs', permission: 'menu.admin.jobs.view' },
+      { path: '/admin/import', label: 'Data Import', permission: 'menu.admin.import.view' },
+      { path: '/admin/dashboard', label: 'Operations Dashboard', permission: 'menu.admin.dashboard.view' },
+      { path: '/admin/bordereaux', label: 'Bordereaux', permission: 'menu.admin.bordereaux.view' },
+      { path: '/admin/reinsurance', label: 'Reinsurance', permission: 'menu.admin.reinsurance.view' },
+      { path: '/admin/exposure', label: 'Exposure', permission: 'menu.admin.exposure.view' },
+    ],
+  },
+  {
+    id: 'platform',
+    label: 'Platform',
+    items: [
+      { path: '/admin/users', label: 'Users', permission: 'menu.admin.users.view' },
+      { path: '/admin/security', label: 'Security', permission: 'menu.admin.security.view' },
+      { path: '/admin/tenant', label: 'Tenant', permission: 'menu.admin.tenant.view' },
+      { path: '/admin/notification-templates', label: 'Notifications', permission: 'menu.admin.notifications.view' },
+      { path: '/admin/llm-releases', label: 'LLM Releases', permission: 'menu.admin.llm.view' },
+      { path: '/admin/ai-audit', label: 'AI Audit', permission: 'menu.admin.ai_audit.view' },
+    ],
+  },
+]
+
 export function AdminShell() {
   const { user } = useAuth()
+  const groups = ADMIN_MENU_GROUPS
+    .map((group) => ({ ...group, items: group.items.filter((item) => hasPermission(user, item.permission)) }))
+    .filter((group) => group.items.length > 0)
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
   const toggleSidebar = () => {
     setCollapsed((value) => {
@@ -49,61 +106,20 @@ export function AdminShell() {
             {collapsed ? '\u00BB' : '\u00AB'}
           </button>
         </div>
-        <nav id="admin-sidebar-nav" className="ps-admin-nav" hidden={collapsed}>
-          {hasPermission(user, 'menu.admin.forms.view') && (
-            <NavLink to="/admin/forms" className={adminMenuClass}>Forms</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.uw_company.view') && (
-            <NavLink to="/admin/uw-company" className={adminMenuClass}>Underwriting Companies</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.users.view') && (
-            <NavLink to="/admin/users" className={adminMenuClass}>Users</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.tenant.view') && (
-            <NavLink to="/admin/tenant" className={adminMenuClass}>Tenant</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.security.view') && (
-            <NavLink to="/admin/security" className={adminMenuClass}>Security</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.customers.view') && (
-            <NavLink to="/admin/customers" className={adminMenuClass}>Customers</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.onboarding.view') && (
-            <NavLink to="/admin/onboarding" className={adminMenuClass}>Agency Onboarding</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.notifications.view') && (
-            <NavLink to="/admin/notification-templates" className={adminMenuClass}>Notifications</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.llm.view') && <NavLink to="/admin/llm-releases" className={adminMenuClass}>LLM Releases</NavLink>}
-          {hasPermission(user, 'menu.admin.ai_audit.view') && <NavLink to="/admin/ai-audit" className={adminMenuClass}>AI Audit</NavLink>}
-          {hasPermission(user, 'menu.admin.validation_rules.view') && <NavLink to="/admin/validation-rules" className={adminMenuClass}>Validation Rules</NavLink>}
-          {hasPermission(user, 'menu.admin.compliance.view') && (
-            <NavLink to="/admin/compliance" className={adminMenuClass}>Compliance</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.import.view') && (
-            <NavLink to="/admin/import" className={adminMenuClass}>Data Import</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.dashboard.view') && (
-            <NavLink to="/admin/dashboard" className={adminMenuClass}>Operations Dashboard</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.exposure.view') && (
-            <NavLink to="/admin/exposure" className={adminMenuClass}>Exposure</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.reinsurance.view') && (
-            <NavLink to="/admin/reinsurance" className={adminMenuClass}>Reinsurance</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.bordereaux.view') && (
-            <NavLink to="/admin/bordereaux" className={adminMenuClass}>Bordereaux</NavLink>
-          )}
-          {hasPermission(user, 'menu.admin.jobs.view') && (
-            <NavLink to="/admin/jobs" className={adminMenuClass}>Jobs</NavLink>
-          )}
-          {hasPermission(user, 'uw.authority.read') && (
-            <NavLink to="/admin/underwriting-authority" className={adminMenuClass}>Underwriting Authority</NavLink>
-          )}
-          {hasPermission(user, 'admin.underwriting_rules.read') && (
-            <NavLink to="/admin/underwriting-rules" className={adminMenuClass}>Underwriting Rules</NavLink>
-          )}
+        <nav id="admin-sidebar-nav" className="ps-admin-nav" aria-label="Administration" hidden={collapsed}>
+          <NavLink to="/admin" end className={adminMenuClass}>Overview</NavLink>
+          {groups.map((group) => (
+            <div key={group.id} className="ps-admin-nav-group">
+              <h2 id={`admin-nav-${group.id}`} className="ps-admin-nav-group-title">{group.label}</h2>
+              <ul className="ps-admin-nav-list" aria-labelledby={`admin-nav-${group.id}`}>
+                {group.items.map((item) => (
+                  <li key={item.path}>
+                    <NavLink to={item.path} className={adminMenuClass}>{item.label}</NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
       <section className="admin-content">

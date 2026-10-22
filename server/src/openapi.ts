@@ -706,6 +706,58 @@ const componentSchemas: Record<string, any> = {
     properties: { transactionNumber: { type: 'string' } },
     required: ['transactionNumber']
   },
+  UwReferral: {
+    type: 'object',
+    properties: {
+      referralId: { type: 'string', format: 'uuid' },
+      proposalHash: { type: 'string', nullable: true, description: 'Server-derived SHA-256 of immutable versioned review evidence. Legacy referrals have no evidence and cannot authorize a newly evaluated proposal.' },
+      proposalSnapshot: { type: 'object', nullable: true, readOnly: true, additionalProperties: true,
+        description: 'Tenant-private immutable proposed policy facts, rated premium, base version and underwriting/authority evaluation. Sensitive document/credential fields are digest-only. Never accepted from a transaction request.' },
+      quoteId: { type: 'string', format: 'uuid', nullable: true },
+      policyId: { type: 'string', format: 'uuid', nullable: true },
+      policyNumber: { type: 'string', nullable: true },
+      productCode: { type: 'string', nullable: true },
+      insuredName: { type: 'string', nullable: true },
+      effectiveDate: { type: 'string', format: 'date', nullable: true },
+      transactionType: { type: 'string' },
+      status: { type: 'string', enum: ['Open', 'Approved', 'Declined', 'InfoRequested', 'Withdrawn'] },
+      reasons: { type: 'array', items: { type: 'string' } },
+      assignedTo: { type: 'string', format: 'uuid', nullable: true },
+      premium: {
+        description: 'Latest policy version premium, or the rated quote total for a pre-bind referral; null when not rated.',
+        nullable: true,
+        allOf: [{ $ref: '#/components/schemas/Money' }]
+      },
+      createdAt: { type: 'string', format: 'date-time' }
+    },
+    additionalProperties: true
+  },
+  UwReferralListResponse: {
+    type: 'object',
+    properties: {
+      items: { type: 'array', items: { $ref: '#/components/schemas/UwReferral' } },
+      total: { type: 'integer' },
+      page: { type: 'integer' },
+      pageSize: { type: 'integer' },
+      sort: { type: 'string', enum: ['oldest', 'newest'] }
+    },
+    required: ['items', 'total', 'page', 'pageSize']
+  },
+  UwReferralDecisionRequest: {
+    type: 'object',
+    required: ['decision'],
+    properties: {
+      decision: { type: 'string', enum: ['Approved', 'Declined', 'InfoRequested'] },
+      reason: { type: 'string', description: 'Required (non-blank) for Approved and Declined; optional comment for InfoRequested.' }
+    }
+  },
+  UwReferralReasonRequest: {
+    type: 'object',
+    required: ['reason'],
+    properties: {
+      reason: { type: 'string', minLength: 1, description: 'Non-blank reason, recorded in the referral history.' }
+    }
+  },
   RatingWorkbookImportRequest: {
     type: 'object',
     required: ['fileName', 'dataBase64'],
@@ -758,7 +810,64 @@ const componentSchemas: Record<string, any> = {
   }
 }
 
+const auditFilterParameters = [
+  { in: 'query', name: 'source', schema: { type: 'string', enum: ['all', 'intake', 'releases'], default: 'all' } },
+  ...['actor', 'actorKind'].map(name => ({ in: 'query', name,
+    description: name === 'actorKind' ? 'Alias for actor kind; conflicting explicit kinds are rejected.' : 'Recorded actor kind (legacy filter).',
+    schema: { type: 'string', enum: ['all', 'ai', 'automation', 'person', 'system'] } })),
+  { in: 'query', name: 'model', description: 'Exact recorded intake model or linked release artifact model.', schema: { type: 'string', minLength: 1, maxLength: 240 } },
+  { in: 'query', name: 'user', description: 'Exact intake actor text or release actor UUID/current username.', schema: { type: 'string', minLength: 1, maxLength: 120 } },
+  ...['from', 'to'].map(name => ({ in: 'query', name, description: 'Inclusive offset-aware timestamp; from must not exceed to.', schema: { type: 'string', format: 'date-time' } })),
+  { in: 'query', name: 'search', schema: { type: 'string', maxLength: 120 } },
+]
+
 const operationOverrides: Record<string, any> = {
+  'GET /v1/admin/ai-audit': {
+    description: 'Requires ai.audit.read. Entries and total apply every filter. Counts retain legacy date-only actor-summary semantics. Historical model provenance is not inferred for events without recorded evidence.',
+    parameters: [
+      ...auditFilterParameters,
+      { in: 'query', name: 'offset', schema: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER, default: 0 } },
+      { in: 'query', name: 'limit', schema: { type: 'integer', minimum: 1, maximum: 500, default: 25 } },
+    ],
+    responses: {
+      '200': jsonResponse({ type: 'object', required: ['items', 'total', 'counts'], properties: {
+        total: { type: 'integer', minimum: 0, description: 'Total matching every active filter.' },
+        counts: { type: 'object', additionalProperties: { type: 'integer', minimum: 0 }, description: 'Actor summary scoped only by date bounds.' },
+        items: { type: 'array', items: { type: 'object', additionalProperties: true, properties: {
+          model: { type: 'string', nullable: true },
+          modelProvenance: { type: 'object', nullable: true, additionalProperties: true },
+        } } },
+      } }),
+      '400': jsonResponse('ErrorResponse', 'INVALID_AUDIT_FILTER'),
+    },
+  },
+  'GET /v1/admin/ai-audit/export': {
+    description: 'Requires ai.audit.read. Exports up to 10,000 filtered entries from offset zero; caller limit and offset are ignored. Export is audited; CSV cells are formula-protected.',
+    parameters: auditFilterParameters,
+    responses: {
+      '200': { description: 'Filtered CSV export', content: { 'text/csv': { schema: { type: 'string' } } } },
+      '400': jsonResponse('ErrorResponse', 'INVALID_AUDIT_FILTER'),
+    },
+  },
+  'POST /v1/admin/compliance/eligibility/bulk': {
+    description: 'Requires admin.compliance.manage. Atomically locks and updates all selected tenant eligibility records and appends one before/after audit event per row. No partial success.',
+    requestBody: { required: true, content: { 'application/json': { schema: {
+      type: 'object', additionalProperties: false, required: ['ids', 'status', 'reason'], properties: {
+        ids: { type: 'array', minItems: 1, maxItems: 500, uniqueItems: true, items: { type: 'string', format: 'uuid' } },
+        status: { type: 'string', enum: ['ACTIVE', 'CLOSED', 'FILING_PENDING', 'SUSPENDED'] },
+        reason: { type: 'string', minLength: 1, maxLength: 2000, description: 'Required non-blank reason after trimming.' },
+      },
+    } } } },
+    responses: {
+      '200': jsonResponse({ type: 'object', required: ['updated', 'items'], properties: {
+        updated: { type: 'integer', minimum: 1, maximum: 500 },
+        items: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      } }),
+      '400': jsonResponse('ErrorResponse', 'INVALID_INPUT'),
+      '404': jsonResponse('ErrorResponse', 'Missing or inaccessible eligibility record; no changes applied.'),
+      '409': jsonResponse('ErrorResponse', 'CONCURRENT_CHANGE: refresh and retry.'),
+    },
+  },
   'POST /auth/login': {
     requestBody: {
       required: true,
@@ -901,6 +1010,63 @@ const operationOverrides: Record<string, any> = {
       content: { 'application/json': { schema: { $ref: '#/components/schemas/ReinsuranceTreatyRequest' } } }
     },
     responses: { '201': jsonResponse({ type: 'object', additionalProperties: true }) }
+  },
+  'GET /v1/uw/referrals': {
+    parameters: [
+      { name: 'status', in: 'query', schema: { type: 'string', enum: ['Open', 'Approved', 'Declined', 'InfoRequested', 'Withdrawn'] }, required: false },
+      {
+        name: 'sort',
+        in: 'query',
+        schema: { type: 'string', enum: ['oldest', 'newest'] },
+        required: false,
+        description: 'Order by referral age. Defaults to oldest first when status=Open, otherwise newest first. Any other value returns 400 INVALID_SORT.'
+      },
+      { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, required: false },
+      { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, required: false }
+    ],
+    responses: {
+      '200': jsonResponse('UwReferralListResponse'),
+      '400': jsonResponse('ErrorResponse', 'INVALID_SORT: sort is not one of oldest, newest')
+    }
+  },
+  'GET /v1/uw/referrals/{referralId}': {
+    responses: {
+      '200': jsonResponse('UwReferral'),
+      '404': jsonResponse('ErrorResponse', 'REFERRAL_NOT_FOUND (also for another tenant\'s referral)')
+    }
+  },
+  'PATCH /v1/uw/referrals/{referralId}/decide': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/UwReferralDecisionRequest' } } }
+    },
+    responses: {
+      '400': jsonResponse('ErrorResponse', 'INVALID_DECISION, REASON_REQUIRED (Approved/Declined with a blank reason) or REFERRAL_NOT_DECIDABLE'),
+      '403': jsonResponse('ErrorResponse', 'FORBIDDEN, REFERRAL_DECISION_FORBIDDEN or AUTHORITY_OVERRIDE_REQUIRED'),
+      '404': jsonResponse('ErrorResponse', 'REFERRAL_NOT_FOUND (also for another tenant\'s referral)')
+    }
+  },
+  'PATCH /v1/uw/referrals/{referralId}/approve': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/UwReferralReasonRequest' } } }
+    },
+    responses: {
+      '400': jsonResponse('ErrorResponse', 'REASON_REQUIRED (blank reason) or REFERRAL_NOT_DECIDABLE'),
+      '403': jsonResponse('ErrorResponse', 'FORBIDDEN, REFERRAL_DECISION_FORBIDDEN or AUTHORITY_OVERRIDE_REQUIRED'),
+      '404': jsonResponse('ErrorResponse', 'REFERRAL_NOT_FOUND (also for another tenant\'s referral)')
+    }
+  },
+  'PATCH /v1/uw/referrals/{referralId}/decline': {
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/UwReferralReasonRequest' } } }
+    },
+    responses: {
+      '400': jsonResponse('ErrorResponse', 'REASON_REQUIRED (blank reason) or REFERRAL_NOT_DECIDABLE'),
+      '403': jsonResponse('ErrorResponse', 'FORBIDDEN or REFERRAL_DECISION_FORBIDDEN'),
+      '404': jsonResponse('ErrorResponse', 'REFERRAL_NOT_FOUND (also for another tenant\'s referral)')
+    }
   },
   'GET /v1/customer-portal/summary': {
     responses: { '200': jsonResponse('PortalSummaryResponse') }

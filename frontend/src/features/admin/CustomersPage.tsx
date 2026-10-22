@@ -8,6 +8,7 @@ import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { useConfirmDialog, useReasonDialog } from '../../components/Dialog'
 
 type EntityType = 'INDIVIDUAL' | 'COMPANY' | 'BOTH'
 type CustomerStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'MERGED' | 'PENDING_APPROVAL' | 'ARCHIVED'
@@ -62,6 +63,15 @@ export function CustomersPage() {
   const [settingsDirty, setSettingsDirty] = useState(false)
   const [record, setRecord] = useState<any>(() => emptyCustomerRecord())
   const [dirty, setDirty] = useState(false)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
+  const { dialog: reasonDialog, askReason } = useReasonDialog()
+  const confirmDiscard = () => askConfirm({
+    title: 'Discard unsaved changes',
+    description: 'You have unsaved changes. Continue and discard them?',
+    confirmLabel: 'Discard changes',
+    danger: true,
+  })
+  const customerLabel = () => record.customerKey || record.customerId
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -181,20 +191,20 @@ export function CustomersPage() {
     }
   }
 
-  function openCustomerInPage(customerIdOrKey: string, mode: 'view' | 'edit') {
+  async function openCustomerInPage(customerIdOrKey: string, mode: 'view' | 'edit') {
     if (!customerIdOrKey) return
-    if (dirty && !window.confirm('You have unsaved changes. Continue and discard?')) return
+    if (dirty && !(await confirmDiscard())) return
     navigate(`/admin/customers/${mode}/${encodeURIComponent(customerIdOrKey)}`)
   }
 
-  function openNewCustomerInPage() {
-    if (dirty && !window.confirm('You have unsaved changes. Continue and discard?')) return
+  async function openNewCustomerInPage() {
+    if (dirty && !(await confirmDiscard())) return
     navigate('/admin/customers/new')
   }
 
-  function closeCustomerInPage() {
+  async function closeCustomerInPage() {
     if (saving) return
-    if (dirty && !window.confirm('You have unsaved changes. Continue and discard?')) return
+    if (dirty && !(await confirmDiscard())) return
     navigate('/admin/customers')
   }
 
@@ -220,7 +230,7 @@ export function CustomersPage() {
 
   async function loadRecord(idOrKey: string, options: { skipDirtyCheck?: boolean } = {}) {
     const { skipDirtyCheck = false } = options
-    if (!skipDirtyCheck && dirty && !window.confirm('You have unsaved changes. Continue and discard?')) return
+    if (!skipDirtyCheck && dirty && !(await confirmDiscard())) return
     setLoading(true)
     setError(null)
     setSuccess(null)
@@ -362,7 +372,9 @@ export function CustomersPage() {
 
   async function submitForApproval() {
     if (!record.customerId || !canManage) return
-    const reason = window.prompt('Approval reason', 'REQUIRES_REVIEW') || 'REQUIRES_REVIEW'
+    const answer = await askReason({ title: `Submit customer ${customerLabel()} for approval`, confirmLabel: 'Submit', optional: true, initialValue: 'REQUIRES_REVIEW' })
+    if (answer === null) return
+    const reason = answer || 'REQUIRES_REVIEW'
     setSaving(true)
     setError(null)
     try {
@@ -379,7 +391,9 @@ export function CustomersPage() {
 
   async function activateRecord() {
     if (record.status === 'PENDING_APPROVAL' && canApprove && record.customerId) {
-      const reason = window.prompt('Approval reason', 'APPROVE') || 'APPROVE'
+      const answer = await askReason({ title: `Approve customer ${customerLabel()}`, confirmLabel: 'Approve', optional: true, initialValue: 'APPROVE' })
+      if (answer === null) return
+      const reason = answer || 'APPROVE'
       setSaving(true)
       setError(null)
       try {
@@ -399,9 +413,19 @@ export function CustomersPage() {
 
   async function deactivateRecord() {
     if (!record.customerId || !canDeactivate) return
-    const reason = window.prompt('Deactivation reason', 'CUSTOMER_REQUEST') || ''
+    const reason = (await askReason({ title: `Deactivate customer ${customerLabel()}`, confirmLabel: 'Continue', danger: true, initialValue: 'CUSTOMER_REQUEST' })) || ''
     if (!reason.trim()) return
-    const effectiveDate = window.prompt('Effective date (YYYY-MM-DD)', todayDateString()) || ''
+    const effectiveAnswer = await askReason({
+      title: `Deactivate customer ${customerLabel()}`,
+      label: 'Effective date',
+      help: 'YYYY-MM-DD. Leave blank for today.',
+      confirmLabel: 'Deactivate',
+      danger: true,
+      optional: true,
+      initialValue: todayDateString(),
+    })
+    if (effectiveAnswer === null) return
+    const effectiveDate = effectiveAnswer
     setSaving(true)
     setError(null)
     try {
@@ -427,7 +451,9 @@ export function CustomersPage() {
 
   async function reactivateRecord() {
     if (!record.customerId || !canDeactivate) return
-    const reason = window.prompt('Reactivation reason', 'REOPEN') || 'REOPEN'
+    const answer = await askReason({ title: `Reactivate customer ${customerLabel()}`, confirmLabel: 'Reactivate', optional: true, initialValue: 'REOPEN' })
+    if (answer === null) return
+    const reason = answer || 'REOPEN'
     setSaving(true)
     setError(null)
     try {
@@ -444,7 +470,7 @@ export function CustomersPage() {
 
   async function deleteRecord() {
     if (!record.customerId || !canManage) return
-    if (!window.confirm(`Delete ${record.customerKey || record.customerId}?`)) return
+    if (!(await askConfirm({ title: `Delete customer ${customerLabel()}`, confirmLabel: 'Delete', danger: true }))) return
     setSaving(true)
     setError(null)
     try {
@@ -583,7 +609,12 @@ export function CustomersPage() {
 
   async function revealField(field: 'ssn' | 'fein' | 'dob') {
     if (!record.customerId || !canReveal) return
-    const reason = window.prompt(`Reason for ${field.toUpperCase()} reveal`, 'CUSTOMER_SERVICE') || ''
+    const reason = (await askReason({
+      title: `Reveal ${field.toUpperCase()} for customer ${customerLabel()}`,
+      help: 'The reveal and its reason are recorded in the customer audit.',
+      confirmLabel: 'Reveal',
+      initialValue: 'CUSTOMER_SERVICE',
+    })) || ''
     if (!reason.trim()) return
     try {
       const response = await api.revealCustomerField(record.customerId, { field, reason })
@@ -699,6 +730,8 @@ export function CustomersPage() {
 
   return (
     <div className="ps-admin-page">
+      {confirmDialog}
+      {reasonDialog}
       <div className="ps-page-header">
         <div>
           <h2 className="ps-page-title">Customers</h2>

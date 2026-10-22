@@ -50,8 +50,12 @@ Server (`server/src`), additive only:
 
 ## Data and migrations
 
-None. No table, column or RLS change. All server changes read or update existing
-tables within existing tenant-scoped transactions.
+Original scope: no schema changes; server changes use tenant-scoped transactions.
+
+**2026-10-21 review update:** this is the original approved scope. A blocking
+approval-reuse finding required `02a-referral-proposal-binding.md`. Gate B was
+reopened and explicitly reapproved on 2026-10-21 with "approved." Migration 069
+now adds immutable tenant-private proposal evidence, without changing RLS.
 
 ## API contract
 

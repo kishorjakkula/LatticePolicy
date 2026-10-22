@@ -52,6 +52,25 @@ describe('OpenAPI contract drift checks', () => {
     }
   })
 
+  it('documents bounded atomic compliance changes and filtered audit pagination', () => {
+    const bulk = spec.paths['/v1/admin/compliance/eligibility/bulk'].post
+    const body = bulk.requestBody.content['application/json'].schema
+    expect(body.required).toEqual(['ids', 'status', 'reason'])
+    expect(body.additionalProperties).toBe(false)
+    expect(body.properties.ids).toMatchObject({ minItems: 1, maxItems: 500, uniqueItems: true })
+    expect(body.properties.reason).toMatchObject({ minLength: 1, maxLength: 2000 })
+    const audit = spec.paths['/v1/admin/ai-audit'].get
+    const parameters = Object.fromEntries(audit.parameters.map((item: any) => [item.name, item.schema]))
+    expect(parameters.limit).toMatchObject({ minimum: 1, maximum: 500, default: 25 })
+    expect(parameters.offset).toMatchObject({ minimum: 0, default: 0 })
+    expect(parameters.actor.enum).toContain('person')
+    expect(parameters.actorKind.enum).toEqual(parameters.actor.enum)
+    expect(parameters.model.maxLength).toBe(240)
+    expect(parameters.user.maxLength).toBe(120)
+    expect(audit.responses['200'].content['application/json'].schema.required).toContain('total')
+    expect(spec.paths['/v1/admin/ai-audit/export'].get.responses['200'].content['text/csv']).toBeTruthy()
+  })
+
   it('uses detailed contracts for import and reinsurance mutations', () => {
     expect(spec.paths['/v1/admin/import/batches'].post.requestBody.content['application/json'].schema.$ref)
       .toBe('#/components/schemas/DataImportBatchRequest')

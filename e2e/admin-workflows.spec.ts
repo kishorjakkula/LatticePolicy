@@ -38,7 +38,7 @@ test.describe('admin browser workflows', () => {
 
     await page.goto('/admin/exposure')
     await expect(page.getByRole('heading', { name: 'Exposure Management' })).toBeVisible()
-    await page.getByLabel('Product').fill('personal-auto')
+    await page.getByRole('textbox', { name: 'Product', exact: true }).fill('personal-auto')
     await page.getByLabel('As Of').fill('2026-08-01')
 
     await expect(page.getByText(/in-force policies as of 2026-08-01/)).toBeVisible()

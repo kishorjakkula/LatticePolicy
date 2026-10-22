@@ -26,38 +26,31 @@ export async function continueToStep(page: Page, step: number) {
 const seededCompany = process.env.E2E_UW_COMPANY || 'Sample Carrier Personal Lines'
 
 /**
- * Picks the underwriting company, jurisdiction, and product. A freshly seeded
- * stack has the seeded company; a long-lived environment (local demo stack, a
- * deployed test environment) has its own, so when the seeded one is missing
- * fall back to the first company that writes the requested product.
+ * Fills the start of step 1 in its order (WP-0004 REQ-8): country, state and
+ * product, then the underwriting company, whose options are only the companies
+ * that write that product in that state. A freshly seeded stack has the seeded
+ * company; a long-lived environment (local demo stack, a deployed test
+ * environment) has its own, so when the seeded one is not offered pick the
+ * first company that is. A company passed explicitly must be offered.
  */
 export async function selectProduct(
   page: Page,
   options: { company?: string; state?: string; productCode?: string } = {},
 ) {
   const productCode = options.productCode ?? 'personal-auto'
-  const companySelect = fieldByLabel(page, 'Underwriting Company')
+  const state = options.state ?? 'CA'
   const productSelect = fieldByLabel(page, 'Product')
-  await expect(companySelect).toBeEnabled()
-  const labels = (await companySelect.locator('option').allTextContents()).map((label) => label.trim())
-  const wanted = options.company ?? seededCompany
-
-  if (options.company || labels.includes(wanted)) {
-    await companySelect.selectOption({ label: wanted })
-  } else {
-    let matched = false
-    for (const label of labels.slice(1)) {
-      await companySelect.selectOption({ label })
-      if (await productSelect.locator(`option[value="${productCode}"]`).count()) {
-        matched = true
-        break
-      }
-    }
-    expect(matched, `an underwriting company that writes ${productCode}`).toBe(true)
-  }
   await fieldByLabel(page, 'Country').selectOption('US')
-  await fieldByLabel(page, 'State').selectOption(options.state ?? 'CA')
+  await fieldByLabel(page, 'State').selectOption(state)
+  await expect(productSelect).toBeEnabled()
   await productSelect.selectOption(productCode)
+
+  const companySelect = fieldByLabel(page, 'Underwriting Company')
+  await expect(companySelect).toBeEnabled()
+  const labels = (await companySelect.locator('option').allTextContents()).map((label) => label.trim()).slice(1)
+  expect(labels.length, `an underwriting company that writes ${productCode} in ${state}`).toBeGreaterThan(0)
+  const wanted = options.company ?? seededCompany
+  await companySelect.selectOption({ label: options.company || labels.includes(wanted) ? wanted : labels[0] })
 }
 
 export async function answerAllQualificationQuestions(page: Page, answer: 'Yes' | 'No' = 'Yes') {

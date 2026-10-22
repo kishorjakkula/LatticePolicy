@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { compileExpression } from '@lattice-policy/rules'
 import { apiAdmin as api } from '../../../api/client'
 import { RadioGroup } from '../../../components/RadioGroup'
+import { useConfirmDialog } from '../../../components/Dialog'
 
 export type AttachmentField = { path: string; label: string; type: string; group: string; expressionPath?: string }
 type Trigger = { triggerId?: string; triggerType: string; conditionExpression: string; suppressExpression: string; priority: number; active: boolean }
@@ -51,6 +52,7 @@ export function FormAttachmentEditor({ formId, productCode, canEdit, onChange }:
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
   useEffect(() => {
     let current = true
     setTriggers([])
@@ -77,6 +79,7 @@ export function FormAttachmentEditor({ formId, productCode, canEdit, onChange }:
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   return <section aria-label="Attachment rules">
+    {confirmDialog}
     <h4>Attachment rules</h4>
     {!formId && <p>Save the form before adding attachment rules.</p>}
     {error && <p className="error" role="alert">{error}</p>}
@@ -96,7 +99,7 @@ export function FormAttachmentEditor({ formId, productCode, canEdit, onChange }:
       {triggers.map((trigger) => <tr key={trigger.triggerId}><td>{trigger.triggerType === 'Always' ? 'Always' : trigger.conditionExpression}</td><td>{trigger.suppressExpression || '-'}</td><td>{trigger.priority}</td><td>{trigger.active ? 'Active' : 'Inactive'}</td><td className="table-actions">
         <button type="button" className="btn-secondary" disabled={!canEdit || busy} onClick={() => { setDraft({ ...trigger }); setError('') }} aria-label={`Edit rule priority ${trigger.priority}`}>Edit</button>
         <button type="button" className="btn-secondary" disabled={!canEdit || busy} aria-label={`Delete rule priority ${trigger.priority}`} onClick={async () => {
-          if (!trigger.triggerId || !window.confirm('Delete this attachment rule?')) return
+          if (!trigger.triggerId || !(await askConfirm({ title: `Delete attachment rule priority ${trigger.priority}`, confirmLabel: 'Delete', danger: true }))) return
           setBusy(true)
           try { await api.deleteFormTrigger(formId, trigger.triggerId); await reload(); setDraft(emptyTrigger()) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
         }}>Delete</button>

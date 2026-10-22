@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
+import { useConfirmDialog } from '../../components/Dialog'
 import { useFormTemplates, useCreateFormTemplateMutation, useUpdateFormTemplateMutation, useDeleteFormTemplateMutation } from '../../api/hooks'
 
 type FieldType =
@@ -43,6 +44,7 @@ function uid(prefix = '') {
 export function FormsAdmin() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<FormTemplate | null>(null)
+  const { dialog: confirmDialog, askConfirm } = useConfirmDialog()
 
   const { data: templatesData } = useFormTemplates()
   const items: FormTemplate[] = templatesData ?? []
@@ -86,9 +88,9 @@ export function FormsAdmin() {
     })()
   }
 
-  const removeTemplate = (id: string) => {
-    if (!confirm('Delete form template?')) return
+  const removeTemplate = (id: string, name: string) => {
     ;(async () => {
+      if (!(await askConfirm({ title: `Delete form template ${name}`, confirmLabel: 'Delete', danger: true }))) return
       try {
         await deleteMutation.mutateAsync(id)
         if (editingId === id) resetForm()
@@ -121,6 +123,7 @@ export function FormsAdmin() {
 
   return (
     <div className="card">
+      {confirmDialog}
       <h2>Forms Administration</h2>
 
       <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }}>
@@ -244,7 +247,7 @@ export function FormsAdmin() {
               <td>{t.active ? 'Active' : 'Inactive'}</td>
               <td style={{ display: 'flex', gap: 8 }}>
                 <button className="btn-secondary" onClick={() => startEdit(t)}>Edit</button>
-                <button className="btn-secondary" onClick={() => removeTemplate(t.id)}>Delete</button>
+                <button className="btn-secondary" onClick={() => removeTemplate(t.id, t.name)}>Delete</button>
               </td>
             </tr>
           ))}

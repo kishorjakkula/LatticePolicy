@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TablePagination } from '../TablePagination'
 import { Pagination } from '../Pagination'
@@ -61,6 +61,42 @@ describe('TablePagination renders the shared numbered pager', () => {
 })
 
 describe('Pagination page-size picker', () => {
+  it('keeps the desktop picker open when a mobile close toggle arrives during resize', () => {
+    const original = window.matchMedia
+    const listeners = new Set<() => void>()
+    const media = {
+      matches: true,
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+    }
+    window.matchMedia = vi.fn(() => media) as any
+    try {
+      const { container, unmount } = render(<Pagination page={1} pageSize={20} totalItems={183} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />)
+      const picker = container.querySelector('details')!
+      expect(picker.open).toBe(false)
+      fireEvent.click(screen.getByLabelText('Page size options'))
+      expect(picker.open).toBe(true)
+      // A pending native close event can be delivered after the media update.
+      act(() => {
+        media.matches = false
+        listeners.forEach(listener => listener())
+        picker.open = false
+        fireEvent(picker, new Event('toggle'))
+      })
+      expect(container.querySelector('details')).toBeNull()
+      expect(screen.getByRole('combobox', { name: 'Results per page' })).toHaveValue('20')
+      act(() => {
+        media.matches = true
+        listeners.forEach(listener => listener())
+      })
+      expect(container.querySelector('details')!.open).toBe(false)
+      unmount()
+      expect(listeners.size).toBe(0)
+    } finally {
+      window.matchMedia = original
+    }
+  })
+
   it('lists the page size in use even when it is not a preset, so the picker never disagrees with the results', () => {
     render(<Pagination page={1} pageSize={20} totalItems={183} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} pageSizeOptions={[10, 25, 50]} />)
 
