@@ -25,3 +25,11 @@ Migration 069 implemented. No human Gate C/D approval or production certificatio
 | High | Concurrent binds spend one approval twice. | Quote and approval locks/revalidation inside the policy-creation transaction; real HTTP race regression. | Verified fixed. |
 | High | Client redaction-marker field hides material sibling facts. | Exact singleton 64-hex marker handling; malicious sibling risk/coverage test. | Verified fixed. |
 | Medium | Cross-principal count cache and dialog/contrast/rollback regressions. | Implemented focused fixes and automated regressions; independent review evidence in `07-code-review.md`. | Fixed for tested scope, not overall production certification. |
+
+## PR #394 CI Environment Follow-Up
+
+The CI and disposable Docker runner now enable tenant RLS explicitly. The
+existing isolation assertion is unchanged. Independent review confirmed that
+test database guards, restricted-role enforcement and application permission
+checks are preserved. No new secrets, production configuration, migration,
+audit mutation or AI data-boundary change is introduced by this correction.

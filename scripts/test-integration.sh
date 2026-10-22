@@ -73,6 +73,7 @@ docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e DATABASE_URL="$DATABASE_URL" \
   -e LATTICE_DISPOSABLE_TEST_DATABASE=true \
+  -e TENANT_RLS_ENFORCED=true \
   "$@" \
   -v "$PWD":/app \
   -v "$VOLUME":/app/node_modules \

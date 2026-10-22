@@ -87,3 +87,10 @@ infrastructure record; browser results are in `09-automation-tests.md`.
 | REQ-11 | `DashboardPage`, `dashboardModel`, timezone-boundary cases |
 | REQ-14/15/16 | shared pager/dialog tests, `color-tokens`, browser suites in the automation handoff |
 | REQ-19 | `AiAuditPage`, `AiAuditPage.phase3`, `ai-audit.api`, `ai-audit-phase3` unit/integration |
+
+## PR #394 CI Environment Follow-Up
+
+No unit logic changed. Root typecheck, 27 delivery contract tests, generated
+agent sync, shell syntax and a parsed-YAML assertion of both required CI
+environment flags passed. The existing AI audit integration regression is
+retained unchanged and detects the original missing enforcement flag.

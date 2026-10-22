@@ -12,7 +12,7 @@
 | Software Architect | `02-design.md` | done | 1 |
 | UI/UX Designer | `03-ui-design.md` | done | 0 |
 | Test Designer | `04-test-design.md` | done | 0 |
-| Developer | `05-implementation.md` | done | 0 |
+| Developer | `05-implementation.md` | done | 1 |
 | Unit Test | `06-unit-tests.md` | done | 0 |
 | Code Reviewer | `07-code-review.md` | done | 0 |
 | Security and Compliance | `08-security-compliance.md` | done | 0 |
@@ -50,3 +50,9 @@
 - 2026-10-21T17:12:19.352Z — Code Reviewer completed
 - 2026-10-21T17:12:19.523Z — Security and Compliance completed
 - 2026-10-21T17:12:19.689Z — Automation Test completed
+- 2026-10-22T01:57:57.188Z — returned to Developer: PR #394 DB CI requires TENANT_RLS_ENFORCED=true; align CI and disposable runner, preserve strict isolation assertion and rerun integration tests.
+- 2026-10-22T01:59:21.984Z — Developer completed
+- 2026-10-22T02:00:15.455Z — Unit Test completed
+- 2026-10-22T02:00:15.603Z — Code Reviewer completed
+- 2026-10-22T02:00:15.775Z — Security and Compliance completed
+- 2026-10-22T02:00:30.421Z — Automation Test completed

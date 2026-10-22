@@ -4,7 +4,10 @@ This plan organizes automated testing by risk and execution cost. Keep fast unit
 
 Run the full database integration suite on a newly provisioned disposable
 `lattice_policy_integration` database for each full run, with
-`LATTICE_DISPOSABLE_TEST_DATABASE=true`. Some existing suites deliberately leave
+`LATTICE_DISPOSABLE_TEST_DATABASE=true` and `TENANT_RLS_ENFORCED=true`.
+CI and the disposable Docker runner set both flags; direct server-workspace
+runs must supply them too. Keep the AI audit isolation assertion enabled.
+Some existing suites deliberately leave
 fixtures and assume an empty database, so replaying the full suite on a used
 instance is not a clean regression run. Never reset a demo/pilot database to
 meet this requirement. The isolated browser runner provisions its own volumes.

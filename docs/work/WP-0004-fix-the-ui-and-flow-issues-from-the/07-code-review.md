@@ -139,3 +139,13 @@ Checks run (Node 24.21, from `frontend/`):
 - No Docker or e2e runs.
 
 Merge: there are no open blockers or majors, so the code-review stage is done for Phase 1. Minors 4 (header text), 5 (unreachable branch), 3 and 8 are non-blocking follow-ups. Gate C is the human merge approval.
+
+## Independent PR #394 CI Follow-Up Review
+
+A separate reviewer session inspected the two enforcement environment additions
+and related documentation. No actionable correctness or security findings.
+Both runners use the existing transaction-local restricted RLS role; disposable
+database guards and targets remain intact. No assertion, policy or application
+authorization was weakened. Reviewer shell syntax and whitespace checks passed;
+the reviewer did not independently rerun the database suite. Parent-run results
+are recorded in `09-automation-tests.md`. Human Gate C remains pending.

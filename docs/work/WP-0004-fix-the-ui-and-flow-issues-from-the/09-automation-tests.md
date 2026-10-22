@@ -83,3 +83,14 @@ described above. The populated mobile queue overflow was a real issue: an
 absolute-positioned screen-reader label escaped the scroll region. Positioning
 that region relatively fixed page width (927px -> 390px) without removing
 accessible text. The final full run passed that populated-data regression.
+
+## PR #394 CI Environment Follow-Up
+
+Full fresh PostgreSQL 15 integration rerun with
+`LATTICE_DISPOSABLE_TEST_DATABASE=true` and `TENANT_RLS_ENFORCED=true`:
+**299 passed / 42 files**, 90.23 seconds, Node 22. The original missing-flag
+failure is resolved without changing the AI audit assertion. Both CI and the
+disposable Docker runner explicitly provide enforcement. The local run used
+a dedicated ephemeral container, never demo/pilot data. No application code
+changed, so browser suites were not rerun for this environment-only correction.
+Remote checks on the new commit and human Gate C remain separate requirements.

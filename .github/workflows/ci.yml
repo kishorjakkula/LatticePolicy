@@ -120,6 +120,7 @@ jobs:
         env:
           DATABASE_URL: postgres://lattice_policy:integration_password@127.0.0.1:5432/lattice_policy_integration
           LATTICE_DISPOSABLE_TEST_DATABASE: "true"
+          TENANT_RLS_ENFORCED: "true"
         run: npm run test:integration --workspace=server
 
   e2e:

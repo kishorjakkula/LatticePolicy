@@ -80,3 +80,21 @@ package's `evidence/local-regression/` directory. The final evidence supersedes
 the interrupted runs, without hiding their infrastructure cause. PR creation
 is authorized by the original request; Gate C approval/merge, formal merged-main
 staging and business sign-off remain human-controlled follow-ups.
+
+## PR #394 CI Environment Correction
+
+Remote DB integration reported 298 passed / 1 failed because the new AI audit
+isolation regression requires `TENANT_RLS_ENFORCED=true`, but the CI job did
+not set it. The disposable Docker runner had the same omission. Both runners
+now explicitly enable enforcement; no isolation assertion, RLS policy or
+application authorization is weakened. Direct workspace test commands must
+also supply the flag (see `docs/TEST_PLAN.md`).
+
+Verification: all **299 integration tests / 42 files passed** on a fresh
+PostgreSQL 15 container with both flags enabled (90.23 seconds, Node 22).
+The previously failing AI audit regression is unchanged and passes. Root
+typecheck, 27 delivery contract tests, generated-agent sync, shell syntax and
+parsed-YAML checks passed. Independent review found no actionable issues.
+Only the temporary test database container is removed after verification;
+the local app and pilot databases are not used. GitHub CI must rerun on the
+new commit; local results do not imply a remote pass or human merge approval.

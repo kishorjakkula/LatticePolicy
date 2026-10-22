@@ -140,3 +140,12 @@ review identified concurrent new-business consumption and a spoofable UI
 redaction marker; both were corrected with real HTTP concurrency and component
 regressions. Quote revalidation and approval consumption now share the policy
 creation transaction. No production deployment or merge was performed.
+
+### PR #394 CI Follow-Up
+
+The DB integration job and `scripts/test-integration.sh` now explicitly pass
+`TENANT_RLS_ENFORCED=true` alongside the disposable-database flag. This fixes
+the missing CI prerequisite for the existing AI audit isolation assertion;
+no test or application behavior was weakened. Test setup guidance is updated
+in `docs/TEST_PLAN.md`; verification is in the local deployment task note.
+No approved-design change, application rebuild or data migration is needed.

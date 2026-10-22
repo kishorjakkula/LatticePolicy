@@ -53,7 +53,7 @@
       "writes": "05-implementation.md",
       "gateAfter": null,
       "status": "done",
-      "returns": 0
+      "returns": 1
     },
     {
       "id": "unit-test",
@@ -221,6 +221,30 @@
     },
     {
       "at": "2026-10-21T17:12:19.689Z",
+      "event": "Automation Test completed"
+    },
+    {
+      "at": "2026-10-22T01:57:57.188Z",
+      "event": "returned to Developer: PR #394 DB CI requires TENANT_RLS_ENFORCED=true; align CI and disposable runner, preserve strict isolation assertion and rerun integration tests."
+    },
+    {
+      "at": "2026-10-22T01:59:21.984Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-22T02:00:15.455Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-22T02:00:15.603Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-22T02:00:15.775Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-22T02:00:30.421Z",
       "event": "Automation Test completed"
     }
   ]
