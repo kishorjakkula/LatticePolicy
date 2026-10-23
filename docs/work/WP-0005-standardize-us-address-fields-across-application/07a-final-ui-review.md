@@ -71,3 +71,28 @@ the parent's session 29145; this reviewer did not poll that session or start a
 competing run. Parent also reports fresh PostgreSQL 302 passed in 75s, while
 the serial browser run remains in progress; neither is independently verified
 here. No additional source or gate edits were made.
+
+## Coverage-Time Test Setup Follow-Up
+
+Independently reviewed the pending `companyChange.test.tsx` diff against
+a58291d and traced the real quote-loading/contact-popup paths. No actionable
+finding. `ratedQuote()` preserves the former default fixture; only the stale
+popup test supplies progressStep 3. The application loads that saved quote
+through its normal API mock and selects step 3 (Rated redirects only steps
+4 and above), so this does not mock away the behavior under test.
+
+The test still clicks the real Pat button, waits for the customer request,
+closes the real dialog, edits the primary contact's unit, resolves the deferred
+customer response, and checks both the closed dialog and retained unit in the
+UI and saved primary-insured payload. Scoped Close/unit queries preserve those
+assertions. Removing the unrelated Documents/rating navigation from this test
+does not remove the existing company-change tests' rated-output checks; their
+`openRatedQuote()` helper remains unchanged. No timeout increase or runtime
+change is present in this diff.
+
+This is source verification, not an independently reproduced coverage fix.
+The parent reports a focused run was performed; full coverage is next. No
+competing test run was started, and no claim is made that the hosted coverage
+failure is resolved until that run completes. Local Docker results do not
+establish coverage-test success. Only this review note was appended; no source
+or gate changes, rebuild, merge or deployment was performed by this reviewer.

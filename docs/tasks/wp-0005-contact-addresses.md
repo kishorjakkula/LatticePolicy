@@ -56,16 +56,22 @@ Independent review R7 (suggestion button contrast) is also resolved. Final small
 UI/lockfile review is in `07a-final-ui-review.md`, with no new actionable finding.
 The three new browser scenarios pass nine executions over three repeats.
 
-Preview: UI http://localhost:5175, API http://localhost:3302, synthetic
-`lattice_policy_browser_verified` database in `lattice-wp5-integration` PostgreSQL
-(host 53859), isolated `lattice-wp5-cache` Redis (host 53860). Original demo/pilot
-containers, volumes and 5173/3300 application remain untouched. This is a local
-host-process preview, not latest code deployed in the Docker application.
-Optional external matching remains disabled.
+Latest local deployment: Docker UI http://localhost:5173, API http://localhost:3300,
+application commit a58291d, PR #396. Only API/UI containers replaced; existing
+database/cache/document volumes and carrier pilot stack preserved. Previous
+5175/3302 host preview and its test dependencies stopped. External matching
+remains disabled. Same images passed 14 post-build tests in a fresh disposable
+Docker stack, then that test stack/volume was removed. See 10/11 for evidence,
+rollback images and protected local backup. This is an explicitly requested
+local branch preview, not formal staging acceptance or a production release.
 
 Baseline moderate ip-address advisory GHSA-rxp7-6hxx-x8q5 fixed with the targeted
 10.7.3 -> 10.7.4 lockfile-only update. Audit policy passes; no exception added.
-Pending: hosted CI/CodeQL/container scan; PR/code-owner Gate C; staging
+Pending: remaining hosted CI and code-owner Gate C; formal staging
 deployment and carrier business Gate D. Do not merge or mark release-ready from
-local results only. Security/automation completion intentionally pending. Keep
-unrelated untracked research/output files untouched.
+local results only. Security review/scans complete for the application commit;
+automation completion awaits latest-head CI. Initial hosted coverage exposed a
+5-second test-only timeout: optimized the delayed-contact regression to load
+Insureds directly, preserving all assertions/timeouts/thresholds. Full frontend
+coverage now passes 604 tests; latest hosted rerun required. Keep unrelated
+untracked research/output files untouched.

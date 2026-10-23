@@ -35,8 +35,20 @@ not a rebuild of the existing demo Docker application.
   no retries or relaxed timeouts. This supersedes the earlier 164-case run and
   the incomplete concurrent attempt. Results: `test-results/results.json`;
   repeated focused screenshots: local-only `output/wp-0005-browser-final/`.
-- Hosted CI: not run; no new PR/remote changes in this work package yet.
-- No stage deployment, carrier UAT or production/business sign-off claimed.
+- Hosted CI on a58291d: security, delivery, DB integration, pilot and full Docker
+  browser checks passed. The build job failed in frontend coverage because the
+  new delayed-contact regression exceeded its 5-second test budget. Its setup
+  unnecessarily navigated through unrelated rated-document screens. The test
+  now loads the real saved quote directly at Insureds and scopes DOM queries;
+  delayed response/close/edit/saved-draft assertions are unchanged. No timeout,
+  retry, coverage threshold or runtime behavior changed. Independent review
+  appended in 07a. Full local frontend coverage: 604 passed, all thresholds met
+  (48.05% lines, 47.22% branches). Latest-head hosted CI must rerun before merge.
+  Full local server coverage also passed all 977 tests and existing thresholds
+  (40.37% lines, 32.28% branches); root typecheck passed after the test-only fix.
+- Local Docker branch deployment explicitly requested later: 14/14 same-image
+  browser checks passed (10/11). No formal stage deployment, carrier UAT or
+  production/business sign-off claimed.
 
 ## Environment-only failures
 

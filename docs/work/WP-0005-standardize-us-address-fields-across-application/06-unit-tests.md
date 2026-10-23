@@ -40,6 +40,8 @@ Local Node 22; exact-name fresh disposable PostgreSQL 15 database
 | `npm run check:architecture` | 3 tests passed; no cycles/forbidden imports |
 | `npm run security:audit` | Passed project policy after targeted ip-address 10.7.4 lockfile patch; existing accepted extract-zip/Puppeteer advisories remain |
 | Focused `address-parser.test.ts` | 6 passed; independently source-reviewed in 07a |
+| `npm run test:coverage --workspace=frontend -- --maxWorkers=1` | 604 passed after coverage-run setup optimization; existing thresholds met, 48.05% lines / 47.22% branches |
+| `npm run test:coverage --workspace=server -- --maxWorkers=1` | 977 passed; existing thresholds met, 40.37% lines / 32.28% branches |
 
 An earlier integration attempt named the new database with a `_final` suffix:
 42 files passed but the form-attachment fixture correctly refused that name

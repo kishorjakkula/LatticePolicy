@@ -76,7 +76,7 @@
       "name": "Security and Compliance",
       "writes": "08-security-compliance.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -210,6 +210,10 @@
     {
       "at": "2026-10-23T11:05:09.927Z",
       "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-23T11:36:45.988Z",
+      "event": "Security and Compliance completed"
     }
   ]
 }

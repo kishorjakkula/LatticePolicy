@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QUALIFICATION_QUESTIONS } from '@lattice-policy/rules'
 import { QuoteWizard, buildWizardQuotePayload } from '../QuoteWizard'
@@ -78,12 +78,16 @@ function savedPayload() {
   }
 }
 
+function ratedQuote(progressStep = 1) {
+  return {
+    quoteId: 'quote-test', quoteNumber: 'Q-TEST', status: 'Rated', progressStep, payload: savedPayload(),
+    premium: { total: { amount: 1234, currency: 'USD' }, byCoverage: [] }, underwriting: { decision: 'Accept', reasons: [] },
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.getQuote.mockResolvedValue({
-    quoteId: 'quote-test', quoteNumber: 'Q-TEST', status: 'Rated', progressStep: 1, payload: savedPayload(),
-    premium: { total: { amount: 1234, currency: 'USD' }, byCoverage: [] }, underwriting: { decision: 'Accept', reasons: [] },
-  })
+  mocks.getQuote.mockResolvedValue(ratedQuote())
   mocks.updateQuoteDraft.mockImplementation(async (_id, _payload, options) => ({
     quoteId: 'quote-test', quoteNumber: 'Q-TEST', status: 'Rated', progressStep: options.progressStep,
   }))
@@ -98,17 +102,20 @@ it.each(['updated@example.com', ''])('primary contact email %j is authoritative 
 })
 
 it('closing a pending read-only contact popup cannot overwrite a newly edited contact address', async () => {
-  await openRatedQuote()
-  await goTo(/03 Insureds/)
+  mocks.getQuote.mockResolvedValueOnce(ratedQuote(3))
+  const view = render(<MemoryRouter initialEntries={['/quote?quoteId=quote-test']}><QuoteWizard /></MemoryRouter>)
+  const contact = await screen.findByText('Pat', { selector: 'button' })
   let resolve!: (value: any) => void
   mocks.getCustomer.mockImplementation(() => new Promise(r => { resolve = r }))
-  fireEvent.click(screen.getAllByRole('button', { name: 'Pat' })[0])
+  fireEvent.click(contact)
   await waitFor(() => expect(mocks.getCustomer).toHaveBeenCalled())
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-  fireEvent.change(screen.getAllByLabelText('Apartment, suite or unit')[0], { target: { value: 'APT 99' } })
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
+  const primaryAddresses = view.container.querySelector<HTMLElement>('.contact-addresses')!
+  const unit = within(primaryAddresses).getByLabelText('Apartment, suite or unit')
+  fireEvent.change(unit, { target: { value: 'APT 99' } })
   await act(async () => resolve({ addresses: [{ line1: 'STALE READ', city: 'Austin', state: 'TX', postalCode: '78701' }] }))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(screen.getAllByLabelText('Apartment, suite or unit')[0]).toHaveValue('APT 99')
+  expect(unit).toHaveValue('APT 99')
   expect((await savePayload()).insureds.primary.addresses[0].line2).toBe('APT 99')
 })
 
