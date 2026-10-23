@@ -1,0 +1,29 @@
+.carrier-brand-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.carrier-brand-fallback img {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.carrier-brand-name {
+  max-width: 206px;
+  padding: 0 4px 2px;
+  color: #193a65;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

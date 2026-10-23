@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "id": "WP-0006",
+  "title": "Restore the existing LatticePolicy logo on default login and application branding and browser icon while preserving carr",
+  "track": "quick",
+  "trackReason": "Small presentation-only missing-logo bug using existing assets; no authentication, tenant resolution, data or branding configuration behavior changes",
+  "state": "in-progress",
+  "createdAt": "2026-10-23T14:30:31.763Z",
+  "stages": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "writes": "status.json",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "developer",
+      "name": "Developer",
+      "writes": "05-implementation.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "unit-test",
+      "name": "Unit Test",
+      "writes": "06-unit-tests.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "writes": "07-code-review.md",
+      "gateAfter": "C",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "writes": "10-release.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "C",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-23T14:30:31.763Z",
+      "event": "started on the quick track (Small presentation-only missing-logo bug using existing assets; no authentication, tenant resolution, data or branding configuration behavior changes)"
+    },
+    {
+      "at": "2026-10-23T15:19:32.526Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-23T15:22:40.365Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-23T15:24:03.362Z",
+      "event": "Code Reviewer completed"
+    }
+  ]
+}
