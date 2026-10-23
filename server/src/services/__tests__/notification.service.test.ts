@@ -41,6 +41,10 @@ const baseContext = {
 }
 
 describe('notification service', () => {
+  it.each(['updated@example.com', ''])('uses the updated primary-contact/applicant projection %j, not a superseded email', email => {
+    const recipient = resolvePolicyNotificationRecipient({ applicant: { email }, insureds: { primary: { email } } })
+    expect(recipient.email).toBe(email || null)
+  })
   it('renders merge fields and resolves customer recipients', () => {
     expect(
       renderNotificationTemplate('Policy {{policyNumber}} for {{recipient.name}}', {

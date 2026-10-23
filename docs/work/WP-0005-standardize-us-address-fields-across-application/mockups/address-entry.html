@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LatticePolicy - Address Design Review</title>
+  <style>
+    :root { color-scheme: light; --ink:#182329; --muted:#52606a; --border:#cbd2d7; --surface:#f4f6f7; --brand:#3159cd; --success:#16633f; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:white; font:14px/1.5 system-ui,sans-serif; letter-spacing:0; }
+    header { border-bottom:1px solid var(--border); padding:15px 24px; display:flex; gap:20px; align-items:center; }
+    header strong { font-size:20px; } .preview { color:var(--muted); margin-left:auto; }
+    main { max-width:1000px; margin:auto; padding:24px; }
+    .breadcrumb { color:var(--muted); margin:0 0 8px; } h1 { font-size:24px; margin:0 0 20px; }
+    .toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:16px; }
+    label { display:block; font-weight:600; }
+    input:not([type=checkbox]),select { display:block; width:100%; min-height:42px; margin-top:5px; border:1px solid #83929b; border-radius:4px; padding:9px 11px; font:inherit; background:white; color:inherit; }
+    button { min-height:42px; padding:9px 15px; font:inherit; font-weight:600; color:var(--brand); background:white; border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+    button.primary { background:var(--brand); color:white; border-color:var(--brand); }
+    button:disabled { opacity:.55; cursor:default; } :focus-visible { outline:3px solid #97630b; outline-offset:3px; }
+    details { margin:0; border-bottom:1px solid var(--border); }
+    summary { padding:20px 0; font-size:17px; font-weight:650; cursor:pointer; }
+    .fields { display:grid; grid-template-columns:1fr 145px 175px; gap:16px; padding-bottom:18px; }
+    .full { grid-column:1/-1; } .country { max-width:320px; }
+    .consent { display:flex; gap:10px; font-weight:400; align-items:flex-start; margin:4px 0 16px; max-width:670px; }
+    .consent input { width:20px; height:20px; flex-shrink:0; margin:1px 0 0; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:0 0 20px; }
+    .muted { color:var(--muted); } .result { border-top:1px solid var(--border); padding:18px 0 0; }
+    h2 { font-size:17px; margin:0 0 5px; } .sample { color:var(--success); font-weight:650; }
+    .compare { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:18px 0; }
+    .compare h3 { font-size:14px; margin:0 0 6px; } address { font-style:normal; white-space:pre-line; overflow-wrap:anywhere; }
+    .suggested { border-left:3px solid var(--success); padding-left:15px; }
+    .footer { display:flex; justify-content:flex-end; gap:12px; padding-top:22px; }
+    .tabs { display:flex; gap:20px; border-bottom:1px solid var(--border); margin:0 0 20px; padding:10px 0; flex-wrap:wrap; }
+    .tabs strong { border-bottom:2px solid var(--brand); padding-bottom:8px; }
+    .contact-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:18px 0; }
+    .contact-facts span { display:block; overflow-wrap:anywhere; }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:20px 0 12px; }
+    .table-wrap { overflow:auto; } table { border-collapse:collapse; width:100%; min-width:620px; text-align:left; }
+    th,td { padding:10px 8px; vertical-align:top; border-bottom:1px solid var(--border); } th { color:var(--muted); font-size:13px; }
+    td button { padding:5px 9px; min-height:34px; margin:2px; font-size:13px; } .selected-row { background:var(--surface); }
+    .address-meta { display:flex; gap:20px; flex-wrap:wrap; padding:0 0 18px; align-items:center; }
+    .address-meta label { min-width:160px; } .address-meta .inline-label { display:flex; gap:8px; align-items:center; }
+    #contact-panel { padding:0 0 10px; } .context-fact { margin:15px 0; }
+    [hidden] { display:none!important; } .notice { margin:0 0 18px; color:var(--muted); }
+    @media(max-width:600px) { header { padding:12px 16px; flex-wrap:wrap; gap:4px 15px; } .preview { margin-left:0; width:100%; } main { padding:18px 16px; } .fields,.compare { grid-template-columns:minmax(0,1fr); } .country { max-width:none; } .toolbar select { width:100%; } .toolbar label { width:100%; } .footer { flex-wrap:wrap; } }
+    @media(max-width:600px) { .contact-facts { grid-template-columns:minmax(0,1fr); gap:10px; } .section-head { flex-wrap:wrap; } }
+  </style>
+</head>
+<body>
+  <header><strong>LatticePolicy</strong><span>Home</span><span>Work</span><span>Policies</span><span>Customers</span><span class="preview">Embedded address preview</span></header>
+  <main>
+    <p class="breadcrumb" id="breadcrumb">Administration / Customers / Jordan Example</p>
+    <h1 id="page-title">Customer Details: Jordan Example</h1>
+    <p class="notice">Synthetic preview only. No address is sent to an external service.</p>
+    <div class="toolbar">
+      <label>Preview screen<select id="context"><option value="contact">Contact &amp; Address</option><option value="risk">Dwelling risk</option><option value="garaging">Vehicle garaging</option></select></label>
+      <label>Preview state<select id="mode"><option value="enabled">Checking enabled</option><option value="disabled">Checking disabled</option><option value="offline">Service unavailable</option><option value="unmatched">No match</option></select></label>
+      <button id="copy" type="button" hidden>Use contact's primary address</button>
+    </div>
+    <div id="contact-panel">
+      <div class="tabs"><span>Identity</span><strong>Contact &amp; Address</strong><span>Relationships</span><span>Audit</span></div>
+      <details open><summary>Contact Points</summary>
+        <div class="contact-facts"><div><strong>Name</strong><span>Jordan Example</span></div><div><strong>Email</strong><span>jordan@example.com</span></div><div><strong>Phone</strong><span>(202) 555-0148</span></div></div>
+      </details>
+      <div class="section-head"><h2>Addresses</h2><button id="add-address" type="button">Add Address</button></div>
+      <div class="table-wrap" role="region" aria-label="Contact addresses" tabindex="0"><table><thead><tr><th>Type</th><th>Address</th><th>Primary</th><th>Actions</th></tr></thead><tbody id="address-rows"></tbody></table></div>
+    </div>
+    <p id="risk-fact" class="context-fact" hidden></p>
+    <form id="editor">
+      <details open id="address-details"><summary id="editor-title">Edit mailing address</summary>
+        <div class="address-meta" id="address-meta"><label>Address type<select id="address-type"><option value="Mailing">Mailing</option><option value="Business">Business</option><option value="Home">Home</option><option value="Other">Other</option></select></label><label class="inline-label"><input id="primary" type="checkbox">Primary address</label></div>
+        <div class="fields">
+          <label class="full country">Country<select id="country" autocomplete="section-mail country"><option value="US">United States</option><option value="CA">Canada</option></select></label>
+          <label class="full">Address line 1<input id="line1" value="10 Test Street" autocomplete="section-mail address-line1"></label>
+          <label class="full">Apartment, suite or unit<input id="line2" value="APT 4B" autocomplete="section-mail address-line2"></label>
+          <label>City<input id="city" value="Austin" autocomplete="section-mail address-level2"></label>
+          <label id="state-label">State<select id="state" autocomplete="section-mail address-level1"><option value="TX">Texas</option><option value="MA">Massachusetts</option><option value="DC">District of Columbia</option><option value="PR">Puerto Rico</option><option value="AE">Armed Forces Europe</option><option value="ON">Ontario</option></select></label>
+          <label id="postal-label">ZIP Code<input id="postalCode" value="78701" autocomplete="section-mail postal-code" type="text"></label>
+        </div>
+        <div id="checking-controls">
+          <label class="consent"><input id="consent" type="checkbox"><span>I agree to send this street, city, state and ZIP to the US Census Bureau for address matching.</span></label>
+          <div class="actions"><button type="button" id="check" disabled>Check Address</button><span class="muted">Apartment and postal delivery are not verified.</span></div>
+        </div>
+        <p id="disabled" class="muted" hidden>External address checking is disabled.</p>
+        <p id="feedback" role="status" aria-live="polite"></p>
+        <section class="result" id="result" hidden aria-labelledby="result-title">
+          <span class="sample">Sample result</span>
+          <h2 id="result-title">Address range matched</h2>
+          <p class="muted">Postal delivery and apartment/unit were not verified.</p>
+          <div class="compare"><div><h3>Entered address</h3><address id="entered"></address></div><div class="suggested"><h3>Suggested address</h3><address id="suggestion"></address></div></div>
+          <div class="actions"><button id="keep" type="button">Keep entered address</button><button id="apply" class="primary" type="button">Use suggested address</button></div>
+        </section>
+      </details>
+      <div class="footer"><button id="cancel" type="button">Cancel</button><button class="primary" type="submit">Save Changes</button></div>
+    </form>
+  </main>
+  <script>
+    const ids=['line1','line2','city','state','postalCode','country'];
+    const get=id=>document.getElementById(id);
+    let candidate=null;
+    const original=[
+      {id:'address-1',type:'Mailing',primary:true,line1:'10 Test Street',line2:'APT 4B',city:'Austin',state:'TX',postalCode:'78701',country:'US'},
+      {id:'address-2',type:'Business',primary:false,line1:'20 Example Avenue',line2:'STE 200',city:'Boston',state:'MA',postalCode:'02108-1234',country:'US'}
+    ];
+    let contacts=structuredClone(original), selectedId='address-1', sequence=2;
+    const singles={risk:{...original[0]},garaging:{...original[1]}};
+    const context=()=>get('context').value;
+    const current=()=>context()==='contact'?contacts.find(a=>a.id===selectedId):singles[context()];
+    const values=()=>Object.fromEntries(ids.map(id=>[id,get(id).value]));
+    const text=a=>[a.line1,a.line2,a.city+', '+a.state+' '+a.postalCode,a.country].filter(Boolean).join('\n');
+    function invalidate(){ candidate=null; get('result').hidden=true; get('feedback').textContent=''; get('consent').checked=false; get('check').disabled=true; }
+    function renderRows(){
+      get('address-rows').replaceChildren();
+      if(!contacts.length){const row=document.createElement('tr'), cell=document.createElement('td');cell.colSpan=4;cell.textContent='No addresses.';row.append(cell);get('address-rows').append(row);}
+      for(const a of contacts){
+        const row=document.createElement('tr');if(a.id===selectedId)row.className='selected-row';
+        for(const value of [a.type,text(a).replaceAll('\n',', '),a.primary?'Yes':'No']){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}
+        const actions=document.createElement('td');
+        function action(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.setAttribute('aria-label',label+' '+a.type+' address');b.addEventListener('click',fn);actions.append(b);}
+        action('Edit',()=>{selectedId=a.id;load();get('line1').focus();});
+        if(!a.primary)action('Set primary',()=>{for(const item of contacts)item.primary=item.id===a.id;load();});
+        action('Remove',()=>{contacts=contacts.filter(item=>item.id!==a.id);if(contacts.length&&!contacts.some(item=>item.primary))contacts[0].primary=true;if(selectedId===a.id)selectedId=contacts[0]?.id;load();});
+        row.append(actions);get('address-rows').append(row);
+      }
+    }
+    function load(){
+      invalidate();const contact=context()==='contact', a=current();
+      get('contact-panel').hidden=!contact;get('address-meta').hidden=!contact;get('copy').hidden=contact;get('risk-fact').hidden=contact;get('address-details').hidden=!a;
+      get('page-title').textContent=contact?'Customer Details: Jordan Example':context()==='risk'?'Quote: Homeowners - Risk Details':'Quote: Personal Auto - Vehicle Details';
+      get('breadcrumb').textContent=contact?'Administration / Customers / Jordan Example':'New quote / Risk Details';
+      get('risk-fact').textContent=context()==='risk'?'Dwelling 1':'Vehicle 1: 2024 Example Sedan';
+      if(a){for(const id of ids)get(id).value=a[id]||'';get('editor-title').textContent=contact?'Edit '+a.type.toLowerCase()+' address':context()==='risk'?'Risk address':'Garaging address';get('address-type').value=a.type;get('primary').checked=!!a.primary;}
+      renderRows();
+    }
+    for(const id of ids)get(id).addEventListener('input',()=>{const a=current();if(a)Object.assign(a,values());invalidate();renderRows();});
+    get('context').addEventListener('change',load);
+    get('add-address').addEventListener('click',()=>{const a={id:'address-'+(++sequence),type:'Mailing',primary:!contacts.length,line1:'',line2:'',city:'',state:'TX',postalCode:'',country:'US'};contacts.push(a);selectedId=a.id;load();get('line1').focus();});
+    get('address-type').addEventListener('change',()=>{current().type=get('address-type').value;load();});
+    get('primary').addEventListener('change',()=>{if(get('primary').checked){for(const a of contacts)a.primary=a.id===selectedId;}load();});
+    get('consent').addEventListener('change',()=>{get('check').disabled=!get('consent').checked;});
+    get('mode').addEventListener('change',()=>{invalidate(); const disabled=get('mode').value==='disabled'; get('checking-controls').hidden=disabled; get('disabled').hidden=!disabled;});
+    get('check').addEventListener('click',()=>{
+      const mode=get('mode').value;
+      if(mode==='offline'){get('feedback').textContent='Address check unavailable. Your entries have been kept.';return;}
+      if(mode==='unmatched'){get('feedback').textContent='No address match found. You can keep the address you entered.';return;}
+      if(get('country').value!=='US'){get('feedback').textContent='This address type cannot be checked with this service.';return;}
+      const entered=values(); candidate={...entered,line1:entered.line1.toUpperCase(),city:entered.city.toUpperCase()};
+      get('entered').textContent=text(entered); get('suggestion').textContent=text(candidate); get('result').hidden=false;
+    });
+    get('keep').addEventListener('click',()=>{invalidate();get('feedback').textContent='Entered address kept.';get('line1').focus();});
+    get('apply').addEventListener('click',()=>{if(!candidate)return;Object.assign(current(),candidate);load();get('feedback').textContent='Suggestion applied to the draft. Save to keep your changes.';get('line1').focus();});
+    get('copy').addEventListener('click',()=>{const a=contacts.find(item=>item.primary);if(!a||context()==='contact')return;for(const id of ids)singles[context()][id]=a[id];load();});
+    get('cancel').addEventListener('click',()=>{contacts=structuredClone(original);selectedId=contacts[0].id;for(const [index,key]of ['risk','garaging'].entries())singles[key]={...original[index]};load();});
+    get('editor').addEventListener('submit',e=>{e.preventDefault();get('feedback').textContent='Preview only: no record was saved.';});
+    load();
+  </script>
+</body>
+</html>

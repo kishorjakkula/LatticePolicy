@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import { adminApi } from '../../api/client'
 import { ActionButton } from '../../components/ActionButton'
 import { useCreateCustomerMutation } from '../../api/hooks'
+import { ContactAddresses, ContactCommunication } from '../../components/ContactAddresses'
+import { contactAddresses, type ContactAddress } from '../../shared/postalAddress'
 
 function NameFields({ prefix, setPrefix, firstName, setFirstName, lastName, setLastName, displayName, setDisplayName }: any) {
   return (
@@ -29,26 +31,7 @@ function NameFields({ prefix, setPrefix, firstName, setFirstName, lastName, setL
 }
 
 function AddressFields({ address, setAddress }: any) {
-  return (
-    <div className="insured-address-fields">
-      <label>
-        Street
-        <input value={address.street || ''} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
-      </label>
-      <label>
-        City
-        <input value={address.city || ''} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
-      </label>
-      <label>
-        State
-        <input value={address.state || ''} onChange={(e) => setAddress({ ...address, state: e.target.value })} />
-      </label>
-      <label>
-        ZIP
-        <input value={address.zip || ''} onChange={(e) => setAddress({ ...address, zip: e.target.value })} />
-      </label>
-    </div>
-  )
+  return <ContactAddresses value={contactAddresses(address)} onChange={setAddress} />
 }
 
 export function InsuredsPage() {
@@ -57,14 +40,16 @@ export function InsuredsPage() {
   const [pFirst, setPFirst] = useState('')
   const [pLast, setPLast] = useState('')
   const [pDisplay, setPDisplay] = useState('')
-  const [pAddress, setPAddress] = useState<any>({})
+  const [pAddress, setPAddress] = useState<ContactAddress[]>([])
+  const [pContact, setPContact] = useState({ email: '', phone: '' })
 
   // Secondary
   const [sPrefix, setSPrefix] = useState('')
   const [sFirst, setSFirst] = useState('')
   const [sLast, setSLast] = useState('')
   const [sDisplay, setSDisplay] = useState('')
-  const [sAddress, setSAddress] = useState<any>({})
+  const [sAddress, setSAddress] = useState<ContactAddress[]>([])
+  const [sContact, setSContact] = useState({ email: '', phone: '' })
 
   // Additional named insureds
   const [additional, setAdditional] = useState<any[]>([])
@@ -121,6 +106,7 @@ export function InsuredsPage() {
         <div className="ps-form-grid">
           <NameFields prefix={pPrefix} setPrefix={setPPrefix} firstName={pFirst} setFirstName={setPFirst} lastName={pLast} setLastName={setPLast} displayName={pDisplay} setDisplayName={setPDisplay} />
         </div>
+        <ContactCommunication {...pContact} onChange={patch => setPContact(prev => ({ ...prev, ...patch }))} />
         <AddressFields address={pAddress} setAddress={setPAddress} />
       </CollapsibleSection>
 
@@ -129,6 +115,7 @@ export function InsuredsPage() {
         <div className="ps-form-grid">
           <NameFields prefix={sPrefix} setPrefix={setSPrefix} firstName={sFirst} setFirstName={setSFirst} lastName={sLast} setLastName={setSLast} displayName={sDisplay} setDisplayName={setSDisplay} />
         </div>
+        <ContactCommunication {...sContact} onChange={patch => setSContact(prev => ({ ...prev, ...patch }))} />
         <AddressFields address={sAddress} setAddress={setSAddress} />
       </CollapsibleSection>
 
@@ -188,10 +175,7 @@ function CreateCustomerForm({ onCreate }: { onCreate: (p: any) => void }) {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [street, setStreet] = useState('')
-  const [city, setCity] = useState('')
-  const [state, setState] = useState('')
-  const [zip, setZip] = useState('')
+  const [addresses, setAddresses] = useState<ContactAddress[]>([])
   const [saving, setSaving] = useState(false)
 
   async function submit(e?: any) {
@@ -204,11 +188,15 @@ function CreateCustomerForm({ onCreate }: { onCreate: (p: any) => void }) {
         lastName,
         email,
         phone,
-        addresses: [{ street, city, state, zip, country: 'US', primary: true }]
+        addresses,
+        contactPoints: [
+          ...(email ? [{ contactType: 'EMAIL', value: email, preferred: true }] : []),
+          ...(phone ? [{ contactType: 'PHONE', subType: 'mobile', value: phone, preferred: true }] : [])
+        ]
       }
       await onCreate(payload)
       // clear
-      setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setStreet(''); setCity(''); setState(''); setZip('')
+      setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setAddresses([])
     } catch (err) {
       console.error(err)
     } finally { setSaving(false) }
@@ -218,12 +206,8 @@ function CreateCustomerForm({ onCreate }: { onCreate: (p: any) => void }) {
     <form onSubmit={submit} className="create-customer-form">
       <label>First name<input value={firstName} onChange={(e) => setFirstName(e.target.value)} /></label>
       <label>Last name<input value={lastName} onChange={(e) => setLastName(e.target.value)} /></label>
-      <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label>Phone<input value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
-      <label>Street<input value={street} onChange={(e) => setStreet(e.target.value)} /></label>
-      <label>City<input value={city} onChange={(e) => setCity(e.target.value)} /></label>
-      <label>State<input value={state} onChange={(e) => setState(e.target.value)} /></label>
-      <label>ZIP<input value={zip} onChange={(e) => setZip(e.target.value)} /></label>
+      <ContactCommunication email={email} phone={phone} onChange={patch => { if (patch.email !== undefined) setEmail(patch.email); if (patch.phone !== undefined) setPhone(patch.phone) }} />
+      <ContactAddresses value={addresses} onChange={setAddresses} />
       <button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Create & Add'}</button>
     </form>
   )

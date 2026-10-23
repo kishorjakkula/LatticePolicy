@@ -21,6 +21,22 @@ feature code. The source audit in `radio-standard.test.ts` enforces this rule.
   column. At widths below 760px, answers appear below the question. Grid tracks
   must allow shrinking with `minmax(0, 1fr)`.
 
+## Postal Addresses And Contact Communication
+
+Reuse `AddressFields` for one structured postal address and `ContactAddresses`
+for a contact's collection, within the existing screen/section. Contact email
+and mobile are separate fields, never postal properties. Customer master data
+retains its existing contact-points editor; quote/insured contacts use
+`ContactCommunication`. Each dwelling/vehicle risk keeps one address, with no
+collection actions. Use stable contact/row scope IDs to discard late suggestions.
+Preserve units, ZIP+4, county and existing non-US values in legacy adapters.
+Optional matching needs an explicit check and Apply/Keep review; it must not
+silently change a draft, a primary address or the rating jurisdiction.
+
+`e2e/contact-addresses.spec.ts` covers embedded contact save/reopen and single
+garaging address behavior, including mobile viewport bounds. Matching controls
+are tested with mocked provider traffic; never use customer addresses in CI.
+
 ## Validation
 
 `e2e/support/radio-standard.ts` checks visible radios for shared markup,

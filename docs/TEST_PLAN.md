@@ -325,6 +325,31 @@ Conventions for new specs:
 - A new screen must be added to `SCREENS` in `e2e/ui-section-standards.spec.ts`,
   and its sections must use `CollapsibleSection`; the audit fails otherwise.
 
+### Contact And Address Regressions
+
+- `ContactAddresses.test.tsx`: collection/primary behavior, separate communication,
+  postal versus rating ZIP projections, preserved non-US values, stale checks.
+- `companyChange.test.tsx`: full collections survive quote changes, saved primary
+  email controls the notification recipient (including clearing), and late
+  read-only contact requests cannot overwrite draft edits.
+- `address-check.test.ts` / `address-routes.test.ts`: disabled/allowlisted/pinned
+  tenants, strict input, minimal external payload, bounded transport/timeouts,
+  authorization, per-tenant/user limiting, and no idempotent replay on URL aliases.
+- `address-parser.test.ts`: real-app malformed JSON/4 KB limit checks on canonical,
+  slash and uppercase aliases, returning sanitized 400/413 responses before auth.
+- `contact-address.integration.test.ts`: real restricted tenant role, masked-DOB
+  preservation on contact-only address PATCH, forbidden entity-type changes, and
+  quote-to-policy collections/single risk address persistence.
+- `e2e/contact-addresses.spec.ts`: existing customer save/reopen and quote contact
+  versus garaging ownership, ZIP+4/full postal versus rating ZIP, mobile bounds.
+
+Use fresh disposable PostgreSQL, not demo/pilot data. Some fixture guards require
+the exact database name `lattice_policy_integration`; do not loosen those guards
+to reuse a customer database. Browser runs use a separate seeded database with
+cache enabled and inline intake extraction (or the matching worker services).
+Provider calls are mocked in automation. Public-address smoke results do not
+establish carrier privacy approval, deliverability or production service fitness.
+
 ### Failure reporting
 
 Every pull request and push to `main` runs the full suite. Failures are

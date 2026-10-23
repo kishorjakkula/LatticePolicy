@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { addressRoutes } from './addresses.routes.js'
 import { configRoutes } from './config.routes.js'
 import { aiRoutes } from './ai.routes.js'
 import { referenceRoutes } from './reference.routes.js'
@@ -22,6 +23,7 @@ import { productGovernanceRoutes } from './product-governance.routes.js'
 import { mountRouter } from '../route-registry.js'
 
 export const routes = Router()
+mountRouter(routes, '/', addressRoutes)
 
 mountRouter(routes, '/', configRoutes)
 mountRouter(routes, '/', aiRoutes)

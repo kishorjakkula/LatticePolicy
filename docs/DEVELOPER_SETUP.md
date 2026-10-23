@@ -450,6 +450,22 @@ docker compose up -d --build
 
 This deletes local PostgreSQL and Redis data.
 
+## Optional Demo Address Matching
+
+Postal entry works without internet. Matching is disabled unless both
+`ADDRESS_CHECK_PROVIDER=census` and `ADDRESS_CHECK_ALLOWED_TENANTS` explicitly
+name the permitted tenant(s), comma-separated; `*` does not enable tenants.
+Local Compose forwards these variables with empty defaults. Recreate the API
+after changing its environment. Do not enable for real carrier/customer data
+without privacy/terms approval: checking sends street/city/state/base ZIP to
+the public Census service. Units, names, email/mobile and policy IDs are not sent.
+
+An editing user must explicitly consent/check and review Apply/Keep. A range
+match is not USPS delivery-point, apartment or ZIP+4 certification. Failure or
+offline operation leaves the original entry usable under carrier rules. No
+external matching fallback or response persistence is configured. See
+`docs/tasks/wp-0005-contact-addresses.md` for implementation and test locations.
+
 ## Related Documentation
 
 - [Architecture](ARCHITECTURE.md)

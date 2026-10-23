@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QUALIFICATION_QUESTIONS } from '@lattice-policy/rules'
-import { QuoteWizard } from '../QuoteWizard'
+import { QuoteWizard, buildWizardQuotePayload } from '../QuoteWizard'
 
 const mocks = vi.hoisted(() => ({
   getQuote: vi.fn(),
   updateQuoteDraft: vi.fn(),
   previewForms: vi.fn(),
+  getCustomer: vi.fn(),
 }))
 
 vi.mock('../../../api/client', () => ({
@@ -24,7 +25,8 @@ vi.mock('../../../api/validation-rules.api', () => ({
   validationRulesApi: { applicable: vi.fn().mockResolvedValue({ items: [] }) },
   validationStopFrom: vi.fn(),
 }))
-vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { username: 'test-agent', roles: ['agent'] } }) }))
+vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { username: 'test-agent', roles: ['agent'], permissions: ['admin.customers.read'] } }) }))
+vi.mock('../../../api/quotes.api', () => ({ quoteIntakeApi: { getCustomer: mocks.getCustomer } }))
 vi.mock('../../../components/Toast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }))
 
 // Multiple compatible companies keep deselection observable. Other products,
@@ -86,6 +88,28 @@ beforeEach(() => {
     quoteId: 'quote-test', quoteNumber: 'Q-TEST', status: 'Rated', progressStep: options.progressStep,
   }))
   mocks.previewForms.mockResolvedValue([])
+  mocks.getCustomer.mockResolvedValue(null)
+})
+
+it.each(['updated@example.com', ''])('primary contact email %j is authoritative for the saved notification recipient projection', email => {
+  const state = savedPayload()
+  state.insureds.primary.email = email
+  expect(buildWizardQuotePayload(state as any, state.insureds).applicant.email).toBe(email)
+})
+
+it('closing a pending read-only contact popup cannot overwrite a newly edited contact address', async () => {
+  await openRatedQuote()
+  await goTo(/03 Insureds/)
+  let resolve!: (value: any) => void
+  mocks.getCustomer.mockImplementation(() => new Promise(r => { resolve = r }))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Pat' })[0])
+  await waitFor(() => expect(mocks.getCustomer).toHaveBeenCalled())
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  fireEvent.change(screen.getAllByLabelText('Apartment, suite or unit')[0], { target: { value: 'APT 99' } })
+  await act(async () => resolve({ addresses: [{ line1: 'STALE READ', city: 'Austin', state: 'TX', postalCode: '78701' }] }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getAllByLabelText('Apartment, suite or unit')[0]).toHaveValue('APT 99')
+  expect((await savePayload()).insureds.primary.addresses[0].line2).toBe('APT 99')
 })
 
 async function goTo(name: RegExp) {
@@ -197,7 +221,12 @@ describe('product-first company changes in the quote wizard (WP-0004)', () => {
     expect(before.qualificationAnswers.noMajorViolations3Years).toBe('yes')
     expect(before.risks).toEqual(savedPayload().risks)
     expect(before.coverages).toMatchObject(savedPayload().coverages)
-    for (const key of commonFields) expect(before[key], key).toEqual(savedPayload()[key as keyof ReturnType<typeof savedPayload>])
+    for (const key of commonFields) {
+      if (key === 'insureds') {
+        expect(before.insureds).toMatchObject(savedPayload().insureds)
+        expect(before.insureds.primary.addresses).toHaveLength(1)
+      } else expect(before[key], key).toEqual(savedPayload()[key as keyof ReturnType<typeof savedPayload>])
+    }
     expect(screen.getByTestId('wizard-quote-summary')).toHaveTextContent('$1,234.00')
     fireEvent.change(screen.getByLabelText('Underwriting Company'), { target: { value: company } })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

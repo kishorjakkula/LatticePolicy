@@ -200,6 +200,22 @@ instead of being forced into the single-carrier quote shape:
 - Rating calc traces are important for explainability and audit.
 - See `docs/PRODUCT_PACK_CONTRACT.md` for the full contract and framework code paths to update when adding a new product pack.
 
+## Contact And Postal Address Ownership
+
+Contact email/mobile belong to the contact, separately from its `addresses`
+collection. Existing customer, insured and additional-interest screens embed
+`ContactAddresses`; non-contact mailing, dwelling and each vehicle garaging
+slot use one `AddressFields` object. See `docs/tasks/wp-0005-contact-addresses.md`.
+Keep full structured ZIP+4 and units; `ratingZip` projects US ZIP+4 to the
+five-digit rating input without rewriting the postal address. Legacy primary
+address projections remain for existing callers and snapshots retain collections.
+Read-only contact details must never implicitly overwrite an edited draft.
+
+Optional Census range matching is off by default, tenant-allowlisted, explicit
+and transient. It is not delivery-point or apartment validation. No provider
+requests occur during entry/save. Private carrier data requires separate privacy
+approval before enabling an external recipient. No external AI is involved.
+
 ## Working Guidance
 
 - Prefer `rg` for searching.

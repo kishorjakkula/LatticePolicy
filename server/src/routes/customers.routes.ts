@@ -1267,10 +1267,16 @@ export async function updateCustomerRecord(
   const existing = await loadCustomerRecordById(q, input.tenantId, input.customerId, true)
   if (!existing) throw new Error('NOT_FOUND')
   if (existing.version !== input.expectedVersion) throw new Error('VERSION_MISMATCH')
-  if (!input.allowIdentityUpdate && identitySectionsChanged(existing, input.payload)) {
+  const identityUnchanged = JSON.stringify(normalizeCustomerInput(existing).identity) === JSON.stringify(input.payload.identity)
+  if (!input.allowIdentityUpdate && (!identityUnchanged || existing.entityType !== input.payload.entityType)) {
     throw new Error('IDENTITY_EDIT_FORBIDDEN')
   }
-  const validation = validateCustomerPayload(input.payload, settings.validation)
+  // Address/contact saves receive masked identity data. Validate against the
+  // existing encrypted DOB without requiring its disclosure or rewriting it.
+  const validationConfig = identityUnchanged && existing.identity?.person?.dobEncrypted
+    ? { ...settings.validation, individual: { ...settings.validation.individual, requireDobOrSsnLast4: false } }
+    : settings.validation
+  const validation = validateCustomerPayload(input.payload, validationConfig)
   if (!validation.valid) throw new Error(validation.errors.join('; '))
   const potentialMatches = await findPotentialMatches(q, input.tenantId, input.payload, input.customerId)
   if (potentialMatches.length > 0 && input.reason.toUpperCase() !== 'MERGE') {
@@ -1302,7 +1308,8 @@ export async function updateCustomerRecord(
     ]
   )
   await persistCustomerSections(q, input.tenantId, input.customerId, input.payload, input.actor, {
-    preserveMissingAsHistory: true
+    preserveMissingAsHistory: true,
+    preserveIdentity: identityUnchanged
   })
   const updated = await loadCustomerRecordById(q, input.tenantId, input.customerId, true)
   await addCustomerAuditEvent(q, {
@@ -1324,10 +1331,12 @@ async function persistCustomerSections(
   customerId: string,
   payload: NormalizedCustomerInput,
   actor: string,
-  options: { preserveMissingAsHistory: boolean }
+  options: { preserveMissingAsHistory: boolean; preserveIdentity?: boolean }
 ) {
-  await upsertPersonDetails(q, tenantId, customerId, payload.identity.person)
-  await upsertCompanyDetails(q, tenantId, customerId, payload.identity.company)
+  if (!options.preserveIdentity) {
+    await upsertPersonDetails(q, tenantId, customerId, payload.identity.person)
+    await upsertCompanyDetails(q, tenantId, customerId, payload.identity.company)
+  }
   await syncContactPoints(q, tenantId, customerId, payload.contactPoints, options.preserveMissingAsHistory)
   await syncAddresses(q, tenantId, customerId, payload.addresses, options.preserveMissingAsHistory)
   await syncExternalIdentifiers(q, tenantId, customerId, payload.externalIdentifiers)
