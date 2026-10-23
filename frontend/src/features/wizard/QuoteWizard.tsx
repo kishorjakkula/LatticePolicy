@@ -60,6 +60,19 @@ type ProductCode = string
 type QuoteProductCode = ProductCode | ''
 type WizardMode = 'quote' | 'endorse' | 'cancel' | 'reinstate' | 'rewrite' | 'renew'
 
+/** The server's error code, also when the client wrapped its JSON envelope in the message. */
+export function serverErrorCode(error: unknown): string | null {
+  const direct = (error as { code?: unknown })?.code
+  if (typeof direct === 'string' && direct) return direct
+  const message = String((error as { message?: unknown })?.message || '')
+  const start = message.indexOf('{')
+  if (start < 0) return null
+  try {
+    const code = JSON.parse(message.slice(start))?.code
+    return typeof code === 'string' ? code : null
+  } catch { return null }
+}
+
 export function referralReviewPath(error: unknown): string | null {
   let response = error as { code?: string; message?: string }
   const message = response?.message || ''
@@ -952,6 +965,8 @@ export function QuoteWizard() {
   const [validationResult, setValidationResult] = useState<{ title: string; errors: ValidationFinding[]; warnings: ValidationFinding[] } | null>(null)
   const [ackRequest, setAckRequest] = useState<{ action: 'bind' | 'issue'; warnings: ValidationFinding[] } | null>(null)
   const [quoteResp, setQuoteResp] = useState<any | null>(null)
+  // Risk data changed after rating (locally or as reported by the server): Bind waits for a new rating.
+  const [ratingNeedsRefresh, setRatingNeedsRefresh] = useState(false)
   const [endorsementPreview, setEndorsementPreview] = useState<EndorsementPreviewResponse | null>(null)
   const [boundPolicy, setBoundPolicy] = useState<{ policyId: string; policyNumber: string } | null>(null)
   const [issued, setIssued] = useState(false)
@@ -1228,6 +1243,8 @@ export function QuoteWizard() {
         setIssued(false)
         setIssuedTransactionVersion(null)
         ratedPayloadSnapshot.current = ''
+        // A newly loaded quote starts without a re-rate prompt from the previous one.
+        setRatingNeedsRefresh(false)
         if (isPolicyTransactionMode) {
           const nextTransactionDate = normalizeDateInput(transactionEffectiveDateParam || merged.effectiveDate)
           if (nextTransactionDate) setTransactionEffectiveDate(nextTransactionDate)
@@ -1835,6 +1852,7 @@ export function QuoteWizard() {
     if (!snapshot || !ratedPayloadSnapshot.current) return
     if (snapshot !== ratedPayloadSnapshot.current) {
       setQuoteResp(null)
+      setRatingNeedsRefresh(true)
       setQuoteDocumentModel(null)
       setEndorsementPreview(null)
       setDraft(prev => prev ? { ...prev, status: 'Draft' } : prev)
@@ -1994,6 +2012,7 @@ export function QuoteWizard() {
       }
       setStep(nextStep)
       resetBindingState()
+      setRatingNeedsRefresh(false)
       const convertedPolicyId = String(resp.convertedPolicyId || '').trim()
       if (wizardMode === 'quote' && ['Converted', 'Issued'].includes(normalizedStatus) && convertedPolicyId) {
         let policyNumberFromApi = String(policyContext?.policyNumber || '').trim()
@@ -2046,6 +2065,8 @@ export function QuoteWizard() {
     try {
       if (draft?.quoteId) {
         const res = await api.updateQuoteDraft(draft.quoteId, payload, { progressStep: desiredStep })
+        // The server reset the rating because risk data changed (WP-0008).
+        if (res?.ratingReset) { setQuoteResp(null); setRatingNeedsRefresh(true) }
         setDraft({ quoteId: draft.quoteId, quoteNumber: res.quoteNumber, status: res.status, progressStep: res.progressStep })
         applyQuoteAudit(res)
         return true
@@ -2935,6 +2956,7 @@ export function QuoteWizard() {
       setValidationResult(rateWarnings.length ? { title: 'Rating checks', errors: [], warnings: rateWarnings } : null)
       const ratedResponse = resp
       setQuoteResp(ratedResponse)
+      setRatingNeedsRefresh(false)
       if (wizardMode === 'quote') {
         setQuoteDocumentModel(buildQuoteSummaryModel(ratedResponse))
       } else {
@@ -2978,6 +3000,11 @@ export function QuoteWizard() {
     } catch (e: any) {
       const reviewPath = referralReviewPath(e)
       if (reviewPath) { setReferralReviewHref(reviewPath); return }
+      if (serverErrorCode(e) === 'QUOTE_RERATE_REQUIRED') {
+        setQuoteResp(null)
+        setRatingNeedsRefresh(true)
+        return
+      }
       if (!showValidationStop(e, 'bind')) setError(coverageErrorMessage(e) || e.message || String(e))
     } finally { setAction(null) }
   }
@@ -4899,6 +4926,9 @@ export function QuoteWizard() {
         </section>
         )}
 
+      {step === 7 && ratingNeedsRefresh && !quoteResp && !isViewOnly && (
+        <RerateNotice onRate={() => void rateQuote()} busy={action === 'rate'} />
+      )}
       {step === 7 && (
         <section>
           {!visiblePremium && wizardMode !== 'reinstate' && !isViewOnly ? (
@@ -5081,6 +5111,9 @@ export function QuoteWizard() {
         </section>
       )}
 
+      {step === 8 && ratingNeedsRefresh && !quoteResp && !isViewOnly && (
+        <RerateNotice onGoToPremium={() => setStep(7)} />
+      )}
       {step === 8 && (
         <section>
           <div className="search-subtabs" style={{ marginBottom: 12 }}>
@@ -5959,6 +5992,18 @@ function DwellingRiskEditor({ value, onChange }: { value: any; onChange: (v:any)
         <label>Square Feet</label>
         <input type="number" value={value.squareFeet || 1800} onChange={e=>onChange({ ...value, squareFeet: Number(e.target.value) })} />
       </div>
+    </div>
+  )
+}
+
+/** Shown when risk data changed after rating (WP-0008 REQ-5). */
+export function RerateNotice({ onRate, onGoToPremium, busy }: { onRate?: () => void; onGoToPremium?: () => void; busy?: boolean }) {
+  return (
+    <div className="card rerate-notice" role="status">
+      <h3>{onRate ? 'Your changes need a new rating' : 'This quote changed after it was rated.'}</h3>
+      <p>Risk details changed after this quote was rated. Rate it again to see the premium and underwriting result.</p>
+      {onRate && <button type="button" onClick={onRate} disabled={busy}>Rate again</button>}
+      {onGoToPremium && <button type="button" className="btn-secondary" onClick={onGoToPremium}>Go to Premium</button>}
     </div>
   )
 }

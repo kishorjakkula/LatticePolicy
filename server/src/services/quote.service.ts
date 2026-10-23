@@ -13,6 +13,7 @@ import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
 import { resolveGovernanceRelease } from './product-governance.service.js'
+import { ratingFingerprint, storedRatingFingerprint, withServerOwnedFieldsFrom, withoutServerOwnedFields } from '../lib/rating-fingerprint.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -180,6 +181,8 @@ export async function createOrRateQuote(
 
   const premium = rate(tenantId, body)
   const uw = await evaluateUW(tenantId, body)
+  // Stored with the rating so a later change to the risk data is detectable (WP-0008).
+  const storedUw = { ...uw, ratedFingerprint: ratingFingerprint(body) }
   const aiMlConfig = await loadTenantAiMlConfig(tenantId)
   const aiInsights = inferQuoteAiInsights(aiMlConfig, {
     payload: body,
@@ -215,7 +218,7 @@ export async function createOrRateQuote(
           body.termMonths,
           body.state || null,
           body,
-          uw,
+          storedUw,
           premium,
           aiInsights,
           'Rated',
@@ -262,7 +265,7 @@ export async function createOrRateQuote(
               body.termMonths,
               body.state || null,
               body,
-              uw,
+              storedUw,
               premium,
               aiInsights,
               'Rated',
@@ -397,8 +400,13 @@ export async function insertDraftQuote(
 ): Promise<DraftQuoteResult> {
   const quoteId = uuidv4()
   const progressStep = clampStep(body.progressStep)
-  const status = typeof body.status === 'string' ? body.status : 'Draft'
-  const payload = normalizeQuotePayload(body.payload || {}, body.effectiveDate)
+  // A new quote is always a Draft; lifecycle statuses are server-owned (WP-0008).
+  if (body.status != null && body.status !== 'Draft') {
+    throw new BadRequestError('INVALID_STATUS', 'A new quote starts as a Draft.')
+  }
+  const status = 'Draft'
+  // Product pinning is server-owned: rating sets it, never the client.
+  const payload = normalizeQuotePayload(withoutServerOwnedFields(body.payload || {}), body.effectiveDate)
   const nowIso = new Date().toISOString()
   const stepHistory = upsertQuoteAuditHistory([], progressStep, nowIso, updatedBy)
   const statusHistory = upsertQuoteAuditHistory([], status, nowIso, updatedBy)
@@ -470,41 +478,70 @@ export async function updateDraftQuote(
   statusHistory: QuoteAuditEntry[]
   stepHistory: QuoteAuditEntry[]
   normalizedPayload: any | null
+  ratingReset: boolean
 }> {
   const payload = body.payload || {}
   const hasPayload = Object.keys(payload).length > 0
   const normalizedPayload = hasPayload ? normalizeQuotePayload(payload, body.effectiveDate) : null
-  const status = typeof body.status === 'string' ? body.status : undefined
+  // Status is server-owned (WP-0008): a client may only ask for Draft, or record
+  // Issued after the wizard issues a policy or applies a policy transaction (its
+  // post-issue audit save). An Issued quote can no longer be bound.
+  const status = body.status == null ? undefined : body.status
+  if (status !== undefined && status !== 'Draft' && status !== 'Issued') {
+    throw new BadRequestError('INVALID_STATUS', 'A quote status can only be set by rating or binding.')
+  }
   const progressStep = body.progressStep != null ? clampStep(body.progressStep) : undefined
   const nowIso = new Date().toISOString()
 
   const result: any = await withTenantTx(tenantId, async (innerDb) => {
     const q = toRawQuery(innerDb)
+    // Locked so a draft save and a bind of the same quote cannot interleave.
     const current: any = await q(
-      'SELECT quote_number, payload, status, progress_step, status_history, step_history FROM quotes WHERE tenant_id=$1 AND quote_id=$2',
+      'SELECT quote_number, payload, status, progress_step, status_history, step_history, underwriting FROM quotes WHERE tenant_id=$1 AND quote_id=$2 FOR UPDATE',
       [tenantId, quoteId]
     )
     if (!current.rowCount) return null
     const row = current.rows[0]
-    const nextStatus = status || row.status || 'Draft'
+    // Product pinning is server-owned: keep what rating stored, whatever the
+    // client sent (a swapped productSnapshot would re-price and re-rule bind).
+    // The stored pin is kept only for a quote still on the same product; a
+    // switched product gets its pin when it is rated again (WP-0008).
+    const sameProduct = normalizedPayload != null && normalizedPayload.productCode === row.payload?.productCode
+    const nextPayload = normalizedPayload == null ? null
+      : sameProduct ? withServerOwnedFieldsFrom(normalizedPayload, row.payload) : withoutServerOwnedFields(normalizedPayload)
+    // A change to the risk data after rating needs a new rating: otherwise bind
+    // would use an underwriting result and premium for a different risk. This
+    // applies to any quote still holding a rating (Rated, or an older Rated quote
+    // since marked Expired or Draft), not only to Rated ones.
+    const finalStatus = row.status === 'Converted' || row.status === 'Issued'
+    const ratedFingerprint = storedRatingFingerprint(row.underwriting)
+    const ratingReset = !finalStatus && row.underwriting != null && nextPayload != null
+      && (ratedFingerprint ? ratingFingerprint(nextPayload) !== ratedFingerprint : ratingFingerprint(nextPayload) !== ratingFingerprint(row.payload))
+    // A client "Draft" never changes the status (it could otherwise reopen a
+    // bound quote); only a rating reset or the post-issue audit save moves it.
+    const nextStatus = ratingReset ? 'Draft' : status === 'Issued' ? 'Issued' : row.status || 'Draft'
     const nextStep = progressStep != null ? progressStep : row.progress_step || 1
     const nextStatusHistory = upsertQuoteAuditHistory(row.status_history, nextStatus, nowIso, updatedBy)
     const nextStepHistory = upsertQuoteAuditHistory(row.step_history, nextStep, nowIso, updatedBy)
     const update: any = await q(
-      'UPDATE quotes SET payload = COALESCE($3, payload), status = $4, progress_step = $5, updated_at=$6, updated_by=$7, status_history=$8, step_history=$9 WHERE tenant_id=$1 AND quote_id=$2 RETURNING quote_number, status, progress_step, status_history, step_history',
+      `UPDATE quotes SET payload = COALESCE($3, payload), status = $4, progress_step = $5, updated_at=$6, updated_by=$7, status_history=$8, step_history=$9,
+              underwriting = CASE WHEN $10::boolean THEN NULL ELSE underwriting END,
+              premium = CASE WHEN $10::boolean THEN NULL ELSE premium END
+        WHERE tenant_id=$1 AND quote_id=$2 RETURNING quote_number, status, progress_step, status_history, step_history`,
       [
         tenantId,
         quoteId,
-        normalizedPayload,
+        nextPayload,
         nextStatus,
         nextStep,
         nowIso,
         updatedBy,
         JSON.stringify(nextStatusHistory),
         JSON.stringify(nextStepHistory),
+        ratingReset,
       ]
     )
-    return update.rows[0]
+    return { ...update.rows[0], rating_reset: ratingReset, next_payload: nextPayload }
   })
 
   if (!result) throw new NotFoundError('QUOTE_NOT_FOUND')
@@ -518,7 +555,8 @@ export async function updateDraftQuote(
     updatedBy,
     statusHistory: normalizeQuoteAuditHistory(result.status_history),
     stepHistory: normalizeQuoteAuditHistory(result.step_history),
-    normalizedPayload,
+    normalizedPayload: result.next_payload ?? normalizedPayload,
+    ratingReset: Boolean(result.rating_reset),
   }
 }
 
@@ -556,7 +594,8 @@ export async function copyQuote(
   const row = result.rows[0]
   const newId = uuidv4()
   const quoteNumber = generateQuoteNumber()
-  const copyPayload = normalizeQuotePayload(row.payload, row.effective_date)
+  // A copy is an unrated draft: it gets its own product pin when rated (WP-0008).
+  const copyPayload = normalizeQuotePayload(withoutServerOwnedFields(row.payload || {}), row.effective_date)
 
   await withTenantTx(tenantId, (innerDb) =>
     toRawQuery(innerDb)(

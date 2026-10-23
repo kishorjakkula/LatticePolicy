@@ -27,9 +27,21 @@ Endpoints
   - Body: `contracts/quote.request.schema.json`
   - Returns: quote id, rated premium breakdown, next actions.
 
+- PATCH /v1/quotes/{id}/draft
+  - Save draft progress. The quote status is server-owned: a client may send only
+    `Draft`, or `Issued` (recorded after issuing; an Issued quote cannot be bound);
+    any other value is 400 `INVALID_STATUS`. `POST /v1/quotes/draft` accepts only
+    `Draft`. Product pin fields (`productSnapshot`, `productVersion`,
+    `governanceLineage`) are kept from rating; client values are ignored.
+  - Changing risk data on a Rated quote (anything but `billingMethod` and
+    `paymentPlan`) returns it to Draft and clears its underwriting result and
+    premium; the response then has `ratingReset: true` (WP-0008).
+
 - POST /v1/quotes/{id}/bind
   - Issue policy; generates initial PolicyVersion.
   - Returns: policy number, policy id, PolicyVersion summary.
+  - 409 `QUOTE_RERATE_REQUIRED` when the quote has no rating or its risk data
+    no longer matches the rating it carries; nothing is written.
 
 - GET /v1/policies/{id}
   - Fetch current policy summary with latest version.
