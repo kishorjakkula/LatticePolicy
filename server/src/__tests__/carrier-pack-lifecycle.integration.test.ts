@@ -220,7 +220,8 @@ describe('carrier pack product across the policy lifecycle (database path)', () 
     const quote = await createOrRateQuote({} as any, tenantId, quotePayload(), null, 'integration-test')
     // Simulate the stored quote falling out of line with the pack, as after a pack change.
     await getDb()!.query(
-      `UPDATE quotes SET payload = jsonb_set(payload, '{risks,0,floorLevel}', '12') WHERE tenant_id=$1 AND quote_id=$2`,
+      // Without its rating fingerprint (a pre-WP-0008 rating), bind reaches the rules check.
+      `UPDATE quotes SET payload = jsonb_set(payload, '{risks,0,floorLevel}', '12'), underwriting = underwriting - 'ratedFingerprint' WHERE tenant_id=$1 AND quote_id=$2`,
       [tenantId, quote.quoteId]
     )
     await expect(bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null))

@@ -23,6 +23,7 @@ import { normalizeValidationTransaction } from '@lattice-policy/rules'
 import { loadPolicyContext } from '../persistence.js'
 import { addMonths } from '../lib/date.utils.js'
 import { csvEscape, isUuidLike, routeParam } from '../lib/utils.js'
+import { AppError } from '../errors/domain.errors.js'
 
 export const quoteRoutes = Router()
 
@@ -255,8 +256,11 @@ quoteRoutes.patch('/quotes/:id/draft', requirePermission(['page.wizard.view']), 
           updatedBy: result.updatedBy,
           statusHistory: result.statusHistory,
           stepHistory: result.stepHistory,
+          // True when the change needs a new rating (WP-0008); the status is Draft again.
+          ratingReset: result.ratingReset,
         })
-      } catch {
+      } catch (error) {
+        if (error instanceof AppError) return next(error)
         return res
           .status(500)
           .json({ code: 'DB_ERROR', message: 'Unable to update draft quote' })
@@ -271,7 +275,12 @@ quoteRoutes.patch('/quotes/:id/draft', requirePermission(['page.wizard.view']), 
     const normalizedPayload = Object.keys(body.payload || {}).length > 0
       ? quoteService.normalizeQuotePayload(body.payload, body.effectiveDate)
       : null
-    const status = typeof body.status === 'string' ? body.status : undefined
+    // Same server-owned status rule as the database path (WP-0008). The in-memory
+    // store only holds Draft and Rated quotes, so a client may only ask for Draft.
+    if (body.status != null && body.status !== 'Draft') {
+      return res.status(400).json({ code: 'INVALID_STATUS', message: 'A quote status can only be set by rating or binding.' })
+    }
+    const status = undefined
     const progressStep =
       body.progressStep != null ? quoteService.clampStep(body.progressStep) : undefined
     const nowIso = new Date().toISOString()

@@ -115,7 +115,10 @@ describe('coverage codes belong to the product', () => {
   it('binding re-checks a saved quote', async () => {
     const quote = await createOrRateQuote({} as any, tenantId, payload(['BI', 'PD']), null, 'integration-test')
     await getDb()!.query(
-      `UPDATE quotes SET payload = jsonb_set(payload, '{coverages}', (payload->'coverages') || '[{"code":"END_WB","selected":true}]'::jsonb) WHERE tenant_id=$1 AND quote_id=$2`,
+      // Dropping the rating fingerprint (as for a rating made before WP-0008) lets bind
+      // reach the product-rules re-check this test is about; a stale fingerprint is
+      // refused earlier with QUOTE_RERATE_REQUIRED (rated-quote-guard test).
+      `UPDATE quotes SET payload = jsonb_set(payload, '{coverages}', (payload->'coverages') || '[{"code":"END_WB","selected":true}]'::jsonb), underwriting = underwriting - 'ratedFingerprint' WHERE tenant_id=$1 AND quote_id=$2`,
       [tenantId, quote.quoteId],
     )
     await expect(bindQuote({} as any, tenantId, quote.quoteId, {}, 'integration-test', null)).rejects.toMatchObject({

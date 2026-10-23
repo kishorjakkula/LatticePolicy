@@ -6,7 +6,9 @@ import {
   NotFoundError,
   BadRequestError,
   ValidationError,
+  ConflictError,
 } from '../errors/domain.errors.js'
+import { ratingFingerprint, storedRatingFingerprint } from '../lib/rating-fingerprint.js'
 import {
   insertPolicyProjection,
   insertPolicyTransaction,
@@ -367,6 +369,8 @@ export async function bindQuote(
 
   const row = r.rows[0]
   const quote = { payload: row.payload, uw: row.underwriting, premium: row.premium }
+  // Refuse before any referral or policy work if the rating is missing or stale.
+  assertBindableRating(quote.payload, quote.uw, quote.premium)
   requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
   // The quote is bound on the product version it was rated on.
   await ensureProductSnapshots(tenantId, [quote.payload])
@@ -683,6 +687,8 @@ export async function bindQuote(
     if (latest.converted_policy_id || latest.status === 'Converted') {
       throw new BadRequestError('QUOTE_ALREADY_BOUND', 'This quote has already been bound.')
     }
+    // Authoritative check under the same lock as policy creation (WP-0008).
+    assertBindableRating(latest.payload, latest.underwriting, latest.premium)
     if (canonicalProposal({ payload: latest.payload, uw: latest.underwriting, premium: latest.premium }) !== canonicalProposal(quote)) {
       throw new BadRequestError('QUOTE_CHANGED', 'The quote changed during bind. Review the latest quote and retry.')
     }
@@ -947,5 +953,17 @@ export async function bindQuote(
     expirationDate,
     premiumSummary,
     riskSummary,
+  }
+}
+
+/**
+ * A quote binds only on the risk it was rated for (WP-0008): it needs a rating,
+ * and its risk data must match the fingerprint stored with that rating. Ratings
+ * from before WP-0008 carry no fingerprint and are accepted as they stand.
+ */
+function assertBindableRating(payload: unknown, underwriting: unknown, premium: unknown): void {
+  const stored = storedRatingFingerprint(underwriting)
+  if (!underwriting || !premium || (stored && ratingFingerprint(payload) !== stored)) {
+    throw new ConflictError('QUOTE_RERATE_REQUIRED', 'The quote changed after it was rated. Rate it again before binding.')
   }
 }
