@@ -827,6 +827,7 @@ export function buildCustomerInput(values: Record<string, string>) {
     addresses.push({
       addressType: 'MAILING',
       line1: values.addressLine1,
+      ...(values.addressLine2 ? { line2: values.addressLine2 } : {}),
       city: values.city || '',
       state: values.addressState || values.state || '',
       postalCode: values.postalCode || '',
@@ -911,7 +912,7 @@ export function buildQuotePayload(
     yearsWithPriorCarrier: values.yearsWithPriorCarrier || '',
     billingMethod: values.billingMethod || '',
     paymentPlan: values.paymentPlan || '',
-    mailingAddress: { street: values.addressLine1 || '', city: values.city || '', state: values.addressState || '', zip: values.postalCode || '' },
+    mailingAddress: { street: values.addressLine1 || '', ...(values.addressLine2 ? { line2: values.addressLine2 } : {}), city: values.city || '', state: values.addressState || '', zip: values.postalCode || '' },
     additionalInterests: values.interestName
       ? [{ role: values.interestRole || (values.productCode === 'homeowners' ? 'MORTGAGEE' : values.productCode?.includes('auto') ? 'LOSS_PAYEE' : 'ADDITIONAL_INTEREST'), name: values.interestName, loanNumber: values.interestLoanNumber || '', street: values.interestAddress || '', city: '', state: '', zip: '' }]
       : [],
@@ -932,7 +933,7 @@ export function buildQuotePayload(
         phone: values.phone || '',
         customerId: customer?.customerId || '',
         customerKey: customer?.customerKey || '',
-        address: { street: values.addressLine1 || '', city: values.city || '', state: values.addressState || '', zip: values.postalCode || '' },
+        address: { street: values.addressLine1 || '', ...(values.addressLine2 ? { line2: values.addressLine2 } : {}), city: values.city || '', state: values.addressState || '', zip: values.postalCode || '' },
       },
       secondary: { firstName: '', lastName: '', dob: '', prefix: '', displayName: '', email: '', phone: '', customerId: '', customerKey: '', address: { street: '', city: '', state: '', zip: '' } },
       additional: [],

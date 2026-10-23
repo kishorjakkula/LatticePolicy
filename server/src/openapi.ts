@@ -822,6 +822,13 @@ const auditFilterParameters = [
 ]
 
 const operationOverrides: Record<string, any> = {
+  'GET /v1/addresses/capabilities': {
+    description: 'Authenticated internal editing permission required. Reports tenant-allowlisted Census address-range matching capability, disabled by default. No address data is sent.',
+  },
+  'POST /v1/addresses/check': {
+    description: 'Explicit internal user-initiated Census range matching; not postal deliverability verification. Requires wizard or customer-edit permission; customer portal roles denied. Disabled unless provider and tenant allowlist are configured. Rate limited 20/min per tenant/user. No-store; no database writes. Outcomes: disabled, unsupported, unmatched, ambiguous, matched, unavailable. 400 INVALID_ADDRESS_INPUT, 401, 403, 429.',
+    requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: false, required: ['address'], properties: { address: { type: 'object', additionalProperties: false, required: ['line1', 'city', 'state', 'postalCode', 'country'], properties: Object.fromEntries(['line1', 'line2', 'line3', 'city', 'state', 'postalCode', 'country', 'county'].map(key => [key, { type: 'string', maxLength: key === 'line1' ? 200 : key === 'postalCode' ? 20 : key === 'country' ? 2 : 100 }])) } } } } } },
+  },
   'GET /v1/admin/ai-audit': {
     description: 'Requires ai.audit.read. Entries and total apply every filter. Counts retain legacy date-only actor-summary semantics. Historical model provenance is not inferred for events without recorded evidence.',
     parameters: [

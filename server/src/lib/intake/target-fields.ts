@@ -38,6 +38,7 @@ const COMMON_FIELDS: IntakeTargetField[] = [
   { key: 'email', label: 'Insured email', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'phone', label: 'Insured phone', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'addressLine1', label: 'Mailing address', section: 'Insured', type: 'text', options: [], required: false },
+  { key: 'addressLine2', label: 'Apartment, suite or unit', section: 'Insured', type: 'text', options: [], required: false, aliases: ['address line 2', 'apartment', 'suite', 'unit'] },
   { key: 'city', label: 'City', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'addressState', label: 'Address state', section: 'Insured', type: 'text', options: [], required: false },
   { key: 'postalCode', label: 'ZIP code', section: 'Insured', type: 'text', options: [], required: false },

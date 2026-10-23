@@ -1,0 +1,24 @@
+.contact-addresses,.postal-editor { color:var(--ps-text); background:var(--ps-surface); }
+.postal-fields { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap:12px; margin:12px 0; }
+.postal-fields label { min-width:0; }
+.postal-fields label,.postal-toolbar label { color:var(--ps-text-secondary); }
+.postal-wide { grid-column:1/-1; }
+.postal-fields input,.postal-fields select { width:100%; min-width:0; }
+.postal-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; }
+.postal-toolbar h4 { margin:0; }
+.postal-toolbar .btn-secondary,.postal-editor .btn-secondary { color:var(--ps-text); background:var(--ps-surface); border-color:var(--ps-border); }
+.postal-toolbar .btn-secondary:hover,.postal-editor .btn-secondary:hover { background:var(--ps-bg); }
+.postal-table { overflow-x:auto; position:relative; }
+.postal-table table { min-width:560px; }
+.postal-table td { overflow-wrap:anywhere; }
+.postal-table .table tbody tr { color:var(--ps-text); background:var(--ps-surface); }
+.postal-table .table tbody tr:hover { background:var(--ps-bg); }
+.postal-table .table-link-button { color:var(--ps-primary); }
+.postal-selected { border-top:1px solid var(--ps-border); margin-top:12px; padding-top:12px; }
+.postal-check { display:grid; gap:12px; justify-items:start; margin:12px 0; }
+.postal-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:12px; overflow-wrap:anywhere; }
+.auto-risk-field:has(> .postal-editor) { grid-column:1/-1; }
+@media(max-width:600px) {
+  .postal-fields,.postal-comparison { grid-template-columns:minmax(0,1fr); }
+  .postal-table table { min-width:0; width:100%; }
+}

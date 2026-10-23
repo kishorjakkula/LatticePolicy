@@ -1,4 +1,7 @@
 import { RadioGroup } from '../../components/RadioGroup'
+import { AddressFields } from '../../components/AddressFields'
+import { ContactAddresses, ContactCommunication } from '../../components/ContactAddresses'
+import { contactAddresses, primaryAddress, postalAddress, legacyAddress, formatPostalAddress, ratingZip, type ContactAddress } from '../../shared/postalAddress'
 import { useId } from 'react'
 import './wizard-stepper.css'
 import { FieldError } from '../../components/FieldError'
@@ -132,6 +135,10 @@ type InsuredAddress = {
   city: string
   state: string
   zip: string
+  line2?: string
+  line3?: string
+  country?: string
+  county?: string
 }
 
 type InsuredParty = {
@@ -145,6 +152,7 @@ type InsuredParty = {
   customerId: string
   customerKey: string
   address: InsuredAddress
+  addresses?: ContactAddress[]
 }
 
 type InsuredState = {
@@ -244,10 +252,12 @@ export function liveFormPreviewContext(payload: any, stage: FormAttachmentStage,
 
 export function buildWizardQuotePayload(state: QuoteState, insuredState: InsuredState): any {
   const commissionPct = parseCommissionPercent(state.agencyCommissionPct)
+  const insureds = normalizeInsuredState(insuredState, state.applicant)
   const payload = normalizePayloadCoverages({
     ...state,
     agencyCommissionPct: commissionPct ?? undefined,
-    insureds: normalizeInsuredState(insuredState, state.applicant),
+    insureds,
+    applicant: { ...state.applicant, email: insureds.primary.email },
     uwAnswers: deriveUwAnswers(state),
   })
   if (commissionPct == null) delete payload.agencyCommissionPct
@@ -767,13 +777,7 @@ function formatQualificationAnswer(value: QualificationAnswer): string {
 
 function formatInsuredAddress(address: Partial<InsuredAddress> | null | undefined): string {
   if (!address || typeof address !== 'object') return ''
-  const street = String(address.street || '').trim()
-  const city = String(address.city || '').trim()
-  const state = String(address.state || '').trim()
-  const zip = String(address.zip || '').trim()
-  const cityStateZip = [city, state].filter(Boolean).join(', ')
-  const cityStateZipWithPostal = [cityStateZip, zip].filter(Boolean).join(' ')
-  return [street, cityStateZipWithPostal].filter(Boolean).join(', ')
+  return formatPostalAddress(address)
 }
 
 function formatInsuredName(party: Partial<InsuredParty> | null | undefined): string {
@@ -884,6 +888,7 @@ function normalizeInsuredParty(raw: any, fallback?: Partial<InsuredParty>): Insu
   const firstName = String(source.firstName ?? fallback?.firstName ?? '').trim()
   const lastName = String(source.lastName ?? fallback?.lastName ?? '').trim()
   const computedDisplayName = [firstName, lastName].filter(Boolean).join(' ').trim()
+  const addresses = contactAddresses(source.addresses ?? fallback?.addresses, { ...fallbackAddress, ...sourceAddress })
   return {
     firstName,
     lastName,
@@ -894,12 +899,8 @@ function normalizeInsuredParty(raw: any, fallback?: Partial<InsuredParty>): Insu
     phone: String(source.phone ?? fallback?.phone ?? '').trim(),
     customerId: String(source.customerId ?? fallback?.customerId ?? '').trim(),
     customerKey: String(source.customerKey ?? fallback?.customerKey ?? '').trim(),
-    address: {
-      street: String(sourceAddress.street ?? fallbackAddress.street ?? '').trim(),
-      city: String(sourceAddress.city ?? fallbackAddress.city ?? '').trim(),
-      state: String(sourceAddress.state ?? fallbackAddress.state ?? '').trim(),
-      zip: String(sourceAddress.zip ?? fallbackAddress.zip ?? '').trim()
-    }
+    addresses,
+    address: legacyAddress(primaryAddress(addresses))
   }
 }
 
@@ -1012,6 +1013,8 @@ export function QuoteWizard() {
   }, [])
   const [contactDetailTitle, setContactDetailTitle] = useState('')
   const [contactDetailPopupOpen, setContactDetailPopupOpen] = useState(false)
+  const contactReadGeneration = useRef(0)
+  useEffect(() => () => { contactReadGeneration.current++ }, [])
   const [formsTab, setFormsTab] = useState<WizardFormsTab>('forms')
   const [attachedFormsByStage, setAttachedFormsByStage] = useState<Record<FormAttachmentStage, AttachedForm[]>>({
     Quote: [],
@@ -2340,16 +2343,12 @@ export function QuoteWizard() {
       firstName,
       lastName,
       dob: resolveCustomerDob(details) || resolveCustomerDob(summary),
+      addresses: contactAddresses(addresses),
       prefix: String(summary?.prefix || '').trim(),
       displayName,
       email: String(preferredEmail || summary?.email || '').trim(),
       phone: String(preferredPhone || summary?.phone || '').trim(),
-      address: {
-        street: String(preferredAddress?.line1 || preferredAddress?.street || summary?.address?.street || '').trim(),
-        city: String(preferredAddress?.city || summary?.address?.city || '').trim(),
-        state: String(preferredAddress?.state || summary?.address?.state || '').trim(),
-        zip: String(preferredAddress?.postalCode || preferredAddress?.zip || summary?.address?.zip || '').trim()
-      },
+      address: legacyAddress(preferredAddress),
       customerId: String(details?.customerId || summary?.customerId || '').trim(),
       customerKey: String(details?.customerKey || summary?.customerKey || '').trim()
     }
@@ -2400,6 +2399,7 @@ export function QuoteWizard() {
   }
 
   function clearCustomerContactView() {
+    contactReadGeneration.current++
     setContactDetailPopupOpen(false)
     setContactDetailLoading(false)
     setContactDetailError(null)
@@ -2486,12 +2486,8 @@ export function QuoteWizard() {
         dob: preferredDob || party.dob,
         email: preferredEmail || party.email,
         phone: preferredPhone || party.phone,
-        address: {
-          street: preferredStreet || party.address?.street || '',
-          city: preferredCity || party.address?.city || '',
-          state: preferredState || party.address?.state || '',
-          zip: preferredZip || party.address?.zip || ''
-        }
+        addresses: contactAddresses(addresses),
+        address: legacyAddress(currentAddress)
       }
     }
 
@@ -2578,6 +2574,7 @@ export function QuoteWizard() {
   }
 
   async function openCustomerContactView(candidate: any) {
+    const generation = ++contactReadGeneration.current
     const lookup = resolveCustomerLookup(candidate)
     const fallbackRecord = buildContactDetailFallback(candidate)
     const canFetchFullRecord = Boolean(lookup && canViewCustomerDetails)
@@ -2593,15 +2590,15 @@ export function QuoteWizard() {
     setContactDetailLoading(true)
     try {
       const details = await quoteIntakeApi.getCustomer(lookup)
-      if (details) {
+      if (details && generation === contactReadGeneration.current) {
         setContactDetailRecord(details)
-        syncInsuredFromContactDetail(details, lookup)
       }
     } catch (e: any) {
+      if (generation !== contactReadGeneration.current) return
       const msg = e?.message || String(e || 'Unable to load customer details.')
       setContactDetailError(msg)
     } finally {
-      setContactDetailLoading(false)
+      if (generation === contactReadGeneration.current) setContactDetailLoading(false)
     }
   }
 
@@ -4339,7 +4336,7 @@ export function QuoteWizard() {
               </tbody>
             </table>
           </div>
-
+          <InsuredContactEditor party={insureds.primary} disabled={isViewOnly || isCancellationMode} onChange={party => { setInsureds(prev => ({ ...prev, primary: party })); setQ(prev => ({ ...prev, applicant: { ...prev.applicant, email: party.email } })) }} />
           </CollapsibleSection>
           <CollapsibleSection className="wizard-section">
             <h3 style={{ margin: 0 }}>Secondary Named Insured</h3>
@@ -4429,7 +4426,7 @@ export function QuoteWizard() {
               </tbody>
             </table>
           </div>
-
+          {(insureds.secondary.firstName || insureds.secondary.customerId) && <InsuredContactEditor party={insureds.secondary} disabled={isViewOnly || isCancellationMode} onChange={party => setInsureds(prev => ({ ...prev, secondary: party }))} />}
           </CollapsibleSection>
           <CollapsibleSection className="wizard-section">
           <div className="insureds-subsection-header">
@@ -4536,6 +4533,10 @@ export function QuoteWizard() {
             </div>
           )}
           </CollapsibleSection>
+          {(insureds.additional || []).map((party, index) => <div key={party.customerId || index}>
+            <h4>{party.displayName || formatInsuredName(party) || `Additional contact ${index + 1}`}</h4>
+            <InsuredContactEditor party={party} disabled={isViewOnly || isCancellationMode} onChange={next => setInsureds(prev => ({ ...prev, additional: prev.additional.map((item, i) => i === index ? next : item) }))} />
+          </div>)}
           {contactDetailPopupOpen && (
             <div className="modal-overlay" role="dialog" aria-modal="true" onClick={clearCustomerContactView}>
               <div className="modal-panel modal-panel-lg" onClick={(event) => event.stopPropagation()}>
@@ -4603,7 +4604,7 @@ export function QuoteWizard() {
                         ) : (
                           (Array.isArray(contactDetailRecord?.addresses) ? contactDetailRecord.addresses : []).map((item: any, index: number) => (
                             <tr key={`contact-address-${index}`}>
-                              <td>{String(item?.line1 || item?.street || '-')}</td>
+                              <td>{formatPostalAddress(item) || '-'}</td>
                               <td>{String(item?.city || '-')}</td>
                               <td>{String(item?.state || '-')}</td>
                               <td>{String(item?.postalCode || item?.zip || '-')}</td>
@@ -4621,7 +4622,7 @@ export function QuoteWizard() {
             </div>
           )}
           <CollapsibleSection className="wizard-section" title="Mailing Address">
-            <MailingAddressFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} insuredAddress={insureds.primary.address} />
+          <MailingAddressFields value={q} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} insuredAddress={insureds.primary.address} insuredAddresses={insureds.primary.addresses} />
           </CollapsibleSection>
           <CollapsibleSection className="wizard-section" title="Additional Interests">
             <AdditionalInterestsFields value={q} productCode={q.productCode} onChange={(next) => setQ((prev) => ({ ...prev, ...next }))} disabled={isCancellationMode || isViewOnly} />
@@ -4646,7 +4647,7 @@ export function QuoteWizard() {
             />
           ) : riskScreen && !isCoreProductCode(q.productCode) ? null : (
             <DynamicRiskForm
-              fields={riskFields}
+              fields={q.productCode === 'homeowners' ? riskFields.filter(f => !/\.address$/.test(f.path)) : riskFields}
               value={q}
               disabled={isCancellationMode || isViewOnly}
               onChange={(path, val) => {
@@ -4657,6 +4658,11 @@ export function QuoteWizard() {
               onValidate={(errs) => setFieldErrors(errs)}
             />
           )}
+          {q.productCode === 'homeowners' && (q.risks || []).map((risk: any, index: number) => <div key={index}>
+            <h4>Risk address{q.risks.length > 1 ? ` ${index + 1}` : ''}</h4>
+            {!risk.locationAddress && risk.address && <p>Existing address: {risk.address}</p>}
+            <AddressFields identity={`risk-${index}`} value={postalAddress(risk.locationAddress)} disabled={isCancellationMode || isViewOnly} onChange={address => setQ(prev => ({ ...prev, risks: prev.risks.map((item: any, i: number) => i === index ? { ...item, locationAddress: address, address: formatPostalAddress(address) } : item) }))} />
+          </div>)}
           {q.productCode && riskScreen && (
             <ConfiguredRiskForm
               screen={riskScreen}
@@ -5612,7 +5618,10 @@ export function DynamicRiskForm({ fields, value, onChange, onValidate, disabled 
       {fields.map(f => (
         <div className="col" key={f.key} style={{ minWidth: 220 }}>
           <label>{f.label}</label>
-          {f.type === 'select' ? (
+          {/\.garagingZip$/.test(f.path) ? <AddressFields identity={f.path} disabled={disabled} value={postalAddress({ ...getByPath(value, f.path.replace(/\.garagingZip$/, ''))?.garagingAddress, postalCode: getByPath(value, f.path.replace(/\.garagingZip$/, ''))?.garagingAddress?.postalCode ?? getByPath(value, f.path) ?? '' })} onChange={address => {
+            const base = f.path.replace(/\.garagingZip$/, '')
+            onChange(base, { ...getByPath(value, base), garagingAddress: address, garagingZip: ratingZip(address) })
+          }} /> : f.type === 'select' ? (
             <select value={String(getByPath(value, f.path) ?? f.options?.[0] ?? '')} onChange={e=>onChange(f.path, e.target.value)} disabled={disabled}>
               {f.options?.map((o:any) => <option key={String(o)} value={String(o)}>{String(o)}</option>)}
             </select>
@@ -5774,11 +5783,8 @@ function AutoRiskEditor({
             <div className="auto-risk-vehicle-grid">
               <div className="auto-risk-field">
               <label>Garaging ZIP</label>
-              <input
-                value={vehicle.garagingZip ?? ''}
-                onChange={e=>updateVehicle(index, { garagingZip: e.target.value })}
-                disabled={disabled}
-              />
+              <AddressFields identity={`vehicle-${index}`} value={postalAddress({ ...vehicle.garagingAddress, postalCode: vehicle.garagingAddress?.postalCode ?? vehicle.garagingZip ?? '' })} disabled={disabled}
+                onChange={garagingAddress => updateVehicle(index, { garagingAddress, garagingZip: ratingZip(garagingAddress) })} />
               {fieldError(index, 'garagingZip') && <div className="error">{fieldError(index, 'garagingZip')}</div>}
               </div>
               <div className="auto-risk-field">
@@ -5917,6 +5923,13 @@ function AutoRiskEditor({
       )})}
     </div>
   )
+}
+
+function InsuredContactEditor({ party, disabled, onChange }: { party: InsuredParty; disabled: boolean; onChange: (party: InsuredParty) => void }) {
+  return <div>
+    <ContactCommunication email={party.email} phone={party.phone} disabled={disabled} onChange={patch => onChange({ ...party, ...patch })} />
+    <ContactAddresses scope={party.customerId || party.customerKey} value={contactAddresses(party.addresses, party.address)} disabled={disabled} onChange={addresses => onChange({ ...party, addresses, address: legacyAddress(primaryAddress(addresses)) })} />
+  </div>
 }
 
 function DwellingRiskEditor({ value, onChange }: { value: any; onChange: (v:any)=>void }) {

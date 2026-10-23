@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { AddressFields } from '../../components/AddressFields'
+import { formatPostalAddress, postalAddress, ratingZip } from '../../shared/postalAddress'
 import { useForm } from 'react-hook-form'
 import { useCreateQuoteMutation, useBindQuoteMutation } from '../../api/hooks'
 import { Link, useNavigate } from 'react-router-dom'
@@ -46,6 +48,8 @@ type FormValues = {
   driverAge: number
   // homeowners
   address: string
+  locationAddress?: import('@lattice-policy/types').PostalAddress
+  garagingAddress?: import('@lattice-policy/types').PostalAddress
   construction: string
   roofAgeYears: number
   // commercial-auto
@@ -170,12 +174,13 @@ export function CreateQuotePage() {
                 ? { priorClaimsCount: data.priorClaimsCount, writtenContracts: data.writtenContracts === 'true', qualityControl: data.qualityControl }
                 : {},
         risks: data.productCode === 'personal-auto'
-          ? [{ type: 'autoVehicle', year: 2018, make: 'Toyota', model: 'Camry', garagingZip: data.garagingZip, usage: 'commute', annualMiles: data.annualMiles }]
+          ? [{ type: 'autoVehicle', year: 2018, make: 'Toyota', model: 'Camry', garagingZip: data.garagingZip, garagingAddress: data.garagingAddress, usage: 'commute', annualMiles: data.annualMiles }]
           : data.productCode === 'commercial-auto'
             ? [{
                 type: 'commercialAutoFleet',
                 businessName: data.caBusinessName,
                 garagingZip: data.caGaragingZip,
+                garagingAddress: data.garagingAddress,
                 vehicleCount: data.caVehicleCount,
                 driverCount: data.caDriverCount,
                 useClass: data.caUseClass,
@@ -187,7 +192,7 @@ export function CreateQuotePage() {
                 priorLossesCount: data.caPriorLossesCount
               }]
             : data.productCode === 'homeowners'
-              ? [{ type: 'dwelling', address: data.address, construction: data.construction, yearBuilt: 2000, roofAgeYears: data.roofAgeYears }]
+              ? [{ type: 'dwelling', address: data.address, locationAddress: data.locationAddress, construction: data.construction, yearBuilt: 2000, roofAgeYears: data.roofAgeYears }]
               : data.productCode === 'cyber'
                 ? [{ type: 'cyberProfile', industry: data.industry, annualRevenue: data.annualRevenue, employeeCount: data.employeeCount, recordsCount: data.recordsCount, mfaEnabled: data.mfaEnabled, endpointProtection: 'true', backups: data.backups, priorIncidents: data.priorIncidents, publicFacingApps: data.publicFacingApps, domain: data.domain }]
                 : [{
@@ -282,7 +287,7 @@ export function CreateQuotePage() {
           <div className="row">
             <div className="col">
               <label>Garaging ZIP</label>
-              <input {...register('garagingZip')} />
+              <AddressFields value={postalAddress({ ...watch('garagingAddress'), postalCode: watch('garagingAddress')?.postalCode ?? watch('garagingZip') })} onChange={a => { setValue('garagingAddress', a); setValue('garagingZip', ratingZip(a)) }} />
             </div>
             <div className="col">
               <label>Annual Miles</label>
@@ -299,7 +304,7 @@ export function CreateQuotePage() {
           <div className="row">
             <div className="col">
               <label>Address</label>
-              <input {...register('address')} />
+              <AddressFields value={postalAddress(watch('locationAddress'))} onChange={a => { setValue('locationAddress', a); setValue('address', formatPostalAddress(a)) }} />
             </div>
             <div className="col">
               <label>Construction</label>
@@ -325,7 +330,7 @@ export function CreateQuotePage() {
               </div>
               <div className="col">
                 <label>Primary Garaging ZIP</label>
-                <input {...register('caGaragingZip')} />
+                <AddressFields value={postalAddress({ ...watch('garagingAddress'), postalCode: watch('garagingAddress')?.postalCode ?? watch('caGaragingZip') })} onChange={a => { setValue('garagingAddress', a); setValue('caGaragingZip', ratingZip(a)) }} />
               </div>
               <div className="col">
                 <label>Vehicle Count</label>

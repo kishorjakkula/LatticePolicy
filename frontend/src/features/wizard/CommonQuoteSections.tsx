@@ -2,8 +2,11 @@
 // mailing address, and additional interests. Stored on the quote payload and
 // carried to the policy (additional interests become policy interests at bind).
 import { RadioGroup } from '../../components/RadioGroup'
+import { AddressFields } from '../../components/AddressFields'
+import { ContactAddresses, ContactCommunication } from '../../components/ContactAddresses'
+import { contactAddresses, primaryAddress, postalAddress, legacyAddress, formatPostalAddress, type ContactAddress } from '../../shared/postalAddress'
 
-export type QuoteMailingAddress = { street: string; city: string; state: string; zip: string }
+export type QuoteMailingAddress = { street: string; city: string; state: string; zip: string; line2?: string; line3?: string; country?: string; county?: string }
 
 export type QuoteAdditionalInterest = {
   id: string
@@ -14,6 +17,11 @@ export type QuoteAdditionalInterest = {
   city: string
   state: string
   zip: string
+  line2?: string
+  country?: string
+  addresses?: ContactAddress[]
+  email?: string
+  phone?: string
 }
 
 export type CommonQuoteFields = {
@@ -52,6 +60,7 @@ export function commonFieldsFromPayload(payload: any, current: CommonQuoteFields
     paymentPlan: payload?.paymentPlan || current.paymentPlan || '',
     mailingAddress: address ? { ...EMPTY_ADDRESS, ...address } : { ...EMPTY_ADDRESS },
     additionalInterests: (interests || []).map((item: any, index: number) => ({
+      ...item,
       id: String(item?.id || `ai-${index}-${Date.now()}`),
       role: (Object.keys(INTEREST_ROLE_LABELS).includes(item?.role) ? item.role : 'ADDITIONAL_INTEREST') as QuoteAdditionalInterest['role'],
       name: String(item?.name || ''),
@@ -116,22 +125,18 @@ export function BillingFields({ value, onChange, disabled }: Props) {
   )
 }
 
-export function MailingAddressFields({ value, onChange, disabled, insuredAddress }: Props & { insuredAddress?: { street?: string; city?: string; state?: string; zip?: string } }) {
+export function MailingAddressFields({ value, onChange, disabled, insuredAddress, insuredAddresses }: Props & { insuredAddress?: QuoteMailingAddress; insuredAddresses?: ContactAddress[] }) {
   const address = { ...EMPTY_ADDRESS, ...(value.mailingAddress || {}) }
   const set = (field: keyof QuoteMailingAddress, next: string) => onChange({ ...value, mailingAddress: { ...address, [field]: next } })
   const canCopy = !!(insuredAddress && (insuredAddress.street || insuredAddress.city))
   return (
     <>
       <p className="muted" style={{ marginTop: 0 }}>Where notices and bills are sent. It can differ from the insured location on the risk.</p>
-      <div className="row">
-        <div className="col"><label htmlFor="wizard-mail-street">Street</label><input id="wizard-mail-street" value={address.street} disabled={disabled} onChange={(event) => set('street', event.target.value)} /></div>
-        <div className="col"><label htmlFor="wizard-mail-city">City</label><input id="wizard-mail-city" value={address.city} disabled={disabled} onChange={(event) => set('city', event.target.value)} /></div>
-        <div className="col"><label htmlFor="wizard-mail-state">State</label><input id="wizard-mail-state" maxLength={2} value={address.state} disabled={disabled} onChange={(event) => set('state', event.target.value.toUpperCase())} /></div>
-        <div className="col"><label htmlFor="wizard-mail-zip">ZIP</label><input id="wizard-mail-zip" value={address.zip} disabled={disabled} onChange={(event) => set('zip', event.target.value)} /></div>
-      </div>
+      <AddressFields value={postalAddress(address)} disabled={disabled} onChange={a => onChange({ ...value, mailingAddress: legacyAddress(a) })} />
+      {!disabled && !!insuredAddresses?.length && <label>Copy contact address<select value="" onChange={e => { if (e.target.value !== '') onChange({ ...value, mailingAddress: legacyAddress(insuredAddresses[Number(e.target.value)]) }) }}><option value="">Select address</option>{insuredAddresses.map((a, i) => <option key={a.addressId || i} value={i}>{a.primary ? 'Primary: ' : ''}{formatPostalAddress(a)}</option>)}</select></label>}
       {canCopy && !disabled && (
         <button type="button" className="btn-secondary" style={{ marginTop: 8 }}
-          onClick={() => onChange({ ...value, mailingAddress: { street: insuredAddress?.street || '', city: insuredAddress?.city || '', state: insuredAddress?.state || '', zip: insuredAddress?.zip || '' } })}>
+          onClick={() => onChange({ ...value, mailingAddress: legacyAddress(insuredAddress) })}>
           Use the insured's address
         </button>
       )}
@@ -164,12 +169,8 @@ export function AdditionalInterestsFields({ value, onChange, disabled, productCo
             <div className="col"><label htmlFor={`ai-name-${item.id}`}>Name</label><input id={`ai-name-${item.id}`} value={item.name} disabled={disabled} onChange={(event) => update(item.id, { name: event.target.value })} /></div>
             <div className="col"><label htmlFor={`ai-loan-${item.id}`}>Loan / Reference Number</label><input id={`ai-loan-${item.id}`} value={item.loanNumber} disabled={disabled} onChange={(event) => update(item.id, { loanNumber: event.target.value })} /></div>
           </div>
-          <div className="row">
-            <div className="col"><label htmlFor={`ai-street-${item.id}`}>Street</label><input id={`ai-street-${item.id}`} value={item.street} disabled={disabled} onChange={(event) => update(item.id, { street: event.target.value })} /></div>
-            <div className="col"><label htmlFor={`ai-city-${item.id}`}>City</label><input id={`ai-city-${item.id}`} value={item.city} disabled={disabled} onChange={(event) => update(item.id, { city: event.target.value })} /></div>
-            <div className="col"><label htmlFor={`ai-state-${item.id}`}>State</label><input id={`ai-state-${item.id}`} maxLength={2} value={item.state} disabled={disabled} onChange={(event) => update(item.id, { state: event.target.value.toUpperCase() })} /></div>
-            <div className="col"><label htmlFor={`ai-zip-${item.id}`}>ZIP</label><input id={`ai-zip-${item.id}`} value={item.zip} disabled={disabled} onChange={(event) => update(item.id, { zip: event.target.value })} /></div>
-          </div>
+          <ContactCommunication email={item.email || ''} phone={item.phone || ''} disabled={disabled} onChange={patch => update(item.id, patch)} />
+          <ContactAddresses value={contactAddresses(item.addresses, item)} disabled={disabled} onChange={addresses => update(item.id, { addresses, ...legacyAddress(primaryAddress(addresses)) })} />
           {!disabled && <button type="button" className="btn-secondary" onClick={() => remove(item.id)} aria-label={`Remove additional interest ${index + 1}`}>Remove</button>}
         </div>
       ))}
@@ -181,7 +182,7 @@ export function AdditionalInterestsFields({ value, onChange, disabled, productCo
 /** Read-only summary for the review step. */
 export function CommonQuoteSummary({ value }: { value: CommonQuoteFields }) {
   const address = value.mailingAddress
-  const addressText = address ? [address.street, address.city, [address.state, address.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') : ''
+  const addressText = address ? formatPostalAddress(address) : ''
   return (
     <>
       <div className="kvline"><span className="muted">Prior Expiration</span><span>{value.priorExpirationDate || '-'}</span></div>

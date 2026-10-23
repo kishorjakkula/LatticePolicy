@@ -6,6 +6,8 @@ import { expect, type Locator, type Page } from '@playwright/test'
  * control that immediately follows the label.
  */
 export function fieldByLabel(scope: Page | Locator, label: string): Locator {
+  if (label === 'Garaging ZIP') return scope.getByRole('textbox', { name: 'ZIP Code', exact: true }).first()
+  if (label === 'Address') return scope.getByRole('textbox', { name: 'Address line 1', exact: true }).or(scope.locator('label:text-is("Address")').locator('xpath=following-sibling::input[1]')).first()
   return scope
     .locator(`label:text-is("${label}")`)
     .locator('xpath=following-sibling::*[self::select or self::input or self::textarea][1]')

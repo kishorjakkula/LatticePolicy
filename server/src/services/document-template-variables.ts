@@ -319,7 +319,7 @@ function money(value: unknown): string {
 function oneLineAddress(address: any): string {
   if (!address || typeof address !== 'object') return ''
   const cityLine = [text(address.city), [text(address.state), text(address.zip || address.postalCode)].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-  return [text(address.street || address.line1), cityLine].filter(Boolean).join(', ')
+  return [text(address.street || address.line1), text(address.line2 || address.street2), text(address.line3), cityLine, address.country && address.country !== 'US' ? text(address.country) : ''].filter(Boolean).join(', ')
 }
 
 /**
@@ -330,7 +330,7 @@ function oneLineAddress(address: any): string {
 export function resolvePolicyDetailTokens(payload: any, productConfig?: any): Record<string, string> {
   const interests = Array.isArray(payload?.additionalInterests) ? payload.additionalInterests.filter((item: any) => text(item?.name)) : []
   const mortgagee = interests.find((item: any) => item.role === 'MORTGAGEE') || interests.find((item: any) => item.role === 'LOSS_PAYEE')
-  const interestAddress = (item: any) => oneLineAddress({ street: item.street, city: item.city, state: item.state, zip: item.zip })
+  const interestAddress = (item: any) => oneLineAddress(item)
   const coverages: any[] = Array.isArray(payload?.coverages) ? payload.coverages.filter((cov: any) => cov && cov.selected !== false) : []
   const byCode = new Map<string, any>(coverages.map((cov: any) => [String(cov.code || cov.coverageCode || '').toUpperCase(), cov]))
   const dwelling: any = byCode.get('A') || {}

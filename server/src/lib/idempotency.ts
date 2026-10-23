@@ -193,6 +193,9 @@ export async function idempotencyMiddleware(
 ) {
   const method = req.method.toUpperCase()
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next()
+  // Optional address matching is a read-like operation with private transient
+  // results. Never retain/replay a provider response, even with a supplied key.
+  if (/^\/addresses\/check\/?$/i.test(req.path)) return next()
 
   const key = String(req.header('Idempotency-Key') || '').trim()
   if (!key) return next()

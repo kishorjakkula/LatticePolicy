@@ -96,6 +96,7 @@ export function createApp() {
     },
     credentials: true
   }))
+  app.use(/^\/api\/v1\/addresses\/check\/?$/i, express.json({ limit: '4kb' }))
   app.use(express.json({ limit: '25mb' }))
   app.use(httpLogger)
 
@@ -200,6 +201,10 @@ export function createApp() {
   // Global error handler — must be last middleware
   app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
     const traceId = String(res.getHeader('x-request-id') || (req as any).id || '')
+    if (/^\/api\/v1\/addresses\/check\/?$/i.test(req.path) && ['entity.too.large', 'entity.parse.failed'].includes((err as any).type)) {
+      const status = (err as any).type === 'entity.too.large' ? 413 : 400
+      return res.status(status).json({ code: status === 413 ? 'PAYLOAD_TOO_LARGE' : 'INVALID_ADDRESS_INPUT', message: 'Invalid address request', traceId })
+    }
     if (err instanceof AppError) {
       return res.status(err.statusCode).json({
         code: err.code,

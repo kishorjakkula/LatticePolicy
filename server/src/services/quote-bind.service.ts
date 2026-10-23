@@ -331,7 +331,7 @@ export function additionalInterestRowsFromPayload(payload: any): Array<{ role: s
       role: text(item?.role, 40).toUpperCase(),
       name: text(item?.name),
       loanNumber: text(item?.loanNumber, 80) || null,
-      address: { street: text(item?.street), city: text(item?.city, 100), state: text(item?.state, 2).toUpperCase(), zip: text(item?.zip, 10) },
+      address: { street: text(item?.street), ...(item?.line2 ? { line2: text(item.line2) } : {}), ...(item?.line3 ? { line3: text(item.line3) } : {}), ...(item?.county ? { county: text(item.county, 100) } : {}), ...(item?.country ? { country: text(item.country, 2) } : {}), city: text(item?.city, 100), state: text(item?.state, !item?.country || item.country === 'US' ? 2 : 100).toUpperCase(), zip: text(item?.zip, 20) },
     }))
     .filter((item: any) => item.name && (QUOTE_INTEREST_ROLES as readonly string[]).includes(item.role))
     .slice(0, 20)

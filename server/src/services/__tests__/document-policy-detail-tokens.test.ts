@@ -30,6 +30,10 @@ const hoPayload = {
 }
 
 describe('resolvePolicyDetailTokens', () => {
+  it('prints unit and ZIP+4 without nesting contact communication in postal data', () => {
+    const tokens = resolvePolicyDetailTokens({ ...hoPayload, mailingAddress: { street: '20 Example Street', line2: 'APT 4B', city: 'Boston', state: 'MA', zip: '02108-1234' } })
+    expect(tokens.mailingAddress).toBe('20 Example Street, APT 4B, Boston, MA 02108-1234')
+  })
   it('resolves homeowners declarations values and common policy details', () => {
     const tokens = resolvePolicyDetailTokens(hoPayload, loadProductConfig('homeowners'))
     expect(tokens).toMatchObject({

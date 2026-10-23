@@ -9,6 +9,7 @@ import { useClientPagination } from '../../hooks/useClientPagination'
 import { formatDisplayDate, formatDisplayDateTime } from '../../shared/dateDisplay'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
 import { useConfirmDialog, useReasonDialog } from '../../components/Dialog'
+import { ContactAddresses } from '../../components/ContactAddresses'
 
 type EntityType = 'INDIVIDUAL' | 'COMPANY' | 'BOTH'
 type CustomerStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'MERGED' | 'PENDING_APPROVAL' | 'ARCHIVED'
@@ -1434,28 +1435,7 @@ function renderContactSection(record: any, markRecord: (next: any) => void, canE
       </table>
       <button type="button" className="btn-secondary" onClick={addContact} disabled={!canEdit}>Add Contact</button>
 
-      <h3 className="section-title">Addresses</h3>
-      <table className="table">
-        <thead><tr><th>Type</th><th>Line1</th><th>City</th><th>State</th><th>Postal</th><th>Country</th><th>Primary</th><th>Effective From</th><th>Effective To</th><th>Action</th></tr></thead>
-        <tbody>
-          {(record.addresses || []).length === 0 && <tr><td colSpan={10} className="muted">No addresses.</td></tr>}
-          {(record.addresses || []).map((item: any, index: number) => (
-            <tr key={`${item.addressId || 'new'}-${index}`}>
-              <td><input value={item.addressType || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { addressType: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input value={item.line1 || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { line1: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input value={item.city || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { city: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input value={item.state || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { state: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input value={item.postalCode || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { postalCode: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input value={item.country || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { country: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input type="checkbox" checked={item.primary === true} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { primary: e.target.checked }))} disabled={!canEdit} /></td>
-              <td><input type="date" value={item.effectiveFrom || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { effectiveFrom: e.target.value }))} disabled={!canEdit} /></td>
-              <td><input type="date" value={item.effectiveTo || ''} onChange={(e) => markRecord(updateArrayItem(record, 'addresses', index, { effectiveTo: e.target.value }))} disabled={!canEdit} /></td>
-              <td><button type="button" className="btn-secondary" onClick={() => markRecord(removeArrayItem(record, 'addresses', index))} disabled={!canEdit}>Remove</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button type="button" className="btn-secondary" onClick={addAddress} disabled={!canEdit}>Add Address</button>
+      <ContactAddresses scope={record.customerId || record.customerKey} value={record.addresses || []} onChange={addresses => markRecord({ ...record, addresses })} disabled={!canEdit} />
     </CollapsibleSection>
   )
 }
