@@ -2012,6 +2012,7 @@ export function QuoteWizard() {
       }
       setStep(nextStep)
       resetBindingState()
+      setRatingNeedsRefresh(false)
       const convertedPolicyId = String(resp.convertedPolicyId || '').trim()
       if (wizardMode === 'quote' && ['Converted', 'Issued'].includes(normalizedStatus) && convertedPolicyId) {
         let policyNumberFromApi = String(policyContext?.policyNumber || '').trim()

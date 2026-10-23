@@ -72,3 +72,51 @@
 ### Gate C
 
 **Blocked.** Three Major findings are open and returned to the developer. No Blockers.
+
+## Re-check — 2026-10-23
+
+Reviewed `git diff 39d6cbf..a05669e` (commits 4056124 and a05669e). I checked each claim in 05 "Code review fixes" against the code.
+
+### Earlier findings
+
+| Finding | Status | Evidence |
+| --- | --- | --- |
+| M1 product pin | **Resolved** | `quote.service.ts:507`: `withServerOwnedFieldsFrom(normalizedPayload, row.payload)` drops the client's `productSnapshot`, `productVersion` and `governanceLineage` and copies the stored values. `insertDraftQuote` strips them. New tests cover the swap and the autosave; the swap test also passes when the stored pin is absent, because the client value is still dropped. |
+| M2 older ratings in other statuses | **Resolved** | `quote.service.ts:512-515`: reset when `row.underwriting != null` and the status is not Converted or Issued. The test with an older Expired quote resets it and bind refuses. |
+| M3 policy-transaction audit save | **Resolved, with a new Minor (N1)** | Issued is accepted in any state that is not final. Bind refuses Converted and Issued twice, early (`quote-bind.service.ts:374`) and under the lock (`:692`). Tested. |
+| Minor: create accepts any status | **Resolved** | `insertDraftQuote` and the in-memory create accept only Draft, and the route passes AppError through. Intake (`submission-intake.service.ts:1097`) and `PolicyViewPage.tsx:570` both send Draft. |
+| Minor: in-memory fallback | **Accepted** | Development only (05). The human approver should confirm at Gate C that production never runs without a database. |
+| Minor: `ratingNeedsRefresh` not cleared | **Not resolved** | The reset was added at `QuoteWizard.tsx:1247`, which is in the read-only policy-version load effect. `loadQuoteFromServer` (around line 1978-2040), the path that opens another quote, still does not clear the flag. Fix: call `setRatingNeedsRefresh(false)` next to `resetBindingState()` there. |
+| Minor: test gaps | **Partly resolved** | Added: the race, the REQ-2 unrated-draft bind, and Expired. Still missing: HTTP-level tests of the route, the wizard-state tests, and the `buildWizardQuotePayload` stability fixture. The race test only proves the interleavings that happen to occur. With an in-process `Promise.allSettled`, the save usually wins before bind's long first phase, so the branch where bind wins rarely runs. |
+| Minor: documents | **Resolved** | 02 and API.md now say "accepted as it stands", and the status and pin rules are documented. |
+
+### New findings
+
+| Severity | File:line | Finding | Failure scenario | Outcome |
+| --- | --- | --- | --- | --- |
+| Minor | server/src/services/quote.service.ts:488-518 | N1. Any client can now set Issued on any unbound quote (Draft, Rated or Expired). This departs from Gate A answer 2 ("Issued and later statuses are server-owned"). Binding is not bypassed: an Issued quote cannot be bound. | A user with `page.wizard.view` in the tenant marks another user's Rated quote Issued. It can no longer be bound, and the quote list shows Issued with no policy. A re-rate through `POST /quotes` with that quoteId (below) makes it Rated again. | Accepted for this package if the human approver agrees at Gate C. A follow-up should have the policy-transaction endpoints record Issued on the server, then remove the client Issued. |
+| Minor | server/src/lib/rating-fingerprint.ts:38; quote.service.ts:507, copyQuote | N2. The product pin is carried even after a rating reset, including when the user switches product. The stored draft can then hold product B with product A's `productSnapshot`. `copyQuote` also still copies the pin into a new draft, which contradicts "new drafts drop client values". | Low impact today. Rating re-pins (`pinToCurrentProduct`) and bind needs a rating. But any future consumer that resolves the pin from a draft (`ensureProductSnapshots`, as in `/ai/quotes/insights`) gets `PRODUCT_VERSION_NOT_LOADED` for that draft. | Returned (small fix: drop the pin fields when `ratingReset` is true or when the product code changes, and strip them in `copyQuote`). |
+| Info | server/src/services/quote.service.ts:206-214 | Not part of this diff. A re-rate through `POST /quotes` with a quoteId does not check the status, so it moves an Issued policy-transaction quote back to Rated. That quote has no `converted_policy_id`, so it can then be bound as new business. Underwriting runs again, so this is not an underwriting bypass. Before this PR it was easier: such quotes could be bound directly. | A duplicate new-business policy is created from a renewal or rewrite quote. | Separate work item: re-rate should refuse Converted and Issued quotes. |
+
+### Questions from the coordinator
+
+- **Could a stale Issued quote matter?** It cannot be bound, and its draft saves no longer reset anything (a final status). The stale-quote job ignores it, which is harmless.
+- **Can an old pin be carried forward?** Yes, after a reset or a product switch (N2). Binding still requires a new rating, and the new rating re-pins.
+- **Do intake or AI flows trigger the reset?** No. Intake and AI create drafts through `insertDraftQuote`, which has no underwriting, so nothing resets. Only the draft PATCH route calls `updateDraftQuote`.
+
+### Checks run at a05669e (Node 24.21)
+
+- Server typecheck: clean.
+- `server: npx vitest run quote fingerprint` passed 37/37.
+- `frontend: npx vitest run src/features/wizard` passed 113/113 in 12 files.
+- The integration suite could not run locally (no PostgreSQL). I read the tests but could not verify the developer's 43/43 claim.
+- `gh pr checks 398` on the new head: Build/Test/Typecheck, DB Integration Tests, Playwright E2E and pilot were still pending when I checked.
+
+### Gate C (review view)
+
+**Not blocked by code review.** No Blocker or Major findings are open. Open Minors:
+- `ratingNeedsRefresh` on quote load (not resolved);
+- N2 stale pin;
+- the remaining test gaps.
+
+N1 and the in-memory fallback need the human approver's explicit acceptance. CI on a05669e must be green before merge.

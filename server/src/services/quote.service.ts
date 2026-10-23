@@ -504,7 +504,11 @@ export async function updateDraftQuote(
     const row = current.rows[0]
     // Product pinning is server-owned: keep what rating stored, whatever the
     // client sent (a swapped productSnapshot would re-price and re-rule bind).
-    const nextPayload = normalizedPayload == null ? null : withServerOwnedFieldsFrom(normalizedPayload, row.payload)
+    // The stored pin is kept only for a quote still on the same product; a
+    // switched product gets its pin when it is rated again (WP-0008).
+    const sameProduct = normalizedPayload != null && normalizedPayload.productCode === row.payload?.productCode
+    const nextPayload = normalizedPayload == null ? null
+      : sameProduct ? withServerOwnedFieldsFrom(normalizedPayload, row.payload) : withoutServerOwnedFields(normalizedPayload)
     // A change to the risk data after rating needs a new rating: otherwise bind
     // would use an underwriting result and premium for a different risk. This
     // applies to any quote still holding a rating (Rated, or an older Rated quote
@@ -590,7 +594,8 @@ export async function copyQuote(
   const row = result.rows[0]
   const newId = uuidv4()
   const quoteNumber = generateQuoteNumber()
-  const copyPayload = normalizeQuotePayload(row.payload, row.effective_date)
+  // A copy is an unrated draft: it gets its own product pin when rated (WP-0008).
+  const copyPayload = normalizeQuotePayload(withoutServerOwnedFields(row.payload || {}), row.effective_date)
 
   await withTenantTx(tenantId, (innerDb) =>
     toRawQuery(innerDb)(
