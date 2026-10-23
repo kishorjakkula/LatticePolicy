@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { config } from '../config'
 import { tenantId } from '../api/request'
+import latticePolicyLogo from '../assets/lattice-policy-logo.svg'
+import './carrier-branding.css'
 
 export type CarrierBranding = { name: string; primaryColor: string; logoDataUrl: string | null; documentFooter: string }
 export function fallbackBranding(id: string): CarrierBranding {
@@ -32,6 +34,11 @@ export function CarrierBrand({ id = tenantId(), className }: { id?: string; clas
     root.setProperty('--accent', brand.primaryColor)
     root.setProperty('--accent-strong', brand.primaryColor)
     root.setProperty('--accent-soft', `color-mix(in srgb, ${brand.primaryColor} 12%, white)`)
-  }, [brand.name, brand.primaryColor])
-  return brand.logoDataUrl ? <img src={brand.logoDataUrl} alt={brand.name} className={className} /> : <strong className={className}>{brand.name}</strong>
+  }, [brand.name, brand.primaryColor, brand.logoDataUrl])
+  return brand.logoDataUrl ? <img src={brand.logoDataUrl} alt={brand.name} className={className} /> : (
+    <span className="carrier-brand-fallback">
+      <img src={latticePolicyLogo} alt="LatticePolicy" className={className} width={278} height={72} />
+      <strong className="carrier-brand-name">{brand.name}</strong>
+    </span>
+  )
 }

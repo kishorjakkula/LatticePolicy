@@ -24,6 +24,11 @@ Pilot administration owns carrier identity instead of displaying the framework l
 - Historical packets without a branding snapshot retain their old rendering contract solely for byte-identical recovery. The framework name is never inserted into new carrier documents. Uploaded regulatory DOCX form content remains authored by the carrier.
 - Synthetic pilot examples can be rebranded with `npm run pilot:rebrand-documents`; setup does not rewrite issued documents automatically. Originals remain archived through their existing immutable storage paths.
 - The checked-in Acme logo is a replaceable demonstration monogram, not a customer-provided identity.
+- Screen-only default: when a carrier has not supplied a logo, show the bundled
+  LatticePolicy artwork plus the carrier name on login and shared app header;
+  use its lattice mark for the default browser icon. Supplied carrier logos
+  remain primary. This does not add framework branding to carrier documents.
+  See `restore-platform-logo.md` (WP-0006).
 
 ## Automated tests and validation
 
