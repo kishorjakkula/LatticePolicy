@@ -23,14 +23,16 @@ before release are treated as rated once.
   - **Rate (create/re-rate):** stores `underwriting.ratedFingerprint`. The `underwriting` JSON keeps its shape; this adds one key.
   - **`updateDraftQuote`:**
     - Reads the row `FOR UPDATE`.
-    - If the stored status is Rated and the new payload's fingerprint differs from `underwriting.ratedFingerprint`, it sets status Draft, sets `underwriting` and `premium` to NULL, and adds a status-history entry.
+    - If the quote still holds a rating (any status but Converted or Issued, including older Rated quotes since marked Expired or Draft) and the new payload's fingerprint differs from `underwriting.ratedFingerprint`, it sets status Draft, sets `underwriting` and `premium` to NULL, and adds a status-history entry.
+    - The product pin (`productSnapshot`, `productVersion`, `governanceLineage`) is server-owned: draft saves keep the stored values and ignore the client's, and new drafts drop any the client sends. That keeps those fields safe to leave out of the fingerprint.
+    - `POST /quotes/draft` accepts only Draft as a status.
     - The client `status` field is validated:
       - "Draft" or no value: the server derives the status;
-      - "Issued": allowed only when the stored status is Converted or Issued (the wizard's post-issue audit save, `QuoteWizard.tsx:3052,3068`);
+      - "Issued": the wizard's audit save after issuing a policy or applying a policy transaction; an Issued quote can no longer be bound (bind refuses Converted and Issued quotes with `QUOTE_ALREADY_BOUND`);
       - anything else: 400 `INVALID_STATUS`.
 - `server/src/services/quote-bind.service.ts`, before any policy work:
   - The quote must have `underwriting` and `premium`.
-  - Its payload fingerprint must equal `underwriting.ratedFingerprint`. A missing fingerprint (rated before release) is accepted once and recorded.
+  - Its payload fingerprint must equal `underwriting.ratedFingerprint`. A missing fingerprint (rated before release) is accepted as it stands; any later change resets it.
   - Otherwise 409 `QUOTE_RERATE_REQUIRED`, with nothing written.
   - The existing #394 `FOR UPDATE` re-read happens inside the same transaction.
 - `server/src/schemas/quote.schema.ts`: `status` stays optional (service-validated); the OpenAPI description lists the allowed values and the new error codes.
@@ -59,7 +61,7 @@ code; stored fingerprints are ignored by older code.
 - All reads and writes stay on `tenant_id = $1` inside `withTenantTx`, with `FOR UPDATE` on the quote row in draft save and bind, so a save and a bind cannot interleave.
 - The fingerprint is computed only on the server; nothing from the client is trusted (no client hash, no client status).
 - Audit: the rating reset is written to `status_history` with actor and time; the bind refusal is logged with the quote id (no payload).
-- Legacy quotes without a fingerprint: accepted once at bind (Gate A default). After release, any draft edit removes their Rated status.
+- Legacy quotes without a fingerprint: accepted at bind as they stand (Gate A default). After release, any draft edit that changes their risk data clears their rating.
 
 ## Performance, operations and configuration
 

@@ -13,7 +13,7 @@
   - **Rating** stores `underwriting.ratedFingerprint` on both the insert and re-rate paths.
   - **`updateDraftQuote`:**
     - locks the row (`FOR UPDATE`);
-    - validates the client status (only Draft, or Issued on a Converted/Issued quote; otherwise 400 `INVALID_STATUS`, including non-string values);
+    - validates the client status (only Draft or Issued; otherwise 400 `INVALID_STATUS`, including non-string values);
     - a client "Draft" never changes the stored status, so it can no longer reopen a bound quote, a defect older than this package;
     - resets status, underwriting and premium when the risk fingerprint changes on a Rated quote, compared against the current payload for ratings made before this package;
     - returns `ratingReset`.
@@ -33,6 +33,18 @@
   - new `frontend/src/features/wizard/__tests__/rerate.test.tsx` (4);
   - `coverage-integrity.integration.test.ts` and `carrier-pack-lifecycle.integration.test.ts` now drop the fingerprint when they tamper with a stored quote, so bind still reaches the product-rules re-check those tests cover.
 - `docs/API.md`: the draft and bind contract changes.
+
+## Code review fixes (2026-10-23)
+
+- **M1:** the product pin is server-owned. Draft saves carry the stored `productSnapshot`, `productVersion` and `governanceLineage` (`withServerOwnedFieldsFrom`); new drafts drop client values. This also stops wizard autosaves from removing the pin, a defect older than this package.
+- **M2:** the rating reset applies to any quote still holding a rating except Converted and Issued, so older Rated quotes since marked Expired or Draft are covered.
+- **M3:** "Issued" is accepted as the wizard's audit save after policy transactions as well as new business. Bind refuses Converted and Issued quotes (`QUOTE_ALREADY_BOUND`), both before any work and under the lock.
+- **Minor fixes:**
+  - `POST /quotes/draft` accepts only Draft, and passes domain errors through.
+  - The re-rate flag is cleared when another quote loads.
+  - Docs wording: older ratings are "accepted as they stand", with nothing recorded.
+- **Not changed:** the in-memory fallback (development only) still keeps an old rating on a draft change and has no bind fingerprint check. Production always runs with a database.
+- **Tests added** to `rated-quote-guard.integration.test.ts`: the product pin swap and autosave; an older Expired quote; Issued after a policy transaction, then bind refused; create Draft-only and an unrated draft refused at bind; a racing draft save and bind (3 rounds). 20 cases pass, and 43 across the 6 affected integration files.
 
 ## Deviations from the design
 

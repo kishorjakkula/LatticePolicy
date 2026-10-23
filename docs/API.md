@@ -29,8 +29,10 @@ Endpoints
 
 - PATCH /v1/quotes/{id}/draft
   - Save draft progress. The quote status is server-owned: a client may send only
-    `Draft`, or `Issued` on an already bound quote; any other value is
-    400 `INVALID_STATUS`.
+    `Draft`, or `Issued` (recorded after issuing; an Issued quote cannot be bound);
+    any other value is 400 `INVALID_STATUS`. `POST /v1/quotes/draft` accepts only
+    `Draft`. Product pin fields (`productSnapshot`, `productVersion`,
+    `governanceLineage`) are kept from rating; client values are ignored.
   - Changing risk data on a Rated quote (anything but `billingMethod` and
     `paymentPlan`) returns it to Draft and clears its underwriting result and
     premium; the response then has `ratingReset: true` (WP-0008).
