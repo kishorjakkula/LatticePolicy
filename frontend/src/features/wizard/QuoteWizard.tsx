@@ -1243,6 +1243,8 @@ export function QuoteWizard() {
         setIssued(false)
         setIssuedTransactionVersion(null)
         ratedPayloadSnapshot.current = ''
+        // A newly loaded quote starts without a re-rate prompt from the previous one.
+        setRatingNeedsRefresh(false)
         if (isPolicyTransactionMode) {
           const nextTransactionDate = normalizeDateInput(transactionEffectiveDateParam || merged.effectiveDate)
           if (nextTransactionDate) setTransactionEffectiveDate(nextTransactionDate)

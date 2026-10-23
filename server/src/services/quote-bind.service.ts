@@ -358,7 +358,7 @@ export async function bindQuote(
   // ── 1. Fetch quote from DB ──────────────────────────────────────────────────
   const r: any = await withTenantTx(tenantId, (innerDb) =>
     toRawQuery(innerDb)(
-      'SELECT payload, underwriting, premium, status_history, step_history FROM quotes WHERE tenant_id=$1 AND quote_id=$2',
+      'SELECT payload, underwriting, premium, status, status_history, step_history FROM quotes WHERE tenant_id=$1 AND quote_id=$2',
       [tenantId, quoteId]
     )
   )
@@ -369,7 +369,11 @@ export async function bindQuote(
 
   const row = r.rows[0]
   const quote = { payload: row.payload, uw: row.underwriting, premium: row.premium }
-  // Refuse before any referral or policy work if the rating is missing or stale.
+  // Refuse before any referral or policy work if the quote is already bound or
+  // issued, or its rating is missing or stale.
+  if (row.status === 'Converted' || row.status === 'Issued') {
+    throw new BadRequestError('QUOTE_ALREADY_BOUND', 'This quote has already been bound.')
+  }
   assertBindableRating(quote.payload, quote.uw, quote.premium)
   requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
   // The quote is bound on the product version it was rated on.
@@ -684,7 +688,8 @@ export async function bindQuote(
       FROM quotes WHERE tenant_id=$1 AND quote_id=$2 FOR UPDATE`, [tenantId, quoteId])
     const latest = current.rows[0]
     if (!latest) throw new NotFoundError('QUOTE_NOT_FOUND')
-    if (latest.converted_policy_id || latest.status === 'Converted') {
+    // An Issued quote was recorded after its policy or policy transaction was issued.
+    if (latest.converted_policy_id || latest.status === 'Converted' || latest.status === 'Issued') {
       throw new BadRequestError('QUOTE_ALREADY_BOUND', 'This quote has already been bound.')
     }
     // Authoritative check under the same lock as policy creation (WP-0008).

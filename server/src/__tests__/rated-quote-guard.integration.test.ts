@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb, initDb } from '../db.js'
-import { createOrRateQuote, updateDraftQuote } from '../services/quote.service.js'
+import { createDraftQuote, createOrRateQuote, updateDraftQuote } from '../services/quote.service.js'
 import { bindQuote } from '../services/quote-bind.service.js'
 
 // WP-0008: a quote binds only on the risk it was rated for.
@@ -133,7 +133,7 @@ describe('WP-0008 rated quote guard', () => {
     expect(changed).toMatchObject({ status: 'Draft', ratingReset: true })
   })
 
-  it.each(['Rated', 'Bound', 'Converted', 'rated', 'Issued'])('refuses a client status %s on an unbound quote', async (status) => {
+  it.each(['Rated', 'Bound', 'Converted', 'rated', 'Expired'])('refuses a client status %s', async (status) => {
     const quote = await rate()
     await expect(updateDraftQuote({} as any, tenantId, quote.quoteId, { status }, 'wp-0008-test'))
       .rejects.toMatchObject({ code: 'INVALID_STATUS', statusCode: 400 })
@@ -163,5 +163,76 @@ describe('WP-0008 rated quote guard', () => {
     await expect(updateDraftQuote({} as any, otherTenant, quote.quoteId, { payload: wizardDraftPayload(quote.quoteId, { termMonths: 6 }) }, 'wp-0008-test'))
       .rejects.toMatchObject({ code: 'QUOTE_NOT_FOUND' })
     expect((await stored(quote.quoteId)).status).toBe('Rated')
+  })
+
+  it('keeps the stored product pin: a swapped productSnapshot is ignored and the rating stays', async () => {
+    const quote = await rate()
+    const before = await stored(quote.quoteId)
+    const swapped = await updateDraftQuote({} as any, tenantId, quote.quoteId, {
+      payload: { ...wizardDraftPayload(quote.quoteId), productSnapshot: { id: 'another-version', version: '9.9' }, productVersion: '9.9', governanceLineage: { versionLabel: '9.9' } },
+    }, 'wp-0008-test')
+    expect(swapped).toMatchObject({ status: 'Rated', ratingReset: false })
+    const after = await stored(quote.quoteId)
+    expect(after.payload.productSnapshot).toEqual(before.payload.productSnapshot)
+    expect(after.payload.productVersion).toEqual(before.payload.productVersion)
+    expect(after.payload.governanceLineage).toEqual(before.payload.governanceLineage)
+  })
+
+  it('keeps the stored product pin when the wizard autosave omits it', async () => {
+    const quote = await rate()
+    const before = await stored(quote.quoteId)
+    await updateDraftQuote({} as any, tenantId, quote.quoteId, { payload: wizardDraftPayload(quote.quoteId) }, 'wp-0008-test')
+    expect((await stored(quote.quoteId)).payload.productSnapshot).toEqual(before.payload.productSnapshot)
+  })
+
+  it('resets an older rating on a quote since marked Expired, and bind refuses it', async () => {
+    const quote = await rate()
+    await getDb()!.query(`UPDATE quotes SET status='Expired', underwriting = underwriting - 'ratedFingerprint' WHERE tenant_id=$1 AND quote_id=$2`, [tenantId, quote.quoteId])
+    const changed = await updateDraftQuote({} as any, tenantId, quote.quoteId, {
+      payload: wizardDraftPayload(quote.quoteId, { risks: [{ ...quotePayload().risks[0], driverAge: 17 }] }),
+    }, 'wp-0008-test')
+    expect(changed).toMatchObject({ status: 'Draft', ratingReset: true })
+    await expect(bindQuote({} as any, tenantId, quote.quoteId, {}, 'wp-0008-test', null))
+      .rejects.toMatchObject({ code: 'QUOTE_RERATE_REQUIRED' })
+  })
+
+  it('records Issued after a policy transaction (rated, never bound), and such a quote cannot be bound', async () => {
+    const quote = await rate()
+    const issued = await updateDraftQuote({} as any, tenantId, quote.quoteId, { payload: wizardDraftPayload(quote.quoteId), status: 'Issued' }, 'wp-0008-test')
+    expect(issued.status).toBe('Issued')
+    await expect(bindQuote({} as any, tenantId, quote.quoteId, {}, 'wp-0008-test', null))
+      .rejects.toMatchObject({ code: 'QUOTE_ALREADY_BOUND' })
+    expect(await policiesFor(quote.quoteId)).toBe(0)
+  })
+
+  it('creates every new quote as a Draft, and an unrated draft cannot be bound', async () => {
+    await expect(createDraftQuote({} as any, tenantId, { payload: quotePayload(), status: 'Rated' }, 'wp-0008-test'))
+      .rejects.toMatchObject({ code: 'INVALID_STATUS' })
+    const draft = await createDraftQuote({} as any, tenantId, { payload: { ...quotePayload(), productSnapshot: { id: 'client-chosen' } } }, 'wp-0008-test')
+    const row = await stored(draft.quoteId)
+    expect(row.status).toBe('Draft')
+    expect(row.payload.productSnapshot).toBeUndefined()
+    await expect(bindQuote({} as any, tenantId, draft.quoteId, {}, 'wp-0008-test', null))
+      .rejects.toMatchObject({ code: 'QUOTE_RERATE_REQUIRED' })
+  })
+
+  it('never binds changed risk when a draft save and a bind race', async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const quote = await rate()
+      const [save, bind] = await Promise.allSettled([
+        updateDraftQuote({} as any, tenantId, quote.quoteId, { payload: wizardDraftPayload(quote.quoteId, { risks: [{ ...quotePayload().risks[0], driverAge: 17 }] }) }, 'wp-0008-test'),
+        bindQuote({} as any, tenantId, quote.quoteId, {}, 'wp-0008-test', null),
+      ])
+      if (bind.status === 'fulfilled') {
+        // The bind won the lock: the policy carries the rated risk, not the edit.
+        const policy = await getDb()!.query(
+          `SELECT v.payload FROM policy_versions v JOIN quotes q ON q.converted_policy_id = v.policy_id AND q.tenant_id = v.tenant_id
+            WHERE q.tenant_id=$1 AND q.quote_id=$2 ORDER BY v.processed_at LIMIT 1`, [tenantId, quote.quoteId])
+        expect(policy.rows[0]?.payload?.risks?.[0]?.driverAge).toBe(30)
+      } else {
+        expect(['QUOTE_RERATE_REQUIRED', 'QUOTE_CHANGED']).toContain((bind.reason as any)?.code)
+        expect(save.status).toBe('fulfilled')
+      }
+    }
   })
 })

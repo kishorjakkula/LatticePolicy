@@ -13,7 +13,7 @@ import { checkStateEligibility } from '../policyCompliance.js'
 import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
 import { resolveGovernanceRelease } from './product-governance.service.js'
-import { ratingFingerprint, storedRatingFingerprint } from '../lib/rating-fingerprint.js'
+import { ratingFingerprint, storedRatingFingerprint, withServerOwnedFieldsFrom, withoutServerOwnedFields } from '../lib/rating-fingerprint.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -400,8 +400,13 @@ export async function insertDraftQuote(
 ): Promise<DraftQuoteResult> {
   const quoteId = uuidv4()
   const progressStep = clampStep(body.progressStep)
-  const status = typeof body.status === 'string' ? body.status : 'Draft'
-  const payload = normalizeQuotePayload(body.payload || {}, body.effectiveDate)
+  // A new quote is always a Draft; lifecycle statuses are server-owned (WP-0008).
+  if (body.status != null && body.status !== 'Draft') {
+    throw new BadRequestError('INVALID_STATUS', 'A new quote starts as a Draft.')
+  }
+  const status = 'Draft'
+  // Product pinning is server-owned: rating sets it, never the client.
+  const payload = normalizeQuotePayload(withoutServerOwnedFields(body.payload || {}), body.effectiveDate)
   const nowIso = new Date().toISOString()
   const stepHistory = upsertQuoteAuditHistory([], progressStep, nowIso, updatedBy)
   const statusHistory = upsertQuoteAuditHistory([], status, nowIso, updatedBy)
@@ -479,7 +484,8 @@ export async function updateDraftQuote(
   const hasPayload = Object.keys(payload).length > 0
   const normalizedPayload = hasPayload ? normalizeQuotePayload(payload, body.effectiveDate) : null
   // Status is server-owned (WP-0008): a client may only ask for Draft, or record
-  // Issued on a quote that was already bound (the wizard's post-issue audit save).
+  // Issued after the wizard issues a policy or applies a policy transaction (its
+  // post-issue audit save). An Issued quote can no longer be bound.
   const status = body.status == null ? undefined : body.status
   if (status !== undefined && status !== 'Draft' && status !== 'Issued') {
     throw new BadRequestError('INVALID_STATUS', 'A quote status can only be set by rating or binding.')
@@ -496,14 +502,17 @@ export async function updateDraftQuote(
     )
     if (!current.rowCount) return null
     const row = current.rows[0]
-    if (status === 'Issued' && row.status !== 'Converted' && row.status !== 'Issued') {
-      throw new BadRequestError('INVALID_STATUS', 'Only a bound quote can be recorded as issued.')
-    }
+    // Product pinning is server-owned: keep what rating stored, whatever the
+    // client sent (a swapped productSnapshot would re-price and re-rule bind).
+    const nextPayload = normalizedPayload == null ? null : withServerOwnedFieldsFrom(normalizedPayload, row.payload)
     // A change to the risk data after rating needs a new rating: otherwise bind
-    // would use an underwriting result and premium for a different risk.
+    // would use an underwriting result and premium for a different risk. This
+    // applies to any quote still holding a rating (Rated, or an older Rated quote
+    // since marked Expired or Draft), not only to Rated ones.
+    const finalStatus = row.status === 'Converted' || row.status === 'Issued'
     const ratedFingerprint = storedRatingFingerprint(row.underwriting)
-    const ratingReset = row.status === 'Rated' && normalizedPayload != null
-      && (ratedFingerprint ? ratingFingerprint(normalizedPayload) !== ratedFingerprint : ratingFingerprint(normalizedPayload) !== ratingFingerprint(row.payload))
+    const ratingReset = !finalStatus && row.underwriting != null && nextPayload != null
+      && (ratedFingerprint ? ratingFingerprint(nextPayload) !== ratedFingerprint : ratingFingerprint(nextPayload) !== ratingFingerprint(row.payload))
     // A client "Draft" never changes the status (it could otherwise reopen a
     // bound quote); only a rating reset or the post-issue audit save moves it.
     const nextStatus = ratingReset ? 'Draft' : status === 'Issued' ? 'Issued' : row.status || 'Draft'
@@ -518,7 +527,7 @@ export async function updateDraftQuote(
       [
         tenantId,
         quoteId,
-        normalizedPayload,
+        nextPayload,
         nextStatus,
         nextStep,
         nowIso,
@@ -528,7 +537,7 @@ export async function updateDraftQuote(
         ratingReset,
       ]
     )
-    return { ...update.rows[0], rating_reset: ratingReset }
+    return { ...update.rows[0], rating_reset: ratingReset, next_payload: nextPayload }
   })
 
   if (!result) throw new NotFoundError('QUOTE_NOT_FOUND')
@@ -542,7 +551,7 @@ export async function updateDraftQuote(
     updatedBy,
     statusHistory: normalizeQuoteAuditHistory(result.status_history),
     stepHistory: normalizeQuoteAuditHistory(result.step_history),
-    normalizedPayload,
+    normalizedPayload: result.next_payload ?? normalizedPayload,
     ratingReset: Boolean(result.rating_reset),
   }
 }

@@ -181,7 +181,8 @@ quoteRoutes.post('/quotes/draft', requirePermission(['page.wizard.view']), valid
       try {
         const result = await quoteService.createDraftQuote(db as any, tenantId, body, updatedBy)
         return ok(res, result)
-      } catch {
+      } catch (error) {
+        if (error instanceof AppError) return next(error)
         return res
           .status(500)
           .json({ code: 'DB_ERROR', message: 'Unable to create draft quote' })
@@ -191,7 +192,11 @@ quoteRoutes.post('/quotes/draft', requirePermission(['page.wizard.view']), valid
     // In-memory fallback
     const quoteId = uuidv4()
     const progressStep = quoteService.clampStep(body.progressStep)
-    const status = typeof body.status === 'string' ? body.status : 'Draft'
+    // A new quote is always a Draft (WP-0008), as on the database path.
+    if (body.status != null && body.status !== 'Draft') {
+      return res.status(400).json({ code: 'INVALID_STATUS', message: 'A new quote starts as a Draft.' })
+    }
+    const status = 'Draft'
     const payload = quoteService.normalizeQuotePayload(body.payload || {}, body.effectiveDate)
     const nowIso = new Date().toISOString()
     const stepHistory = quoteService.upsertQuoteAuditHistory([], progressStep, nowIso, updatedBy)
