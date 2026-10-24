@@ -20,10 +20,11 @@ import {
   useAgencyContacts
 } from '../../api/hooks'
 import { fetchCarrierBranding } from '../../tenant/carrierBranding'
-import { normalizePayloadCoverages } from './coverageUtils'
+import { buildGenericCoverageDefaults, createCoverageSelection, hasDeclaredCoverageDefaults, normalizePayloadCoverages } from './coverageUtils'
 import { configMatchesProduct, useHomeownersAutoDefaults, useProductConfiguration } from './useProductConfiguration'
 import {
   defaultAutoRisk,
+  defaultBusinessownersRisk,
   defaultCommercialAutoRisk,
   defaultCyberRisk,
   defaultDwellingRisk,
@@ -55,6 +56,7 @@ import {
 import { formatDisplayDate } from '../../shared/dateDisplay'
 import type { ProductCapabilityDescriptor } from '@lattice-policy/types'
 import { CollapsibleSection } from '../../components/CollapsibleSection'
+import { CoveragePackageTerms, coveragePackageTerms, packageTermLines } from '../../components/CoveragePackageTerms'
 
 type ProductCode = string
 type QuoteProductCode = ProductCode | ''
@@ -710,7 +712,7 @@ function formatSelectionLabel(value: any): string {
     .join(' ')
 }
 
-function defaultRisksForProduct(code: QuoteProductCode): any[] {
+export function defaultRisksForProduct(code: QuoteProductCode): any[] {
   const configuredRisk = code ? runtimeProductRegistry.get(code)?.defaultRisk : null
   if (configuredRisk && Object.keys(configuredRisk).length) {
     return [JSON.parse(JSON.stringify(configuredRisk))]
@@ -720,6 +722,7 @@ function defaultRisksForProduct(code: QuoteProductCode): any[] {
   if (code === 'homeowners') return [defaultDwellingRisk()]
   if (code === 'cyber') return [defaultCyberRisk()]
   if (code === 'professional-liability') return [defaultProfessionalLiabilityRisk()]
+  if (code === 'businessowners') return [defaultBusinessownersRisk()]
   return []
 }
 
@@ -1096,6 +1099,17 @@ export function QuoteWizard() {
     appliedRef: hoDefaultsApplied,
     autoDefaultsRef: autoDefaultCoveragesRef,
   })
+
+  useEffect(() => {
+    if (isReadOnlyView || isCoreProductCode(q.productCode) || !configMatchesProduct(cfg, q.productCode) || q.coverages?.length) return
+    // Only packs that declare required or default coverages preselect them;
+    // others keep the explicit "Apply Default Coverages" action.
+    if (!hasDeclaredCoverageDefaults(cfg)) return
+    const defaults = buildGenericCoverageDefaults(cfg)
+    if (!defaults.length) return
+    autoDefaultCoveragesRef.current = JSON.stringify(defaults)
+    setQ(prev => prev.productCode === q.productCode && !prev.coverages?.length ? { ...prev, coverages: defaults } : prev)
+  }, [cfg, q.productCode, q.coverages, isReadOnlyView])
 
   useEffect(() => {
     if (isReadOnlyView) return
@@ -2917,7 +2931,7 @@ export function QuoteWizard() {
       setError('Resolve insured validation before rating premium.')
       return
     }
-    const rateState: QuoteState = resolvedCompany
+    let rateState: QuoteState = resolvedCompany
       ? { ...q, underwritingCompanyId: resolvedCompany.companyId, underwritingCompanyName: resolvedCompany.name }
       : q
     if (resolvedCompany && (q.underwritingCompanyId !== resolvedCompany.companyId || q.underwritingCompanyName !== resolvedCompany.name)) {
@@ -2951,6 +2965,15 @@ export function QuoteWizard() {
         // codes already on the policy are carried rather than refused.
         const policyForRating = wizardMode === 'quote' ? undefined : policyContext?.policyId || boundPolicy?.policyId || policyIdParam || undefined
         resp = await api.createQuote(payload, wizardMode === 'quote' ? undefined : wizardMode, policyForRating)
+      }
+      if (rateState.productCode === 'businessowners' && resp.quoteId && wizardMode !== 'endorse') {
+        const beforeRate = snapshotFromState(rateState)
+        const saved = await api.getQuote(resp.quoteId)
+        if (Array.isArray(saved?.payload?.coverages)) {
+          rateState = { ...rateState, coverages: saved.payload.coverages }
+          const savedCoverages = saved.payload.coverages
+          setQ(prev => snapshotFromState(prev) === beforeRate ? { ...prev, coverages: savedCoverages } : prev)
+        }
       }
       const rateWarnings: ValidationFinding[] = Array.isArray(resp?.validation?.warnings) ? resp.validation.warnings : []
       setValidationResult(rateWarnings.length ? { title: 'Rating checks', errors: [], warnings: rateWarnings } : null)
@@ -3328,7 +3351,7 @@ export function QuoteWizard() {
           return {
             code,
             name: coverageName(code, cfg),
-            details: coverageSummary(sel) || 'Selected'
+            details: coverageSummary(sel, cfg) || 'Selected'
           }
         })
       const model: PolicyPacketDocumentModel = {
@@ -4674,7 +4697,7 @@ export function QuoteWizard() {
             />
           ) : riskScreen && !isCoreProductCode(q.productCode) ? null : (
             <DynamicRiskForm
-              fields={q.productCode === 'homeowners' ? riskFields.filter(f => !/\.address$/.test(f.path)) : riskFields}
+              fields={q.productCode === 'businessowners' ? riskFields.filter(f => !/\.(locationAddress|address)(\.|$)/.test(f.path)) : q.productCode === 'homeowners' ? riskFields.filter(f => !/\.address$/.test(f.path)) : riskFields}
               value={q}
               disabled={isCancellationMode || isViewOnly}
               onChange={(path, val) => {
@@ -4690,6 +4713,8 @@ export function QuoteWizard() {
             {!risk.locationAddress && risk.address && <p>Existing address: {risk.address}</p>}
             <AddressFields identity={`risk-${index}`} value={postalAddress(risk.locationAddress)} disabled={isCancellationMode || isViewOnly} onChange={address => setQ(prev => ({ ...prev, risks: prev.risks.map((item: any, i: number) => i === index ? { ...item, locationAddress: address, address: formatPostalAddress(address) } : item) }))} />
           </div>)}
+          {q.productCode === 'businessowners' && <BusinessownersPremisesEditor risk={q.risks?.[0]} disabled={isCancellationMode || isViewOnly}
+            onChange={address => setQ(prev => ({ ...prev, risks: [{ ...prev.risks?.[0], type: 'businessownersLocation', locationAddress: address }, ...prev.risks.slice(1)] }))} />}
           {q.productCode && riskScreen && (
             <ConfiguredRiskForm
               screen={riskScreen}
@@ -4720,6 +4745,7 @@ export function QuoteWizard() {
               product={q.productCode}
               cfg={cfg}
               value={q.coverages}
+              risk={q.risks?.[0]}
               disabled={isCancellationMode || isViewOnly}
               onChange={(c) => setQ(prev => ({ ...prev, coverages: c }))} />
           )}
@@ -4863,6 +4889,11 @@ export function QuoteWizard() {
                   <div className="kvline"><span className="muted">Years in Business</span><span>{q.risks?.[0]?.yearsInBusiness ?? '-'}</span></div>
                   <div className="kvline"><span className="muted">Prior Losses (3 years)</span><span>{q.risks?.[0]?.priorLossesCount ?? '-'}</span></div>
                 </>
+              ) : q.productCode === 'businessowners' && riskScreen ? (
+                <>
+                  <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} />
+                  <div className="kvline"><span className="muted">Premises address</span><span>{formatPostalAddress(postalAddress(q.risks?.[0]?.locationAddress)) || '-'}</span></div>
+                </>
               ) : !isCoreProductCode(q.productCode) ? (
                 // A product added by a carrier pack: summarise the fields its own screen shows.
                 riskScreen ? <ConfiguredRiskSummary screen={riskScreen} value={q} tables={riskTables} /> : (
@@ -4906,7 +4937,7 @@ export function QuoteWizard() {
               {(q.coverages || []).map((c:any) => (
                 <div className="kvline" key={c.code}>
                   <span className="muted">{coverageName(c.code, cfg)}</span>
-                  <span>{coverageSummary(c)}</span>
+                  <span>{coverageSummary(c, cfg)}</span>
                 </div>
               ))}
             </CollapsibleSection>
@@ -5623,6 +5654,12 @@ function ReviewFooter({
   )
 }
 
+export function BusinessownersPremisesEditor({ risk, disabled, onChange }: { risk?: any; disabled?: boolean; onChange: (address: ReturnType<typeof postalAddress>) => void }) {
+  return <div><h4>Premises address</h4>
+    <AddressFields identity="businessowners-premises" value={postalAddress(risk?.locationAddress)} disabled={disabled} onChange={onChange} />
+  </div>
+}
+
 // Exported for tests.
 export function DynamicRiskForm({ fields, value, onChange, onValidate, disabled }:{ fields: Field[]; value:any; onChange:(path:string, val:any)=>void; onValidate:(errs:Record<string,string>)=>void; disabled?: boolean }) {
   useEffect(() => { onValidate(validateFields(fields, value)) }, [fields, value])
@@ -5650,16 +5687,17 @@ export function DynamicRiskForm({ fields, value, onChange, onValidate, disabled 
     <div className="row dynamic-grid">
       {fields.map(f => (
         <div className="col" key={f.key} style={{ minWidth: 220 }}>
-          <label>{f.label}</label>
+          <label htmlFor={`risk-field-${f.path}`}>{f.label}</label>
           {/\.garagingZip$/.test(f.path) ? <AddressFields identity={f.path} disabled={disabled} value={postalAddress({ ...getByPath(value, f.path.replace(/\.garagingZip$/, ''))?.garagingAddress, postalCode: getByPath(value, f.path.replace(/\.garagingZip$/, ''))?.garagingAddress?.postalCode ?? getByPath(value, f.path) ?? '' })} onChange={address => {
             const base = f.path.replace(/\.garagingZip$/, '')
             onChange(base, { ...getByPath(value, base), garagingAddress: address, garagingZip: ratingZip(address) })
           }} /> : f.type === 'select' ? (
-            <select value={String(getByPath(value, f.path) ?? f.options?.[0] ?? '')} onChange={e=>onChange(f.path, e.target.value)} disabled={disabled}>
+            <select id={`risk-field-${f.path}`} value={String(getByPath(value, f.path) ?? '')} onChange={e=>onChange(f.path, e.target.value)} disabled={disabled}>
+              <option value="">Select...</option>
               {f.options?.map((o:any) => <option key={String(o)} value={String(o)}>{String(o)}</option>)}
             </select>
           ) : (
-            <input type={f.type === 'number' ? 'number' : 'text'} value={String(getByPath(value, f.path) ?? '')} onChange={e=>onChange(f.path, f.type==='number' ? Number(e.target.value) : e.target.value)} disabled={disabled} />
+            <input id={`risk-field-${f.path}`} type={f.type === 'number' ? 'number' : 'text'} value={String(getByPath(value, f.path) ?? '')} onChange={e=>onChange(f.path, f.type==='number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)} disabled={disabled} />
           )}
           {f.help && <div className="muted">{f.help}</div>}
         </div>
@@ -6059,26 +6097,20 @@ export function ProductChangeDialog({ from, to, title, description, confirmLabel
   )
 }
 
-export function CoverageSelector({ product, cfg, value, onChange, disabled }: { product: ProductCode; cfg: any | null; value: any[]; onChange: (v:any[])=>void; disabled?: boolean }) {
+export function CoverageSelector({ product, cfg, value, onChange, disabled, risk }: { product: ProductCode; cfg: any | null; value: any[]; onChange: (v:any[])=>void; disabled?: boolean; risk?: any }) {
   // Never show (or apply defaults from) another product's configuration.
   if (!configMatchesProduct(cfg, product)) return <div className="muted">Loading product config...</div>
   const covs = Array.isArray(cfg.coverages) ? cfg.coverages : []
   if (product === 'homeowners') {
     return <HomeownersCoverageEditor cfg={cfg} selections={value} onChange={onChange} disabled={disabled} />
   }
-  return <GenericCoverageEditor coverages={covs} selections={value} onChange={onChange} disabled={disabled} />
+  return <GenericCoverageEditor coverages={covs} selections={value} onChange={onChange} disabled={disabled} businessownersRisk={product === 'businessowners' ? risk || {} : undefined} />
 }
 
-function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { coverages: any[]; selections: any[]; onChange: (v:any[])=>void; disabled?: boolean }) {
+function GenericCoverageEditor({ coverages, selections, onChange, disabled, businessownersRisk }: { coverages: any[]; selections: any[]; onChange: (v:any[])=>void; disabled?: boolean; businessownersRisk?: any }) {
   function createSelection(cov: any) {
     if (!cov) return null
-    const sel: any = { code: cov.code, selected: true }
-    if (Array.isArray(cov.limits) && cov.limits.length > 0) sel.limit = cov.limits[0]
-    // A coverage with a free-form limit starts from the product's suggested amount.
-    else if (cov.limitType === 'value' && Number.isFinite(Number(cov.defaultLimit))) sel.limit = Number(cov.defaultLimit)
-    if (Array.isArray(cov.deductibles) && cov.deductibles.length > 0) sel.deductible = cov.deductibles[0]
-    if (Array.isArray(cov.percentOptions) && cov.percentOptions.length > 0) sel.percent = cov.percentOptions[0]
-    return sel
+    return createCoverageSelection(cov)
   }
 
   function toggle(code: string) {
@@ -6092,13 +6124,19 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
   }
 
   function setField(code: string, field: 'limit'|'deductible'|'percent', val: any) {
-    const next = selections.map((c: any) => c.code === code ? { ...c, selected: true, [field]: val } : c)
+    const next = selections.map((c: any) => {
+      if (c.code !== code) return c
+      const { packageTerms: _snapshotTerms, ...selection } = c
+      return { ...selection, selected: true, [field]: val }
+    })
     onChange(next)
   }
 
   function applyDefaults() {
-    const withDefaults = coverages.map(createSelection).filter(Boolean)
-    onChange(withDefaults as any[])
+    const defaults = buildGenericCoverageDefaults({coverages})
+    const building = coverages.find(coverage => coverage.code === 'BOP_BUILDING')
+    if (businessownersRisk?.occupancy === 'owner' && building && !defaults.some(selection => selection.code === building.code)) defaults.unshift(createCoverageSelection(building))
+    onChange(defaults)
   }
 
   function currentSel(code: string) {
@@ -6113,18 +6151,22 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
       {coverages.map((c: any) => {
         const sel = currentSel(c.code)
         const selected = sel.selected !== false && Object.keys(sel).length > 0
+        const building = businessownersRisk !== undefined && c.code === 'BOP_BUILDING'
+        const required = c.required || (building && businessownersRisk.occupancy === 'owner')
+        const buildingAllowed = !building || businessownersRisk.buildingInterest === true || businessownersRisk.buildingInterest === 'true'
         return (
           <div key={c.code} className="row" style={{ alignItems: 'end' }}>
             <div className="col">
-              <label>{c.name}</label>
+              <label htmlFor={`coverage-${c.code}`}>{c.name}{required ? ' (Required)' : ''}</label>
               <div>
-                <input type="checkbox" checked={selected} onChange={() => toggle(c.code)} disabled={disabled} /> Select
+                <input id={`coverage-${c.code}`} type="checkbox" checked={selected} onChange={() => toggle(c.code)} disabled={disabled || (selected && (required || c.selectable === false)) || (!selected && !buildingAllowed)} /> {c.selectable === false ? 'Included' : 'Select'}
               </div>
+              {building && !buildingAllowed && <p role={selected ? 'alert' : undefined}>Building coverage requires ownership or confirmed insurable interest.{selected ? ' Review this selection after the occupancy or interest change.' : ''}</p>}
             </div>
             {Array.isArray(c.limits) && c.limits.length > 0 && selected && (
               <div className="col">
                 <label>Limit</label>
-                <select value={String(sel.limit ?? c.limits?.[0] ?? '')} onChange={e=>setField(c.code, 'limit', e.target.value)} disabled={disabled}>
+                <select aria-label={`${c.name} limit`} value={String(sel.limit ?? c.defaultLimit ?? c.limits?.[0] ?? '')} onChange={e=>setField(c.code, 'limit', Number(e.target.value))} disabled={disabled || c.selectable === false}>
                   {c.limits.map((l: any) => <option key={String(l)} value={String(l)}>{String(l)}</option>)}
                 </select>
               </div>
@@ -6134,7 +6176,9 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
                 <label>Limit</label>
                 <input
                   type="number"
-                  min={0}
+                  aria-label={`${c.name} limit`}
+                  min={c.minLimit ?? 0}
+                  max={c.maxLimit}
                   value={sel.limit ?? ''}
                   onChange={e => setField(c.code, 'limit', e.target.value === '' ? '' : Number(e.target.value))}
                   disabled={disabled}
@@ -6144,11 +6188,12 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled }: { 
             {Array.isArray(c.deductibles) && c.deductibles.length > 0 && selected && (
               <div className="col">
                 <label>Deductible</label>
-                <select value={String(sel.deductible ?? c.deductibles?.[0] ?? '')} onChange={e=>setField(c.code, 'deductible', e.target.value)} disabled={disabled}>
+                <select aria-label={`${c.name} deductible`} value={String(sel.deductible ?? c.deductibles?.[0] ?? '')} onChange={e=>setField(c.code, 'deductible', Number(e.target.value))} disabled={disabled}>
                   {c.deductibles.map((d: any) => <option key={String(d)} value={String(d)}>{String(d)}</option>)}
                 </select>
               </div>
             )}
+            {selected && <div className="col" style={{ flexBasis: '100%', minWidth: 0 }}><CoveragePackageTerms terms={coveragePackageTerms(c, sel)} /></div>}
             {Array.isArray(c.percentOptions) && c.percentOptions.length > 0 && selected && (
               <div className="col">
                 <label>Percent</label>
@@ -6546,7 +6591,7 @@ function formatNumericValue(value: any): string {
   return String(value ?? '')
 }
 
-function coverageSummary(sel: any): string {
+function coverageSummary(sel: any, cfg?: any): string {
   if (!sel) return ''
   const parts: string[] = []
   if (sel.limit != null && sel.limit !== '') {
@@ -6563,6 +6608,7 @@ function coverageSummary(sel: any): string {
   if (sel.windHailPercent != null && sel.windHailPercent !== '') {
     parts.push('Wind/Hail: ' + sel.windHailPercent + '%')
   }
+  parts.push(...packageTermLines(coveragePackageTerms(cfg?.coverages?.find((coverage: any) => coverage.code === sel.code), sel)))
   return parts.length ? parts.join(' | ') : 'Selected'
 }
 

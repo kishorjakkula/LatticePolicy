@@ -38,6 +38,7 @@ import {
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { resolveReferralGateForActor } from './uw-referral.service.js'
 import { canonicalProposal } from '../lib/referral-proposal.js'
+import { assertBusinessownersAuthorization, isBusinessownersProduct } from './businessowners-authorization.service.js'
 import { assertProductRules } from './product-rules.service.js'
 import { ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
@@ -375,6 +376,10 @@ export async function bindQuote(
     throw new BadRequestError('QUOTE_ALREADY_BOUND', 'This quote has already been bound.')
   }
   assertBindableRating(quote.payload, quote.uw, quote.premium)
+  if (isBusinessownersProduct(quote.payload?.productCode)) {
+    await withTenantTx(tenantId, innerDb =>
+      assertBusinessownersAuthorization(toRawQuery(innerDb), tenantId, quote.payload, normalizedActorId))
+  }
   requireProductCapability(String(quote.payload?.productCode || ''), 'bind')
   // The quote is bound on the product version it was rated on.
   await ensureProductSnapshots(tenantId, [quote.payload])
@@ -697,6 +702,7 @@ export async function bindQuote(
     if (canonicalProposal({ payload: latest.payload, uw: latest.underwriting, premium: latest.premium }) !== canonicalProposal(quote)) {
       throw new BadRequestError('QUOTE_CHANGED', 'The quote changed during bind. Review the latest quote and retry.')
     }
+    await assertBusinessownersAuthorization(q, tenantId, latest.payload, normalizedActorId)
     if (referralId) {
       const approval = await q(`SELECT status, transaction_id, version_id FROM underwriting_referrals
         WHERE tenant_id=$1 AND referral_id=$2 FOR UPDATE`, [tenantId, referralId])

@@ -16,6 +16,7 @@ import {
 import { TablePagination } from '../../components/TablePagination'
 import { useClientPagination } from '../../hooks/useClientPagination'
 import { normalizePayloadCoverages } from '../wizard/coverageUtils'
+import { BusinessownersPolicyDetails } from './BusinessownersPolicyDetails'
 import {
   clearPendingTransaction,
   readPendingTransactions,
@@ -870,6 +871,7 @@ export function PolicyViewPage() {
         )}
 
         <PolicyAsOfResult policyId={policy.policyId} asOf={asOf} />
+        {policy.productCode === 'businessowners' && !asOf && <BusinessownersPolicyDetails payload={currentPayload} />}
 
         <CollapsibleSection title="Transactions" className="card policy-section-card policy-versions-card">
           <table className="table table-sticky-header">

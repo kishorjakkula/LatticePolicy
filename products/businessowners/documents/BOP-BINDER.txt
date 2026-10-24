@@ -1,0 +1,28 @@
+BUSINESSOWNERS POLICY (BOP) - DEMO BINDER
+Demo - not a contract of insurance. Synthetic/non-filed demonstration only.
+
+Insured: {insuredName}
+Policy reference: {policyNumber}
+Effective date: {effectiveDate}
+Expiration date: {expirationDate}
+Premises: {premisesAddress}
+Underwriting company: {underwritingCompanyName}
+
+Selected coverages, limits and deductibles: {coverageSummary}
+Premium (USD): {totalPremium}
+This demo output must reflect the authorized bound transaction, not a later
+product edition. It does not itself supply authority to bind real insurance.
+
+Building/BPP valuation: replacement cost for selected demo coverage.
+Income and extra expense: shared 100,000 dollar limit, up to twelve months
+restoration, 72-hour income waiting period; not unrestricted actual loss sustained.
+Occurrence liability: {liabilityOccurrenceLimit}; general aggregate
+{generalAggregate}; products-completed operations aggregate
+{productsCompletedOperationsAggregate}; personal/advertising injury limit
+{personalAdvertisingInjuryLimit}. Rented-premises damage sublimit: 100,000.
+Included medical expenses: 5,000 per person, without duplicate premium.
+Equipment breakdown/water backup: selected extensions only, 1,000 deductible each.
+
+No flood, earthquake, professional liability, auto, workers compensation or
+cyber coverage is represented. Original demonstration text only; not filed or
+proprietary policy wording. Authorized issuance remains a separate action.

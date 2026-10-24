@@ -311,6 +311,7 @@ export function rateFromRateTable(payload: any, rates: any, productConfig: any =
       limit: coverage?.limit ?? null,
       deductible: coverage?.deductible ?? null,
       percent: coverage?.percent ?? null,
+      ...(coverage?.packageTerms ? { packageTerms: coverage.packageTerms } : {}),
       amount: { amount: premium, currency: 'USD' },
     })
     coverageTrace.push({ code: code.toUpperCase(), method, limit, applyFactors, deductibleFactor, premium, ...(itemTrace ? { items: itemTrace } : {}) })

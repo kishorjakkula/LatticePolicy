@@ -6,7 +6,7 @@
   "required": ["productCode", "effectiveDate", "termMonths", "applicant", "risks", "coverages"],
   "properties": {
     "tenantId": { "type": "string" },
-    "productCode": { "type": "string", "enum": ["personal-auto", "commercial-auto", "homeowners", "cyber", "professional-liability"] },
+    "productCode": { "type": "string", "enum": ["personal-auto", "commercial-auto", "homeowners", "cyber", "professional-liability", "businessowners"] },
     "effectiveDate": { "type": "string", "format": "date" },
     "termMonths": { "type": "integer", "enum": [6, 12] },
     "state": { "type": "string", "minLength": 2, "maxLength": 2 },
@@ -29,7 +29,8 @@
           { "$ref": "#/definitions/commercialAutoFleet" },
           { "$ref": "#/definitions/dwelling" },
           { "$ref": "#/definitions/cyberProfile" },
-          { "$ref": "#/definitions/professionalLiabilityProfile" }
+          { "$ref": "#/definitions/professionalLiabilityProfile" },
+          { "$ref": "#/definitions/businessownersLocation" }
         ]
       }
     },
@@ -40,6 +41,12 @@
     }
   },
   "definitions": {
+    "businessownersLocation": {
+      "type": "object",
+      "required": ["type"],
+      "properties": { "type": { "const": "businessownersLocation" } },
+      "additionalProperties": true
+    },
     "coverageSelection": {
       "type": "object",
       "required": ["code", "selected"],

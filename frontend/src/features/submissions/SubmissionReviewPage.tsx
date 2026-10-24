@@ -33,6 +33,7 @@ import {
   productLabel,
 } from './submissionUi'
 import './submissions.css'
+import { SubmissionPackageTerms } from './SubmissionPackageTerms'
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
@@ -664,6 +665,7 @@ export function SubmissionReviewPage() {
       )}
 
       <Steps submission={submission} />
+      {submission.productCode === 'businessowners' && <SubmissionPackageTerms product={submission.productCode} fields={fields} />}
       {actionError && <div className="si-banner is-error" role="alert"><p>{actionError}</p></div>}
 
       {submission.status === 'READING' && (

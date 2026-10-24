@@ -1,0 +1,30 @@
+BUSINESSOWNERS POLICY (BOP) - DEMO DECLARATIONS
+Demo - not a contract of insurance. Synthetic/non-filed demonstration only.
+
+Insured: {insuredName}
+Policy reference: {policyNumber}
+Effective date: {effectiveDate}
+Expiration date: {expirationDate}
+Premises: {premisesAddress}
+Underwriting company: {underwritingCompanyName}
+
+Selected coverages, limits, deductibles and component premiums: {coverageSummary}
+Premium (USD): {totalPremium}
+Read the pinned transaction's values and edition; later configuration changes
+do not amend these historical demonstration declarations.
+
+Building/BPP: replacement-cost demo valuation within selected limits.
+Business income and extra expense: one shared 100,000 dollar limit, up to
+twelve months restoration, 72-hour income waiting period. Extra expense is
+included, not an additional unlimited limit or separately charged coverage.
+Business liability occurrence limit: {liabilityOccurrenceLimit}
+General aggregate: {generalAggregate}
+Products-completed operations aggregate: {productsCompletedOperationsAggregate}
+Personal/advertising injury limit: {personalAdvertisingInjuryLimit}
+Included damage to rented premises sublimit: 100,000
+Included medical expenses: 5,000 per person, no separate premium
+Equipment breakdown/water backup: only as selected; 1,000 deductible each.
+
+No flood, earthquake, professional liability, auto, workers compensation or
+cyber coverage is represented. This original demo text is not a filed policy,
+an insurance offer, a coverage determination or a contract of insurance.

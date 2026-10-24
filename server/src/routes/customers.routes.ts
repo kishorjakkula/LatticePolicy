@@ -3831,6 +3831,8 @@ function buildSampleCustomerRelationships(): Array<{
 }
 
 function toNullableNumber(value: any): number | null {
+  // Number(null) and Number('') are 0: a missing coordinate or share is not zero.
+  if (value == null || (typeof value === 'string' && !value.trim())) return null
   const num = Number(value)
   return Number.isFinite(num) ? num : null
 }

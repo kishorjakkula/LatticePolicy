@@ -86,7 +86,7 @@ export function riskTargetFields(productCode: string, tenantId?: string): Intake
   } catch {
     return []
   }
-  return fields.map((field) => ({
+  const targets: IntakeTargetField[] = fields.map((field) => ({
     key: `${RISK_FIELD_PREFIX}${field.key}`,
     label: field.label,
     section: field.group || product.riskLabel || 'Risk',
@@ -95,6 +95,22 @@ export function riskTargetFields(productCode: string, tenantId?: string): Intake
     required: field.required === true,
     help: field.help,
   }))
+  // Structured risk addresses remain separate from insured/contact addresses.
+  for (const field of loadProductConfig(productCode)?.fields || []) {
+    if (field.type !== 'object' || field.format !== 'postal-address') continue
+    const key = String(field.path).replace(/^risks\.0\./, '')
+    for (const [property, definition] of Object.entries(field.properties || {}) as Array<[string, any]>) {
+      targets.push({
+        key: `${RISK_FIELD_PREFIX}${key}.${property}`,
+        label: `${field.label || 'Premises address'} ${property === 'line1' ? 'line 1' : property === 'line2' ? 'line 2' : property === 'line3' ? 'line 3' : property === 'postalCode' ? 'ZIP code' : property}`,
+        section: field.ui?.group || 'Premises',
+        type: definition.type === 'enum' ? 'select' : 'text',
+        options: definition.enum || [],
+        required: field.required === true && (field.requiredProperties || []).includes(property),
+      })
+    }
+  }
+  return targets
 }
 
 /**
@@ -149,7 +165,7 @@ export function coverageTargetFields(productCode: string): IntakeTargetField[] {
       out.push({ key: `${COVERAGE_FIELD_PREFIX}${code}.limit`, label: `${name} limit`, section, type: 'number', options: [], required: false, aliases: named })
     } else if (cov.limitAsPercentOf) {
       out.push({ key: `${COVERAGE_FIELD_PREFIX}${code}.percent`, label: `${name} (% of Coverage ${cov.limitAsPercentOf})`, section, type: 'select', options: asOptions(cov.percentOptions || []), required: false, help: 'Percentage of the dwelling limit' })
-    } else if (meaningful(cov.limits) && cov.limits.length > 1) {
+    } else if (meaningful(cov.limits) && (cov.limits.length > 1 || cov.required === true)) {
       out.push({ key: `${COVERAGE_FIELD_PREFIX}${code}.limit`, label: `${name} limit`, section, type: 'select', options: asOptions(cov.limits), required: false, aliases: named })
     }
     if (meaningful(cov.deductibles) && cov.deductibles.length > 1) {

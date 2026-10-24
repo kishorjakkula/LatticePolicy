@@ -7,6 +7,28 @@ const coverageCodeAliases: Record<string, string> = {
   MEDICALPAYMENTS: 'F'
 }
 
+export function createCoverageSelection(coverage: any): any {
+  const selection: any = { code: coverage.code, selected: true }
+  const limit = coverage.defaultLimit ?? coverage.limits?.[0]
+  if (limit !== undefined) selection.limit = limit
+  const deductible = coverage.defaultDeductible ?? coverage.deductibles?.[0]
+  if (deductible !== undefined) selection.deductible = deductible
+  if (coverage.percentOptions?.length) selection.percent = coverage.percentOptions[0]
+  return selection
+}
+
+export function hasDeclaredCoverageDefaults(config: any): boolean {
+  const coverages: any[] = Array.isArray(config?.coverages) ? config.coverages : []
+  return coverages.some(coverage => coverage.required !== undefined || coverage.defaultSelected !== undefined)
+}
+
+export function buildGenericCoverageDefaults(config: any): any[] {
+  const coverages: any[] = Array.isArray(config?.coverages) ? config.coverages : []
+  const explicitDefaults = hasDeclaredCoverageDefaults(config)
+  return coverages.filter(coverage => !explicitDefaults || coverage.required || coverage.defaultSelected || coverage.selectable === false)
+    .map(createCoverageSelection)
+}
+
 function normalizeCoverageCode(value?: string): string | null {
   if (!value) return null
   const cleaned = value.replace(/[^0-9A-Za-z]/g, '')

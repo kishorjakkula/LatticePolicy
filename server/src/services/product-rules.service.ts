@@ -4,6 +4,7 @@ import { loadProductConfig, loadRiskScreen } from '../lib/products.js'
 import { checkQuoteAgainstScreen, type ScreenViolation } from '../lib/product-screen.js'
 import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
+import { productPackageViolations, type PackageViolation } from '../lib/product-package.js'
 
 /**
  * Rules a carrier pack defines for a product (required fields, conditional
@@ -21,7 +22,7 @@ export type RuledTransaction = 'quote' | 'bind' | 'issue' | 'endorsement' | 'ren
 
 /** A coverage code the payload's product (version) does not define. */
 export type CoverageViolation = { path: string; keyword: 'coverage'; code: string; message: string }
-export type ProductRuleViolation = ScreenViolation | CoverageViolation
+export type ProductRuleViolation = ScreenViolation | CoverageViolation | PackageViolation
 export type ProductRuleOptions = {
   /**
    * The policy's current payload, for changes to an existing policy: undefined
@@ -77,7 +78,10 @@ function screenViolations(tenantId: string, payload: any): ScreenViolation[] {
 }
 
 export function productRuleViolations(tenantId: string, payload: any, options: ProductRuleOptions = {}): ProductRuleViolation[] {
-  return [...screenViolations(tenantId, payload), ...coverageViolations(tenantId, payload, options)]
+  const snapshot = requireLoadedSnapshot(tenantId, payload)
+  const code = String(payload?.productCode || '')
+  const config = snapshot?.definition.config || (getInstalledProductCapabilities(code) ? loadProductConfig(code) : null)
+  return [...screenViolations(tenantId, payload), ...coverageViolations(tenantId, payload, options), ...productPackageViolations(payload, config)]
 }
 
 function refuse(transaction: RuledTransaction, violations: ProductRuleViolation[]): void {
@@ -95,7 +99,10 @@ export function assertProductRules(tenantId: string, payload: any, transaction: 
 
 /** Issue re-checks coverage codes only; bind already enforced the screen rules. */
 export function assertCoveragesDefined(tenantId: string, payload: any, transaction: RuledTransaction): void {
-  refuse(transaction, coverageViolations(tenantId, payload))
+  const snapshot = requireLoadedSnapshot(tenantId, payload)
+  const code = String(payload?.productCode || '')
+  const config = snapshot?.definition.config || (getInstalledProductCapabilities(code) ? loadProductConfig(code) : null)
+  refuse(transaction, [...coverageViolations(tenantId, payload), ...productPackageViolations(payload, config)])
 }
 
 /** True when two payloads describe the same risks and coverages. */
