@@ -26,4 +26,8 @@ main().catch(error => {
   const message = String(error?.message || '')
   process.stderr.write(`${/^BOP_DEMO_[A-Z0-9_:.-]+$/i.test(message) ? message : 'BOP_DEMO_SETUP_FAILED'}\n`)
   process.exitCode = 1
-}).finally(closeDb)
+}).finally(async () => {
+  await closeDb()
+  // Imported services leave cache and worker handles open; a CLI must still end.
+  process.exit(process.exitCode ?? 0)
+})
