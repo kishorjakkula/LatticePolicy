@@ -1,7 +1,6 @@
 import { getDb, withTenantTx, toRawQuery } from '../db.js'
-import { loadTenantOverrides } from '../products.js'
+import { loadProductConfig, loadTenantOverrides } from '../products.js'
 import { resolveFieldValue } from './underwriting-rule-fields.js'
-import { loadProductConfig } from '../products.js'
 import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { BadRequestError } from '../errors/domain.errors.js'
 
@@ -24,7 +23,9 @@ export async function evaluateUW(tenantId: string, payload: any): Promise<UWDeci
   const product = payload?.productCode as string
   const configured = await evaluateUwRules(tenantId, product, payload)
   if (configured) return configured
-  const config = requireLoadedSnapshot(tenantId, payload)?.definition.config || (product === 'businessowners' ? loadProductConfig(product) : null)
+  // Only packs that declare package rules (BOP) resolve their pinned version here.
+  const current = product === 'businessowners' ? loadProductConfig(product) : null
+  const config = current?.packageRules ? requireLoadedSnapshot(tenantId, payload)?.definition.config || current : null
   if (config?.packageRules?.requiredUnderwritingRules) {
     throw new BadRequestError('UNDERWRITING_NOT_CONFIGURED', 'This package requires active carrier underwriting rules before it can be rated or bound.')
   }

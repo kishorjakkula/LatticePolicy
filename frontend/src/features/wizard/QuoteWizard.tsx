@@ -6166,7 +6166,7 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled, busi
             {Array.isArray(c.limits) && c.limits.length > 0 && selected && (
               <div className="col">
                 <label>Limit</label>
-                <select aria-label={`${c.name} limit`} value={String(sel.limit ?? c.defaultLimit ?? c.limits?.[0] ?? '')} onChange={e=>setField(c.code, 'limit', Number(e.target.value))} disabled={disabled || c.selectable === false}>
+                <select aria-label={`${c.name} limit`} value={String(sel.limit ?? c.defaultLimit ?? c.limits?.[0] ?? '')} onChange={e=>setField(c.code, 'limit', offeredOption(c.limits, e.target.value))} disabled={disabled || c.selectable === false}>
                   {c.limits.map((l: any) => <option key={String(l)} value={String(l)}>{String(l)}</option>)}
                 </select>
               </div>
@@ -6188,7 +6188,7 @@ function GenericCoverageEditor({ coverages, selections, onChange, disabled, busi
             {Array.isArray(c.deductibles) && c.deductibles.length > 0 && selected && (
               <div className="col">
                 <label>Deductible</label>
-                <select aria-label={`${c.name} deductible`} value={String(sel.deductible ?? c.deductibles?.[0] ?? '')} onChange={e=>setField(c.code, 'deductible', Number(e.target.value))} disabled={disabled}>
+                <select aria-label={`${c.name} deductible`} value={String(sel.deductible ?? c.deductibles?.[0] ?? '')} onChange={e=>setField(c.code, 'deductible', offeredOption(c.deductibles, e.target.value))} disabled={disabled}>
                   {c.deductibles.map((d: any) => <option key={String(d)} value={String(d)}>{String(d)}</option>)}
                 </select>
               </div>
@@ -6589,6 +6589,11 @@ function formatNumericValue(value: any): string {
   const num = Number(value)
   if (Number.isFinite(num)) return formatCurrency(num)
   return String(value ?? '')
+}
+
+// The offered value itself: numeric for BOP, text such as "100000/300000" for split limits.
+function offeredOption(options: any[], value: string): any {
+  return options.find(option => String(option) === value) ?? value
 }
 
 function coverageSummary(sel: any, cfg?: any): string {

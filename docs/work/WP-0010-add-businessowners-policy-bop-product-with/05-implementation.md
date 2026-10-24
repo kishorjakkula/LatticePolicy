@@ -64,3 +64,18 @@ was renumbered from WP-0009, which `main` already uses.
   - BOP demo (5 tests) and BOP lifecycle (8 tests) pass;
   - full suite on a fresh database: 47 files, 373 tests passed.
 - Browser (`npx playwright test -c playwright.businessowners.config.ts`): 2 passed (1440px and 390px).
+
+## Code review fixes (round 1)
+
+- Major: the generic coverage editor saved `Number(value)` for limit and
+  deductible choices, so personal auto's split limits (for example
+  `100000/300000`) became `null` and were priced at the first table row. It now
+  saves the offered option itself. Test: `coverageEditorValues.test.tsx`; it
+  fails with the old code.
+- `uw.service.ts`: the pinned-version lookup runs only for packs that declare
+  package rules (BOP), so other products keep their fallback; duplicate import
+  removed.
+- `docs/API.md`: notes that terms copied with a changed limit are refused.
+- Checks: typecheck clean; server unit 1,155 and frontend unit 625 passed; BOP
+  lifecycle and authorization integration 46 passed; BOP browser spec 2 passed.
+- Other minors are accepted as recorded in `07-code-review.md`.

@@ -50,6 +50,8 @@ Endpoints
     coverage without insurable interest, an unoffered limit or deductible, more
     than one premises, or `packageTerms` that differ from what the product
     derives. Clients send no `packageTerms`; the server derives and stores them.
+    Terms copied from an earlier version with a changed limit are refused, not
+    re-derived: drop `packageTerms` when changing a limit.
   - Distribution is re-checked inside the writing transaction:
     400 `STATE_NOT_ELIGIBLE`, `BOP_EFFECTIVE_DATE_REQUIRED`,
     `BOP_COMPANY_NOT_ELIGIBLE`, `BOP_DISTRIBUTION_REQUIRED`;
