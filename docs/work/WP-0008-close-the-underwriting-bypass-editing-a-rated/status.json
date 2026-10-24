@@ -52,7 +52,7 @@
       "name": "Developer",
       "writes": "05-implementation.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -60,7 +60,7 @@
       "name": "Unit Test",
       "writes": "06-unit-tests.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -68,7 +68,7 @@
       "name": "Code Reviewer",
       "writes": "07-code-review.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -76,7 +76,7 @@
       "name": "Security and Compliance",
       "writes": "08-security-compliance.md",
       "gateAfter": null,
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -84,7 +84,7 @@
       "name": "Automation Test",
       "writes": "09-automation-tests.md",
       "gateAfter": "C",
-      "status": "pending",
+      "status": "done",
       "returns": 0
     },
     {
@@ -139,11 +139,11 @@
     },
     {
       "gate": "C",
-      "approvedBy": null,
-      "approvedAt": null,
+      "approvedBy": "Kishor Jakkula",
+      "approvedAt": "2026-10-23",
       "waivedBy": null,
       "waivedAt": null,
-      "note": null
+      "note": "Approved and merged PR #398 on 2026-10-23 (235ee7c). N1 and the in-memory fallback gap (both low) were listed for acceptance before the merge; explicit acceptance to be confirmed."
     },
     {
       "gate": "D",
@@ -182,6 +182,30 @@
     {
       "at": "2026-10-23T19:29:11.798Z",
       "event": "Gate B approved by Kishor Jakkula: \"Approve\""
+    },
+    {
+      "at": "2026-10-23T21:15:03.215Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-23T21:15:03.262Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-23T21:15:12.880Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-23T21:18:31.042Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-23T21:18:31.071Z",
+      "event": "Automation Test completed"
+    },
+    {
+      "at": "2026-10-23T21:18:31.101Z",
+      "event": "Gate C approved by Kishor Jakkula: \"Approved and merged PR #398 (235ee7c)\""
     }
   ]
 }

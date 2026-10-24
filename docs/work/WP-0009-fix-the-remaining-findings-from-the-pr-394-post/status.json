@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "id": "WP-0009",
+  "title": "Fix the remaining findings from the PR #394 post-merge review: referral queue premium, proposal approvals expiring on ag",
+  "track": "major",
+  "trackReason": "Underwriting referrals, compliance and bind controls",
+  "state": "in-progress",
+  "createdAt": "2026-10-23T21:12:01.620Z",
+  "stages": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "writes": "status.json",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "business-analyst",
+      "name": "Business Analyst",
+      "writes": "01-requirements.md",
+      "gateAfter": "A",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "software-architect",
+      "name": "Software Architect",
+      "writes": "02-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "ui-designer",
+      "name": "UI/UX Designer",
+      "writes": "03-ui-design.md",
+      "gateAfter": null,
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "test-designer",
+      "name": "Test Designer",
+      "writes": "04-test-design.md",
+      "gateAfter": "B",
+      "status": "done",
+      "returns": 0
+    },
+    {
+      "id": "developer",
+      "name": "Developer",
+      "writes": "05-implementation.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "unit-test",
+      "name": "Unit Test",
+      "writes": "06-unit-tests.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "writes": "07-code-review.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "security-compliance",
+      "name": "Security and Compliance",
+      "writes": "08-security-compliance.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "automation-test",
+      "name": "Automation Test",
+      "writes": "09-automation-tests.md",
+      "gateAfter": "C",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "writes": "10-release.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "e2e-test",
+      "name": "End-to-End Test",
+      "writes": "11-e2e-results.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "business-validation",
+      "name": "Business Validation",
+      "writes": "12-business-validation.md",
+      "gateAfter": "D",
+      "status": "pending",
+      "returns": 0
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Knowledge Curator",
+      "writes": "13-lessons.md",
+      "gateAfter": null,
+      "status": "pending",
+      "returns": 0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "A",
+      "approvedBy": "Kishor Jakkula",
+      "approvedAt": "2026-10-23",
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": "approve"
+    },
+    {
+      "gate": "B",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    },
+    {
+      "gate": "C",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    },
+    {
+      "gate": "D",
+      "approvedBy": null,
+      "approvedAt": null,
+      "waivedBy": null,
+      "waivedAt": null,
+      "note": null
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-23T21:12:01.620Z",
+      "event": "started on the major track (Underwriting referrals, compliance and bind controls)"
+    },
+    {
+      "at": "2026-10-23T21:12:35.544Z",
+      "event": "Business Analyst completed"
+    },
+    {
+      "at": "2026-10-23T21:16:44.085Z",
+      "event": "Gate A approved by Kishor Jakkula: \"approve\""
+    },
+    {
+      "at": "2026-10-23T21:18:22.894Z",
+      "event": "Software Architect completed"
+    },
+    {
+      "at": "2026-10-23T21:18:22.941Z",
+      "event": "UI/UX Designer completed"
+    },
+    {
+      "at": "2026-10-23T21:18:22.971Z",
+      "event": "Test Designer completed"
+    }
+  ]
+}
