@@ -9,7 +9,7 @@ import { buildRiskFields, loadFieldMeta, loadProductConfig, loadProductRates, lo
 import { rate } from '../../services/rating.service.js'
 
 const EXAMPLE_PACK = path.resolve(__dirname, '../../../../examples/carrier-pack')
-const CORE_CODES = ['commercial-auto', 'cyber', 'example-identity-protection', 'homeowners', 'personal-auto', 'professional-liability']
+const CORE_CODES = ['businessowners', 'commercial-auto', 'cyber', 'example-identity-protection', 'homeowners', 'personal-auto', 'professional-liability']
 
 const tempDirs: string[] = []
 

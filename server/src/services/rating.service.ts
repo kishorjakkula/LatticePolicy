@@ -7,6 +7,7 @@ import { BadRequestError } from '../errors/domain.errors.js'
 import { requireLoadedSnapshot } from '../lib/product-snapshot.js'
 import { loadCarrierTables } from '../lib/carrier-tables.js'
 import type { LookupTable } from '@lattice-policy/rules'
+import { applyProductPackage } from '../lib/product-package.js'
 
 export type QuoteInput = any
 
@@ -48,6 +49,7 @@ export function rate(tenantId: string, payload: QuoteInput): PremiumResult {
     publishedModel = tenantId ? getPublishedRatingModelForProduct(tenantId, product, payload?.state) : null
   }
 
+  applyProductPackage(payload, productConfig())
   let fallback: () => PremiumResult
   if (ratingAdapter === 'rate-table') {
     // Priced entirely from the product's own rates.yaml; no product-specific code.

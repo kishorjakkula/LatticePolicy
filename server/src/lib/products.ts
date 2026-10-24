@@ -4,7 +4,8 @@ import YAML from 'yaml'
 import { getInstalledProductCapabilities, resolveProductPackDir } from './product-registry.js'
 import type { ProductScreen } from '@lattice-policy/rules'
 import { carrierPackFieldMetaPath, carrierPackFor, loadCarrierPackConfig } from './carrier-pack.js'
-import { loadProductScreen } from './product-screen.js'
+import { buildProductScreen, loadProductScreen } from './product-screen.js'
+import { loadCarrierTables } from './carrier-tables.js'
 
 /** Products whose risk screens are built into the framework. */
 const CORE_PRODUCT_CODES = new Set(['personal-auto', 'commercial-auto', 'homeowners', 'cyber', 'professional-liability'])
@@ -19,6 +20,10 @@ export function hasBuiltInRiskFields(productCode: string): boolean {
  * the built-in screen already shows are reserved.
  */
 export function loadRiskScreen(productCode: ProductCode, cfg: any, tenantId: string | undefined): ProductScreen | null {
+  if (Array.isArray(cfg?.fields)) {
+    const meta = tenantId ? loadFieldMeta(productCode, tenantId) : cfg.fields
+    return buildProductScreen(productCode, meta.filter((field: any) => field.type !== 'object'), cfg.screen, [], tenantId ? loadCarrierTables(tenantId) : {}).screen
+  }
   if (!tenantId) return null
   const reserved = CORE_PRODUCT_CODES.has(productCode) ? buildRiskFields(productCode, cfg).map((field) => field.key) : []
   return loadProductScreen(productCode, tenantId, reserved)
@@ -171,7 +176,7 @@ function humanizeFieldKey(key: string): string {
  */
 function riskFieldsFromFieldMeta(meta: any[]): FormField[] {
   return meta
-    .filter((field) => typeof field?.path === 'string' && /^risks\.0\.[^.]+$/.test(field.path) && field.type !== 'list')
+    .filter((field) => typeof field?.path === 'string' && /^risks\.0\.[^.]+$/.test(field.path) && field.type !== 'list' && field.type !== 'object')
     .map((field, index) => ({ field, index }))
     .sort((left, right) => {
       const leftOrder = Number(left.field?.ui?.order)
@@ -335,6 +340,9 @@ export function buildRiskFields(productCode: ProductCode, cfg: any, tenantId?: s
     if (keys.includes('retroactiveYears')) add({ key: 'retroactiveYears', label: 'Years of Prior Acts / Retroactive Coverage', type: 'number', path: 'risks.0.retroactiveYears', required: true })
   }
   // A product the carrier pack defines fields for gets exactly that form.
+  if (!out.length && Array.isArray(cfg?.fields)) {
+    out.push(...riskFieldsFromFieldMeta(cfg.fields))
+  }
   if (!out.length && tenantId) {
     const pack = carrierPackFor(tenantId)
     const metaPath = pack ? carrierPackFieldMetaPath(pack, productCode) : null
@@ -376,6 +384,8 @@ export function loadFieldMeta(productCode: ProductCode, tenantId: string): any[]
     }
   }
   // Fallback minimal catalog
+  const configuredFields = loadProductConfig(productCode)?.fields
+  if (Array.isArray(configuredFields)) return configuredFields
   if (productCode === 'homeowners') {
     return [
       { path: 'risks.0.construction', type: 'enum', enum: ['frame','masonry','other'], required: true, ui: { group: 'Dwelling', order: 110 }},

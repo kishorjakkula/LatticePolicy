@@ -269,6 +269,8 @@ export const DOCUMENT_TEMPLATE_VARIABLES: DocumentTemplateVariable[] = [
   { token: 'mortgageeName', label: 'Mortgagee / Lienholder Name', description: 'The first mortgagee, or the first lienholder/loss payee when there is no mortgagee.', group: 'Policy details' },
   { token: 'mortgageeLoanNumber', label: 'Mortgagee Loan Number', description: 'Loan number of that mortgagee or lienholder.', group: 'Policy details' },
   { token: 'mortgageeAddress', label: 'Mortgagee Address', description: 'Address of that mortgagee or lienholder, on one line.', group: 'Policy details' },
+  { token: 'businessownersRiskSummary', label: 'Businessowners Business and Premises', description: 'BOP business, occupancy and premises from the saved transaction payload; empty for other products.', group: 'Policy details' },
+  { token: 'businessownersCoverageSummary', label: 'Businessowners Selected Package Terms', description: 'Selected BOP limits, deductibles and recorded packageTerms, including income periods and liability aggregates. Never inferred from current product configuration.', group: 'Coverage' },
 
   // ── Homeowners (HO-3 structure; empty for other products) ───────────────────
   { token: 'policyFormName', label: 'Policy Form', description: 'The policy form name and code from the product definition, e.g. "Homeowners Special Form (HO3)".', group: 'Homeowners' },
@@ -322,6 +324,48 @@ function oneLineAddress(address: any): string {
   return [text(address.street || address.line1), text(address.line2 || address.street2), text(address.line3), cityLine, address.country && address.country !== 'US' ? text(address.country) : ''].filter(Boolean).join(', ')
 }
 
+const BOP_COVERAGE_NAMES: Record<string, string> = {
+  BOP_BUILDING: 'Building', BOP_BPP: 'Business personal property',
+  BOP_BI_EE: 'Business income and extra expense', BOP_LIAB: 'Business liability',
+  BOP_MED: 'Medical expenses (included)', BOP_EQUIP: 'Equipment breakdown', BOP_WATER: 'Water backup',
+}
+
+function businessownersTokens(payload: any): Record<string, string> {
+  if (payload?.productCode !== 'businessowners') return { businessownersRiskSummary: '', businessownersCoverageSummary: '' }
+  const risks = Array.isArray(payload.risks) ? payload.risks : []
+  const riskSummary = risks.map((risk: any, index: number) => [
+    `Premises ${index + 1}: ${oneLineAddress(risk.locationAddress) || 'Address not recorded'}`,
+    [['Business', risk.businessName], ['Class', risk.businessClass], ['Occupancy', risk.occupancy],
+      ['Building interest', risk.buildingInterest], ['Annual sales', risk.annualRevenue],
+      ['Annual payroll', risk.annualPayroll], ['Employees', risk.employeeCount], ['Years in business', risk.yearsInBusiness]]
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([label, value]) => `${label}: ${typeof value === 'boolean' ? value ? 'Yes' : 'No' : text(value)}`).join('; '),
+  ].filter(Boolean).join('\n')).join('\n')
+  const selections = Array.isArray(payload.coverages) ? payload.coverages.filter((cov: any) => cov && cov.selected !== false) : []
+  const amounts: Record<string, string> = {
+    generalAggregate: 'General aggregate', productsCompletedOperationsAggregate: 'Products completed operations aggregate',
+    personalAdvertisingInjuryLimit: 'Personal and advertising injury limit',
+    damageToRentedPremisesLimit: 'Damage to rented premises limit', medicalExpensesPerPerson: 'Medical expenses per person',
+  }
+  const coverageSummary = selections.map((cov: any) => {
+    const code = text(cov.code || cov.coverageCode)
+    const terms = cov.packageTerms && typeof cov.packageTerms === 'object' ? cov.packageTerms : {}
+    const details = [
+      `Limit: ${money(cov.limit) || 'Not recorded'}`,
+      ...(cov.deductible != null ? [`Deductible: ${money(cov.deductible) || 'Not recorded'}`] : []),
+      ...(terms.basis ? [`Basis: ${text(terms.basis)}`] : []),
+      ...(terms.valuation ? [`Valuation: ${text(terms.valuation)}`] : []),
+      ...Object.entries(amounts).filter(([key]) => terms[key] != null).map(([key, label]) => `${label}: ${money(terms[key]) || 'Not recorded'}`),
+      ...(terms.restorationMonths != null ? [`Restoration period: ${text(terms.restorationMonths)} months`] : []),
+      ...(terms.waitingPeriodHours != null ? [`Income waiting period: ${text(terms.waitingPeriodHours)} hours`] : []),
+      ...(typeof terms.extraExpenseIncluded === 'boolean' ? [`Extra expense included: ${terms.extraExpenseIncluded ? 'Yes' : 'No'}`] : []),
+      ...(typeof terms.sharedLimit === 'boolean' ? [`Shared income and extra expense limit: ${terms.sharedLimit ? 'Yes' : 'No'}`] : []),
+    ]
+    return `${BOP_COVERAGE_NAMES[code] || code} (${code})\n${details.join('; ')}`
+  }).join('\n\n')
+  return { businessownersRiskSummary: riskSummary || 'No premises recorded', businessownersCoverageSummary: coverageSummary || 'No selected coverages recorded' }
+}
+
 /**
  * Tokens computed only from the policy/quote payload: the common policy
  * details every product shares, and the homeowners declarations values.
@@ -355,6 +399,7 @@ export function resolvePolicyDetailTokens(payload: any, productConfig?: any): Re
   const isHomeowners = text(payload?.productCode) === 'homeowners'
   const form = productConfig?.form
   return {
+    ...businessownersTokens(payload),
     underwritingCompany: text(payload?.underwritingCompanyName),
     mailingAddress: oneLineAddress(payload?.mailingAddress) || oneLineAddress(payload?.insureds?.primary?.address),
     billingMethod: payload?.billingMethod === 'agency' ? 'Agency bill' : payload?.billingMethod === 'direct' ? 'Direct bill' : '',

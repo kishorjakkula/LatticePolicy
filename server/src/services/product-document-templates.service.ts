@@ -8,19 +8,36 @@ type QueryFn = (text: string, params?: any[]) => Promise<any>
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
+type ProductDocumentTemplate = {
+  productCode: string; formNumber: string; formTitle: string; file: string; transactionTypes: string[]
+  endorsementChangeCriteria?: { alwaysAttachOnEndorsement: boolean }
+}
+
 /**
  * Word templates a product ships in products/<code>/documents/, and the form
  * each one fills. Seeding creates the form when missing and attaches the
  * template when the form has none, so a carrier's own uploaded template is
  * never replaced. Generated at bind with the rest of the policy packet.
  */
-export const PRODUCT_DOCUMENT_TEMPLATES = [
+export const PRODUCT_DOCUMENT_TEMPLATES: ProductDocumentTemplate[] = [
   // Declarations print on every transaction that changes the policy.
   { productCode: 'homeowners', formNumber: 'HO-DEC', formTitle: 'Homeowners Declarations', file: 'HO-DEC.docx', transactionTypes: [] as string[] },
   // A binder confirms new business; the lender needs evidence at new business and renewal.
   { productCode: 'homeowners', formNumber: 'HO-BINDER', formTitle: 'Homeowners Binder', file: 'HO-BINDER.docx', transactionTypes: ['NB'] },
   { productCode: 'homeowners', formNumber: 'HO-EOI', formTitle: 'Evidence of Property Insurance for the Mortgagee', file: 'HO-EOI.docx', transactionTypes: ['NB', 'Renew'] },
+  // Demo products are opt-in, including through normal admin reference seeding.
+  { productCode: 'businessowners', formNumber: 'BOP-QUOTE', formTitle: 'Businessowners Demo Quote', file: 'BOP-QUOTE.docx', transactionTypes: ['Quote'] },
+  { productCode: 'businessowners', formNumber: 'BOP-BINDER', formTitle: 'Businessowners Demo Binder', file: 'BOP-BINDER.docx', transactionTypes: ['Bind'] },
+  { productCode: 'businessowners', formNumber: 'BOP-DEC', formTitle: 'Businessowners Demo Declarations', file: 'BOP-DEC.docx', transactionTypes: ['Issue', 'Endorse', 'Renew', 'Rewrite'], endorsementChangeCriteria: { alwaysAttachOnEndorsement: true } },
 ]
+
+export type ProductDocumentTemplateSeedOptions = {
+  carrierCode: string
+  authority: string
+  editionDate: string
+  /** Explicit selection replaces the homeowners-only default; [] seeds nothing. */
+  productCodes?: string[]
+}
 
 export function productDocumentTemplatePath(productCode: string, file: string): string | null {
   const dir = resolveProductPackDir(productCode)
@@ -33,10 +50,12 @@ export async function seedProductDocumentTemplates(
   q: QueryFn,
   tenantId: string,
   actor: string,
-  options: { carrierCode: string; authority: string; editionDate: string }
+  options: ProductDocumentTemplateSeedOptions
 ): Promise<{ created: string[]; attached: string[]; skipped: string[] }> {
   const summary = { created: [] as string[], attached: [] as string[], skipped: [] as string[] }
-  for (const entry of PRODUCT_DOCUMENT_TEMPLATES) {
+  const selected = new Set(options.productCodes ?? ['homeowners'])
+  for (const entry of PRODUCT_DOCUMENT_TEMPLATES.filter(entry => selected.has(entry.productCode))) {
+    const demo = entry.productCode === 'businessowners'
     const templatePath = productDocumentTemplatePath(entry.productCode, entry.file)
     if (!templatePath) {
       summary.skipped.push(entry.formNumber)
@@ -49,10 +68,15 @@ export async function seedProductDocumentTemplates(
       continue
     }
     const existing = await q(
-      `SELECT form_id FROM forms_admin_forms WHERE tenant_id=$1 AND carrier_code=$2 AND authority=$3 AND form_number=$4 AND edition_date=$5::date LIMIT 1`,
+      `SELECT form_id, metadata FROM forms_admin_forms WHERE tenant_id=$1 AND carrier_code=$2 AND authority=$3 AND form_number=$4 AND edition_date=$5::date LIMIT 1`,
       [tenantId, options.carrierCode, options.authority, entry.formNumber, options.editionDate]
     )
     let formId: string = existing.rows?.[0]?.form_id
+    // Never adopt a carrier-owned form merely because it shares a demo number.
+    if (demo && formId && existing.rows[0].metadata?.seedCode !== 'businessowners-demo') {
+      summary.skipped.push(entry.formNumber)
+      continue
+    }
     if (!formId) {
       const inserted = await q(
         `INSERT INTO forms_admin_forms (
@@ -62,7 +86,9 @@ export async function seedProductDocumentTemplates(
          ) VALUES ($1,$2,$3,$4,$5,$6::date,'Policy',$7,'Approved',true,true,false,$8::jsonb,$9,$9,now())
          RETURNING form_id`,
         [tenantId, options.carrierCode, options.authority, entry.formNumber, entry.formTitle, options.editionDate, entry.productCode,
-          JSON.stringify({ seedCode: 'seed-reference-data', template: `products/${entry.productCode}/documents/${entry.file}` }), actor]
+          JSON.stringify({ seedCode: demo ? 'businessowners-demo' : 'seed-reference-data',
+            template: `products/${entry.productCode}/documents/${entry.file}`,
+            ...(demo ? { demo: true, nonContractual: true, regulatoryApprovalClaimed: false, workPackage: 'WP-0010' } : {}) }), actor]
       )
       formId = inserted.rows[0].form_id
       await ensureDefaultFormRows(q, tenantId, formId, actor)
@@ -73,9 +99,9 @@ export async function seedProductDocumentTemplates(
       const rules = await q(`SELECT 1 FROM forms_admin_applicability WHERE tenant_id=$1 AND form_id=$2 LIMIT 1`, [tenantId, formId])
       if (!rules.rowCount) {
         await q(
-          `INSERT INTO forms_admin_applicability (tenant_id, form_id, line_of_business, product_code, transaction_types, active, created_by, updated_by)
-           VALUES ($1,$2,$3,$3,$4::text[],true,$5,$5)`,
-          [tenantId, formId, entry.productCode, entry.transactionTypes, actor]
+          `INSERT INTO forms_admin_applicability (tenant_id, form_id, line_of_business, product_code, transaction_types, endorsement_change_criteria, active, created_by, updated_by)
+           VALUES ($1,$2,$3,$3,$4::text[],$5::jsonb,true,$6,$6)`,
+          [tenantId, formId, entry.productCode, entry.transactionTypes, JSON.stringify(entry.endorsementChangeCriteria || {}), actor]
         )
       }
     }

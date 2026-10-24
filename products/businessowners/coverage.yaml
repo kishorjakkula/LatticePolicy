@@ -1,0 +1,174 @@
+# Original synthetic demonstration package. Not filed rates/forms or a contract of insurance.
+product: businessowners
+version: 1.0.0
+source:
+  kind: synthetic-demo
+  workPackage: WP-0010
+  description: Original LatticePolicy Ohio single-premises BOP demonstration; not an insurance offer.
+capabilities:
+  # "Demo" in the label: nothing else in the UI marks a synthetic pack.
+  label: Businessowners Policy (BOP) - Demo
+  riskLabel: Business Premises
+  ratingAdapter: rate-table
+  formsMode: catalog
+  supportedTransactions: [quote, bind, issue, endorse, cancel, reinstate, rewrite, renew, nonRenew]
+  riskKinds:
+    businessownersLocation: BOP.Location
+  defaultRisk:
+    type: businessownersLocation
+  ui:
+    demo: true
+availability:
+  country: US
+  states: [OH]
+packageRules:
+  riskType: businessownersLocation
+  riskCount: 1
+  termMonths: [12]
+  states: [OH]
+  requiredCoverages: [BOP_BPP, BOP_BI_EE, BOP_LIAB, BOP_MED]
+  buildingCoverage: BOP_BUILDING
+  buildingInterestField: buildingInterest
+  ownerOccupancy: owner
+  occupancyField: occupancy
+  requiredUnderwritingRules: true
+coverages:
+  - code: BOP_BUILDING
+    name: Building
+    selectable: true
+    optional: true
+    limitType: value
+    minLimit: 100000
+    maxLimit: 5000000
+    defaultLimit: 500000
+    deductibles: [1000, 2500, 5000]
+    defaultDeductible: 1000
+    packageTerms:
+      valuation: replacement-cost
+  - code: BOP_BPP
+    name: Business personal property
+    selectable: true
+    required: true
+    limitType: value
+    minLimit: 10000
+    maxLimit: 1000000
+    defaultLimit: 100000
+    deductibles: [1000, 2500, 5000]
+    defaultDeductible: 1000
+    packageTerms:
+      valuation: replacement-cost
+  - code: BOP_BI_EE
+    name: Business income and extra expense
+    selectable: true
+    required: true
+    limits: [100000]
+    defaultLimit: 100000
+    packageTerms:
+      basis: limited-dollar
+      restorationMonths: 12
+      waitingPeriodHours: 72
+      extraExpenseIncluded: true
+      sharedLimit: true
+  - code: BOP_LIAB
+    name: Business liability
+    selectable: true
+    required: true
+    limits: [500000, 1000000, 2000000]
+    defaultLimit: 1000000
+    aggregateMultiplier: 2
+    personalAdvertisingInjuryMultiplier: 1
+    packageTerms:
+      basis: occurrence
+      damageToRentedPremisesLimit: 100000
+      medicalExpensesPerPerson: 5000
+  - code: BOP_MED
+    name: Medical expenses (included)
+    selectable: true
+    required: true
+    limits: [5000]
+    defaultLimit: 5000
+    packageTerms:
+      basis: perPerson
+      included: true
+  - code: BOP_EQUIP
+    name: Equipment breakdown
+    selectable: true
+    optional: true
+    limits: [25000, 50000, 100000]
+    defaultLimit: 25000
+    deductibles: [1000]
+    defaultDeductible: 1000
+  - code: BOP_WATER
+    name: Water backup
+    selectable: true
+    optional: true
+    limits: [5000, 10000, 25000]
+    defaultLimit: 5000
+    deductibles: [1000]
+    defaultDeductible: 1000
+notCovered:
+  - Flood
+  - Earthquake
+  - Professional liability
+  - Commercial auto
+  - Workers compensation
+  - Cyber
+ratingKeys:
+  - businessName
+  - businessClass
+  - annualRevenue
+  - annualPayroll
+  - employeeCount
+  - yearsInBusiness
+  - priorLossCount
+  - priorLossAmount
+  - occupancy
+  - buildingInterest
+  - locationAddress
+  - yearBuilt
+  - squareFeet
+  - construction
+  - protectionClass
+  - roofAgeYears
+  - sprinklers
+  - fireAlarm
+  - burglarAlarm
+  - vacancyDays
+  - hazardousOperations
+fields:
+  - {path: risks.0.businessName, label: Business name, type: string, required: true, ui: {group: Business, order: 110}}
+  - {path: risks.0.businessClass, label: Business class, type: enum, enum: [office, retail, service], required: true, help: Demo classifications, ui: {group: Business, order: 120}}
+  - {path: risks.0.annualRevenue, label: Annual sales, type: number, required: true, validation: {min: 0, max: 5000000}, ui: {group: Business, order: 130}}
+  - {path: risks.0.annualPayroll, label: Annual payroll, type: number, required: true, validation: {min: 0}, ui: {group: Business, order: 140}}
+  - {path: risks.0.employeeCount, label: Employees, type: int, required: true, validation: {min: 0, max: 50}, ui: {group: Business, order: 150}}
+  - {path: risks.0.yearsInBusiness, label: Years in business, type: int, required: true, validation: {min: 0}, ui: {group: Business, order: 160}}
+  - {path: risks.0.priorLossCount, label: Prior loss count, type: int, required: true, validation: {min: 0}, ui: {group: Loss history, order: 210}}
+  - {path: risks.0.priorLossAmount, label: Prior loss amount, type: number, required: true, validation: {min: 0}, ui: {group: Loss history, order: 220}}
+  - {path: risks.0.occupancy, label: Occupancy, type: enum, enum: [owner, tenant], required: true, ui: {group: Premises, order: 310}}
+  - {path: risks.0.buildingInterest, label: Building insurable interest, type: bool, required: true, ui: {group: Premises, order: 320}}
+  - path: risks.0.locationAddress
+    label: Premises address
+    type: object
+    format: postal-address
+    required: true
+    requiredProperties: [line1, city, state, postalCode, country]
+    properties:
+      line1: {type: string}
+      line2: {type: string}
+      line3: {type: string}
+      city: {type: string}
+      state: {type: enum, enum: [OH]}
+      postalCode: {type: string}
+      country: {type: enum, enum: [US]}
+      county: {type: string}
+    ui: {group: Premises, order: 330}
+  - {path: risks.0.yearBuilt, label: Building year, type: int, required: true, validation: {min: 1800}, ui: {group: Premises, order: 340}}
+  - {path: risks.0.squareFeet, label: Floor area (square feet), type: int, required: true, validation: {min: 1}, ui: {group: Premises, order: 350}}
+  - {path: risks.0.construction, label: Construction, type: enum, enum: [masonry, frame, noncombustible], required: true, ui: {group: Premises, order: 360}}
+  - {path: risks.0.protectionClass, label: Protection class, type: int, required: true, validation: {min: 1, max: 10}, ui: {group: Protections, order: 410}}
+  - {path: risks.0.roofAgeYears, label: Roof age (years), type: int, required: true, validation: {min: 0}, ui: {group: Protections, order: 420}}
+  - {path: risks.0.sprinklers, label: Sprinklers, type: bool, required: true, ui: {group: Protections, order: 430}}
+  - {path: risks.0.fireAlarm, label: Fire alarm, type: bool, required: true, ui: {group: Protections, order: 440}}
+  - {path: risks.0.burglarAlarm, label: Burglar alarm, type: bool, required: true, ui: {group: Protections, order: 450}}
+  - {path: risks.0.vacancyDays, label: Vacancy days, type: int, required: true, validation: {min: 0}, ui: {group: Operations, order: 510}}
+  - {path: risks.0.hazardousOperations, label: Hazardous manufacturing operations, type: bool, required: true, ui: {group: Operations, order: 520}}

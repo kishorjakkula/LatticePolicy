@@ -1,0 +1,30 @@
+BUSINESSOWNERS POLICY (BOP) - DEMO QUOTE
+Demo - not a contract of insurance. Synthetic/non-filed demonstration only.
+
+Insured: {insuredName}
+Quote reference: {quoteNumber}
+Effective date: {effectiveDate}
+Expiration date: {expirationDate}
+Premises: {premisesAddress}
+Underwriting company: {underwritingCompanyName}
+
+Selected coverages and component premiums: {coverageSummary}
+Total quoted premium (USD): {totalPremium}
+
+Building and business personal property: replacement-cost demo valuation,
+subject to the selected limits and property deductibles. Building coverage
+requires explicit insurable interest; owner risks require building coverage.
+Business income and extra expense share a 100,000 dollar limit, up to twelve
+months restoration, with a 72-hour income waiting period. Not unrestricted
+actual-loss-sustained coverage.
+Business liability: occurrence limit {liabilityOccurrenceLimit}; general
+aggregate {generalAggregate}; products-completed operations aggregate
+{productsCompletedOperationsAggregate}; personal/advertising injury limit
+{personalAdvertisingInjuryLimit}. Included rented-premises damage sublimit:
+100,000. Medical expenses: included 5,000 per person, no separate charge.
+Equipment breakdown and water backup apply only when explicitly selected;
+each has a 1,000 deductible. Neither expands this demo to flood coverage.
+
+No flood, earthquake, professional liability, auto, workers compensation or
+cyber coverage is represented. This quote does not bind insurance. Eligibility,
+underwriting review and authorized human bind/issue actions remain required.

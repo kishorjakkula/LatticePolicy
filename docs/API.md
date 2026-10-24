@@ -43,6 +43,24 @@ Endpoints
   - 409 `QUOTE_RERATE_REQUIRED` when the quote has no rating or its risk data
     no longer matches the rating it carries; nothing is written.
 
+- Businessowners (`businessowners`, WP-0010) on quote, rate and bind
+  - The package is checked before pricing and at bind, issue and every policy
+    transaction: 422 `PRODUCT_RULES_NOT_MET` with `keyword: "package"` errors for
+    a missing required coverage, an owner without building coverage, building
+    coverage without insurable interest, an unoffered limit or deductible, more
+    than one premises, or `packageTerms` that differ from what the product
+    derives. Clients send no `packageTerms`; the server derives and stores them.
+    Terms copied from an earlier version with a changed limit are refused, not
+    re-derived: drop `packageTerms` when changing a limit.
+  - Distribution is re-checked inside the writing transaction:
+    400 `STATE_NOT_ELIGIBLE`, `BOP_EFFECTIVE_DATE_REQUIRED`,
+    `BOP_COMPANY_NOT_ELIGIBLE`, `BOP_DISTRIBUTION_REQUIRED`;
+    403 `BOP_ACTOR_NOT_AUTHORIZED`, `BOP_DISTRIBUTION_NOT_AUTHORIZED`,
+    `BOP_APPOINTMENT_REQUIRED`, `BOP_PRODUCER_IDENTITY_REQUIRED`;
+    503 `BOP_DEPENDENCIES_UNAVAILABLE` (fails closed).
+  - 400 `UNDERWRITING_NOT_CONFIGURED` when the carrier has no active
+    underwriting rules for the product; there is no built-in fallback.
+
 - GET /v1/policies/{id}
   - Fetch current policy summary with latest version.
 
