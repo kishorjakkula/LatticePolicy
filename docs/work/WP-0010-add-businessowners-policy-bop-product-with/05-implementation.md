@@ -79,3 +79,14 @@ was renumbered from WP-0009, which `main` already uses.
 - Checks: typecheck clean; server unit 1,155 and frontend unit 625 passed; BOP
   lifecycle and authorization integration 46 passed; BOP browser spec 2 passed.
 - Other minors are accepted as recorded in `07-code-review.md`.
+
+## Security review follow-ups (after 08)
+
+- S-2: the product label now ends in "- Demo", since nothing else in the UI
+  marks the pack as synthetic.
+- S-3: `products/businessowners/README.md` lists what carrier and legal must
+  confirm before real use (filings, licensing, TRIA offer, state endorsements,
+  notice rules, the renewal/rewrite distribution check).
+- S-6: the demo integration test counts only its own owner/tenant quotes, so it
+  also passes on a reused database (5 passed).
+- S-1, S-4 and S-5 stay accepted for the demo as recorded in 08.

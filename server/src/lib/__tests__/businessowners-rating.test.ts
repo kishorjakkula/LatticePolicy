@@ -37,7 +37,7 @@ const definition = (code: string) => config.coverages.find((item: any) => item.c
 describe('businessowners versioned pack configuration', () => {
   it('declares a distinct risk, explicit fields and no invented risk facts', () => {
     expect(parseProductDescriptor(config, 'businessowners')).toMatchObject({
-      code: 'businessowners', version: '1.0.0', label: 'Businessowners Policy (BOP)',
+      code: 'businessowners', version: '1.0.0', label: 'Businessowners Policy (BOP) - Demo',
       ratingAdapter: 'rate-table', formsMode: 'catalog',
       riskKinds: {businessownersLocation: 'BOP.Location'}, defaultRisk: {type: 'businessownersLocation'},
     })

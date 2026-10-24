@@ -6,7 +6,8 @@ source:
   workPackage: WP-0010
   description: Original LatticePolicy Ohio single-premises BOP demonstration; not an insurance offer.
 capabilities:
-  label: Businessowners Policy (BOP)
+  # "Demo" in the label: nothing else in the UI marks a synthetic pack.
+  label: Businessowners Policy (BOP) - Demo
   riskLabel: Business Premises
   ratingAdapter: rate-table
   formsMode: catalog

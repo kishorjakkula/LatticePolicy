@@ -48,7 +48,7 @@ describe('explicit synthetic businessowners demo setup', () => {
       expect((await q('SELECT current_user AS role')).rows[0].role).toBe(TENANT_RLS_ROLE)
       const counts = await q(`SELECT
         (SELECT count(*) FROM customers WHERE tenant_id=$1 AND metadata->>'demoSetup'=$2) AS customers,
-        (SELECT count(*) FROM quotes WHERE tenant_id=$1 AND payload->'metadata'->>'demoSetup'=$2) AS quotes,
+        (SELECT count(*) FROM quotes WHERE tenant_id=$1 AND payload->'metadata'->>'demoSetup'=$2 AND payload->'metadata'->>'demoKey' IN ('quote-owner','quote-tenant')) AS quotes,
         (SELECT count(*) FROM underwriting_rules WHERE tenant_id=$1 AND reason_code LIKE 'BOP_DEMO_%') AS uw,
         (SELECT count(*) FROM validation_rule_audit WHERE tenant_id=$1 AND rule_code LIKE 'BOP_DEMO_%') AS validation_audit,
         (SELECT count(*) FROM customer_audit_events WHERE tenant_id=$1 AND actor LIKE 'automation:WP-0010-BOP-DEMO-V1:%') AS customer_audit`, [tenantId, BUSINESSOWNERS_DEMO_KEY])

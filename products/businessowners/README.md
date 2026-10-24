@@ -83,3 +83,17 @@ Original plain-text quote/binder/declarations sources are in `documents/`.
 Parent-owned forms catalog setup, binary templates and rendering qualification
 remain separate. Nothing here seeds live data, activates a product, bypasses
 human intake approval or changes previously issued records.
+
+## Required before any real use
+
+This pack is a synthetic demonstration. Before a carrier offers BOP, carrier
+and legal teams must confirm and configure, for each state:
+
+- admission or surplus-lines status, and filed rates, rules and forms in place
+  of these synthetic ones;
+- producer licensing and appointment requirements, including a distribution
+  check at renewal and rewrite (today only quote and bind check it);
+- the terrorism (TRIA) offer and disclosure at quote and renewal, and the
+  insured's acceptance or rejection;
+- mandatory state endorsements and amendatory forms;
+- cancellation and non-renewal notice periods, reasons and delivery rules.
