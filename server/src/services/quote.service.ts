@@ -14,6 +14,7 @@ import { today, coerceDateOnly } from '../lib/date.utils.js'
 import { csvEscape } from '../lib/utils.js'
 import { resolveGovernanceRelease } from './product-governance.service.js'
 import { ratingFingerprint, storedRatingFingerprint, withServerOwnedFieldsFrom, withoutServerOwnedFields } from '../lib/rating-fingerprint.js'
+import { assertBusinessownersAuthorization, isBusinessownersProduct } from './businessowners-authorization.service.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ export async function createOrRateQuote(
   body: any,
   requestedQuoteId: string | null,
   updatedBy: string,
-  options: { previousPayload?: any } = {}
+  options: { previousPayload?: any; actorId?: string | null } = {}
 ): Promise<{
   quoteId: string
   quoteNumber: string | null
@@ -142,10 +143,15 @@ export async function createOrRateQuote(
     })
   }
 
-  // State eligibility check (non-fatal — ignore if table not seeded)
+  if (isBusinessownersProduct(body.productCode)) {
+    await withTenantTx(tenantId, innerDb =>
+      assertBusinessownersAuthorization(toRawQuery(innerDb), tenantId, body, options.actorId))
+  }
+
+  // Legacy state eligibility handling is unchanged for other products.
   const productCode = body.productCode || ''
   const stateCode = body.state || ''
-  if (productCode && stateCode) {
+  if (!isBusinessownersProduct(productCode) && productCode && stateCode) {
     try {
       const eligibility = await withTenantTx(tenantId, (innerDb) =>
         checkStateEligibility(toRawQuery(innerDb), tenantId, productCode, stateCode)
@@ -198,6 +204,7 @@ export async function createOrRateQuote(
 
   await withTenantTx(tenantId, async (innerDb) => {
     const q = toRawQuery(innerDb)
+    await assertBusinessownersAuthorization(q, tenantId, body, options.actorId)
 
     if (requestedQuoteId) {
       const existing = await q(

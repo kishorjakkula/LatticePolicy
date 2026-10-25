@@ -28,6 +28,7 @@ import { validatePolicyTransactionState, type PolicyTransactionAction } from '..
 import { createCommissionHandoffEvent } from './commission-handoff.service.js'
 import { PolicyReferralRequiredError, resolveReferralGateForActor } from './uw-referral.service.js'
 import { assertProductRules } from './product-rules.service.js'
+import { assertBusinessownersAuthorization } from './businessowners-authorization.service.js'
 import { carryProductPin, ensureProductSnapshots } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
@@ -749,6 +750,7 @@ export async function executeEndorsement(
   )
   const prevPayload = computation.previousPayload
   const newPayload = computation.nextPayload
+  await assertBusinessownersAuthorization(q, tenantId, { ...newPayload, effectiveDate: eff }, actor?.id)
   let changes = computation.changes
   const oldPrem = computation.previousPremium
   const newPrem = computation.nextPremium

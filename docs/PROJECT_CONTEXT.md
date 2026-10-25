@@ -17,7 +17,7 @@ The main architectural idea is one shared policy platform with access-based expe
 - `services/document-learning/` provides approved-dataset profile learning, held-out evaluation, optional offline weight training, and automatic registration for admin review. It never trains directly on raw uploads. See `docs/DOCUMENT_LEARNING.md`.
 - `packages/types/`: shared TypeScript types and Zod schemas.
 - `packages/rules/`: shared runtime package (rule expressions and screen rules) used by both server and frontend; see `docs/MODULES.md`.
-- `products/`: product pack YAML for personal auto, homeowners, cyber, commercial auto, and professional liability.
+- `products/`: product pack YAML for personal auto, homeowners, cyber, commercial auto, professional liability, and a synthetic Ohio businessowners (BOP) demo pack (`docs/tasks/businessowners-product-pack.md`).
 - `tenants/sample-carrier/`: sample tenant configuration and field metadata.
 - `contracts/`: JSON schemas and sample relational seed data.
 - `docs/`: architecture, setup, API, domain, deployment, multitenancy, and data model documentation.

@@ -847,6 +847,9 @@ export function buildCustomerInput(values: Record<string, string>) {
 }
 
 function coerceRiskValue(field: SubmissionField, value: string): unknown {
+  if (field.type === 'select' && field.options?.length === 2 && field.options.includes('true') && field.options.includes('false')) {
+    if (value === 'true' || value === 'false') return value === 'true'
+  }
   if (field.type === 'number') {
     const number = Number(value)
     return Number.isFinite(number) ? number : value
@@ -876,7 +879,16 @@ export function buildQuotePayload(
     if (!reviewedRiskKeys.has(key)) risk[key] = value
   }
   for (const field of fields) {
-    if (field.key.startsWith(RISK_FIELD_PREFIX) && field.value) risk[field.key.slice(RISK_FIELD_PREFIX.length)] = coerceRiskValue(field, field.value)
+    if (field.key.startsWith(RISK_FIELD_PREFIX) && field.value) {
+      const keys: string[] = String(field.key).slice(RISK_FIELD_PREFIX.length).split('.')
+      if (keys.some(key => !key || ['__proto__', 'prototype', 'constructor'].includes(key))) continue
+      let target: Record<string, unknown> = risk
+      for (const key of keys.slice(0, -1)) {
+        if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) target[key] = {}
+        target = target[key] as Record<string, unknown>
+      }
+      target[keys[keys.length - 1]] = coerceRiskValue(field, field.value)
+    }
   }
   if (isCompany && name && !('businessName' in risk) && fields.some((field) => field.key === `${RISK_FIELD_PREFIX}businessName`)) risk.businessName = name
   // Coverages the submission asked for; the wizard applies the product's

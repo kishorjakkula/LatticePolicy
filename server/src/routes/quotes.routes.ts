@@ -134,7 +134,7 @@ quoteRoutes.post(
         // The policy's current payload (tenant-scoped), for codes it already carries.
         const context = policyId ? await loadPolicyContext(db, tenantId, policyId) : null
         const previousPayload = context && context.policy?.productCode === body?.productCode ? context.latestPayload : undefined
-        const rated = await quoteService.createOrRateQuote(db, tenantId, body, requestedQuoteId, updatedBy, { previousPayload })
+        const rated = await quoteService.createOrRateQuote(db, tenantId, body, requestedQuoteId, updatedBy, { previousPayload, actorId: req.user?.id || null })
         return rated && typeof rated === 'object' ? { ...rated, validation } : rated
       })
       ok(res, result)

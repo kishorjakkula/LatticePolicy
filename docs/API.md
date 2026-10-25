@@ -43,6 +43,34 @@ Endpoints
   - 409 `QUOTE_RERATE_REQUIRED` when the quote has no rating or its risk data
     no longer matches the rating it carries; nothing is written.
 
+- Businessowners (`businessowners`, WP-0010) on quote, rate, bind and servicing
+  - The package is checked before pricing and at bind, issue and every policy
+    transaction: 422 `PRODUCT_RULES_NOT_MET` with `keyword: "package"` errors for
+    a missing required coverage, an owner without building coverage, building
+    coverage without insurable interest, an unoffered limit or deductible, more
+    than one premises, or `packageTerms` that differ from what the product
+    derives. Clients send no `packageTerms`; the server derives and stores them.
+    Terms copied from an earlier version with a changed limit are refused, not
+    re-derived: drop `packageTerms` when changing a limit.
+    On default server-copied renewal/rewrite and renewal preview, fixed terms
+    are re-derived from the newly pinned edition; historical terms stay unchanged.
+    Client-supplied override terms still undergo strict validation.
+    A deductible is rejected when its coverage offers no deductible choices.
+  - Distribution is re-checked inside the writing transaction:
+    400 `STATE_NOT_ELIGIBLE`, `BOP_EFFECTIVE_DATE_REQUIRED`,
+    `BOP_COMPANY_NOT_ELIGIBLE`, `BOP_DISTRIBUTION_REQUIRED`;
+    403 `BOP_ACTOR_NOT_AUTHORIZED`, `BOP_DISTRIBUTION_NOT_AUTHORIZED`,
+    `BOP_APPOINTMENT_REQUIRED`, `BOP_PRODUCER_IDENTITY_REQUIRED`;
+    503 `BOP_DEPENDENCIES_UNAVAILABLE` (fails closed).
+    Direct endorsement, renewal and rewrite use these same checks at their
+    transaction/new-term effective date, in the mutation transaction.
+    400 `POLICY_PRODUCT_MISMATCH` rejects a renewal/rewrite attempting to switch
+    a BOP policy to another product to bypass package/distribution checks.
+  - 422 `PRODUCT_PACKAGE_CONFIG_INVALID` refuses malformed package configuration
+    before capture/pricing; empty/missing package metadata is not unrestricted.
+  - 400 `UNDERWRITING_NOT_CONFIGURED` when the carrier has no active
+    underwriting rules for the product; there is no built-in fallback.
+
 - GET /v1/policies/{id}
   - Fetch current policy summary with latest version.
 

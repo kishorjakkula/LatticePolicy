@@ -31,6 +31,8 @@ import {
 } from './document-generation.service.js'
 import { PolicyReferralRequiredError, resolveReferralGateForActor } from './uw-referral.service.js'
 import { assertCoveragesDefined, assertProductRules, sameRiskData } from './product-rules.service.js'
+import { assertBusinessownersAuthorization, isBusinessownersProduct } from './businessowners-authorization.service.js'
+import { refreshCopiedPackageTerms } from '../lib/product-package.js'
 import { carryProductPin, pinToCurrentProduct } from '../lib/product-snapshot.js'
 import { lockPolicyForMutation } from './policy-concurrency.service.js'
 import { maximumRequestedLimit, resolveAuthorityDecision } from './underwriting-authority.service.js'
@@ -881,8 +883,13 @@ export async function renewPolicy(
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   // A renewal starts a new term on the product as it is defined now.
-  await pinToCurrentProduct(tenantId, payload)
+  if (isBusinessownersProduct(policyProductCode(policyRow)) && !isBusinessownersProduct(payload.productCode)) {
+    throw new BadRequestError('POLICY_PRODUCT_MISMATCH', 'A renewal cannot change the policy product.')
+  }
+  const renewalDefinition = await pinToCurrentProduct(tenantId, payload)
+  if (!overridePayload) refreshCopiedPackageTerms(payload, renewalDefinition?.definition.config)
   assertProductRules(tenantId, payload, 'renewal', { previous: prevPayload })
+  await assertBusinessownersAuthorization(q, tenantId, payload, actor?.id)
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)
   const authority = await resolveAuthorityDecision(q, {
@@ -1208,8 +1215,13 @@ export async function rewritePolicy(
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   // A rewrite starts a new term on the product as it is defined now.
-  await pinToCurrentProduct(tenantId, payload)
+  if (isBusinessownersProduct(policyProductCode(policyRow)) && !isBusinessownersProduct(payload.productCode)) {
+    throw new BadRequestError('POLICY_PRODUCT_MISMATCH', 'A rewrite cannot change the policy product.')
+  }
+  const rewriteDefinition = await pinToCurrentProduct(tenantId, payload)
+  if (!overridePayload) refreshCopiedPackageTerms(payload, rewriteDefinition?.definition.config)
   assertProductRules(tenantId, payload, 'rewrite', { previous: prevPayload })
+  await assertBusinessownersAuthorization(q, tenantId, payload, actor?.id)
 
   const prem = rate(tenantId, payload)
   const uw = await evaluateUW(tenantId, payload)
@@ -1528,7 +1540,8 @@ export async function previewRenewal(
   payload.termMonths = termMonths
   payload.productCode = payload.productCode || policyProductCode(policyRow)
   // Preview what the renewal would be on the product as it is defined now.
-  await pinToCurrentProduct(tenantId, payload)
+  const previewDefinition = await pinToCurrentProduct(tenantId, payload)
+  refreshCopiedPackageTerms(payload, previewDefinition?.definition.config)
   const premium = rate(tenantId, payload)
   const underwriting = await evaluateUW(tenantId, payload)
   return { underwriting, premium, nextEffectiveDate: nextEff, nextExpirationDate: nextExp }

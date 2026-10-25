@@ -14,3 +14,4 @@ ADR supersedes an earlier one.
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-delivery-agents.md) | Tool-neutral delivery agents with human gates | Accepted |
+| [0004](0004-businessowners-product-pack.md) | Configuration-first BOP package and opt-in demo setup | Accepted |

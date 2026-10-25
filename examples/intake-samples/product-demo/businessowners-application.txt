@@ -1,0 +1,80 @@
+SYNTHETIC DEMO ONLY - NOT A REAL INSURANCE APPLICATION
+
+
+[Policy]
+Product: businessowners
+Effective date: 2026-12-01
+Rating state: OH
+Prior carrier: Fictional Demo Insurance
+
+[Insured]
+Named insured: Synthetic Office Demo LLC
+Insured type: company
+FEIN: 00-0000004
+Insured email: intake-demo@example.com
+Insured phone: 614-555-0142
+Mailing address: 100 Synthetic Demo Lane
+Apartment, suite or unit: Unit 2
+City: Columbus
+Address state: OH
+ZIP code: 43215
+
+[Prior insurance]
+Prior policy number: DEMO-PRIOR-0001
+Prior policy expiration: 2026-12-01
+Years with prior carrier: 3
+
+[Billing]
+Billing method: direct
+Payment plan: annual
+
+[Broker]
+Broker or agency: Synthetic Demo Agency
+Broker email: broker@example.com
+
+[Business]
+Business name: Synthetic Office Demo LLC
+Business class: office
+Annual sales: 750000
+Annual payroll: 200000
+Employees: 5
+Years in business: 6
+
+[Loss history]
+Prior loss count: 0
+Prior loss amount: 0
+
+[Premises]
+Occupancy: tenant
+Building insurable interest: false
+Building year: 2015
+Floor area (square feet): 2500
+Construction: masonry
+
+[Protections]
+Protection class: 3
+Roof age (years): 5
+Sprinklers: true
+Fire alarm: true
+Burglar alarm: false
+
+[Operations]
+Vacancy days: 0
+Hazardous manufacturing operations: false
+
+[Premises]
+Premises address line 1: 100 Synthetic Demo Lane
+Premises address line 2: Suite 200
+Premises address line 3: Demo Office
+Premises address city: Columbus
+Premises address state: OH
+Premises address ZIP code: 43215-0001
+Premises address country: US
+Premises address county: Franklin
+
+[Coverages requested]
+Business personal property limit: 100000
+Business personal property deductible: 1000
+Business income and extra expense limit: 100000
+Business liability limit: 1000000
+Medical expenses (included) limit: 5000

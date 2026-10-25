@@ -32,6 +32,8 @@ export function defaultAutoRisk() {
   return { type: 'autoVehicle', year: 2018, make: 'Toyota', model: 'Camry', trim: 'LE', bodyStyle: 'sedan', vin: '', garagingZip: '10001', registrationState: 'NY', usage: 'commute', annualMiles: 12000, commuteMiles: 12, driverAge: 30, principalDriver: 'Named insured', ownershipType: 'owned', purchaseDate: '', antiTheft: 'passive-alarm', rideshareUse: 'no', existingDamage: 'no' }
 }
 
+export const defaultBusinessownersRisk = () => ({ type: 'businessownersLocation' })
+
 export const defaultDwellingRisk = () => ({ type: 'dwelling', address: '1 Main St', construction: 'frame', yearBuilt: 2000, roofAgeYears: 10, squareFeet: 1800 })
 export const defaultCyberRisk = () => ({ type: 'cyberProfile', industry: 'technology', annualRevenue: 1000000, employeeCount: 50, recordsCount: 50000, mfaEnabled: 'true', endpointProtection: 'true', backups: 'daily', priorIncidents: 0, publicFacingApps: 2, domain: 'example.com' })
 export const defaultCommercialAutoRisk = () => ({ type: 'commercialAutoFleet', businessName: 'Acme Services LLC', garagingZip: '10001', vehicleCount: 3, driverCount: 4, useClass: 'artisan-contractor', radiusClass: 'local', vehicleType: 'service-van', gvwClass: 'light', annualMileage: 18000, yearsInBusiness: 5, priorLossesCount: 0 })

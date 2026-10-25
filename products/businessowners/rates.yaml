@@ -1,0 +1,61 @@
+# Synthetic, non-filed USD demonstration pricing. No external rating provider.
+product: businessowners
+version: 1.0.0
+source:
+  kind: synthetic-demo
+  workPackage: WP-0010
+  description: Original demo assumptions only; zero tax is not a tax-exemption claim.
+rating:
+  factors:
+    - name: Term
+      path: termMonths
+      table: {'12': 1}
+      required: true
+    - name: State
+      path: state
+      table: {OH: 1}
+      required: true
+    - name: Business class
+      field: businessClass
+      table: {office: 1, retail: 1.15, service: 1.10}
+      required: true
+    - name: Construction
+      field: construction
+      table: {masonry: 1, frame: 1.10, noncombustible: 0.90}
+      required: true
+    - name: Protection class
+      field: protectionClass
+      ranges: {'1-4': 1, '5-8': 1.10, '9-10': 1.25}
+      required: true
+    - name: Prior loss count
+      field: priorLossCount
+      ranges: {'0-0': 1, '1-1': 1.10, '2+': 1.25}
+      required: true
+  coverages:
+    BOP_BUILDING:
+      rate: 2
+      ratePer: 1000
+      deductibleFactors: {'1000': 1, '2500': 0.90, '5000': 0.80}
+    BOP_BPP:
+      rate: 3
+      ratePer: 1000
+      deductibleFactors: {'1000': 1, '2500': 0.90, '5000': 0.80}
+    BOP_BI_EE:
+      byLimit: {'100000': 100}
+    BOP_LIAB:
+      byLimit: {'500000': 300, '1000000': 400, '2000000': 600}
+      applyFactors: false
+    BOP_MED:
+      byLimit: {'5000': 0}
+      applyFactors: false
+    BOP_EQUIP:
+      byLimit: {'25000': 50, '50000': 90, '100000': 160}
+      applyFactors: false
+    BOP_WATER:
+      byLimit: {'5000': 25, '10000': 45, '25000': 90}
+      applyFactors: false
+  minimumPremium: 500
+fees:
+  policy: 0
+taxes:
+  rate: 0

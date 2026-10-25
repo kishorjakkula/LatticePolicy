@@ -1,4 +1,5 @@
 // Shared TypeScript types for LatticePolicy
+export type * from './package-terms.js'
 // Consumed by both frontend and server packages
 
 // ─── Auth ───────────────────────────────────────────────────────────────────

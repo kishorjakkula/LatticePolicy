@@ -43,13 +43,13 @@
     "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.2",
     "kafkajs": "^2.2.4",
-    "nodemailer": "^10.1.2",
+    "nodemailer": "10.2.1",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "pizzip": "^3.3.0",
     "proxy-addr": "^2.0.8",
-    "puppeteer": "^24.43.1",
+    "puppeteer": "25.16.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
@@ -81,7 +81,7 @@
         "brace-expansion": "2.1.7"
       }
     },
-    "fast-uri": "3.1.8",
+    "fast-uri": "3.1.9",
     "ip-address": "10.7.1",
     "qs": "6.16.0",
     "source-map-js": "1.2.2",
