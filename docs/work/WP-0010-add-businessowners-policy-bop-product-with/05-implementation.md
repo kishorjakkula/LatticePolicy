@@ -51,7 +51,9 @@ was renumbered from WP-0009, which `main` already uses.
 
 ## Deviations from the design
 
-- Renewal, rewrite and endorsement do not re-run the BOP distribution check (appointments and producer link). They rely on the existing authority grants and referral gates, which the lifecycle test shows apply to BOP. The reviewer should confirm this matches the servicing intent, or ask for the check at renewal.
+- Superseded during PR #399 follow-up: direct renewal, rewrite and endorsement
+  now re-run BOP distribution authorization in the action transaction, using
+  its effective date. Existing authority/referral checks still apply.
 - The demo authority grant covers new business only, so servicing a demo policy goes to an underwriter referral unless a grant is added. This is deliberate; it is not widened here.
 - Intake fixtures are BOP-only. Codex's all-product intake bundle is a separate package and stays in the shared checkout.
 
@@ -90,3 +92,27 @@ was renumbered from WP-0009, which `main` already uses.
 - S-6: the demo integration test counts only its own owner/tenant quotes, so it
   also passes on a reused database (5 passed).
 - S-1, S-4 and S-5 stay accepted for the demo as recorded in 08.
+
+## PR 399 Follow-Up
+
+The user requested review and fixes before merge. See
+`docs/tasks/pr-399-review-fixes.md`; unrelated shared-checkout changes are excluded.
+
+- Dependency updates remove all currently reported vulnerabilities, without
+  expanding audit exceptions; supported Node engines/licenses checked.
+- Direct servicing authorizes current distribution at transaction/next-term
+  dates, inside its transaction. BOP renewal/rewrite cannot switch product code
+  to bypass the guard or create a mixed-product policy.
+- Deductibles not offered by a package coverage are refused before rating.
+- Server-copied renewal/rewrite/preview terms are re-derived from the new pinned
+  definition. Client overrides remain strictly checked; old versions stay intact.
+- New package-configuration validation rejects missing/empty required metadata,
+  invalid references/options/ranges/multipliers and nonfinite derived amounts
+  before loading/capture/pricing, including invalid pinned definitions.
+- Added real database expiry, product-switch and edition-change regressions,
+  configured deductible tests and malformed package configuration tests.
+- Local full server suite passed 1,299 tests / 108 files (before the final small
+  configuration-validator refinements); frontend passed 625 / 96 files. BOP
+  browser tests passed twice (desktop/mobile); latest full database run pending.
+  Initial simultaneous full-suite attempts timed out under resource pressure;
+  bounded-worker sequential reruns retain the original timeouts/assertions.

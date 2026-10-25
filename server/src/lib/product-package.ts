@@ -1,5 +1,6 @@
 import type { CoveragePackageTerms } from '@lattice-policy/types'
 import { ValidationError } from '../errors/domain.errors.js'
+import { assertValidProductPackageConfig } from './product-package-config.js'
 
 export type PackageViolation = { path: string; keyword: 'package'; message: string }
 
@@ -25,6 +26,7 @@ const numeric = (value: unknown): number | null => {
 }
 
 export function productPackageViolations(payload: any, config: any): PackageViolation[] {
+  assertValidProductPackageConfig(config, { required: payload?.productCode === 'businessowners' })
   const rules = config?.packageRules
   if (!rules) return []
   const errors: PackageViolation[] = []
@@ -93,6 +95,8 @@ export function productPackageViolations(payload: any, config: any): PackageViol
     if (Array.isArray(definition.deductibles) && definition.deductibles.length) {
       const deductible = numeric(coverage.deductible)
       if (deductible === null || !definition.deductibles.some((value: any) => Number(value) === deductible)) fail(`${path}/deductible`, 'Choose an offered deductible.')
+    } else if (coverage.deductible !== undefined && coverage.deductible !== null && coverage.deductible !== '') {
+      fail(`${path}/deductible`, 'This coverage does not offer a deductible.')
     }
     const expected = coveragePackageTerms(definition, coverage)
     if (coverage.packageTerms !== undefined) {
@@ -109,6 +113,7 @@ export function productPackageViolations(payload: any, config: any): PackageViol
 
 /** Called before pricing, including direct/servicing rating paths. */
 export function applyProductPackage(payload: any, config: any): void {
+  assertValidProductPackageConfig(config, { required: payload?.productCode === 'businessowners' })
   if (!config?.packageRules) return
   const errors = productPackageViolations(payload, config)
   if (errors.length) throw new ValidationError('PRODUCT_RULES_NOT_MET', { errors })
@@ -117,4 +122,14 @@ export function applyProductPackage(payload: any, config: any): void {
     const terms = coveragePackageTerms(definition, coverage)
     if (coverage.selected && terms) coverage.packageTerms = terms
   }
+}
+
+/** Only for a server-owned copy of the previous term, never a client override. */
+export function refreshCopiedPackageTerms(payload: any, config: any): void {
+  assertValidProductPackageConfig(config, { required: payload?.productCode === 'businessowners' })
+  if (!config?.packageRules) return
+  for (const coverage of Array.isArray(payload?.coverages) ? payload.coverages : []) {
+    if (coverage && typeof coverage === 'object') delete coverage.packageTerms
+  }
+  applyProductPackage(payload, config)
 }

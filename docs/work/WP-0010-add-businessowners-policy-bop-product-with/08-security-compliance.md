@@ -60,3 +60,19 @@ No Blocker, Critical, Major or High findings.
   - existing user UUIDs with the required permissions are given.
   These checks run before `initDb` applies migrations (`seed-businessowners-demo.ts:17`). Nothing calls `seedBusinessownersDemo` at boot. Admin reference seeding still defaults to homeowners templates only (`product-document-templates.service.ts:56`; `admin.routes.ts:1102` passes no `productCodes`).
 - CI on PR #399: `gh pr checks 399` and the code-scanning alerts API, as summarized above.
+## PR 399 Remediation Recheck
+
+The previously accepted direct-servicing gap is now fixed: endorsement, renewal
+and rewrite validate current actor/company/distribution in the mutation
+transaction, at its effective date. BOP product identity cannot be changed on
+renewal/rewrite to bypass these checks. Independent review verified rollback
+and strict client-forged term refusal (07 round 4).
+Malformed package definitions now fail closed before loading/capture/pricing;
+nonfinite benefits and unoffered deductibles are refused. No audit mutation,
+new data recipient, public credential, external AI call or permission bypass
+was added. New-term server-owned metadata refresh never relaxes client checks.
+Updated supported dependencies without new allowlist entries: npm audit reports
+zero vulnerabilities. Puppeteer 25.16.0 and Chrome 156 PDF checks pass; Node
+engines and licenses are documented in docs/tasks/pr-399-review-fixes.md.
+GitHub scans must still pass on the pushed head before merge. This records a
+local review, not production/carrier approval or permission to bypass CI.

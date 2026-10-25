@@ -53,7 +53,7 @@
       "writes": "05-implementation.md",
       "gateAfter": null,
       "status": "done",
-      "returns": 0
+      "returns": 1
     },
     {
       "id": "unit-test",
@@ -205,6 +205,30 @@
     },
     {
       "at": "2026-10-24T03:18:46.063Z",
+      "event": "Automation Test completed"
+    },
+    {
+      "at": "2026-10-25T01:17:44.099Z",
+      "event": "returned to Developer: PR #399 failed dependency audit; user requested fixes before merge. Re-run review/security/automation on the updated head."
+    },
+    {
+      "at": "2026-10-25T01:31:51.636Z",
+      "event": "Developer completed"
+    },
+    {
+      "at": "2026-10-25T01:31:51.853Z",
+      "event": "Unit Test completed"
+    },
+    {
+      "at": "2026-10-25T01:31:52.370Z",
+      "event": "Code Reviewer completed"
+    },
+    {
+      "at": "2026-10-25T01:31:52.557Z",
+      "event": "Security and Compliance completed"
+    },
+    {
+      "at": "2026-10-25T01:31:52.765Z",
       "event": "Automation Test completed"
     }
   ]

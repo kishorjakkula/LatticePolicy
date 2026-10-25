@@ -23,3 +23,14 @@
 
 - Dependency Audit fails (https://github.com/kishorjakkula/LatticePolicy/actions/runs/40057314212/job/120763040316). It is not caused by this PR, which changes no `package.json` or lockfile. The Security workflow on `main` fails the same way at 235ee7c (run 40025225655). It needs a separate dependency PR, or the owner's explicit acceptance at Gate C.
 - Locally, one existing test (`policy-lifecycle.integration.test.ts`) timed out once while a browser run shared the machine. It passed alone, in the clean full run and in CI.
+## PR 399 Remediation Recheck
+
+Updated implementation passed 2 BOP Playwright tests at 1440px and 390px using
+playwright.businessowners.config.ts. Coverage screenshots were visually inspected;
+no clipped controls/page overflow observed. No demo/pilot API was started.
+Final local server 1,301 tests, frontend 625 tests, and fresh PostgreSQL with RLS
+380 tests pass. PDF/document regression also passed with updated Puppeteer and
+its supported Chrome 156. Full build/typecheck, dependency audit, module and
+delivery checks pass. Independent review cleared confirmed findings in 07.
+GitHub CI is pending the push and must be checked separately; Gate C remains
+unapproved here. No live/demo database or production environment was changed.

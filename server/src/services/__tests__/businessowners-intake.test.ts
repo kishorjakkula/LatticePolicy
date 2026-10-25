@@ -17,6 +17,13 @@ function intakePayload() {
 }
 
 describe('businessowners submission draft mapping', () => {
+  it.each(['BOP_LIAB', 'BOP_BI_EE', 'BOP_MED'])('rejects invented deductibles on %s before rating or rendering', code => {
+    for (const deductible of [-1000, 0, 50000]) {
+      const payload = intakePayload()
+      payload.coverages.find(coverage => coverage.code === code)!.deductible = deductible
+      expect(() => applyProductPackage(payload, loadProductConfig('businessowners'))).toThrow(expect.objectContaining({ code: 'PRODUCT_RULES_NOT_MET' }))
+    }
+  })
   it('preserves structured premises and booleans separately from insured contact data', () => {
     const payload = intakePayload()
     expect(payload.risks[0]).toMatchObject({ type: 'businessownersLocation', buildingInterest: false, hazardousOperations: false, priorLossCount: 0, locationAddress: { line1: '100 Synthetic Demo Lane', line2: 'Suite 200', city: 'Columbus', state: 'OH', postalCode: '43215-0001', country: 'US' } })

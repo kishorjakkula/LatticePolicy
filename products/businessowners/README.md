@@ -92,7 +92,8 @@ and legal teams must confirm and configure, for each state:
 - admission or surplus-lines status, and filed rates, rules and forms in place
   of these synthetic ones;
 - producer licensing and appointment requirements, including a distribution
-  check at renewal and rewrite (today only quote and bind check it);
+  legal review of carrier distribution requirements (company, agency, producer
+  and appointment checks run at quote, bind, direct endorsement, renewal and rewrite);
 - the terrorism (TRIA) offer and disclosure at quote and renewal, and the
   insured's acceptance or rejection;
 - mandatory state endorsements and amendatory forms;

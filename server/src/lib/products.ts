@@ -6,6 +6,7 @@ import type { ProductScreen } from '@lattice-policy/rules'
 import { carrierPackFieldMetaPath, carrierPackFor, loadCarrierPackConfig } from './carrier-pack.js'
 import { buildProductScreen, loadProductScreen } from './product-screen.js'
 import { loadCarrierTables } from './carrier-tables.js'
+import { assertValidProductPackageConfig } from './product-package-config.js'
 
 /** Products whose risk screens are built into the framework. */
 const CORE_PRODUCT_CODES = new Set(['personal-auto', 'commercial-auto', 'homeowners', 'cyber', 'professional-liability'])
@@ -151,6 +152,7 @@ export function loadProductConfig(productCode: ProductCode): any {
   const cfgPath = path.join(productPackDir(productCode), 'coverage.yaml')
   const content = fs.readFileSync(cfgPath, 'utf8')
   const data = YAML.parse(content)
+  assertValidProductPackageConfig(data, { required: productCode === 'businessowners' })
   return data
 }
 

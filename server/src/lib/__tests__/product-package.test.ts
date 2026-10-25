@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { applyProductPackage, coveragePackageTerms, productPackageViolations } from '../product-package.js'
+import { applyProductPackage, coveragePackageTerms, productPackageViolations, refreshCopiedPackageTerms } from '../product-package.js'
 
 const config = {
-  packageRules: { riskCount: 1, riskType: 'businessownersLocation', termMonths: [12], states: ['OH'], requiredCoverages: ['BPP', 'LIAB'], buildingCoverage: 'BUILDING', occupancyField: 'occupancy', ownerOccupancy: 'owner', buildingInterestField: 'buildingInterest' },
+  fields: [
+    { path: 'risks.0.occupancy', label: 'Occupancy', type: 'enum', enum: ['owner', 'tenant'], required: true },
+    { path: 'risks.0.buildingInterest', label: 'Building interest', type: 'bool', required: true },
+  ],
+  packageRules: { riskCount: 1, riskType: 'businessownersLocation', termMonths: [12], states: ['OH'], requiredCoverages: ['BPP', 'LIAB'], buildingCoverage: 'BUILDING', occupancyField: 'occupancy', ownerOccupancy: 'owner', buildingInterestField: 'buildingInterest', requiredUnderwritingRules: true },
   coverages: [
-    { code: 'BPP', limitType: 'value', minLimit: 10000, maxLimit: 1000000, deductibles: [1000, 2500], packageTerms: { valuation: 'replacement-cost' } },
-    { code: 'LIAB', limits: [500000, 1000000], packageTerms: { basis: 'occurrence', damageToRentedPremisesLimit: 100000 }, aggregateMultiplier: 2, personalAdvertisingInjuryMultiplier: 1 },
+    { code: 'BPP', required: true, limitType: 'value', minLimit: 10000, maxLimit: 1000000, deductibles: [1000, 2500], packageTerms: { valuation: 'replacement-cost' } },
+    { code: 'LIAB', required: true, limits: [500000, 1000000], packageTerms: { basis: 'occurrence', damageToRentedPremisesLimit: 100000 }, aggregateMultiplier: 2, personalAdvertisingInjuryMultiplier: 1 },
     { code: 'BUILDING', limitType: 'value', minLimit: 100000, maxLimit: 5000000, deductibles: [1000] },
   ],
 }
@@ -14,6 +18,7 @@ const quote = (): any => ({ productCode: 'businessowners', state: 'OH', termMont
 describe('versioned product package validation and authoritative benefits', () => {
   it('leaves established products unchanged', () => {
     const body = quote()
+    body.productCode = 'personal-auto'
     expect(productPackageViolations(body, {})).toEqual([])
     applyProductPackage(body, {})
     expect(body.coverages[0].packageTerms).toBeUndefined()
@@ -78,5 +83,22 @@ describe('versioned product package validation and authoritative benefits', () =
     applyProductPackage(body, pinned)
     expect(body.coverages[1].packageTerms.generalAggregate).toBe(3000000)
     expect(productPackageViolations(body, config)).not.toEqual([])
+  })
+  it.each([0, -1000, 50000, true, '1000'])('rejects unoffered liability deductible %s', deductible => {
+    const body = quote(); body.coverages[1].deductible = deductible
+    expect(productPackageViolations(body, config)).toEqual(expect.arrayContaining([expect.objectContaining({ path: '/coverages/1/deductible' })]))
+    expect(() => applyProductPackage(body, config)).toThrow(expect.objectContaining({ code: 'PRODUCT_RULES_NOT_MET' }))
+  })
+  it('re-derives only trusted copied terms for a new edition without changing history', () => {
+    const previous = quote(); applyProductPackage(previous, config)
+    const original = structuredClone(previous)
+    const next = structuredClone(previous)
+    const edition = structuredClone(config); edition.coverages[1].aggregateMultiplier = 3
+    refreshCopiedPackageTerms(next, edition)
+    expect(next.coverages[1].packageTerms.generalAggregate).toBe(3000000)
+    expect(previous).toEqual(original)
+    expect(productPackageViolations(previous, config)).toEqual([])
+    const client = structuredClone(previous); client.coverages[1].packageTerms.generalAggregate = 9000000
+    expect(() => applyProductPackage(client, edition)).toThrow(expect.objectContaining({ code: 'PRODUCT_RULES_NOT_MET' }))
   })
 })

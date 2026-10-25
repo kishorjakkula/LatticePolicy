@@ -53,3 +53,13 @@ One existing test, `policy-lifecycle.integration.test.ts`, timed out once while 
 | REQ-8 | businessowners-demo (idempotent, concurrent, no overwrite), businessowners-intake |
 | REQ-9 | businessowners-document-tokens/templates/seeding/history |
 | REQ-10 | full unit, integration and typecheck runs above; e2e spec |
+## PR 399 Final Local Recheck
+
+1,301 server tests / 108 files and 625 frontend tests / 96 files passed.
+Fresh disposable PostgreSQL with tenant RLS: 380 tests / 47 files passed.
+New regressions cover unoffered deductibles, invalid package configuration,
+required underwriting mode, direct servicing appointment expiry, cross-product
+bypass and trusted new-edition term refresh with historical preservation.
+Build/typecheck passed. Initial concurrent runs hit resource timeouts; bounded
+worker reruns retained existing timeout values and assertions. A minimal package
+fixture was updated to include its newly mandatory underwriting requirement.

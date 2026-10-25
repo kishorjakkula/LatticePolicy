@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import * as productFiles from '../lib/products.js'
 import { closeDb, getDb, initDb, toRawQuery, withTenantTx } from '../db.js'
 import { createUser, findByUsername } from '../users.js'
 import { ensureTenantRbacDefaults } from '../lib/rbac.js'
@@ -130,7 +131,7 @@ describe('businessowners across the policy lifecycle (database path)', () => {
     const again = structuredClone(current)
     coverage(again, 'BOP_BPP').limit = 150000
     await expect(tx((db) => executeEndorsement(db, tenantId, policyId, { effectiveDate: '2027-03-01', payload: again }, unauthorized)))
-      .rejects.toMatchObject({ code: 'UW_REFERRAL_REQUIRED' })
+      .rejects.toMatchObject({ code: 'BOP_ACTOR_NOT_AUTHORIZED' })
   })
 
   it('cancels and reinstates without changing the package', async () => {
@@ -191,5 +192,68 @@ describe('businessowners across the policy lifecycle (database path)', () => {
     const hidden = await withTenantTx('other-bop-tenant', async (db) =>
       toRawQuery(db)('SELECT policy_id FROM policies WHERE product_code=$1', ['businessowners']))
     expect(hidden.rows).toHaveLength(0)
+  })
+
+  it.each(['endorse', 'renew', 'rewrite'] as const)('rechecks distribution on direct %s at the transaction effective date', async action => {
+    const { policyId } = await issuedPolicy('tenant')
+    if (action === 'rewrite') {
+      await tx(db => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2027-01-01', reason: 'insured request' }, actor))
+    }
+    const original = await latestPayload(policyId)
+    await tx(db => toRawQuery(db)(`UPDATE onboarding_appointments SET termination_date='2027-01-01'
+      WHERE tenant_id=$1 AND entity_type='AGENCY' AND entity_id=$2 AND product_code='businessowners'`, [tenantId, seeded.agencyId]))
+    try {
+      const mutation = action === 'endorse'
+        ? () => tx(db => executeEndorsement(db, tenantId, policyId, { effectiveDate: '2027-02-01', payload: original }, actor))
+        : action === 'renew'
+          ? () => tx(db => renewPolicy(db, tenantId, policyId, {}, actor))
+          : () => tx(db => rewritePolicy(db, tenantId, policyId, { effectiveDate: '2027-01-15', payload: original }, actor))
+      await expect(mutation()).rejects.toMatchObject({ code: 'BOP_APPOINTMENT_REQUIRED' })
+      expect(await latestPayload(policyId)).toEqual(original)
+    } finally {
+      await tx(db => toRawQuery(db)(`UPDATE onboarding_appointments SET termination_date=NULL
+        WHERE tenant_id=$1 AND entity_type='AGENCY' AND entity_id=$2 AND product_code='businessowners'`, [tenantId, seeded.agencyId]))
+    }
+  })
+  it.each(['renew', 'rewrite'] as const)('refuses to bypass BOP checks by changing the product on %s', async action => {
+    const { policyId } = await issuedPolicy('tenant')
+    if (action === 'rewrite') await tx(db => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2027-01-01', reason: 'insured request' }, actor))
+    const original = await latestPayload(policyId)
+    const payload = { ...original, productCode: 'personal-auto',
+      risks: [{ type: 'autoVehicle', year: 2023, make: 'Toyota', model: 'Camry', garagingZip: '43215', driverAge: 40, symbol: '10', usage: 'pleasure', annualMiles: 9000 }],
+      coverages: [{ code: 'BI', selected: true, limit: '100000/300000' }, { code: 'PD', selected: true, limit: 100000 }] }
+    const mutation = action === 'renew'
+      ? () => tx(db => renewPolicy(db, tenantId, policyId, { payload }, actor))
+      : () => tx(db => rewritePolicy(db, tenantId, policyId, { effectiveDate: '2027-01-15', payload }, actor))
+    await expect(mutation()).rejects.toMatchObject({ code: 'POLICY_PRODUCT_MISMATCH' })
+    expect(await latestPayload(policyId)).toEqual(original)
+  })
+  it.each(['renew', 'rewrite'] as const)('refreshes trusted copied terms on %s into a new edition without changing history', async action => {
+    const { policyId } = await issuedPolicy('tenant')
+    if (action === 'rewrite') await tx(db => cancelPolicy(db, tenantId, policyId, { effectiveDate: '2027-01-01', reason: 'insured request' }, actor))
+    const historical = (await getDb()!.query('SELECT version_id,payload FROM policy_versions WHERE tenant_id=$1 AND policy_id=$2', [tenantId, policyId])).rows
+    const originalLoad = productFiles.loadProductConfig
+    const edition = structuredClone(originalLoad('businessowners'))
+    edition.version = '1.1.0'
+    edition.coverages.find((item: any) => item.code === 'BOP_LIAB').aggregateMultiplier = 3
+    edition.coverages.find((item: any) => item.code === 'BOP_BI_EE').packageTerms.waitingPeriodHours = 96
+    const spy = vi.spyOn(productFiles, 'loadProductConfig').mockImplementation(code => code === 'businessowners' ? edition : originalLoad(code))
+    try {
+      if (action === 'renew') {
+        const preview = await tx(db => previewRenewal(db, tenantId, policyId, {}))
+        expect(preview.premium.byCoverage.find((item: any) => item.code === 'BOP_LIAB').packageTerms.generalAggregate).toBe(3000000)
+        await tx(db => renewPolicy(db, tenantId, policyId, {}, actor))
+      } else {
+        await tx(db => rewritePolicy(db, tenantId, policyId, { effectiveDate: '2027-01-15' }, actor))
+      }
+      const next = await latestPayload(policyId)
+      expect(coverage(next, 'BOP_LIAB').packageTerms.generalAggregate).toBe(3000000)
+      expect(coverage(next, 'BOP_BI_EE').packageTerms.waitingPeriodHours).toBe(96)
+      for (const old of historical) {
+        const stored = (await getDb()!.query('SELECT payload FROM policy_versions WHERE tenant_id=$1 AND version_id=$2', [tenantId, old.version_id])).rows[0]
+        expect(stored.payload).toEqual(old.payload)
+        expect(coverage(stored.payload, 'BOP_LIAB').packageTerms.generalAggregate).toBe(2000000)
+      }
+    } finally { spy.mockRestore() }
   })
 })
