@@ -75,9 +75,9 @@
     "pilot:handoff": "node scripts/pilot-handoff.mjs"
   },
   "optionalDependencies": {
-    "@rollup/rollup-darwin-arm64": "4.64.7",
-    "@rollup/rollup-linux-arm64-musl": "4.64.7",
-    "@rollup/rollup-linux-x64-gnu": "4.64.7"
+    "@rollup/rollup-darwin-arm64": "4.65.0",
+    "@rollup/rollup-linux-arm64-musl": "4.65.0",
+    "@rollup/rollup-linux-x64-gnu": "4.65.0"
   },
   "overrides": {
     "body-parser": "2.4.0",
